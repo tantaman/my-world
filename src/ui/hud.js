@@ -13,6 +13,8 @@ export class Hud {
     this.debug = document.getElementById('debug');
     this._toastTimer = 0;
     this._last = '';
+    const btn = document.getElementById('help-btn');
+    if (btn) btn.addEventListener('click', () => this.toggleHelp());
   }
 
   hideHint() {
