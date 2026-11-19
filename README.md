@@ -29,13 +29,14 @@ npm run build      # static site in dist/, can be hosted anywhere
 | **Q / E** | turn the camera |
 | **scroll** | zoom |
 | **R** | back to the starting path |
+| **M** | map: pan, zoom, and mark places (also the *map* button, bottom right) |
 | **P** | pixel art on / off |
 | **[ ]** | pixel size |
 | **- =** | pixel softness (0 = hard pixels, 1 = smooth) |
 | **O** | silhouette outlines on / off |
 | **, .** | scrub the time of day |
 | **T** | let time flow (a full day takes 24 minutes) |
-| **M** | sound on / off (also the *sound* button, bottom right) |
+| **N** | sound on / off (also the *sound* button, bottom right) |
 | **F** | fullscreen |
 | **V** | stats (fps, draw calls, triangles) |
 | **H** or **?** | help |
@@ -44,7 +45,38 @@ On a phone or tablet, drag with your left thumb to walk (push it all the way
 to run), drag with your right thumb to look, and tap on the right to jump.
 
 Your position, the time of day, your look settings and whether sound is on
-are remembered between visits. Add `?reset` to the URL to start fresh.
+are remembered between visits. Add `?reset` to the URL to start fresh (your
+map marks are kept).
+
+## The map
+
+Press **M** (or tap *map*) for a top-down map of the forest. It's drawn from
+the same world description as the 3D view (`src/map/`), so it always matches
+what's there: meadows and woods, footpaths, rock, and hillshaded relief with
+contour lines. Zoomed in, every tree, bush and boulder is in its real place.
+Tiles are rendered in Web Workers and pre-rendered around you while you walk,
+so the map opens already drawn.
+
+| | |
+|---|---|
+| **click** / tap | add a mark there, or select one |
+| **drag** | pan · drag a pin to move it |
+| **scroll** / pinch, **+ −** | zoom (from about 0.5 m to 8 m per map pixel) |
+| **arrows** / **WASD** | pan |
+| **C** / *me* | back to where you are |
+| **M** / **Esc** | close |
+
+**Marks** tag places of interest. Each has a name, one of eight pixel icons,
+a colour and an optional note. They're listed beside the map by distance
+(behind the *marks* button on a phone), and clicking one there flies to it.
+Press *track* on a mark and the HUD shows its name, how far it is and an arrow
+toward it from where the camera's looking. On the map a dotted line runs from
+you to it. Out in the world, every mark stands as a little stake with a cloth
+pennant in its colour, so you can spot it as you walk up.
+
+Esc on a brand-new mark you haven't named throws it away. Marks are kept in
+`localStorage` per seed, and from the console `world.marks.list()` returns
+them (handy for copying out).
 
 ## How the look works
 
@@ -187,12 +219,20 @@ src/
     materials.js          terrain / vegetation / grass shader hooks
     sky.js                sky dome, clouds, stars, sun/moon, time-of-day palettes
     particles.js          pollen motes and fireflies
+    markers.js            your map marks as pennants in the world
   player/
     character.js          procedural explorer model + gait animation
     player.js             movement, collision, third-person camera
     input.js              keyboard, mouse, touch
+  map/
+    mapRender.js          pure top-down tile renderer (runs in a worker)
+    mapWorker.js          Web Worker wrapper around mapRender
+    tiles.js              tile cache + worker scheduling
+    mapView.js            the map overlay: pan/zoom, pins, mark editor, list
+    marks.js              mark storage, icons and colours
+    map.css               map styles
   structures/
     index.js              ← register structures here
     loader.js             places structures on their pads
-  ui/hud.js               coordinates, hints, help
+  ui/hud.js               coordinates, tracked mark, hints, help
 ```

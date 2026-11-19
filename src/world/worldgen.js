@@ -71,7 +71,11 @@ export class WorldGen {
     const mA = 1 - smoothstep(0.5, 1.0, dA / wA);
     const mB = wB > 0.08 ? 1 - smoothstep(0.45, 1.0, dB / wB) : 0;
 
-    this.pathEdge = Math.min(dA - wA, wB > 0.08 ? dB - wB : 1e9);
+    // The map draws main and side trails separately when zoomed out.
+    this.pathEdgeMain = dA - wA;
+    this.pathEdgeSide = wB > 0.08 ? dB - wB : 1e9;
+    this.pathSide = side;
+    this.pathEdge = Math.min(this.pathEdgeMain, this.pathEdgeSide);
     return mA > mB ? mA : mB;
   }
 
@@ -86,6 +90,25 @@ export class WorldGen {
 
   _detailHeight(x, z) {
     return this.nDetail(x * 0.09, z * 0.09) * 0.45 + this.nDetail(x * 0.31 + 50, z * 0.31 - 20) * 0.1;
+  }
+
+  // The hills without the small bumps, and without any octave shorter than
+  // minWavelength meters: for drawing relief from far away (the map), where
+  // finer detail would only alias into noise. With minWavelength = 0 this is
+  // exactly _baseHeight.
+  broadHeight(x, z, minWavelength = 0) {
+    const wx = x + this.nWarpA(x * 0.0016, z * 0.0016) * 70;
+    const wz = z + this.nWarpB(x * 0.0016, z * 0.0016) * 70;
+    let sum = 0;
+    let amp = 1;
+    let freq = 0.0032;
+    // same octaves as fbm(nHills, ·, ·, 5) in _baseHeight, normalised the same
+    for (let o = 0; o < 5 && 1 / freq >= minWavelength; o++) {
+      sum += amp * this.nHills(wx * freq + o * 17.31, wz * freq - o * 9.13);
+      amp *= 0.5;
+      freq *= 2;
+    }
+    return (sum / 1.9375) * 24 + this.nBig(x * 0.0007, z * 0.0007) * 36;
   }
 
   naturalHeight(x, z, pm = this.pathMask(x, z)) {

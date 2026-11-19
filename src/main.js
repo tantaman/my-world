@@ -14,6 +14,9 @@ import { Hud } from './ui/hud.js';
 import { Soundscape } from './audio/soundscape.js';
 import { STRUCTURES } from './structures/index.js';
 import { placeStructures } from './structures/loader.js';
+import { MarkStore } from './map/marks.js';
+import { MapView } from './map/mapView.js';
+import { Markers } from './world/markers.js';
 
 const SAVE_KEY = 'my-world:state';
 const SETTINGS_KEY = 'my-world:settings';
@@ -76,6 +79,15 @@ const player = new Player(scene, camera, chunks, input);
 const pipeline = new PixelPipeline(renderer);
 const hud = new Hud();
 const sound = new Soundscape();
+
+// ── Map + marks ────────────────────────────────────────────────────────────
+// Marks are kept per seed and survive ?reset: they're things you made.
+const marks = new MarkStore(CONFIG.seed);
+const markers = new Markers(scene, (x, z) => chunks.heightAt(x, z));
+markers.sync(marks.list());
+marks.subscribe(() => markers.sync(marks.list()));
+const map = new MapView({ seed: CONFIG.seed, structures: STRUCTURES, marks, player, input });
+hud.onMapToggle = () => map.toggle();
 
 const settings = store.get(SETTINGS_KEY);
 if (settings && !CONFIG.reset) {
@@ -141,6 +153,8 @@ let fpsAcc = 0;
 let fpsFrames = 0;
 let fps = 0;
 let showDebug = CONFIG.debug;
+let prefetchAt = null; // where the map last pre-rendered around
+let prefetchCheck = 0; // wall-clock ms of the next check
 
 async function boot() {
   const bar = document.getElementById('load-bar');
@@ -164,6 +178,7 @@ async function boot() {
   if (typeof spawn.camPitch === 'number') player.camPitch = spawn.camPitch;
   document.getElementById('loader').classList.add('gone');
   last = performance.now();
+  prefetchCheck = last + 3000; // let the forest settle first
   requestAnimationFrame(loop);
 }
 
@@ -205,7 +220,8 @@ function handleKeys() {
     else document.exitFullscreen?.();
   }
   if (input.wasPressed('KeyV')) showDebug = !showDebug;
-  if (input.wasPressed('KeyM')) toggleSound();
+  if (input.wasPressed('KeyN')) toggleSound();
+  if (input.wasPressed('KeyM')) map.open();
 }
 
 function loop(now) {
@@ -230,6 +246,7 @@ function loop(now) {
   grass.update(player.pos.x, player.pos.z, 3);
   sky.update(player.pos, camera.position);
   particles.update(player.pos, player.pos.y);
+  markers.update(now / 1000, SHARED.uWind.value, player.pos);
   sound.update(dt, {
     hours: sky.hours,
     night: SKY.uNight.value,
@@ -239,10 +256,20 @@ function loop(now) {
     camera,
   });
 
-  pipeline.render(scene, camera, sky.exposure);
+  // The map covers the view, so skip drawing the world under it.
+  if (map.isOpen) map.update(dt);
+  else pipeline.render(scene, camera, sky.exposure);
+  if (now > prefetchCheck && !map.isOpen) {
+    prefetchCheck = now + 2000;
+    if (!prefetchAt || Math.hypot(player.pos.x - prefetchAt.x, player.pos.z - prefetchAt.z) > 120) {
+      prefetchAt = { x: player.pos.x, z: player.pos.z };
+      map.prefetch(prefetchAt.x, prefetchAt.z);
+    }
+  }
   input.endFrame();
 
   hud.update(player.pos, player.camYaw, sky.hours);
+  hud.updateTrack(marks.trackedMark(), player.pos, player.camYaw);
   fpsAcc += dt;
   fpsFrames++;
   if (fpsAcc > 0.5) {
@@ -278,6 +305,8 @@ function loop(now) {
 window.world = {
   gen,
   sound,
+  marks,
+  map,
   chunks,
   player,
   sky,
