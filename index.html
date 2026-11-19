@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0d1510" />
+    <title>my-world</title>
+    <style>
+      :root {
+        --bg: #0d1510;
+        --ink: #eef0e2;
+        --ink-dim: rgba(238, 240, 226, 0.68);
+        --panel: rgba(12, 18, 13, 0.72);
+        --line: rgba(238, 240, 226, 0.16);
+        --accent: #d9b45a;
+        --font: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); font-family: var(--font); }
+      #app, canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+      canvas { cursor: crosshair; }
+
+      #loader {
+        position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); z-index: 20;
+        transition: opacity 0.9s ease;
+      }
+      #loader.gone { opacity: 0; pointer-events: none; }
+      #loader .box { width: min(320px, calc(100vw - 32px)); }
+      #loader h1 { font-size: 14px; font-weight: 600; letter-spacing: 0.3em; text-transform: lowercase; margin: 0 0 14px; }
+      #loader .track { height: 4px; background: var(--line); image-rendering: pixelated; }
+      #load-bar { height: 100%; width: 0; background: var(--accent); transition: width 0.2s steps(6); }
+      #load-label { margin-top: 10px; font-size: 11px; color: var(--ink-dim); letter-spacing: 0.08em; }
+
+      #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+      #coords {
+        position: absolute; left: 16px; bottom: 14px; font-size: 11px; letter-spacing: 0.08em; color: var(--ink-dim);
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+      }
+      #debug { position: absolute; left: 16px; top: 12px; font-size: 11px; color: var(--ink-dim); text-shadow: 0 1px 0 #000; }
+      #hint {
+        position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%); padding: 9px 14px; font-size: 12px;
+        background: var(--panel); border: 1px solid var(--line); white-space: nowrap; letter-spacing: 0.04em;
+        transition: opacity 1.6s ease 0.6s; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis;
+      }
+      #hint.gone { opacity: 0; }
+      #hint b { color: var(--accent); font-weight: 600; }
+      #toast {
+        position: absolute; left: 50%; top: 18px; transform: translateX(-50%); font-size: 12px; padding: 6px 12px;
+        background: var(--panel); border: 1px solid var(--line); opacity: 0; transition: opacity 0.25s;
+      }
+      #toast.show { opacity: 1; }
+      #help {
+        position: absolute; right: 16px; top: 16px; width: min(300px, calc(100vw - 32px)); padding: 14px 16px; font-size: 11.5px;
+        line-height: 1.75; background: var(--panel); border: 1px solid var(--line); opacity: 0; transform: translateY(-6px);
+        transition: opacity 0.2s, transform 0.2s; pointer-events: none;
+      }
+      #help.open { opacity: 1; transform: none; pointer-events: auto; }
+      #help h2 { margin: 0 0 6px; font-size: 11px; letter-spacing: 0.25em; color: var(--accent); font-weight: 600; }
+      #help .row { display: flex; justify-content: space-between; gap: 12px; }
+      #help kbd { font-family: var(--font); color: var(--ink); }
+      #help span:last-child { color: var(--ink-dim); text-align: right; }
+      #help hr { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
+      #help-btn {
+        position: absolute; right: 16px; bottom: 12px; pointer-events: auto; font: inherit; font-size: 11px; color: var(--ink-dim);
+        background: transparent; border: 1px solid var(--line); padding: 4px 8px; cursor: pointer;
+      }
+      @media (hover: none) { .desk { display: none; } }
+      @media (hover: hover) { .touch { display: none; } }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="loader">
+      <div class="box">
+        <h1>my-world</h1>
+        <div class="track"><div id="load-bar"></div></div>
+        <div id="load-label">waking up…</div>
+      </div>
+    </div>
+
+    <div id="hud">
+      <div id="debug"></div>
+      <div id="hint">
+        <span class="desk"><b>click</b> to look · <b>WASD</b> walk · <b>shift</b> run · <b>space</b> jump · <b>H</b> help</span>
+        <span class="touch"><b>left thumb</b> walk · <b>right thumb</b> look · <b>tap</b> jump</span>
+      </div>
+      <div id="toast"></div>
+      <div id="coords"></div>
+      <button id="help-btn" onclick="document.getElementById('help').classList.toggle('open')">?</button>
+      <div id="help">
+        <h2>WANDER</h2>
+        <div class="row"><kbd>W A S D</kbd><span>walk</span></div>
+        <div class="row"><kbd>shift</kbd><span>run</span></div>
+        <div class="row"><kbd>space</kbd><span>jump</span></div>
+        <div class="row"><kbd>mouse · Q E</kbd><span>look around</span></div>
+        <div class="row"><kbd>scroll</kbd><span>zoom</span></div>
+        <div class="row"><kbd>R</kbd><span>back to the start</span></div>
+        <hr />
+        <h2>LOOK</h2>
+        <div class="row"><kbd>P</kbd><span>pixel art on / off</span></div>
+        <div class="row"><kbd>[ ]</kbd><span>pixel size</span></div>
+        <div class="row"><kbd>- =</kbd><span>pixel softness</span></div>
+        <div class="row"><kbd>O</kbd><span>outlines</span></div>
+        <div class="row"><kbd>, .</kbd><span>time of day</span></div>
+        <div class="row"><kbd>T</kbd><span>let time flow</span></div>
+        <div class="row"><kbd>F</kbd><span>fullscreen</span></div>
+        <div class="row"><kbd>V</kbd><span>stats</span></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
