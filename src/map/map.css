@@ -1,0 +1,159 @@
+/* The map overlay. Uses the colour tokens defined on :root in index.html. */
+
+#map {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  background: rgba(5, 8, 6, 0.6);
+  display: none;
+}
+#map.open { display: block; }
+
+#map .map-frame {
+  position: absolute;
+  inset: calc(16px + var(--inset-t)) calc(16px + var(--inset-r)) calc(16px + var(--inset-b)) calc(16px + var(--inset-l));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  outline: none;
+  font-size: 11.5px;
+}
+
+#map .map-top {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+#map h2, #map h3 { margin: 0; font-size: 11px; letter-spacing: 0.25em; color: var(--accent); font-weight: 600; }
+#map-cursor { color: var(--ink-dim); letter-spacing: 0.08em; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#map .map-tools { display: flex; gap: 6px; }
+
+#map button {
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+  min-height: 26px;
+  cursor: pointer;
+}
+#map button:hover { color: var(--ink); border-color: rgba(238, 240, 226, 0.32); }
+#map button:focus-visible, #map input:focus-visible, #map textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; color: var(--ink); }
+#map button[aria-pressed='true'] { color: var(--ink); border-color: var(--accent); }
+
+#map .map-view { position: relative; overflow: hidden; touch-action: none; background: #1b2215; }
+#map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; image-rendering: pixelated; }
+#map-canvas.panning { cursor: grabbing; }
+#map-canvas.on-pin { cursor: pointer; }
+
+#map .map-foot {
+  grid-column: 1;
+  padding: 6px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-dim);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#map .map-foot b { color: var(--accent); font-weight: 600; }
+
+/* marks list */
+#map-side {
+  grid-column: 2;
+  grid-row: 2 / 4;
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+#map .side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 8px 14px; }
+#mark-list { list-style: none; margin: 0; padding: 0 6px 10px; overflow-y: auto; flex: 1; min-height: 0; }
+#mark-list li button {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  border-color: transparent;
+  padding: 6px 8px;
+  color: var(--ink);
+}
+#mark-list li button:hover { border-color: var(--line); }
+#mark-list li button.selected { border-color: var(--accent); }
+#mark-list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#mark-list .dist { color: var(--ink-dim); font-size: 10.5px; }
+#mark-list .tracked { color: var(--accent); }
+#map .empty { color: var(--ink-dim); line-height: 1.6; padding: 4px 14px; margin: 0; }
+
+/* editor */
+#mark-editor {
+  position: absolute;
+  z-index: 2;
+  width: 248px;
+  padding: 12px;
+  background: rgba(12, 18, 13, 0.94);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+#mark-editor[hidden] { display: none; }
+#mark-editor input, #mark-editor textarea {
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: rgba(238, 240, 226, 0.06);
+  border: 1px solid var(--line);
+  padding: 6px 8px;
+  width: 100%;
+  resize: none;
+}
+#mark-editor input::placeholder, #mark-editor textarea::placeholder { color: rgba(238, 240, 226, 0.4); }
+#mark-editor .row { display: flex; flex-wrap: wrap; gap: 4px; }
+#mark-editor .row button { padding: 0; width: 26px; height: 26px; min-height: 0; display: grid; place-items: center; }
+#mark-editor .swatch { width: 12px; height: 12px; display: block; }
+#mark-editor .where { color: var(--ink-dim); font-size: 10.5px; letter-spacing: 0.06em; }
+#mark-editor .actions { display: flex; gap: 6px; }
+#mark-editor .actions .done { margin-left: auto; color: var(--ink); border-color: var(--accent); }
+
+.map-marks-toggle { display: none; }
+
+@media (max-width: 760px) {
+  #map .map-frame {
+    grid-template-columns: minmax(0, 1fr);
+    inset: calc(8px + var(--inset-t)) calc(8px + var(--inset-r)) calc(8px + var(--inset-b)) calc(8px + var(--inset-l));
+  }
+  .map-marks-toggle { display: inline-block; }
+  #map-side {
+    grid-column: 1;
+    grid-row: 2 / 4;
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: min(280px, 86%);
+    z-index: 3;
+    display: none;
+    border-left: 1px solid var(--line);
+  }
+  #map.side-open #map-side { display: flex; }
+  #map h2 { display: none; }
+  #mark-editor {
+    left: 0 !important;
+    right: 0;
+    bottom: 0;
+    top: auto !important;
+    width: auto;
+    border-width: 1px 0 0;
+  }
+}
+@media (hover: none) { #map .map-foot { display: none; } }

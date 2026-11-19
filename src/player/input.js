@@ -15,8 +15,10 @@ export class Input {
     this.touchJump = false;
     this.isTouch = false;
     this.onFirstInteract = null;
+    this.blocked = false; // while an overlay (the map) has the keyboard
 
     addEventListener('keydown', (e) => {
+      if (this.blocked) return;
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
       if (!this.keys.has(e.code)) this.pressed.add(e.code);
       this.keys.add(e.code);
@@ -40,6 +42,7 @@ export class Input {
     });
     addEventListener('mouseup', () => (this.dragging = false));
     addEventListener('mousemove', (e) => {
+      if (this.blocked) return;
       if (this.locked || this.dragging) {
         this.lookX += e.movementX || 0;
         this.lookY += e.movementY || 0;
@@ -111,6 +114,19 @@ export class Input {
     };
     dom.addEventListener('touchend', end);
     dom.addEventListener('touchcancel', end);
+  }
+
+  setBlocked(on) {
+    this.blocked = on;
+    this.keys.clear();
+    this.pressed.clear();
+    this.lookX = 0;
+    this.lookY = 0;
+    this.zoom = 0;
+    this.dragging = false;
+    this.touchJump = false;
+    Object.assign(this.touchMove, { id: null, x: 0, y: 0, active: false });
+    this.touchLook.id = null;
   }
 
   _interact() {

@@ -41,6 +41,10 @@
         position: absolute; left: calc(16px + var(--inset-l)); bottom: calc(14px + var(--inset-b)); font-size: 11px; letter-spacing: 0.08em; color: var(--ink-dim);
         text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
       }
+      #track {
+        position: absolute; left: calc(16px + var(--inset-l)); bottom: calc(32px + var(--inset-b)); font-size: 12px; letter-spacing: 0.06em;
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75), 0 0 6px rgba(0, 0, 0, 0.5); max-width: calc(100vw - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
       #debug { position: absolute; left: calc(16px + var(--inset-l)); top: calc(12px + var(--inset-t)); font-size: 11px; color: var(--ink-dim); text-shadow: 0 1px 0 #000; }
       #hint {
         position: absolute; left: 50%; bottom: calc(52px + var(--inset-b)); transform: translateX(-50%); padding: 9px 14px; font-size: 12px;
@@ -93,12 +97,14 @@
     <div id="hud">
       <div id="debug"></div>
       <div id="hint">
-        <span class="desk"><b>click</b> to look · <b>WASD</b> walk · <b>shift</b> run · <b>space</b> jump · <b>H</b> help</span>
+        <span class="desk"><b>click</b> to look · <b>WASD</b> walk · <b>shift</b> run · <b>space</b> jump · <b>M</b> map · <b>H</b> help</span>
         <span class="touch"><b>left thumb</b> walk · <b>right thumb</b> look · <b>tap</b> jump</span>
       </div>
       <div id="toast"></div>
+      <div id="track" aria-live="polite"></div>
       <div id="coords"></div>
       <div id="corner">
+        <button id="map-btn" type="button" aria-label="Open the map">map</button>
         <button id="sound-btn" type="button" aria-pressed="true">sound on</button>
         <button id="help-btn" type="button" aria-label="Show controls">?</button>
       </div>
@@ -110,6 +116,7 @@
         <div class="row"><kbd>mouse · Q E</kbd><span>look around</span></div>
         <div class="row"><kbd>scroll</kbd><span>zoom</span></div>
         <div class="row"><kbd>R</kbd><span>back to the start</span></div>
+        <div class="row"><kbd>M</kbd><span>map · mark places</span></div>
         <hr />
         <h2>LOOK</h2>
         <div class="row"><kbd>P</kbd><span>pixel art on / off</span></div>
@@ -119,7 +126,7 @@
         <div class="row"><kbd>, .</kbd><span>time of day</span></div>
         <div class="row"><kbd>T</kbd><span>let time flow</span></div>
         <div class="row"><kbd>F</kbd><span>fullscreen</span></div>
-        <div class="row"><kbd>M</kbd><span>sound on / off</span></div>
+        <div class="row"><kbd>N</kbd><span>sound on / off</span></div>
         <div class="row"><kbd>V</kbd><span>stats</span></div>
       </div>
     </div>
