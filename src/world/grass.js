@@ -76,6 +76,22 @@ export class Grass {
     }
   }
 
+  // Drop tiles overlapping a rectangle so they regrow from the current ground
+  // (after digging, clearing or building).
+  invalidate(x0, z0, x1, z1) {
+    const T = CONFIG.grassTile;
+    for (const [k, tile] of this.tiles) {
+      const ox = tile.tx * T;
+      const oz = tile.tz * T;
+      if (ox > x1 || ox + T < x0 || oz > z1 || oz + T < z0) continue;
+      if (tile.mesh) {
+        this.scene.remove(tile.mesh);
+        tile.mesh.geometry.dispose();
+      }
+      this.tiles.delete(k);
+    }
+  }
+
   buildTile(tx, tz) {
     const T = CONFIG.grassTile;
     const ox = tx * T;

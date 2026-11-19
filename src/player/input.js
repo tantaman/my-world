@@ -16,6 +16,9 @@ export class Input {
     this.isTouch = false;
     this.onFirstInteract = null;
     this.blocked = false; // while an overlay (the map) has the keyboard
+    // Tool buttons: 'use' (left mouse / touch button) and 'alt' (right mouse).
+    this.held = { use: false, alt: false };
+    this.hit = new Set(); // 'use' | 'alt' pressed this frame
 
     addEventListener('keydown', (e) => {
       if (this.blocked) return;
@@ -26,10 +29,22 @@ export class Input {
       this._interact();
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
-    addEventListener('blur', () => this.keys.clear());
+    addEventListener('blur', () => {
+      this.keys.clear();
+      this.held.use = this.held.alt = false;
+    });
 
     dom.addEventListener('mousedown', (e) => {
       this._interact();
+      if (this.blocked) return;
+      // While the pointer is locked the left button uses the tool in hand.
+      // The right button always does the tool's second action.
+      if ((e.button === 0 && this.locked) || e.button === 2) {
+        const b = e.button === 0 ? 'use' : 'alt';
+        if (!this.held[b]) this.hit.add(b);
+        this.held[b] = true;
+        if (e.button === 2) return;
+      }
       if (e.button === 0 && !this.locked && dom.requestPointerLock) {
         try {
           const p = dom.requestPointerLock();
@@ -40,7 +55,12 @@ export class Input {
       }
       this.dragging = true;
     });
-    addEventListener('mouseup', () => (this.dragging = false));
+    addEventListener('mouseup', (e) => {
+      if (e.button === 0) {
+        this.dragging = false;
+        this.held.use = false;
+      } else if (e.button === 2) this.held.alt = false;
+    });
     addEventListener('mousemove', (e) => {
       if (this.blocked) return;
       if (this.locked || this.dragging) {
@@ -50,6 +70,7 @@ export class Input {
     });
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === dom;
+      if (!this.locked) this.held.use = false;
     });
     dom.addEventListener(
       'wheel',
@@ -65,7 +86,11 @@ export class Input {
     dom.addEventListener(
       'touchstart',
       (e) => {
-        this.isTouch = true;
+        if (!this.isTouch) {
+          this.isTouch = true;
+          const act = document.getElementById('touch-act');
+          if (act) act.hidden = false;
+        }
         this._interact();
         for (const t of e.changedTouches) {
           if (t.clientX < innerWidth * 0.45 && this.touchMove.id === null) {
@@ -127,6 +152,8 @@ export class Input {
     this.touchJump = false;
     Object.assign(this.touchMove, { id: null, x: 0, y: 0, active: false });
     this.touchLook.id = null;
+    this.held.use = this.held.alt = false;
+    this.hit.clear();
   }
 
   _interact() {
@@ -135,6 +162,35 @@ export class Input {
       this.onFirstInteract = null;
       f();
     }
+  }
+
+  // On-screen buttons (touch) for the two tool actions.
+  bindButton(el, which) {
+    if (!el) return;
+    const on = (e) => {
+      this._interact();
+      if (!this.held[which]) this.hit.add(which);
+      this.held[which] = true;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    const off = (e) => {
+      this.held[which] = false;
+      e.preventDefault();
+    };
+    el.addEventListener('pointerdown', on);
+    el.addEventListener('pointerup', off);
+    el.addEventListener('pointercancel', off);
+    el.addEventListener('pointerleave', off);
+  }
+
+  // Is a tool button held / was it pressed this frame?
+  holding(which) {
+    return this.held[which];
+  }
+
+  tapped(which) {
+    return this.hit.has(which);
   }
 
   down(...codes) {
@@ -191,5 +247,6 @@ export class Input {
 
   endFrame() {
     this.pressed.clear();
+    this.hit.clear();
   }
 }

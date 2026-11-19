@@ -18,6 +18,7 @@ const TREE_KINDS = new Set(['pine', 'broad', 'birch']);
 const MAX_LOD = { pine: 2, broad: 2, birch: 2, rock: 2, bush: 1, log: 1, fern: 0 };
 
 const _m = new THREE.Matrix4();
+const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
 const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
@@ -40,7 +41,12 @@ class Chunk {
     this.step = 1;
     this.n = 0;
     this.veg = []; // { kind, mesh }
+    this.vegLists = null; // raw placement lists by kind (see VEG_STRIDE)
+    this.vegMesh = {}; // kind -> InstancedMesh
     this.colliders = null; // Float32Array [x, z, r, ...]
+    this.pos = null; // terrain vertex buffers, kept for live edits
+    this.nor = null;
+    this.gnd = null;
     this.disposed = false;
   }
 
@@ -90,6 +96,13 @@ export class ChunkManager {
     this.lastCz = NaN;
     this.wanted = [];
     this.pending = true;
+    // Hooks for the building system (see src/build/):
+    //   onTerrainData(ch, t)  patch freshly generated terrain buffers in place
+    //   onVegetation(ch)      a chunk's plants were just placed
+    //   heightOffset(x, z)    edit offset used when no chunk is loaded
+    this.onTerrainData = null;
+    this.onVegetation = null;
+    this.heightOffset = null;
     this.trunkRadius = {};
     for (const k of VEG_KINDS) this.trunkRadius[k] = models[k].trunkRadius;
 
@@ -151,7 +164,7 @@ export class ChunkManager {
   heightAt(x, z) {
     const ch = this.chunkAt(x, z);
     if (ch && ch.heights) return ch.sampleHeight(x, z);
-    return this.gen.height(x, z);
+    return this.gen.height(x, z) + (this.heightOffset ? this.heightOffset(x, z) : 0);
   }
 
   // Ground info for grass placement. Only valid in full-resolution chunks.
@@ -174,6 +187,7 @@ export class ChunkManager {
         if (!ch || !ch.colliders) continue;
         const c = ch.colliders;
         for (let i = 0; i < c.length; i += 3) {
+          if (c[i + 2] <= 0) continue; // removed (felled, cleared)
           const ex = c[i] - x;
           const ez = c[i + 1] - z;
           if (ex * ex + ez * ez < 9) fn(c[i], c[i + 1], c[i + 2]);
@@ -282,6 +296,7 @@ export class ChunkManager {
 
   // ── Terrain ──────────────────────────────────────────────────────────────
   applyTerrain(ch, lod, t) {
+    if (this.onTerrainData) this.onTerrainData(ch, t);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(t.pos, 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(t.nor, 3));
@@ -307,11 +322,15 @@ export class ChunkManager {
     ch.heights = t.heights;
     ch.paths = t.paths;
     ch.forest = t.forest;
+    ch.pos = t.pos;
+    ch.nor = t.nor;
+    ch.gnd = t.gnd;
   }
 
   // ── Vegetation ───────────────────────────────────────────────────────────
   applyVegetation(ch, veg) {
     ch.colliders = veg.colliders;
+    ch.vegLists = veg.lists;
     for (const kind of VEG_KINDS) {
       const list = veg.lists[kind];
       if (!list || !list.length) continue;
@@ -343,6 +362,49 @@ export class ChunkManager {
       mesh.updateMatrix();
       this.scene.add(mesh);
       ch.veg.push({ kind, mesh });
+      ch.vegMesh[kind] = mesh;
+    }
+    if (this.onVegetation) this.onVegetation(ch);
+  }
+
+  // Hide one plant instance (felled, picked up or cleared) and drop its collider.
+  hideInstance(ch, kind, k) {
+    const mesh = ch.vegMesh[kind];
+    if (mesh) {
+      mesh.setMatrixAt(k, _zero);
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+    const list = ch.vegLists && ch.vegLists[kind];
+    if (!list) return;
+    const x = list[k * VEG_STRIDE];
+    const z = list[k * VEG_STRIDE + 2];
+    list[k * VEG_STRIDE + 4] = 0; // scale 0 marks it gone for forEachPlant
+    const c = ch.colliders;
+    if (!c) return;
+    for (let i = 0; i < c.length; i += 3) {
+      if (Math.abs(c[i] - x) < 1e-3 && Math.abs(c[i + 1] - z) < 1e-3) c[i + 2] = -1;
+    }
+  }
+
+  // Calls fn(ch, kind, k, x, y, z, scale) for plants of `kinds` within r of (x, z).
+  forEachPlant(x, z, r, kinds, fn) {
+    const s = this.size;
+    for (let cz = Math.floor((z - r) / s); cz <= Math.floor((z + r) / s); cz++) {
+      for (let cx = Math.floor((x - r) / s); cx <= Math.floor((x + r) / s); cx++) {
+        const ch = this.chunks.get(chunkKey(cx, cz));
+        if (!ch || !ch.vegLists) continue;
+        for (const kind of kinds) {
+          const list = ch.vegLists[kind];
+          if (!list) continue;
+          for (let o = 0; o < list.length; o += VEG_STRIDE) {
+            const dx = list[o] - x;
+            const dz = list[o + 2] - z;
+            if (dx * dx + dz * dz > r * r) continue;
+            if (list[o + 4] <= 0) continue; // removed
+            fn(ch, kind, o / VEG_STRIDE, list[o], list[o + 1], list[o + 2], list[o + 4]);
+          }
+        }
+      }
     }
   }
 

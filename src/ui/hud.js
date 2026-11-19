@@ -1,5 +1,7 @@
 // Minimal overlay: a hint at the start, coordinates (handy for deciding where
-// to build things), the mark you're tracking, and a help panel.
+// to build things), the mark you're tracking, a help panel, and the building
+// HUD: tool bar, materials, what the tool in hand would do, and a progress bar
+// for press-and-hold work.
 
 import { markLabel, formatDistance } from '../map/marks.js';
 
@@ -23,8 +25,25 @@ export class Hud {
     this._arrivedAt = null;
     const btn = document.getElementById('help-btn');
     if (btn) btn.addEventListener('click', () => this.toggleHelp());
+    this.hotbar = document.getElementById('hotbar');
+    this.prompt = document.getElementById('prompt');
+    this.inv = document.getElementById('inv');
+    this.progress = document.getElementById('progress');
+    this.progressBar = this.progress ? this.progress.firstElementChild : null;
+    this.slots = [];
+    this._prompt = null;
+    this._inv = '';
     this.soundBtn = document.getElementById('sound-btn');
     this.onSoundToggle = null;
+    this.onStake = null;
+    const stake = document.getElementById('act-stake');
+    if (stake) {
+      stake.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.onStake) this.onStake();
+      });
+    }
     if (this.soundBtn) {
       this.soundBtn.addEventListener('click', () => {
         if (this.onSoundToggle) this.onSoundToggle();
@@ -106,6 +125,65 @@ export class Hud {
       this.track.style.color = mark ? mark.color : '';
       this._lastTrack = txt;
     }
+  }
+
+  // ── Building ─────────────────────────────────────────────────────────────
+  buildTools(tools, onPick) {
+    if (!this.hotbar) return;
+    this.hotbar.textContent = '';
+    this.slots = tools.map((t, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'slot';
+      b.innerHTML = `<kbd>${i + 1}</kbd><span class="long">${t.label}</span><span class="short">${t.short || t.label}</span>`;
+      b.setAttribute('aria-label', `${t.label} (key ${i + 1})`);
+      b.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        onPick(i);
+        b.blur();
+      });
+      this.hotbar.appendChild(b);
+      return b;
+    });
+  }
+
+  showStake(on) {
+    const el = document.getElementById('act-stake');
+    if (el) el.hidden = !on;
+  }
+
+  selectTool(i) {
+    this.slots.forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
+  }
+
+  setPrompt(html, bad = false) {
+    if (!this.prompt) return;
+    const key = `${bad ? 1 : 0}${html}`;
+    if (key === this._prompt) return;
+    this._prompt = key;
+    this.prompt.innerHTML = html;
+    this.prompt.classList.toggle('bad', !!bad);
+    this.prompt.classList.toggle('gone', !html);
+  }
+
+  nudgePrompt() {
+    if (!this.prompt) return;
+    this.prompt.classList.remove('nudge');
+    void this.prompt.offsetWidth;
+    this.prompt.classList.add('nudge');
+  }
+
+  setProgress(p) {
+    if (!this.progress) return;
+    const on = p !== null && p > 0;
+    this.progress.classList.toggle('show', on);
+    if (on) this.progressBar.style.width = `${Math.round(Math.min(1, p) * 100)}%`;
+  }
+
+  setInventory(text) {
+    if (!this.inv || text === this._inv) return;
+    this._inv = text;
+    this.inv.textContent = text;
   }
 
   setDebug(text) {

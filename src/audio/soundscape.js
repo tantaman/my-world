@@ -626,4 +626,160 @@ export class Soundscape {
       if (!this.offline) setTimeout(() => nodes.forEach((n) => n.disconnect()), 400);
     };
   }
+
+  // ── Work sounds ──────────────────────────────────────────────────────────
+  // kind: 'chop' | 'notch' | 'hew' | 'creak' | 'crash' | 'dig' | 'fill' | 'thud' |
+  //       'stone' | 'pick' | 'grub' | 'deny'
+  // opts: { size 0..1 (how big the tree / log is), strength 0..1 }
+  sfx(kind, opts = {}) {
+    if (!this.ctx || (!this.offline && this.ctx.state !== 'running')) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime + 0.005;
+    const size = opts.size ?? 0.5;
+    const out = ctx.createGain();
+    out.gain.value = 1;
+    out.connect(this.master);
+    const send = ctx.createGain();
+    send.gain.value = kind === 'crash' ? 0.5 : 0.28;
+    out.connect(send).connect(this.reverb);
+    const nodes = [out, send];
+    let end = t + 0.5;
+
+    const noise = (buf, at, dur, filters, peak, attack, decay, rate = 1) => {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = rate * rand(0.92, 1.08);
+      let node = src;
+      for (const f of filters) {
+        const b = ctx.createBiquadFilter();
+        b.type = f[0];
+        b.frequency.value = f[1];
+        if (f[2]) b.Q.value = f[2];
+        node.connect(b);
+        node = b;
+        nodes.push(b);
+      }
+      const g = ctx.createGain();
+      envelope(g.gain, at, attack, peak, decay);
+      node.connect(g).connect(out);
+      nodes.push(g);
+      src.start(at, rand(0, 2), dur);
+      end = Math.max(end, at + dur + 0.2);
+    };
+    const tone = (type, at, f0, f1, peak, attack, decay) => {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, at);
+      o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), at + attack + decay);
+      const g = ctx.createGain();
+      envelope(g.gain, at, attack, peak, decay);
+      o.connect(g).connect(out);
+      o.start(at);
+      o.stop(at + attack + decay + 0.05);
+      nodes.push(g);
+      end = Math.max(end, at + attack + decay + 0.2);
+    };
+
+    switch (kind) {
+      case 'chop':
+      case 'notch':
+      case 'hew': {
+        // steel biting into wood: a hard knock, a woody body, a few chips
+        const pitch = kind === 'hew' ? 1.25 : kind === 'notch' ? 1.12 : 1 - size * 0.25;
+        const amp = kind === 'chop' ? 0.9 : 0.7;
+        noise(this.white, t, 0.06, [['bandpass', 2600 * pitch, 1.2]], amp * 0.5, 0.001, 0.025);
+        noise(this.pink, t, 0.2, [['bandpass', 520 * pitch, 2.5]], amp * 1.1, 0.002, 0.11);
+        noise(this.brown, t, 0.25, [['lowpass', 380]], amp * 0.9, 0.002, 0.12);
+        tone('sine', t, 190 * pitch, 85 * pitch, amp * 0.55, 0.002, 0.12);
+        tone('triangle', t, 410 * pitch * rand(0.95, 1.05), 380 * pitch, amp * 0.12, 0.002, 0.18);
+        for (let i = 0; i < 3; i++) noise(this.white, t + rand(0.02, 0.09), 0.02, [['bandpass', rand(3000, 5500), 3]], rand(0.05, 0.14), 0.001, 0.01);
+        break;
+      }
+      case 'creak': {
+        // fibres giving way: a slow, rough groan with snaps
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(rand(55, 75), t);
+        o.frequency.linearRampToValueAtTime(rand(95, 130), t + 1.4);
+        const trem = ctx.createOscillator();
+        trem.frequency.value = rand(11, 17);
+        const tg = ctx.createGain();
+        tg.gain.value = 0.5;
+        const am = ctx.createGain();
+        am.gain.value = 0.5;
+        trem.connect(tg).connect(am.gain);
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 420;
+        bp.Q.value = 3;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(SILENT, t);
+        g.gain.exponentialRampToValueAtTime(0.32, t + 0.5);
+        g.gain.exponentialRampToValueAtTime(SILENT, t + 1.6);
+        o.connect(am).connect(bp).connect(g).connect(out);
+        o.start(t);
+        trem.start(t);
+        o.stop(t + 1.7);
+        trem.stop(t + 1.7);
+        nodes.push(tg, am, bp, g);
+        for (let i = 0; i < 4; i++) noise(this.white, t + rand(0.2, 1.4), 0.03, [['bandpass', rand(1200, 2600), 2]], rand(0.2, 0.45), 0.001, 0.02);
+        end = t + 2;
+        break;
+      }
+      case 'crash': {
+        // a trunk hitting the ground and the crown thrashing through the brush
+        const s = opts.strength ?? 1;
+        tone('sine', t, 70, 32, 1.4 * s, 0.004, 0.5);
+        noise(this.brown, t, 0.8, [['lowpass', 260]], 1.6 * s, 0.004, 0.45);
+        noise(this.pink, t + 0.02, 1.6, [['highpass', 900], ['lowpass', 6000]], 0.9 * s, 0.05, 1.1);
+        for (let i = 0; i < 14; i++) noise(this.white, t + rand(0.0, 0.7), 0.03, [['bandpass', rand(1500, 4500), 2.5]], rand(0.1, 0.4) * s, 0.001, rand(0.008, 0.03));
+        break;
+      }
+      case 'dig':
+      case 'fill': {
+        // spade into soil, then the scrape and the toss
+        const f = kind === 'dig' ? 1 : 0.8;
+        noise(this.white, t, 0.12, [['bandpass', 3400 * f, 1.5]], 0.25, 0.002, 0.05);
+        noise(this.pink, t + 0.01, 0.35, [['bandpass', 700 * f, 0.9]], 0.65, 0.01, 0.2);
+        tone('sine', t, 110, 60, 0.35, 0.003, 0.09);
+        for (let i = 0; i < 6; i++) noise(this.white, t + rand(0.03, 0.22), 0.02, [['bandpass', rand(2500, 5000), 3]], rand(0.05, 0.16), 0.001, 0.01);
+        break;
+      }
+      case 'grub': {
+        noise(this.pink, t, 0.4, [['bandpass', 380, 1.4]], 0.7, 0.01, 0.25);
+        for (let i = 0; i < 5; i++) noise(this.white, t + rand(0, 0.3), 0.03, [['bandpass', rand(900, 2200), 2]], rand(0.2, 0.4), 0.001, 0.02);
+        break;
+      }
+      case 'thud': {
+        // a heavy log set down on another: low knock with a hollow ring
+        const s = 0.6 + size * 0.6;
+        tone('sine', t, 120, 52, 0.9 * s, 0.003, 0.22);
+        noise(this.pink, t, 0.25, [['bandpass', 240, 3]], 0.8 * s, 0.003, 0.16);
+        tone('triangle', t + 0.005, 230 * rand(0.95, 1.05), 210, 0.12, 0.003, 0.3);
+        noise(this.white, t, 0.04, [['bandpass', 1800, 1.5]], 0.15, 0.001, 0.02);
+        break;
+      }
+      case 'stone': {
+        for (let i = 0; i < 3; i++) {
+          const at = t + i * rand(0.05, 0.11);
+          noise(this.white, at, 0.04, [['bandpass', rand(1900, 3200), 6]], rand(0.35, 0.6), 0.001, 0.025);
+          tone('sine', at, rand(1300, 2100), 1100, 0.08, 0.001, 0.05);
+        }
+        break;
+      }
+      case 'pick': {
+        noise(this.pink, t, 0.2, [['bandpass', 900, 1]], 0.4, 0.01, 0.1);
+        noise(this.white, t + 0.06, 0.04, [['bandpass', 2600, 4]], 0.3, 0.001, 0.025);
+        break;
+      }
+      case 'deny': {
+        tone('triangle', t, 220, 180, 0.14, 0.01, 0.12);
+        tone('triangle', t + 0.1, 180, 150, 0.12, 0.01, 0.14);
+        break;
+      }
+      default:
+        break;
+    }
+    if (!this.offline) setTimeout(() => nodes.forEach((n) => n.disconnect()), (end - ctx.currentTime + 0.6) * 1000);
+  }
 }

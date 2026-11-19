@@ -7,7 +7,30 @@ import { Character } from './character.js';
 import { lerp, clamp } from '../noise.js';
 
 const PLAYER_RADIUS = 0.32;
+// How high a ledge you can walk onto without jumping. Less than one course of
+// a log wall (0.32 m) so walls stay walls; sills and piers set their own
+// (higher) step so you can walk in through a doorway over the threshold.
+const STEP_UP = 0.28;
+const BODY_H = 1.5; // head clearance (a little forgiving under door headers)
 const _dir = new THREE.Vector3();
+const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
+
+// Distance in xz from p to segment ab, with the push-out normal.
+function segDist(px, pz, ax, az, bx, bz, out) {
+  const ex = bx - ax;
+  const ez = bz - az;
+  const l2 = ex * ex + ez * ez;
+  let t = l2 > 1e-9 ? ((px - ax) * ex + (pz - az) * ez) / l2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const dx = px - (ax + ex * t);
+  const dz = pz - (az + ez * t);
+  const d = Math.hypot(dx, dz);
+  out.d = d;
+  out.t = t;
+  out.nx = d > 1e-6 ? dx / d : 1;
+  out.nz = d > 1e-6 ? dz / d : 0;
+  return out;
+}
 
 export class Player {
   constructor(scene, camera, world, input) {
@@ -31,10 +54,32 @@ export class Player {
     this.hasMoved = false;
     this.onJump = null; // ()
     this.onLand = null; // (strength 0..1)
+
+    // Built things you bump into and stand on (see src/build/solids.js).
+    this.solids = null;
+    // (origin, dir, maxDist) -> distance at which something blocks the camera
+    this.cameraBlock = null;
+    // While working (chopping, digging) you barely move and face the work.
+    this.busy = 0;
+    this.faceTo = null; // { x, z } or null
+  }
+
+  // Ground height under (x, z) for feet at y: terrain or the top of something built.
+  groundAt(x, z, y = Infinity) {
+    let g = this.world.heightAt(x, z);
+    if (this.solids) {
+      this.solids.forEachNear(x, z, 1, (s) => {
+        segDist(x, z, s.ax, s.az, s.bx, s.bz, _seg);
+        if (_seg.d > s.r + 0.08) return;
+        const top = s.topA + (s.topB - s.topA) * _seg.t;
+        if (top > g && y >= top - (s.step ?? STEP_UP)) g = top;
+      });
+    }
+    return g;
   }
 
   spawn(x, z, yaw, camYaw = yaw + Math.PI) {
-    this.pos.set(x, this.world.heightAt(x, z), z);
+    this.pos.set(x, this.groundAt(x, z), z);
     this.vel.set(0, 0, 0);
     this.yaw = yaw;
     this.camYaw = camYaw;
@@ -70,7 +115,7 @@ export class Player {
       wz /= wl;
       this.hasMoved = true;
     }
-    const speed = (input.running() ? CONFIG.runSpeed : CONFIG.walkSpeed) * amount;
+    const speed = (input.running() ? CONFIG.runSpeed : CONFIG.walkSpeed) * amount * (1 - this.busy * 0.85);
 
     const accel = this.grounded ? 11 : 2.5;
     const k = 1 - Math.exp(-accel * dt);
@@ -110,10 +155,29 @@ export class Player {
       }
     });
 
+    // Walls, footings, felled trunks: push out of anything that's not underfoot.
+    if (this.solids) {
+      this.solids.forEachNear(this.pos.x, this.pos.z, 1.5, (s) => {
+        segDist(this.pos.x, this.pos.z, s.ax, s.az, s.bx, s.bz, _seg);
+        const min = s.r + PLAYER_RADIUS;
+        if (_seg.d >= min) return;
+        const top = s.topA + (s.topB - s.topA) * _seg.t;
+        if (this.pos.y >= top - (s.step ?? STEP_UP) || this.pos.y + BODY_H < s.bottom) return;
+        const push = min - _seg.d;
+        this.pos.x += _seg.nx * push;
+        this.pos.z += _seg.nz * push;
+        const vn = this.vel.x * _seg.nx + this.vel.z * _seg.nz;
+        if (vn < 0) {
+          this.vel.x -= vn * _seg.nx;
+          this.vel.z -= vn * _seg.nz;
+        }
+      });
+    }
+
     // Ground
     const wasGrounded = this.grounded;
     const fallSpeed = -this.vel.y;
-    const gh = this.world.heightAt(this.pos.x, this.pos.z);
+    const gh = this.groundAt(this.pos.x, this.pos.z, this.pos.y);
     if (this.pos.y <= gh) {
       this.pos.y = gh;
       this.vel.y = 0;
@@ -129,8 +193,11 @@ export class Player {
     // Facing
     const hs = Math.hypot(this.vel.x, this.vel.z);
     let turn = 0;
-    if (hs > 0.3) {
-      const target = Math.atan2(this.vel.x, this.vel.z);
+    const facing = this.faceTo ? Math.hypot(this.faceTo.x - this.pos.x, this.faceTo.z - this.pos.z) > 0.05 : false;
+    if (hs > 0.3 || facing) {
+      const target = facing
+        ? Math.atan2(this.faceTo.x - this.pos.x, this.faceTo.z - this.pos.z)
+        : Math.atan2(this.vel.x, this.vel.z);
       let d = target - this.yaw;
       d = Math.atan2(Math.sin(d), Math.cos(d));
       const step = d * (1 - Math.exp(-dt * 12));
@@ -166,6 +233,11 @@ export class Player {
         dist = Math.max(1.2, t * 0.9);
         break;
       }
+    }
+    // ...or a wall or roof.
+    if (this.cameraBlock) {
+      const hit = this.cameraBlock(this.camTarget, dir, dist);
+      if (hit < dist) dist = Math.max(0.6, hit - 0.25);
     }
     const kd = snap ? 1 : 1 - Math.exp(-dt * (dist < this.camDistSmooth ? 14 : 3));
     this.camDistSmooth = lerp(this.camDistSmooth, dist, kd);

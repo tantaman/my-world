@@ -3,6 +3,52 @@
 
 import * as THREE from 'three';
 import { smoothstep, lerp } from '../noise.js';
+import { makeAxe, makeShovel } from '../build/geometry.js';
+
+// Work poses as keyframes over one swing (p = 0..1). Angles in radians:
+//   sh = shoulder pitch (negative raises the arm forward), el = elbow,
+//   tool = wrist (how the tool sits relative to the forearm),
+//   sp = spine lean, inw = arms brought together, drop = crouch.
+const POSES = {
+  chop: [
+    [0, { sh: -0.5, el: -0.6, tool: -0.2, sp: 0.05, inw: 0.3, drop: 0 }],
+    [0.45, { sh: -2.9, el: -0.75, tool: 0.05, sp: -0.14, inw: 0.36, drop: 0 }],
+    [0.6, { sh: -1.5, el: -0.08, tool: 0.0, sp: 0.22, inw: 0.42, drop: 0.04 }],
+    [0.75, { sh: -1.35, el: -0.12, tool: 0.0, sp: 0.24, inw: 0.42, drop: 0.04 }],
+    [1, { sh: -0.5, el: -0.6, tool: -0.2, sp: 0.05, inw: 0.3, drop: 0 }],
+  ],
+  // (the shoulder angle is relative to the spine, so leaning forward needs
+  // a bigger reach to keep the tool out in front)
+  chopLow: [
+    [0, { sh: -0.6, el: -0.6, tool: -0.2, sp: 0.15, inw: 0.3, drop: 0.04 }],
+    [0.45, { sh: -2.75, el: -0.8, tool: 0.05, sp: 0.0, inw: 0.36, drop: 0.02 }],
+    [0.6, { sh: -1.42, el: -0.05, tool: -0.22, sp: 0.62, inw: 0.42, drop: 0.16 }],
+    [0.75, { sh: -1.36, el: -0.08, tool: -0.22, sp: 0.62, inw: 0.42, drop: 0.16 }],
+    [1, { sh: -0.6, el: -0.6, tool: -0.2, sp: 0.15, inw: 0.3, drop: 0.04 }],
+  ],
+  dig: [
+    [0, { sh: -0.95, el: -0.5, tool: 0.6, sp: 0.25, inw: 0.38, drop: 0.04 }],
+    [0.35, { sh: -1.05, el: -0.2, tool: 0.25, sp: 0.5, inw: 0.4, drop: 0.14 }],
+    [0.6, { sh: -1.25, el: -0.8, tool: 0.6, sp: 0.35, inw: 0.4, drop: 0.08 }],
+    [0.85, { sh: -1.5, el: -0.6, tool: 0.3, sp: 0.1, inw: 0.38, drop: 0.02 }],
+    [1, { sh: -0.95, el: -0.5, tool: 0.6, sp: 0.25, inw: 0.38, drop: 0.04 }],
+  ],
+  bend: [
+    [0, { sh: -0.2, el: -0.3, tool: 0, sp: 0.1, inw: 0.1, drop: 0 }],
+    [0.5, { sh: -1.15, el: -0.25, tool: 0, sp: 0.75, inw: 0.22, drop: 0.26 }],
+    [1, { sh: -0.2, el: -0.3, tool: 0, sp: 0.1, inw: 0.1, drop: 0 }],
+  ],
+};
+const _pose = { sh: 0, el: 0, tool: 0, sp: 0, inw: 0, drop: 0 };
+function samplePose(keys, p, out) {
+  let i = 0;
+  while (i < keys.length - 2 && p > keys[i + 1][0]) i++;
+  const [pa, a] = keys[i];
+  const [pb, b] = keys[i + 1];
+  const t = smoothstep(0, 1, (p - pa) / Math.max(1e-4, pb - pa));
+  for (const k in out) out[k] = a[k] + (b[k] - a[k]) * t;
+  return out;
+}
 
 const M = (hex, rough = 0.85) => new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: 0 });
 
@@ -163,6 +209,17 @@ export class Character {
     this.armL = arm(1);
     this.armR = arm(-1);
 
+    // Tools are gripped in the right hand; the business end points along -y.
+    this.hand = group(this.armR.elbow, 0, -0.27, 0);
+    this.tools = { axe: makeAxe(), shovel: makeShovel() };
+    for (const t of Object.values(this.tools)) {
+      t.visible = false;
+      this.hand.add(t);
+    }
+    this.tool = null;
+    this.action = null; // { kind, t, dur, loop }
+    this.work = 0; // blend into the work pose
+
     // legs
     const leg = (side) => {
       const hip = group(this.hips, side * 0.095, -0.04, 0);
@@ -189,6 +246,28 @@ export class Character {
     this.root.traverse((o) => {
       if (o.isMesh) o.receiveShadow = true;
     });
+  }
+
+  setTool(name) {
+    this.tool = this.tools[name] ? name : null;
+    for (const k in this.tools) this.tools[k].visible = k === this.tool;
+  }
+
+  // Start a work animation: 'chop' | 'chopLow' | 'dig' | 'bend'.
+  play(kind, dur, loop = false) {
+    if (this.action && this.action.kind === kind && this.action.loop && loop) {
+      this.action.dur = dur;
+      return;
+    }
+    this.action = { kind, t: 0, dur, loop };
+  }
+
+  stop() {
+    if (this.action) this.action.loop = false;
+  }
+
+  get acting() {
+    return !!this.action;
   }
 
   // speed: horizontal m/s, grounded: bool, vy: vertical velocity, turn: rad/s
@@ -252,5 +331,46 @@ export class Character {
 
     // Scarf tail trails behind.
     this.scarfTail.rotation.x = -0.3 - speed * 0.12 - Math.abs(Math.sin(this.time * 7)) * 0.05 * mb - (vy > 0 ? 0.2 : -0.3) * ab;
+
+    // How the tool rides when you're just carrying it.
+    let toolRest = this.tool === 'shovel' ? 2.75 : this.tool === 'axe' ? -0.3 : 0;
+    if (this.tool === 'shovel') this.armR.elbow.rotation.x = -0.35;
+    this.hand.rotation.x = toolRest;
+
+    // Work poses blend over the walk.
+    const a = this.action;
+    if (a) {
+      a.t += dt;
+      if (a.t >= a.dur) {
+        if (a.loop) a.t -= a.dur;
+        else this.action = null;
+      }
+    }
+    this.work = lerp(this.work, a ? 1 : 0, 1 - Math.exp(-dt * (a ? 18 : 8)));
+    if (this.work < 0.01) return;
+    const pose = samplePose(POSES[a ? a.kind : this._lastKind || 'chop'], a ? Math.min(1, a.t / a.dur) : 0, _pose);
+    if (a) this._lastKind = a.kind;
+    const w = this.work;
+    const two = this.tool !== null || (a && a.kind === 'bend');
+    const blend = (cur, v) => cur + (v - cur) * w;
+    this.armR.shoulder.rotation.x = blend(this.armR.shoulder.rotation.x, pose.sh);
+    this.armR.elbow.rotation.x = blend(this.armR.elbow.rotation.x, pose.el);
+    this.armR.shoulder.rotation.z = blend(this.armR.shoulder.rotation.z, pose.inw);
+    if (two) {
+      this.armL.shoulder.rotation.x = blend(this.armL.shoulder.rotation.x, pose.sh * 0.96);
+      this.armL.elbow.rotation.x = blend(this.armL.elbow.rotation.x, pose.el - 0.2);
+      this.armL.shoulder.rotation.z = blend(this.armL.shoulder.rotation.z, -pose.inw);
+    }
+    this.hand.rotation.x = blend(toolRest, pose.tool);
+    this.spine.rotation.x = blend(this.spine.rotation.x, pose.sp);
+    this.spine.rotation.y *= 1 - w;
+    this.head.rotation.x = -this.spine.rotation.x * 0.5;
+    const drop = pose.drop * w;
+    this.hips.position.y -= drop;
+    for (const leg of [this.legL, this.legR]) {
+      leg.hip.rotation.x -= drop * 2.6;
+      leg.knee.rotation.x += drop * 5.2;
+      leg.ankle.rotation.x -= drop * 2.6;
+    }
   }
 }
