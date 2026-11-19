@@ -14,6 +14,9 @@ export class Character {
     this.runBlend = 0;
     this.airBlend = 0;
     this.time = 0;
+    this.stepIndex = 0;
+    // called as onFootstep(run 0..1) each time a foot plants
+    this.onFootstep = null;
 
     const skin = M(0xd9a383, 0.7);
     const jacket = M(0x3f5a3a);
@@ -205,6 +208,12 @@ export class Character {
     const mb = this.moveBlend;
     const rb = this.runBlend;
     const ab = this.airBlend;
+
+    // A foot plants each time a leg reaches the front of its swing.
+    const step = Math.floor((this.phase - Math.PI / 2) / Math.PI);
+    if (step > this.stepIndex && grounded && mb > 0.3 && this.onFootstep) this.onFootstep(rb);
+    this.stepIndex = step;
+
     const s = Math.sin(this.phase);
     const c = Math.cos(this.phase);
 

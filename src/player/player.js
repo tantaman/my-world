@@ -29,6 +29,8 @@ export class Player {
     this.camDistSmooth = 6;
     this.camTarget = new THREE.Vector3();
     this.hasMoved = false;
+    this.onJump = null; // ()
+    this.onLand = null; // (strength 0..1)
   }
 
   spawn(x, z, yaw, camYaw = yaw + Math.PI) {
@@ -78,6 +80,7 @@ export class Player {
     if (this.grounded && input.jumped()) {
       this.vel.y = CONFIG.jumpSpeed;
       this.grounded = false;
+      if (this.onJump) this.onJump();
     }
     this.vel.y -= CONFIG.gravity * dt;
 
@@ -108,6 +111,8 @@ export class Player {
     });
 
     // Ground
+    const wasGrounded = this.grounded;
+    const fallSpeed = -this.vel.y;
     const gh = this.world.heightAt(this.pos.x, this.pos.z);
     if (this.pos.y <= gh) {
       this.pos.y = gh;
@@ -119,6 +124,7 @@ export class Player {
     } else {
       this.grounded = false;
     }
+    if (!wasGrounded && this.grounded && fallSpeed > 2.5 && this.onLand) this.onLand(Math.min(1, fallSpeed / 12));
 
     // Facing
     const hs = Math.hypot(this.vel.x, this.vel.z);

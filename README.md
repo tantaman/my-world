@@ -35,6 +35,7 @@ npm run build      # static site in dist/, can be hosted anywhere
 | **O** | silhouette outlines on / off |
 | **, .** | scrub the time of day |
 | **T** | let time flow (a full day takes 24 minutes) |
+| **M** | sound on / off (also the *sound* button, bottom right) |
 | **F** | fullscreen |
 | **V** | stats (fps, draw calls, triangles) |
 | **H** or **?** | help |
@@ -42,8 +43,8 @@ npm run build      # static site in dist/, can be hosted anywhere
 On a phone or tablet, drag with your left thumb to walk (push it all the way
 to run), drag with your right thumb to look, and tap on the right to jump.
 
-Your position, the time of day and your look settings are remembered between
-visits. Add `?reset` to the URL to start fresh.
+Your position, the time of day, your look settings and whether sound is on
+are remembered between visits. Add `?reset` to the URL to start fresh.
 
 ## How the look works
 
@@ -73,6 +74,28 @@ ground they stand on. Trees and bushes have baked vertex-colour shading and
 spherical "canopy" normals so their foliage shades like a soft volume. They
 also sway in the wind, and grass parts around your feet.
 
+## How it sounds
+
+The sound is made in code too, with the Web Audio API. There are no audio
+files (`src/audio/soundscape.js`). Browsers only allow sound after you
+interact, so it fades in after your first click, key press or tap.
+
+- **Wind** is low-passed brown noise that gusts along with the swaying
+  trees. It gets louder in open meadows and on high ground.
+- **Leaves** rustle in swells under the canopy when a gust passes through.
+- **Birds** are placed in 3D in the trees around you, using HRTF panning and
+  a forest reverb. You'll hear flute-like thrush phrases, two-note
+  "fee-bee" whistles, warbler trills, chip calls, wood-pigeon coos and the
+  occasional woodpecker. There's a dawn chorus, quieter days, a little
+  evensong, and silence after dark.
+- **Night** brings crickets, louder in the open, and an owl in the distance.
+- **Footsteps** follow the stride of the walk and run animation. They
+  change with the ground under you: packed earth and grit on paths, a swish
+  in grass, crackling leaf litter in the woods. They get sharper when you
+  run, and there's a thud when you land a jump.
+
+Sound pauses when the tab is hidden. Add `?mute` to the URL to start silent.
+
 ### Tuning from the URL
 
 | param | default | |
@@ -87,6 +110,7 @@ also sway in the wind, and grass parts around your feet.
 | `view` | `4` | chunks loaded in each direction (64 m each) |
 | `grass`, `grassDensity` | `40`, `7` | grass radius (m) and blades per m² |
 | `q=low` | | lighter preset for modest GPUs |
+| `mute` | | start with sound off |
 | `debug` | | show stats from the start |
 
 Example: `/?soft=0.3&px=5&time=7.5`
@@ -148,6 +172,8 @@ src/
   main.js                 boot, loop, keys, save/restore
   config.js               tunables (+ URL overrides)
   noise.js                seeded simplex noise, hashing, helpers
+  audio/
+    soundscape.js         procedural wind, leaves, birds, crickets, owl, footsteps
   render/
     pixelPipeline.js      low-res render → composite → soft-pixel upscale
     glsl.js               shared GLSL: noise, sky gradient, ground colour

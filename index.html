@@ -65,11 +65,15 @@
       #help kbd { font-family: var(--font); color: var(--ink); }
       #help span:last-child { color: var(--ink-dim); text-align: right; }
       #help hr { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
-      #help-btn {
-        position: absolute; right: calc(16px + var(--inset-r)); bottom: calc(12px + var(--inset-b)); pointer-events: auto; font: inherit; font-size: 11px; color: var(--ink-dim);
-        background: transparent; border: 1px solid var(--line); padding: 4px 8px; cursor: pointer;
+      #corner {
+        position: absolute; right: calc(16px + var(--inset-r)); bottom: calc(12px + var(--inset-b)); display: flex; gap: 8px; pointer-events: auto;
       }
-      #help-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; color: var(--ink); }
+      #corner button {
+        font: inherit; font-size: 11px; color: var(--ink-dim); background: transparent; border: 1px solid var(--line); padding: 4px 8px; cursor: pointer;
+      }
+      #corner button:hover { color: var(--ink); }
+      #corner button[aria-pressed='false'] { opacity: 0.6; }
+      #corner button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; color: var(--ink); }
       @media (prefers-reduced-motion: reduce) { #loader, #hint, #toast, #help, #load-bar { transition: none; } }
       @media (hover: none) { .desk { display: none; } }
       @media (hover: hover) { .touch { display: none; } }
@@ -94,7 +98,10 @@
       </div>
       <div id="toast"></div>
       <div id="coords"></div>
-      <button id="help-btn" type="button" aria-label="Show controls">?</button>
+      <div id="corner">
+        <button id="sound-btn" type="button" aria-pressed="true">sound on</button>
+        <button id="help-btn" type="button" aria-label="Show controls">?</button>
+      </div>
       <div id="help">
         <h2>WANDER</h2>
         <div class="row"><kbd>W A S D</kbd><span>walk</span></div>
@@ -112,6 +119,7 @@
         <div class="row"><kbd>, .</kbd><span>time of day</span></div>
         <div class="row"><kbd>T</kbd><span>let time flow</span></div>
         <div class="row"><kbd>F</kbd><span>fullscreen</span></div>
+        <div class="row"><kbd>M</kbd><span>sound on / off</span></div>
         <div class="row"><kbd>V</kbd><span>stats</span></div>
       </div>
     </div>

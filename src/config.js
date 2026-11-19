@@ -46,6 +46,7 @@ export const CONFIG = {
   jumpSpeed: 6.2,
   gravity: 19,
 
+  mute: params.has('mute'),
   reset: params.has('reset'),
   debug: params.has('debug'),
 };

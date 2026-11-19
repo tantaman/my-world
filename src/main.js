@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { WorldGen } from './world/worldgen.js';
 import { ChunkManager } from './world/chunks.js';
 import { Grass } from './world/grass.js';
-import { Sky } from './world/sky.js';
+import { Sky, SKY } from './world/sky.js';
 import { createParticles } from './world/particles.js';
 import { SHARED, createTerrainMaterial, createVegetationMaterial, createGrassMaterial } from './world/materials.js';
 import { makePine, makeBroadleaf, makeBirch, makeBush, makeFern, makeRock, makeLog } from './world/models.js';
@@ -11,6 +11,7 @@ import { PixelPipeline } from './render/pixelPipeline.js';
 import { Input } from './player/input.js';
 import { Player } from './player/player.js';
 import { Hud } from './ui/hud.js';
+import { Soundscape } from './audio/soundscape.js';
 import { STRUCTURES } from './structures/index.js';
 import { placeStructures } from './structures/loader.js';
 
@@ -74,15 +75,45 @@ const input = new Input(renderer.domElement);
 const player = new Player(scene, camera, chunks, input);
 const pipeline = new PixelPipeline(renderer);
 const hud = new Hud();
+const sound = new Soundscape();
 
 const settings = store.get(SETTINGS_KEY);
 if (settings && !CONFIG.reset) {
   if (typeof settings.softness === 'number' && !new URLSearchParams(location.search).has('soft')) pipeline.softness = settings.softness;
   if (typeof settings.pixelSize === 'number' && !new URLSearchParams(location.search).has('px')) pipeline.pixelSize = settings.pixelSize;
   if (typeof settings.outline === 'number') pipeline.outline = settings.outline;
+  if (typeof settings.sound === 'boolean') sound.enabled = settings.sound;
 }
+if (CONFIG.mute) sound.enabled = false;
 const saveSettings = () =>
-  store.set(SETTINGS_KEY, { softness: pipeline.softness, pixelSize: pipeline.pixelSize, outline: pipeline.outline });
+  store.set(SETTINGS_KEY, { softness: pipeline.softness, pixelSize: pipeline.pixelSize, outline: pipeline.outline, sound: sound.enabled });
+
+// ── Sound hooks ────────────────────────────────────────────────────────────
+const _ground = { h: 0, path: 0, forest: 0 };
+function groundHere() {
+  const { x, z } = player.pos;
+  if (!chunks.groundAt(x, z, _ground)) {
+    _ground.path = gen.pathMask(x, z);
+    _ground.forest = gen.forest(x, z);
+  }
+  return _ground;
+}
+function surfaceHere() {
+  const g = groundHere();
+  if (g.path > 0.45) return 'dirt';
+  return g.forest > 0.62 ? 'litter' : 'grass';
+}
+player.character.onFootstep = (run) => sound.footstep(surfaceHere(), run);
+player.onJump = () => sound.footstep(surfaceHere(), 0.5, 'jump');
+player.onLand = (s) => sound.footstep(surfaceHere(), 1, 'land', s);
+function toggleSound() {
+  sound.setEnabled(!sound.enabled);
+  hud.setSound(sound.enabled);
+  hud.flash(sound.enabled ? 'sound on' : 'sound off');
+  saveSettings();
+}
+hud.setSound(sound.enabled);
+hud.onSoundToggle = toggleSound;
 
 function resize() {
   const dpr = renderer.getPixelRatio();
@@ -174,6 +205,7 @@ function handleKeys() {
     else document.exitFullscreen?.();
   }
   if (input.wasPressed('KeyV')) showDebug = !showDebug;
+  if (input.wasPressed('KeyM')) toggleSound();
 }
 
 function loop(now) {
@@ -198,6 +230,14 @@ function loop(now) {
   grass.update(player.pos.x, player.pos.z, 3);
   sky.update(player.pos, camera.position);
   particles.update(player.pos, player.pos.y);
+  sound.update(dt, {
+    hours: sky.hours,
+    night: SKY.uNight.value,
+    forest: groundHere().forest,
+    height: player.pos.y,
+    wind: SHARED.uWind.value,
+    camera,
+  });
 
   pipeline.render(scene, camera, sky.exposure);
   input.endFrame();
@@ -237,6 +277,7 @@ function loop(now) {
 // Handy from the dev console: world.teleport(120, -40)
 window.world = {
   gen,
+  sound,
   chunks,
   player,
   sky,
