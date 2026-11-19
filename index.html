@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0d1510" />
     <title>my-world</title>
     <style>
@@ -14,6 +14,11 @@
         --line: rgba(238, 240, 226, 0.16);
         --accent: #d9b45a;
         --font: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+        --inset-t: env(safe-area-inset-top, 0px);
+        --inset-r: env(safe-area-inset-right, 0px);
+        --inset-b: env(safe-area-inset-bottom, 0px);
+        --inset-l: env(safe-area-inset-left, 0px);
+        color-scheme: dark;
       }
       * { box-sizing: border-box; }
       html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); font-family: var(--font); }
@@ -33,24 +38,24 @@
 
       #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
       #coords {
-        position: absolute; left: 16px; bottom: 14px; font-size: 11px; letter-spacing: 0.08em; color: var(--ink-dim);
+        position: absolute; left: calc(16px + var(--inset-l)); bottom: calc(14px + var(--inset-b)); font-size: 11px; letter-spacing: 0.08em; color: var(--ink-dim);
         text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
       }
-      #debug { position: absolute; left: 16px; top: 12px; font-size: 11px; color: var(--ink-dim); text-shadow: 0 1px 0 #000; }
+      #debug { position: absolute; left: calc(16px + var(--inset-l)); top: calc(12px + var(--inset-t)); font-size: 11px; color: var(--ink-dim); text-shadow: 0 1px 0 #000; }
       #hint {
-        position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%); padding: 9px 14px; font-size: 12px;
+        position: absolute; left: 50%; bottom: calc(52px + var(--inset-b)); transform: translateX(-50%); padding: 9px 14px; font-size: 12px;
         background: var(--panel); border: 1px solid var(--line); white-space: nowrap; letter-spacing: 0.04em;
         transition: opacity 1.6s ease 0.6s; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis;
       }
       #hint.gone { opacity: 0; }
       #hint b { color: var(--accent); font-weight: 600; }
       #toast {
-        position: absolute; left: 50%; top: 18px; transform: translateX(-50%); font-size: 12px; padding: 6px 12px;
+        position: absolute; left: 50%; top: calc(18px + var(--inset-t)); transform: translateX(-50%); font-size: 12px; padding: 6px 12px;
         background: var(--panel); border: 1px solid var(--line); opacity: 0; transition: opacity 0.25s;
       }
       #toast.show { opacity: 1; }
       #help {
-        position: absolute; right: 16px; top: 16px; width: min(300px, calc(100vw - 32px)); padding: 14px 16px; font-size: 11.5px;
+        position: absolute; right: calc(16px + var(--inset-r)); top: calc(16px + var(--inset-t)); width: min(300px, calc(100vw - 32px)); padding: 14px 16px; font-size: 11.5px;
         line-height: 1.75; background: var(--panel); border: 1px solid var(--line); opacity: 0; transform: translateY(-6px);
         transition: opacity 0.2s, transform 0.2s; pointer-events: none;
       }
@@ -61,9 +66,11 @@
       #help span:last-child { color: var(--ink-dim); text-align: right; }
       #help hr { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
       #help-btn {
-        position: absolute; right: 16px; bottom: 12px; pointer-events: auto; font: inherit; font-size: 11px; color: var(--ink-dim);
+        position: absolute; right: calc(16px + var(--inset-r)); bottom: calc(12px + var(--inset-b)); pointer-events: auto; font: inherit; font-size: 11px; color: var(--ink-dim);
         background: transparent; border: 1px solid var(--line); padding: 4px 8px; cursor: pointer;
       }
+      #help-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; color: var(--ink); }
+      @media (prefers-reduced-motion: reduce) { #loader, #hint, #toast, #help, #load-bar { transition: none; } }
       @media (hover: none) { .desk { display: none; } }
       @media (hover: hover) { .touch { display: none; } }
     </style>
@@ -87,7 +94,7 @@
       </div>
       <div id="toast"></div>
       <div id="coords"></div>
-      <button id="help-btn" onclick="document.getElementById('help').classList.toggle('open')">?</button>
+      <button id="help-btn" type="button" aria-label="Show controls">?</button>
       <div id="help">
         <h2>WANDER</h2>
         <div class="row"><kbd>W A S D</kbd><span>walk</span></div>
