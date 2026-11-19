@@ -55,7 +55,8 @@ export function createTerrainMaterial() {
 // ── Vegetation (trees, bushes, ferns, rocks, logs) ─────────────────────────
 // Vertex coloured, gently swaying in the wind. Foliage uses "spherical"
 // normals baked into the geometry so canopies shade as soft volumes.
-export function createVegetationMaterial() {
+// Pass { sway: false } for a tree that's been felled (it shouldn't wave about).
+export function createVegetationMaterial({ sway = true } = {}) {
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 0.92,
@@ -64,7 +65,7 @@ export function createVegetationMaterial() {
   });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = SHARED.uTime;
-    shader.uniforms.uWind = SHARED.uWind;
+    shader.uniforms.uWind = sway ? SHARED.uWind : { value: 0 };
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',

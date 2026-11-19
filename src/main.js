@@ -17,6 +17,7 @@ import { placeStructures } from './structures/loader.js';
 import { MarkStore } from './map/marks.js';
 import { MapView } from './map/mapView.js';
 import { Markers } from './world/markers.js';
+import { Builder } from './build/builder.js';
 
 const SAVE_KEY = 'my-world:state';
 const SETTINGS_KEY = 'my-world:settings';
@@ -79,6 +80,11 @@ const player = new Player(scene, camera, chunks, input);
 const pipeline = new PixelPipeline(renderer);
 const hud = new Hud();
 const sound = new Soundscape();
+// Felling, digging and building. Created before the first chunk streams in so
+// your changes to the world are applied as it loads.
+const builder = new Builder({ scene, camera, gen, chunks, grass, player, input, hud, sound });
+input.bindButton(document.getElementById('act-use'), 'use');
+input.bindButton(document.getElementById('act-alt'), 'alt');
 
 // ── Map + marks ────────────────────────────────────────────────────────────
 // Marks are kept per seed and survive ?reset: they're things you made.
@@ -239,6 +245,7 @@ function loop(now) {
   SHARED.uWind.value = 0.85 + Math.sin(now / 9000) * 0.25;
 
   player.update(dt);
+  builder.update(dt);
   if (player.hasMoved) hud.hideHint();
   SHARED.uPlayer.value.copy(player.pos);
 
@@ -304,6 +311,7 @@ function loop(now) {
 // Handy from the dev console: world.teleport(120, -40)
 window.world = {
   gen,
+  builder,
   sound,
   marks,
   map,
