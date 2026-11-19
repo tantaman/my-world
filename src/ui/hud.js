@@ -15,6 +15,20 @@ export class Hud {
     this._last = '';
     const btn = document.getElementById('help-btn');
     if (btn) btn.addEventListener('click', () => this.toggleHelp());
+    this.soundBtn = document.getElementById('sound-btn');
+    this.onSoundToggle = null;
+    if (this.soundBtn) {
+      this.soundBtn.addEventListener('click', () => {
+        if (this.onSoundToggle) this.onSoundToggle();
+        this.soundBtn.blur();
+      });
+    }
+  }
+
+  setSound(on) {
+    if (!this.soundBtn) return;
+    this.soundBtn.textContent = on ? 'sound on' : 'sound off';
+    this.soundBtn.setAttribute('aria-pressed', String(on));
   }
 
   hideHint() {
