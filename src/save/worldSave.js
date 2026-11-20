@@ -8,11 +8,15 @@
 //            cache for reopening offline and as a net for a save that didn't
 //            make it out before the tab closed.
 //
-// Anyone with the link can save over the world, so every save carries the
-// revision it was based on. If someone else saved in between, the server says
-// no and we stop and ask rather than flattening their afternoon.
+// A world is stored in pieces (regions.js), and so is a save: only the 64 m
+// squares you actually touched go out, each carrying the revision it was based
+// on. Anyone with the link can build, so if someone else got to a square
+// first, that square is refused and reported back — while the rest of the save
+// still lands. Two people working a few hundred metres apart never collide at
+// all, which is the whole point of storing a world in pieces.
 
 import { collectSnapshot, validateSnapshot } from './snapshot.js';
+import { splitSnapshot, keyOf, parseKey } from './regions.js';
 import { createWorld, openWorld, saveWorld, WorldError } from './remote.js';
 
 const CACHE_KEY = (id) => `my-world:world:${id}`;
@@ -26,7 +30,7 @@ const BACKOFF = [5000, 10000, 20000, 40000, 60000]; // after a failed save
 export class WorldSave {
   constructor() {
     this.id = null; // the ?w= of the world we're saving to
-    this.rev = 0; // the revision our snapshot is based on
+    this.gen = 0; // the world's generation, as of our last word with the server
     this.name = '';
     this.status = 'local'; // local | saved | saving | offline | conflict | full | gone
     this.detail = '';
@@ -39,6 +43,8 @@ export class WorldSave {
     this.pushing = null;
     this.onStatus = null;
     this.parts = null; // { gen, builder, marks, player, sky }
+    this.revs = { meta: 0, patches: new Map() }; // what each piece was based on
+    this.sent = { meta: null, visitor: null, patches: new Map() }; // last sent, as JSON
   }
 
   // ── Opening ───────────────────────────────────────────────────────────────
@@ -68,9 +74,9 @@ export class WorldSave {
       // the local copy and push once the network comes back.
       const local = cached && validateSnapshot(cached.snapshot);
       if (local) {
-        this._adopt(id, cached.rev, local, !!cached.dirty);
+        this._adopt(id, cached.gen, cachedRevs(cached), local, !!cached.dirty);
         this._set('offline', err.message);
-        return { id, rev: cached.rev, name: local.name, snapshot: local, offline: true };
+        return { id, gen: cached.gen, name: local.name, snapshot: local, offline: true };
       }
       // Nothing to open and nowhere to save: the game starts a fresh local
       // world, and with no id nothing is ever written to that address.
@@ -88,25 +94,31 @@ export class WorldSave {
     // past, is the newer of the two: pick up where we left off.
     let use = server;
     let recovered = false;
-    if (cached && cached.dirty && cached.rev === remote.rev) {
+    if (cached && cached.dirty && cached.gen === remote.gen) {
       const local = validateSnapshot(cached.snapshot);
       if (local) {
         use = local;
         recovered = true;
       }
-    } else if (cached && cached.dirty && cached.rev < remote.rev) {
+    } else if (cached && cached.dirty && cached.gen < remote.gen) {
       this.detail = 'someone else saved this world while you were away, so their version opened';
     }
 
-    this._adopt(id, remote.rev, use, recovered);
-    writeCache(id, { rev: remote.rev, dirty: recovered, snapshot: use });
+    this._adopt(id, remote.gen, remote.revs, use, recovered);
+    this.name = use.name || remote.name;
+    // After a recovery we don't know which pieces of the last save landed, and
+    // a world still holding one whole blob has to be rewritten in full. Either
+    // way, leaving `sent` empty makes the next save carry everything once.
+    if (!recovered && !remote.legacy) this._remember(use);
+    writeCache(id, { gen: remote.gen, dirty: recovered, revs: plainRevs(this.revs), snapshot: use });
     this._set(recovered ? 'local' : 'saved', this.detail);
-    return { id, rev: remote.rev, name: use.name || remote.name, snapshot: use, recovered };
+    return { id, gen: remote.gen, name: this.name, snapshot: use, recovered };
   }
 
-  _adopt(id, rev, snapshot, dirty) {
+  _adopt(id, gen, revs, snapshot, dirty) {
     this.id = id;
-    this.rev = rev;
+    this.gen = gen;
+    this.revs = { meta: revs.meta || 0, patches: new Map(revs.patches || []) };
     this.name = snapshot.name || '';
     this.dirty = !!dirty;
     if (dirty) this.changes++;
@@ -120,7 +132,7 @@ export class WorldSave {
     builder.onChange = () => this.touch();
     marks.subscribe(() => this.touch());
     // Leaving the tab is the reliable moment to get a save out; unload is the
-    // unreliable one, so try both and let the server dedupe by revision.
+    // unreliable one, so try both and let the revisions sort it out.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.flush();
     });
@@ -151,30 +163,30 @@ export class WorldSave {
   // Put this world on the server for the first time. -> the world's URL.
   async publish(name = '') {
     if (this.id) return this.url();
-    const parts = this.parts;
-    if (!parts) throw new WorldError('the world is not ready yet', 0);
+    if (!this.parts) throw new WorldError('the world is not ready yet', 0);
     this._set('saving');
     const snapshot = this._snapshot(name);
+    const { send, json } = this._changesIn(snapshot);
+    send.name = name;
     let made;
     try {
-      made = await createWorld({ snapshot, name });
+      made = await createWorld(send);
     } catch (err) {
       this._set('local', err.message);
       throw err;
     }
     this.id = made.id;
-    this.rev = made.rev;
     this.name = name;
-    this.dirty = false;
-    this.sinceSave = 0;
     // From here on the server copy is the world; the per-seed local saves
     // would only drift, so hand persistence over to the cache for this id.
-    parts.builder.storeKey = null;
-    parts.marks.key = null;
+    this.parts.builder.storeKey = null;
+    this.parts.marks.key = null;
     this.sentAt = performance.now();
-    writeCache(this.id, { rev: this.rev, dirty: false, snapshot });
+    this._landed(made, snapshot, json);
+    this.dirty = false;
+    writeCache(this.id, { gen: this.gen, dirty: false, revs: plainRevs(this.revs), snapshot });
     setParam('w', this.id);
-    this._set('saved');
+    this._set('saved', `${(made.sentBytes / 1024).toFixed(1)} kB · ${(made.patches || []).length} places`);
     return this.url();
   }
 
@@ -184,14 +196,15 @@ export class WorldSave {
     return this._push(opts);
   }
 
-  // Win a conflict: keep what's in front of us and save over theirs.
+  // Win a clash: save over the squares you both changed. Theirs stand
+  // everywhere else, because nothing of ours was ever meant to go there.
   async takeOver() {
     if (!this.id) return;
     this.dirty = true;
     await this._push({ force: true });
   }
 
-  // Lose a conflict on purpose: open the world as it now stands on the server.
+  // Lose a clash on purpose: open the world as it now stands on the server.
   theirs() {
     if (!this.id) return;
     forgetCache(this.id);
@@ -216,25 +229,90 @@ export class WorldSave {
     return collectSnapshot({ seed: gen.seed, name, builder, marks, player, sky });
   }
 
+  // Work out what has actually moved since the last save: the pieces whose
+  // contents differ, and the regions that have emptied out entirely.
+  _changesIn(snapshot) {
+    const { meta, visitor, patches } = splitSnapshot(snapshot);
+    const json = { meta: JSON.stringify(meta), visitor: JSON.stringify(visitor), patches: new Map() };
+    const send = { seed: snapshot.seed, name: snapshot.name, meta: null, visitor: null, patches: [], drops: [] };
+
+    if (json.meta !== this.sent.meta) send.meta = { rev: this.revs.meta, body: meta };
+    if (json.visitor !== this.sent.visitor) send.visitor = { body: visitor };
+    for (const [key, body] of patches) {
+      const text = JSON.stringify(body);
+      json.patches.set(key, text);
+      if (text === this.sent.patches.get(key)) continue;
+      const [rx, rz] = parseKey(key);
+      send.patches.push({ rx, rz, rev: this.revs.patches.get(key) || 0, body });
+    }
+    for (const key of this.sent.patches.keys()) {
+      if (patches.has(key)) continue;
+      const [rx, rz] = parseKey(key);
+      send.drops.push({ rx, rz, rev: this.revs.patches.get(key) || 0 });
+    }
+    return { send, json };
+  }
+
+  // Record what the server says it took, so the next save doesn't send it
+  // again. Anything it refused is deliberately left looking unsent.
+  _landed(result, snapshot, json) {
+    if (!json) json = this._changesIn(snapshot).json;
+    this.gen = result.gen || this.gen;
+    if (result.meta) {
+      this.revs.meta = result.meta.rev;
+      this.sent.meta = json.meta;
+    }
+    this.sent.visitor = json.visitor;
+    for (const p of result.patches || []) {
+      const key = keyOf(p.rx, p.rz);
+      this.revs.patches.set(key, p.rev);
+      this.sent.patches.set(key, json.patches.get(key));
+    }
+    for (const d of result.dropped || []) {
+      const key = keyOf(d.rx, d.rz);
+      this.revs.patches.delete(key);
+      this.sent.patches.delete(key);
+    }
+  }
+
+  _remember(snapshot) {
+    const { json } = this._changesIn(snapshot);
+    this.sent.meta = json.meta;
+    this.sent.visitor = json.visitor;
+    this.sent.patches = json.patches;
+  }
+
   _push({ keepalive = false, force = false } = {}) {
     if (this.pushing) return this.pushing;
     const at = this.changes;
     const snapshot = this._snapshot();
+    const { send, json } = this._changesIn(snapshot);
+    send.force = force;
+
     // Cache first: if the save fails, or the tab dies mid-flight, this is what
     // brings the world back.
-    writeCache(this.id, { rev: this.rev, dirty: true, snapshot });
+    writeCache(this.id, { gen: this.gen, dirty: true, revs: plainRevs(this.revs), snapshot });
+
+    if (!send.meta && !send.visitor && !send.patches.length && !send.drops.length) {
+      this.dirty = this.changes !== at;
+      this._set(this.dirty ? 'local' : 'saved');
+      return Promise.resolve();
+    }
     if (this.status !== 'offline') this._set('saving');
     this.sentAt = performance.now();
 
-    this.pushing = saveWorld({ id: this.id, rev: this.rev, snapshot, name: this.name, force, keepalive })
+    this.pushing = saveWorld({ id: this.id, send, keepalive })
       .then((res) => {
-        this.rev = res.rev;
+        this._landed(res, snapshot, json);
         this.attempt = 0;
         this.holdUntil = 0;
+        if (res.clashed) return this._clashed(res.clashed);
         // Something changed while that was in flight: keep the flag up.
         this.dirty = this.changes !== at;
-        writeCache(this.id, { rev: this.rev, dirty: this.dirty, snapshot });
-        this._set(this.dirty ? 'local' : 'saved', `${(res.bytes / 1024).toFixed(1)} kB · rev ${res.rev}`);
+        writeCache(this.id, { gen: this.gen, dirty: this.dirty, revs: plainRevs(this.revs), snapshot });
+        const kb = (res.sentBytes / 1024).toFixed(1);
+        const n = (res.patches || []).length;
+        this._set(this.dirty ? 'local' : 'saved', `${kb} kB · ${n} ${n === 1 ? 'place' : 'places'} · gen ${this.gen}`);
       })
       .catch((err) => this._failed(err))
       .finally(() => {
@@ -243,16 +321,22 @@ export class WorldSave {
     return this.pushing;
   }
 
+  _clashed(clashed) {
+    const n = (clashed.regions || []).length;
+    const bits = [];
+    if (n) bits.push(`${n} ${n === 1 ? 'place' : 'places'}`);
+    if (clashed.meta !== null && clashed.meta !== undefined) bits.push('the marks');
+    this._set('conflict', `someone else saved ${bits.join(' and ') || 'this world'} while you were building`);
+  }
+
   _failed(err) {
     const status = err instanceof WorldError ? err.status : 0;
-    if (status === 409) {
-      this.rev = (err.body && err.body.rev) || this.rev;
-      return this._set('conflict', 'someone else saved this world while you were building');
-    }
     if (status === 413) return this._set('full', err.message);
     if (status === 404) return this._set('gone', 'this world is no longer on the server');
     this.holdUntil = performance.now() + BACKOFF[Math.min(this.attempt++, BACKOFF.length - 1)];
-    this._set('offline', err.message);
+    // A 4xx that isn't about size or a missing world means the save itself was
+    // not acceptable: say so plainly, and back off rather than hammering.
+    this._set(status >= 400 && status < 500 ? 'local' : 'offline', err.message);
   }
 
   _set(status, detail = '') {
@@ -264,10 +348,13 @@ export class WorldSave {
 
 // ── The local copy ──────────────────────────────────────────────────────────
 
+const plainRevs = (revs) => ({ meta: revs.meta, patches: [...revs.patches] });
+const cachedRevs = (cached) => (cached.revs ? { meta: cached.revs.meta || 0, patches: cached.revs.patches || [] } : { meta: 0, patches: [] });
+
 function readCache(id) {
   try {
     const raw = JSON.parse(localStorage.getItem(CACHE_KEY(id)) || 'null');
-    if (raw && raw.snapshot && Number.isFinite(raw.rev)) return raw;
+    if (raw && raw.snapshot && Number.isFinite(raw.gen)) return raw;
   } catch {
     /* unreadable or blocked storage */
   }

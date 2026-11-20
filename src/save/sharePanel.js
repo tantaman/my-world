@@ -44,9 +44,13 @@ const TEMPLATE = /* html */ `
         <button type="button" data-act="mine">keep mine</button>
         <button type="button" data-act="theirs">open theirs</button>
       </div>
+      <p class="share-note">Only the places you both changed are in question.
+      Everything they did elsewhere stands either way.</p>
     </div>
     <p class="share-note">Anyone with this link can walk in — and build. The
-    last 20 saves are kept, so a flattened cabin isn't gone for good.</p>
+    world is kept in 64 m squares, so two people working apart never get in
+    each other's way, and a whole copy is kept now and then — the last 20 — so
+    a flattened cabin isn't gone for good.</p>
   </div>`;
 
 // What the corner button says, and what the panel reports underneath.
@@ -55,7 +59,7 @@ const STATES = {
   saving: { button: 'saving…', line: 'Saving…', tone: '' },
   saved: { button: 'saved', line: 'Saved.', tone: 'good' },
   offline: { button: 'offline', line: "Can't reach the save server — still trying.", tone: 'bad' },
-  conflict: { button: 'clash', line: 'Two versions of this world.', tone: 'bad' },
+  conflict: { button: 'clash', line: 'Two versions of some of this world.', tone: 'bad' },
   full: { button: 'too big', line: 'This world is too big to save.', tone: 'bad' },
   gone: { button: 'gone', line: 'This world is no longer on the server.', tone: 'bad' },
 };
@@ -133,7 +137,7 @@ export class SharePanel {
     const clash = save.status === 'conflict';
     this.panes.clash.hidden = !clash;
     // In a clash the box below carries the explanation, so don't say it twice.
-    if (clash && save.detail) this.el['clash-why'].textContent = `${capitalise(save.detail)}. Only one of the two can survive.`;
+    if (clash && save.detail) this.el['clash-why'].textContent = `${capitalise(save.detail)}.`;
 
     const unsaved = save.dirty && save.status !== 'saving';
     const line = unsaved && (save.status === 'saved' || save.status === 'local') ? 'Not saved yet.' : state.line;
