@@ -21,7 +21,9 @@
 //
 // A building that would stand where someone has built something, laid a
 // fire or left a stump is left out (so an old save never wakes up with a
-// saloon through its cabin).
+// saloon through its cabin), and no town grows on, or near enough to change,
+// a real place brought in from a photo (see src/hikes/): what is there is
+// what is really there.
 
 import * as THREE from 'three';
 import { Towns, OPEN, bodyOf } from './towns.js';
@@ -57,8 +59,9 @@ const _pv = new THREE.Matrix4();
 // landmarks for its old places, which the towns keep clear of.
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks'];
 export function installTowns(game) {
-  const { scene, camera, gen, chunks, grass, solids, player, builder, map, hud, save, sound, sky } = game;
-  const towns = new Towns(gen, { start: player.start, sites: game.landmarks ? game.landmarks.sites : null });
+  const { scene, camera, gen, landforms, chunks, grass, solids, player, builder, map, hud, save, sound, sky } = game;
+  const keepOff = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);
+  const towns = new Towns(gen, { start: player.start, sites: game.landmarks ? game.landmarks.sites : null, keepOff });
   const materials = {
     body: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }),
     glow: new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }),

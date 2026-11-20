@@ -13,7 +13,11 @@
 // The trees and stones in its way are hidden as it comes into view, the way
 // a felled tree is (see index.js). A town keeps clear of the old places, of
 // the mouths of the caves (where the hillside is cut open), of where people
-// first arrive, and of the hand-placed structures.
+// first arrive, and of the hand-placed structures. No town grows in a square
+// a real place reaches, or near enough to it to reach it (keepOff:
+// world/landforms.js reaches): the land there isn't the forest's alone, and
+// until it's fetched it isn't even known. That is told from the hikes'
+// cards, so a town never waits on, or changes with, a hike's land arriving.
 //
 // No three.js in here: the tests read it, and the map asks it what to label.
 //
@@ -79,10 +83,12 @@ export const FRONT_STEP = 0.9;
 export class Towns extends Sites {
   // start: where people first arrive (kept clear)
   // sites: the old places (landmarks), which towns keep clear of
-  constructor(gen, { start = gen.findSpawn(0, 0), sites = null } = {}) {
+  // keepOff(x0, z0, x1, z1): is any of that somewhere no town may be?
+  constructor(gen, { start = gen.findSpawn(0, 0), sites = null, keepOff = () => false } = {}) {
     super(gen, { start });
     this.size = CELL;
     this.spill = SPILL;
+    this.keepOff = keepOff;
     this.sites = sites || new Sites(gen, { start });
     this.caves = new Map(); // "cx:cz" -> the mouth of the cave in that square, or null
   }
@@ -97,6 +103,8 @@ export class Towns extends Sites {
 
   // ── Growing a cell ─────────────────────────────────────────────────────────
   _grow(ci, cj) {
+    // (as far out as anything of a town in this square can reach)
+    if (this.keepOff(ci * CELL - SPILL, cj * CELL - SPILL, (ci + 1) * CELL + SPILL, (cj + 1) * CELL + SPILL)) return null;
     const rng = mulberry32(hash2i(ci, cj, (this.gen.seed ^ SALT) >>> 0));
     if (rng() > CHANCE) return null;
     // drawn first, so that how long the search below takes can't change them
