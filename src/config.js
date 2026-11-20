@@ -40,8 +40,9 @@ export const CONFIG = {
   shadowExtent: 60,
   timeOfDay: num('time', 16.6), // hours, 0-24
 
-  // Player
-  walkSpeed: 3.4,
+  // Player (m/s). A brisk hiking walk; much faster than this and a real
+  // person breaks into a jog, so the stride starts to look frantic.
+  walkSpeed: 2.2,
   runSpeed: 7.5,
   jumpSpeed: 6.2,
   gravity: 19,

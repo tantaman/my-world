@@ -75,17 +75,18 @@ export class Peers {
       const moved = Math.hypot(p.pos.x - was, p.pos.z - wasZ) / Math.max(dt, 1e-4);
       p.speed += (moved - p.speed) * Math.min(1, dt * 8);
 
-      const turn = shortest(p.yaw, p.yawTo);
-      p.yaw += turn * Math.min(1, dt * 8);
+      const turn = shortest(p.yaw, p.yawTo) * Math.min(1, dt * 8);
+      p.yaw += turn;
       p.character.root.position.copy(p.pos);
       p.character.root.rotation.y = p.yaw;
-      p.character.update(dt, p.speed, true, 0, turn);
+      p.character.update(dt, p.speed, true, 0, turn / Math.max(dt, 1e-4));
       p.flag.position.set(p.pos.x, p.pos.y + 2.25, p.pos.z);
     }
   }
 
   #make(id, colour, x, z) {
     const character = new Character();
+    character.groundAt = this.heightAt;
     this.scene.add(character.root);
     // A small bright pennant above the head, so you can find each other.
     const flag = new THREE.Mesh(
