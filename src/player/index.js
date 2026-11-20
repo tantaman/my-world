@@ -7,6 +7,8 @@ import { SHARED, WADE } from '../render/uniforms.js';
 const round = (v, f = 100) => Math.round(v * f) / f;
 const finite = (v, otherwise) => (Number.isFinite(v) ? v : otherwise);
 
+// The features this uses, so it is installed after them (game/features.js).
+export const after = ['render', 'ui', 'world'];
 export function installPlayer(game) {
   const { scene, camera, chunks, gen, solids, hud, commands, save } = game;
 

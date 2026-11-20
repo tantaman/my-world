@@ -935,17 +935,28 @@ export const thinkingHut = {
 
 ## How it's put together
 
-The game is a list of **features**. Each is a function that takes the game
+The game is made of **features**. Each is a function that takes the game
 and installs itself — makes its things, says what it saves, binds its keys,
-adds what it does each frame — and `src/main.js` is little more than the list:
+adds what it does each frame. A feature lives in a folder of its own under
+`src/`, and nothing lists them: `src/main.js` finds every folder whose
+`index.js` exports an install function, and each says there which features
+it has to come after:
 
 ```js
-const FEATURES = [installRender, installHud, installWorld, installPlayer, installAudio,
-                  installBuild, installFires, installBlueprints, installMap, installLandmarks,
-                  installSave, installVoice, installWildlife, installSplashes, installMounts, installDebug];
+// src/fires/index.js
+export const after = ['render', 'world', 'audio', 'build'];
+export function installFires(game) { … }
 ```
 
-A feature lives in a folder of its own, and its `index.js` is the only file in
+They install in an order that puts each after the ones it names, and by name
+where that leaves a choice (`src/game/features.js`), so a new feature never
+changes the order of the others. `world.features` in the console shows the
+order. It is also the order tools sit on the tool bar, keys are listed on the
+help panel and systems run within a phase, so a feature can name another for
+its place as well as for its things: blueprints comes after fires to keep the
+plan tool ninth.
+
+A feature's `index.js` is the only file in
 it that knows about the game as a whole. Everything else in the folder is
 ordinary classes and functions that are handed what they need, which is what
 lets most of them be tested in Node with nothing else running.
@@ -1030,6 +1041,8 @@ sound) and an `index.js` that plugs it in:
 
 ```js
 // src/fires/index.js, in short
+export const after = ['render', 'world', 'audio', 'build'];  // whose things it uses
+
 export function installFires(game) {
   const { scene, camera, solids, sky, builder, sound, save } = game;
   const fires = new Fires({ scene, solids, sky });
@@ -1047,9 +1060,9 @@ export function installFires(game) {
 }
 ```
 
-`installFires` comes after `installBuild` in the list in `main.js`, because
-it needs the builder. Nothing else in the game was told about fires, with
-one exception: a fire ring was the first thing a roof couldn't go over, so
+Fires names `build` in its `after` because it needs the builder, and the
+others for the scene, the sky and the sound. Nothing else in the game was
+told about fires, not even `main.js`, with one exception: a fire ring was the first thing a roof couldn't go over, so
 obstacles learned a `roof` radius and the roof tool now checks it. When a new
 thing needs something the game doesn't offer yet, add it like that: as a
 general idea in the place that owns it, not as a special case for the thing.
@@ -1121,7 +1134,7 @@ install chromium`).
 
 ```
 src/
-  main.js                 which world to open, the list of features, the opening
+  main.js                 which world to open, finding the features, the opening
   config.js               tunables (+ URL overrides): the only reader of the address bar
   noise.js                seeded simplex noise, hashing, helpers
   core/
@@ -1131,6 +1144,7 @@ src/
     format.js             how numbers are written for people
   game/
     game.js               the Game: what features share, and the frame's phases
+    features.js           which folders are features, and the order they install in
     commands.js           keys and what they do; the help panel is written from it
     settings.js           the visitor's preferences
     debug.js              stats (V) and the console helpers

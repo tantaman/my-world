@@ -20,6 +20,8 @@ const ROOM = {
   roof: 0.5, // and no roof over it: no room within this of it can be roofed
 };
 
+// The features this uses, so it is installed after them (game/features.js).
+export const after = ['render', 'world', 'audio', 'build'];
 export function installFires(game) {
   const { scene, camera, solids, sky, builder, sound, save } = game;
 

@@ -8,10 +8,10 @@
 //     game.addSystem({ name: 'wildlife', phase: 'world', update: (f) => wildlife.update(f.dt) });
 //   }
 //
-// Features are listed, in order, in main.js. That list and the feature's own
-// folder are the only places a new feature has to touch: tools, sounds, saved
-// state, keys and help rows are all registered from inside the feature (see
-// "Extending the game" in the README).
+// main.js finds every feature and installs them in order (features.js: each
+// says what it comes after). So a new feature's own folder is the only place
+// it has to touch: tools, sounds, saved state, keys and help rows are all
+// registered from inside the feature (see "Extending the game" in the README).
 //
 // Each frame runs in phases, and within a phase in the order systems were
 // added:

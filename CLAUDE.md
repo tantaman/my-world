@@ -24,7 +24,12 @@ a player does (tools, movement, HUD, saving, sound, wildlife). Run
 ## How to add things
 
 A feature is a folder under `src/` whose `index.js` exports
-`install<Name>(game)`, added to `FEATURES` in `src/main.js`. Put new
+`install<Name>(game)` and `after`, the folders of the features it uses.
+`main.js` finds it: there is no list to add it to (`src/game/features.js`
+has the rules, and `npm test` checks `after` against what is taken from
+`game`). Where a feature installs is also where its tool sits on the bar and
+its keys on the help panel, so name a feature in `after` to follow it there
+too. Put new
 behaviour in a new feature, or in the feature that already owns it — not in
 `main.js`, `game/game.js`, `build/builder.js`, `audio/soundscape.js` or
 `save/worldSave.js`. Those are hosts; they should not learn about what plugs

@@ -63,6 +63,8 @@ const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
 const _sphere = new THREE.Sphere();
 const _pm = new THREE.Matrix4();
 
+// The features this uses, so it is installed after them (game/features.js).
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'splashes'];
 export function installMounts(game) {
   const { scene, camera, gen, chunks, solids, player, input, hud, commands, save, sound, builder, map, splashes, peers } = game;
 

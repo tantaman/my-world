@@ -1,5 +1,6 @@
 // The heads-up display: coordinates, prompts, the tool bar, the help panel.
-// Installed early, because nearly everything has something to say on it.
+// Nearly everything has something to say on it, so nearly every feature comes
+// after this one. It comes after nothing itself.
 
 import { Hud } from './hud.js';
 

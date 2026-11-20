@@ -12,6 +12,8 @@ import { CONFIG } from '../config.js';
 const PREFETCH_EVERY = 2000; // ms between checks
 const PREFETCH_AFTER = 120; // metres walked before the map is drawn afresh around you
 
+// The features this uses, so it is installed after them (game/features.js).
+export const after = ['render', 'ui', 'world', 'player'];
 export function installMap(game) {
   const { scene, chunks, player, input, hud, commands, save, structures } = game;
 

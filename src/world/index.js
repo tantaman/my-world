@@ -20,6 +20,8 @@ import { placeStructures } from '../structures/loader.js';
 const DAY_MINUTES = 24; // how long a full day takes when time flows
 const wrapHours = (h) => ((h % 24) + 24) % 24;
 
+// The features this uses, so it is installed after them (game/features.js).
+export const after = ['render'];
 export function installWorld(game) {
   const { scene, camera, commands, save } = game;
 
