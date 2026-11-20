@@ -9,12 +9,20 @@ import assert from 'node:assert/strict';
 export default async function ({ page, step, key, frames, shot }) {
   await step('find an old place', async () => {
     // The places the forest has (old cabins, wells, docks...) are on the map,
-    // nearest first beside it. Pick one there, track it, and go.
+    // nearest first beside it. Pick one there, track it, and go. The caves
+    // are places too, and many more of them, so start within sight of the
+    // nearest old place, or only caves may be listed.
+    await page.evaluate(async () => {
+      const s = world.landmarks.nearest(null, 4000);
+      if (s) await world.teleport(s.x + 60, s.z);
+      await T.frames(30);
+    });
     await key('KeyM');
     await frames(30);
-    const listed = await page.evaluate(() => [...document.querySelectorAll('#place-list button')].map((b) => ({ id: b.dataset.place, name: b.querySelector('.name').textContent })));
+    const listed = await page.evaluate(() => [...document.querySelectorAll('#place-list button')].map((b) => ({ id: b.dataset.place, name: b.querySelector('.name').textContent, old: !!world.landmarks.sites.byId(b.dataset.place) })));
     assert.ok(listed.length > 0, 'places are listed beside the map');
-    const place = listed[0];
+    const place = listed.find((p) => p.old); // (a cave or a hike may be nearer)
+    assert.ok(place, `an old place is among them (${listed.map((p) => p.id).join(', ')})`);
     await page.click(`#place-list button[data-place="${place.id}"]`);
     await frames(5);
     const card = await page.evaluate(() => ({ open: !document.getElementById('place-card').hidden, name: document.getElementById('place-name').textContent }));
