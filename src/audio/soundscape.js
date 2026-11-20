@@ -6,6 +6,7 @@
 // nothing is created until the first click / key / tap.
 
 import { clamp, lerp, smoothstep } from '../noise.js';
+import { playCall } from './calls.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -552,6 +553,15 @@ export class Soundscape {
       tt += d + gaps[i];
     });
     this._cleanup(end, [...nodes, lp]);
+  }
+
+  // ── Animals ──────────────────────────────────────────────────────────────
+  // A call from an animal standing at (x, y, z): see calls.js for the kinds.
+  call(kind, x, y, z, opts) {
+    if (!this.ctx || !this.enabled || (!this.offline && this.ctx.state !== 'running')) return;
+    const l = this.listener;
+    if (l && Math.hypot(x - l.x, z - l.z) > 260) return;
+    playCall(this, kind, x, y, z, opts);
   }
 
   // ── Footsteps ────────────────────────────────────────────────────────────
