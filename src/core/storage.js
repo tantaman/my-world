@@ -11,6 +11,7 @@ export const KEYS = {
   build: (seed) => `my-world:build:${seed}`, // what you changed in a local world
   marks: (seed) => `my-world:marks:${seed}`, // your map marks in a local world
   world: (id) => `my-world:world:${id}`, // this browser's copy of a world on the save server
+  blueprints: 'my-world:blueprints', // blueprints you copied from your buildings, for every world
 };
 
 export const storage = {

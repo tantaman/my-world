@@ -33,17 +33,8 @@ export const footing = {
       const why = b.buildings.canRemoveFooting(b.piece.b, f);
       return { type: 'footing', node: { x, z }, existing: f, b: b.piece.b, why, prompt: why ? `can't lift this footing: ${why}` : `<b>right-click</b> lift this footing (+${STONES} stones)` };
     }
-    const ground = b.chunks.heightAt(x, z);
-    const c = b.buildings.footingCandidate(x, z, ground);
-    const node = { x, z, ground, y0: c.y0 ?? (c.b ? c.b.y0 : ground + PIER.first) };
-    let bad = c.ok ? null : c.reason;
-    if (!bad && b.chunks.waterAt(x, z, _wet) && _wet.depth > -0.05) bad = "that's under water: fill it in first (shovel, right-click)";
-    if (!bad) {
-      const o = b.obstacles.near(x, z, 3).find((q) => q.footing && Math.hypot(q.x - x, q.z - z) < q.footing);
-      if (o) bad = `${o.what} is in the way`;
-    }
-    if (!bad && !b.have('stone', STONES)) bad = `you need ${STONES} stones (hands: pick some up)`;
-    if (bad) return { type: 'footing', node, bad: true, prompt: bad };
+    const { node, c, reason } = footingCheck(b, x, z);
+    if (reason) return { type: 'footing', node, bad: true, prompt: reason };
     const note = c.b ? `pier ${Math.round(c.pier * 100)} cm` : 'starts a new building at this level';
     return { type: 'footing', ok: true, node, c, prompt: `<b>hold click</b> dig a footing and set the stones <i>(${note})</i>` };
   },
@@ -63,24 +54,7 @@ export const footing = {
       b.dropHold();
       return false;
     }
-    const done = b.holding(`${t.node.x},${t.node.z}`, SET_TIME, io.dt);
-    b.face(t.node.x, t.node.z);
-    b.player.character.play('dig', 0.85, true);
-    b.digNoise(io.dt, 'dig', t.node, EARTH);
-    if (done) {
-      const { x, z, ground } = t.node;
-      b.terrain.clear(x, z, 0.75);
-      const fresh = !t.c.b;
-      if (b.buildings.addFooting(x, z, ground)) {
-        b.spend('stone', STONES);
-        b.sound.sfx('stone');
-        b.regrow(x, z, 1.5);
-        if (fresh) {
-          if (!b.stake.datum) b.stake.set(x, ground, z);
-          b.flash('a new building: its other footings must match this level');
-        }
-      }
-    }
+    digFooting(b, t.node, t.c, io.dt);
     return true;
   },
 
@@ -95,3 +69,46 @@ export const footing = {
     b.previews.show(this.ghost, t.ok);
   },
 };
+
+// Can a footing go in at node (x, z), here and now? What the prompt says, and
+// what the blueprint foreman asks before it digs.
+// -> { node: { x, z, ground, y0 }, c: footingCandidate, reason: why not, or
+//      null, short: it's stones that are lacking }
+export function footingCheck(b, x, z) {
+  const ground = b.chunks.heightAt(x, z);
+  const c = b.buildings.footingCandidate(x, z, ground);
+  const node = { x, z, ground, y0: c.y0 ?? (c.b ? c.b.y0 : ground + PIER.first) };
+  let reason = c.ok ? null : c.reason;
+  if (!reason && b.chunks.waterAt(x, z, _wet) && _wet.depth > -0.05) reason = "that's under water: fill it in first (shovel, right-click)";
+  if (!reason) {
+    const o = b.obstacles.near(x, z, 3).find((q) => q.footing && Math.hypot(q.x - x, q.z - z) < q.footing);
+    if (o) reason = `${o.what} is in the way`;
+  }
+  if (reason) return { node, c, reason };
+  if (!b.have('stone', STONES)) return { node, c, short: true, reason: `you need ${STONES} stones (hands: pick some up)` };
+  return { node, c, reason: null };
+}
+
+// One frame of digging the footing at `node` (from footingCheck); the stones
+// go in once the hole is dug. Call it every frame the work goes on.
+// -> true on the frame the footing is set.
+export function digFooting(b, node, c, dt) {
+  const done = b.holding(`${node.x},${node.z}`, SET_TIME, dt);
+  b.face(node.x, node.z);
+  b.player.character.play('dig', 0.85, true);
+  b.digNoise(dt, 'dig', node, EARTH);
+  if (!done) return false;
+  const { x, z, ground } = node;
+  b.terrain.clear(x, z, 0.75);
+  const fresh = !c.b;
+  if (b.buildings.addFooting(x, z, ground)) {
+    b.spend('stone', STONES);
+    b.sound.sfx('stone');
+    b.regrow(x, z, 1.5);
+    if (fresh) {
+      if (!b.stake.datum) b.stake.set(x, ground, z);
+      b.flash('a new building: its other footings must match this level');
+    }
+  }
+  return true;
+}

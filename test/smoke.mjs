@@ -1,7 +1,8 @@
 // A play-through in a real (headless) browser: boot the built game, fell a
 // tree, buck and hew it, pick up a stone, dig, raise a small cabin, roof it,
 // light a campfire in it, then reload and check all of it is still there;
-// wade into a stream and be carried by it.
+// wade into a stream and be carried by it; stake out a blueprint and let the
+// hiker build it.
 //
 //   npm run smoke                  build, then play through
 //   node test/smoke.mjs --report out.json --shots dir
@@ -531,6 +532,143 @@ try {
     return { prompts: Object.fromEntries(Object.entries(prompts).map(([k, v]) => [k, v.replace(/\d+ min/, 'N min')])), kept: kept.map(([x, z, y, wood, lit, ash]) => [x - site.x, z - site.z, wood, lit, ash]) };
   });
 
+  console.log('blueprints');
+  await step('choose a blueprint', async () => {
+    await key('Digit9');
+    assert.equal(await page.evaluate(() => T.tool()), 9, 'the blueprint tool is in hand');
+    const plans = await page.evaluate(() => world.blueprints.list());
+    assert.ok(plans.length >= 4, 'plans come with the game');
+    await key('Digit9');
+    assert.equal(await page.evaluate(() => world.blueprints.library.current.name), plans[1], '9 again: the next plan');
+    for (let i = 1; i < plans.length; i++) await key('Digit9');
+    assert.equal(await page.evaluate(() => world.blueprints.library.current.name), plans[0], 'and round to the first');
+    return { plans };
+  });
+
+  const plot = await step('stake one out', async () => {
+    // Move the crosshair about until the ghost is green, as you would: well
+    // clear of the cabin, on ground near enough level for the footings.
+    const found = await page.evaluate(async (m) => {
+      const H = (x, z) => world.chunks.heightAt(x, z);
+      const busy = (x, z) => T.plants(x, z, 5, ['pine', 'broad', 'birch']).length + T.plants(x, z, 3, ['rock']).length;
+      const x0 = Math.round(m.x);
+      const z0 = Math.round(m.z);
+      let tried = 0;
+      for (let r = 20; r < 90; r++) {
+        for (let dz = -r; dz <= r; dz++) {
+          for (let dx = -r; dx <= r; dx++) {
+            if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+            const x = x0 + dx;
+            const z = z0 + dz;
+            const hs = [H(x - 2, z - 1), H(x + 2, z - 1), H(x - 2, z + 2), H(x + 2, z + 2)];
+            if (Math.max(...hs) - Math.min(...hs) > 0.2 || busy(x, z + 0.5)) continue;
+            if (++tried > 40) return null;
+            await T.aimGround(x, z, 7);
+            if (/^click stake out the /.test(T.prompt())) return { x, z, prompt: T.prompt() };
+          }
+        }
+      }
+      return null;
+    }, middle);
+    assert.ok(found, 'somewhere the first plan will go');
+    for (let i = 0; i < 4; i++) await page.evaluate(() => T.tap('alt')); // turned all the way round
+    await page.evaluate(() => T.tap('use'));
+    const site = await page.evaluate(() => world.blueprints.site());
+    assert.ok(site, 'a click stakes it out');
+    const prompt = await page.evaluate(() => T.prompt());
+    assert.match(prompt, /is staked out/);
+    return { at: [site.x, site.z], plan: site.plan.name, ghost: found.prompt, prompt };
+  });
+
+  await step('it builds itself', async () => {
+    const from = await page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z }));
+    await key('KeyB');
+    assert.equal(await page.evaluate(() => world.blueprints.foreman.state), 'working', 'B sets it going');
+    // the footings, then the first course with each crossing notched in
+    const ok = await page.evaluate(() =>
+      T.until(() => {
+        const b = world.blueprints.foreman.building(world.builder.buildings).b;
+        return b && b.footings.size === 4 && b.logs.filter((L) => L.k <= 1 && L.seated).length === 4;
+      }, 120000),
+    );
+    assert.ok(ok, `the first course is in (it says: "${await page.evaluate(() => T.prompt())}")`);
+    const walked = await page.evaluate((f) => Math.hypot(world.player.pos.x - f.x, world.player.pos.z - f.z), from);
+    assert.ok(walked > 2, 'the hiker walked over to do it');
+    // your own keys take the hiker back
+    await page.keyboard.down('KeyW');
+    await frames(4);
+    await page.keyboard.up('KeyW');
+    await frames(3);
+    const f = await page.evaluate(() => [world.blueprints.foreman.state, world.blueprints.foreman.why]);
+    assert.deepEqual(f, ['paused', 'paused: you took over']);
+    await shot('8-blueprint-started');
+    return { walked: walked > 2, paused: f[1] };
+  });
+
+  await page.evaluate(() => T.frames(120));
+  await step('the site is remembered', async () => {
+    const had = await page.evaluate(() => world.blueprints.site());
+    await open('&creative');
+    assert.deepEqual(await page.evaluate(() => world.blueprints.site()), had);
+    assert.equal(await page.evaluate(() => world.blueprints.foreman.state), 'idle', 'and waits to be asked');
+    return { same: true };
+  });
+
+  await step('and it finishes the job', async () => {
+    // The courses in between go up through the same rules the tools use, as
+    // the cabin's did; the foreman lays the top course and raises the roof.
+    const filled = await page.evaluate(() => {
+      const f = world.blueprints.foreman;
+      const B = world.builder.buildings;
+      const b = f.building(B).b;
+      for (const L of b.logs) for (const n of [...L.below]) B.notch(b, L, n);
+      const top = Math.max(...f.placed.logs.map((L) => L.k));
+      let n = 0;
+      for (const L of f.placed.logs) {
+        if (L.k < 2 || L.k >= top || b.logs.some((M) => M.axis === L.axis && M.line === L.line && M.s0 === L.s0 && M.s1 === L.s1 && M.k === L.k)) continue;
+        const M = B.addLog(b, L.kind, L.axis, L.line, L.s0, L.s1);
+        if (!M) return { failed: [L.axis, L.line, L.s0, L.s1, L.k] };
+        for (const c of [...M.below]) B.notch(b, M, c);
+        n++;
+      }
+      return { n };
+    });
+    assert.ok(!filled.failed, `a log of the plan went up: ${filled.failed}`);
+    await key('KeyB');
+    assert.equal(await page.evaluate(() => T.tool()), 8, 'B picks the blueprint tool up');
+    const done = await page.evaluate(() => T.until(() => !world.blueprints.site(), 90000));
+    assert.ok(done, `it finished (it says: "${await page.evaluate(() => T.prompt())}")`);
+    const b = await page.evaluate(() => {
+      const B = world.builder.buildings.list.find((q) => q.roofs.length);
+      return B && { logs: B.logs.length, seated: B.logs.every((L) => L.seated), roofs: B.roofs.length, footings: B.footings.size };
+    });
+    const plan = await page.evaluate(() => JSON.parse(world.blueprints.export(world.blueprints.list()[0])));
+    assert.deepEqual(b, { logs: plan.logs.length, seated: true, roofs: 1, footings: 4 }, 'all of it, notched in and roofed');
+    await page.evaluate((p) => T.standAndAim(p.at[0] - 9, p.at[1] - 8, p.at[0], world.chunks.heightAt(p.at[0], p.at[1]) + 1.4, p.at[1]), plot);
+    await frames(20);
+    await shot('9-blueprint-built');
+    return { filledByRules: filled.n, ...b };
+  });
+
+  await step('copy a building down as a blueprint', async () => {
+    const at = corners[0];
+    await page.evaluate(
+      ([m, c]) => {
+        const b = world.builder.buildings.list.find((q) => [...q.footings.values()].some((f) => f.x === c[0] && f.z === c[1]));
+        return T.standAndAim(m.x, m.z - 5, m.x, b.y0 + 0.8, m.z);
+      },
+      [middle, at],
+    );
+    const prompt = await page.evaluate(() => T.prompt());
+    assert.match(prompt, /copy this building down/, `aiming at the cabin (prompt: "${prompt}")`);
+    await page.evaluate(() => T.tap('use'));
+    const kept = await page.evaluate(() => ({ names: world.blueprints.list(), stored: JSON.parse(localStorage.getItem('my-world:blueprints')) }));
+    assert.equal(kept.stored.plans.length, 1, 'kept in this browser');
+    assert.equal(kept.names.at(-1), kept.stored.plans[0].name);
+    assert.equal(kept.stored.plans[0].footings.length, 4);
+    return { name: kept.names.at(-1), logs: kept.stored.plans[0].logs.length };
+  });
+
   console.log('around the edges');
   await step('map and save panels', async () => {
     const hidden = (id) => page.evaluate((i) => document.getElementById(i).getAttribute('aria-hidden'), id);
@@ -744,8 +882,13 @@ try {
     });
     assert.equal(f.slots, n, 'it is on the tool bar');
     assert.equal(f.hint, `1–${n}`);
-    await key(`Digit${n}`);
-    assert.equal(await page.evaluate(() => T.tool()), n, 'the next number key picks it');
+    // the number keys go up to 9; past that, a tool is picked from the bar
+    if (n <= 9) await key(`Digit${n}`);
+    else {
+      await page.evaluate((i) => document.querySelectorAll('#hotbar .slot')[i - 1].dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })), n);
+      await frames(3);
+    }
+    assert.equal(await page.evaluate(() => T.tool()), n, n <= 9 ? 'the next number key picks it' : 'and it can be picked from the bar');
     await page.evaluate((m) => T.aimGround(m.x - 6, m.z - 6, 3), middle);
     assert.equal(await page.evaluate(() => T.prompt()), 'click plant a flag', 'its prompt shows');
     await page.evaluate(() => T.tap('use'));

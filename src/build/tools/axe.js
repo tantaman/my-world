@@ -143,20 +143,24 @@ function swingAt(b, t) {
         b.flash(`+${r.meters} m of log`);
       }
     });
-  } else if (t.type === 'notch') {
-    const P = b.player.pos;
-    b.face(t.x, t.z);
-    b.swing(t.y - P.y > 1.15 ? 'chop' : 'chopLow', SWING.chop, 0.6, () => {
-      b.sound.sfx('notch');
-      b.chips.burst(new THREE.Vector3(t.x, t.y, t.z), 6, CHIPS, 2, 0.3);
-      const seated = b.buildings.notch(t.b, t.L, t.n);
-      if (seated) {
-        b.sound.sfx('thud', { size: 0.8 });
-        const left = t.b.logs.filter((L) => !L.seated).length;
-        b.flash(left ? `notched in · ${left} more to notch` : 'notched in');
-      }
-    });
-  }
+  } else if (t.type === 'notch') cutNotch(b, t);
+}
+
+// One swing to cut the notch in log t.L of building t.b at node t.n, which is
+// at (t.x, t.y, t.z). The blueprint foreman swings the same way.
+export function cutNotch(b, t) {
+  const P = b.player.pos;
+  b.face(t.x, t.z);
+  b.swing(t.y - P.y > 1.15 ? 'chop' : 'chopLow', SWING.chop, 0.6, () => {
+    b.sound.sfx('notch');
+    b.chips.burst(new THREE.Vector3(t.x, t.y, t.z), 6, CHIPS, 2, 0.3);
+    const seated = b.buildings.notch(t.b, t.L, t.n);
+    if (seated) {
+      b.sound.sfx('thud', { size: 0.8 });
+      const left = t.b.logs.filter((L) => !L.seated).length;
+      b.flash(left ? `notched in · ${left} more to notch` : 'notched in');
+    }
+  });
 }
 
 // Square up a log lying at your feet.
