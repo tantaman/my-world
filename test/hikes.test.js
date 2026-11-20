@@ -408,10 +408,15 @@ test('hikes lie as far apart as they really are, at their own scale', () => {
   assert.ok(b[0] > a[0] && b[1] > a[1], 'and in the same direction: east-south-east');
   const card = { radius: 800, fade: 200, scale: 0.2 };
   assert.throws(() => placeHike({ photo: ORIGIN, ...card }), /where everyone starts/);
-  assert.throws(() => placeHike({ photo: { lat: -33.87, lon: 151.21 }, ...card }), /further than the game can reach/); // Sydney
-  assert.ok(placeHike({ photo: { lat: 35.68, lon: 139.69 }, ...card }).far, 'Tokyo is in reach, a little blurred'); // ~7,700 km
+  // The whole Earth is in reach. What gives, far out, is the shape of the
+  // map: true along the line from the middle, wider than life across it.
+  const sydney = placeHike({ photo: { lat: -33.87, lon: 151.21 }, ...card }); // ~12,400 km
+  assert.ok(Math.abs(Math.hypot(...sydney.at) / 0.2 - haversine(ORIGIN, { lat: -33.87, lon: 151.21 })) < 20000, 'Sydney is as far from the middle as it really is');
+  assert.ok(sydney.stretch > 2 && sydney.stretch < 2.2, `and the map round it is twice as wide as life (${sydney.stretch.toFixed(2)})`);
+  assert.match(sydney.notes.join(), /wider than life/, 'which the importer says');
   const placed = placeHike({ photo: stormKing, ...card });
-  assert.deepEqual([placed.datum, placed.near, placed.far], [null, null, false], 'far from any other, it sets its own heights');
+  assert.ok(placed.stretch < 1.001 && !placed.notes.length, 'near the middle it is true every way');
+  assert.deepEqual([placed.datum, placed.near], [null, null], 'far from any other, it sets its own heights');
 });
 
 test('hikes that overlap line up exactly, and stand on the same heights', () => {

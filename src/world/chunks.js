@@ -2,6 +2,11 @@
 // a terrain mesh (rebuilt at a coarser resolution as you walk away from it)
 // and instanced vegetation placed deterministically from the seed.
 //
+// Everything a chunk draws is measured from the chunk's corner, where its
+// meshes are put: the ground, the water and each plant. The numbers the
+// graphics card is given stay small however far out the chunk is (see
+// render/origin.js).
+//
 // The heavy lifting (noise evaluation, geometry buffers, placement) happens in
 // a small pool of Web Workers so walking never stutters. If workers are not
 // available it falls back to generating on the main thread within a budget.
@@ -13,10 +18,7 @@ import { buildWaterGeometry } from './waterSurface.js';
 import { NO_WATER } from './water.js';
 import { FLORA } from './flora.js';
 import { Emitter } from '../core/events.js';
-
-const KEY_OFF = 32768;
-const chunkKey = (cx, cz) => (cx + KEY_OFF) * 65536 + (cz + KEY_OFF);
-
+import { cellKey as chunkKey } from '../core/geom.js';
 
 const _m = new THREE.Matrix4();
 const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -579,7 +581,7 @@ export class ChunkManager extends Emitter {
         const o = k * VEG_STRIDE;
         const s = list[o + 4];
         const tint = list[o + 5];
-        _p.set(list[o], list[o + 1], list[o + 2]);
+        _p.set(list[o] - ch.x0, list[o + 1], list[o + 2] - ch.z0);
         _q.setFromAxisAngle(UP, list[o + 3]);
         if (kind === 'rock') {
           const e = list[o + 6];
@@ -596,6 +598,7 @@ export class ChunkManager extends Emitter {
       mesh.computeBoundingSphere();
       mesh.castShadow = FLORA[kind].shadow;
       mesh.receiveShadow = true;
+      mesh.position.set(ch.x0, 0, ch.z0);
       mesh.matrixAutoUpdate = false;
       mesh.updateMatrix();
       this.scene.add(mesh);

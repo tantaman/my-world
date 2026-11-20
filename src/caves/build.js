@@ -221,7 +221,8 @@ function decorate(cave, cols, rng) {
       block(x, z, 0.7);
     }
   }
-  return { hang: Float32Array.from(hang), stand: Float32Array.from(stand), crystals: Float32Array.from(crystals), glow: Float32Array.from(glow), drips: Float32Array.from(drips) };
+  // (64-bit: these are places in the world, which far out a float32 can't hold to the centimetre)
+  return { hang: Float64Array.from(hang), stand: Float64Array.from(stand), crystals: Float64Array.from(crystals), glow: Float64Array.from(glow), drips: Float64Array.from(drips) };
 }
 
 // ── The mouth ───────────────────────────────────────────────────────────────

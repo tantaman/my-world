@@ -8,9 +8,8 @@
 import { smoothstep } from '../noise.js';
 import { regionOf } from '../save/regions.js';
 import { DIG } from './constants.js';
+import { cellKey as K } from '../core/geom.js';
 
-const OFF = 1 << 20;
-const K = (ix, iz) => (ix + OFF) * 2097152 + (iz + OFF);
 
 export class TerrainEdits {
   constructor(gen, chunks) {

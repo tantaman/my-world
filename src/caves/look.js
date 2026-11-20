@@ -10,6 +10,11 @@
 // of the sun's, all of it in the mouth (where the shadow map does the
 // detail) and none past the first bend. What's left to see by deep inside is
 // what you bring: the headlamp (lamp.js).
+//
+// A cave is built round a spot of its own (the corner its rock was meshed
+// from): the group is put there, and everything in it is measured from it,
+// so no big number goes to the graphics card (render/origin.js). The rock's
+// grain is drawn from that same frame, which never moves.
 
 import * as THREE from 'three';
 import { SHARED } from '../render/uniforms.js';
@@ -19,7 +24,9 @@ import { NOISE_GLSL } from '../render/glsl.js';
 export const ROCK = { uSkyFill: { value: 1 } };
 
 // The rock. With { decor: true }, for things on it (stalactites): instanced,
-// with aSky per instance and nothing to cut off at the hillside.
+// with aSky per instance and nothing to cut off at the hillside. vRock is
+// where in the cave a point is, from the cave's own spot (the group's: see
+// caveObject), which is level with the world's zero, so its y is a height.
 export function createRockMaterial({ decor = false } = {}) {
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: decor ? 0.6 : 0.88, metalness: 0 });
   mat.onBeforeCompile = (shader) => {
@@ -39,9 +46,9 @@ export function createRockMaterial({ decor = false } = {}) {
         vSky = aSky;
         ${decor ? '' : 'vGround = aGround;'}
         #ifdef USE_INSTANCING
-          vRock = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+          vRock = (instanceMatrix * vec4(transformed, 1.0)).xyz;
         #else
-          vRock = (modelMatrix * vec4(transformed, 1.0)).xyz;
+          vRock = transformed;
         #endif`,
       );
     shader.fragmentShader = shader.fragmentShader
@@ -80,7 +87,7 @@ export function createRockMaterial({ decor = false } = {}) {
         #include <lights_fragment_maps>`,
       );
   };
-  mat.customProgramCacheKey = () => (decor ? 'cave-decor-v3' : 'cave-rock-v3');
+  mat.customProgramCacheKey = () => (decor ? 'cave-decor-v4' : 'cave-rock-v4');
   return mat;
 }
 
@@ -234,11 +241,14 @@ export function caveKit(models, vegetation) {
   };
 }
 
-// Everything to draw for a built cave (build.js's result), in one group.
+// Everything to draw for a built cave (build.js's result), in one group, put
+// at the cave's own spot (mesh.origin) with all of it measured from there.
 export function caveObject(kit, built) {
   const group = new THREE.Group();
   group.name = built.cave.id;
   const { mesh, decor, rocks } = built;
+  const [ox, oy, oz] = mesh.origin;
+  group.position.set(ox, oy, oz);
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(mesh.position, 3));
@@ -249,7 +259,6 @@ export function caveObject(kit, built) {
   geo.setIndex(new THREE.BufferAttribute(mesh.index, 1));
   geo.computeBoundingSphere();
   const rock = new THREE.Mesh(geo, kit.rock);
-  rock.position.set(mesh.origin[0], mesh.origin[1], mesh.origin[2]);
   rock.customDepthMaterial = kit.rockDepth;
   rock.castShadow = true;
   rock.receiveShadow = true;
@@ -265,7 +274,7 @@ export function caveObject(kit, built) {
     const im = new THREE.InstancedMesh(g, kit.decor, n);
     for (let i = 0; i < n; i++) {
       const o = i * 6;
-      _p.set(list[o], list[o + 1], list[o + 2]);
+      _p.set(list[o] - ox, list[o + 1] - oy, list[o + 2] - oz);
       _q.setFromAxisAngle(_s.set(0, 1, 0), list[o + 5] * 6.283);
       _s.set(list[o + 4], list[o + 3], list[o + 4]);
       im.setMatrixAt(i, _m.compose(_p, _q, _s));
@@ -286,7 +295,7 @@ export function caveObject(kit, built) {
     for (let i = 0; i < n; i++) {
       const o = i * 8;
       const [x, y, z, len, rad, yaw, out, hue] = decor.crystals.subarray(o, o + 8);
-      _p.set(x, y, z);
+      _p.set(x - ox, y - oy, z - oz);
       // turned about its own length, then leant out from the wall
       _e.set(Math.cos(out) * 0.55, yaw, -Math.sin(out) * 0.55, 'XZY');
       _q.setFromEuler(_e);
@@ -303,8 +312,11 @@ export function caveObject(kit, built) {
     const p = new Float32Array(n * 3);
     const ph = new Float32Array(n);
     for (let i = 0; i < n; i++) {
-      p.set(decor.glow.subarray(i * 4, i * 4 + 3), i * 3);
-      ph[i] = decor.glow[i * 4 + 3];
+      const o = i * 4;
+      p[i * 3] = decor.glow[o] - ox;
+      p[i * 3 + 1] = decor.glow[o + 1] - oy;
+      p[i * 3 + 2] = decor.glow[o + 2] - oz;
+      ph[i] = decor.glow[o + 3];
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(p, 3));
@@ -316,7 +328,7 @@ export function caveObject(kit, built) {
   if (rocks.length) {
     const im = new THREE.InstancedMesh(kit.boulder, kit.vegetation, rocks.length);
     rocks.forEach((r, i) => {
-      _p.set(r.x, r.y, r.z);
+      _p.set(r.x - ox, r.y - oy, r.z - oz);
       _q.setFromAxisAngle(_s.set(0, 1, 0), r.yaw);
       _s.set(r.s, r.sy, r.s * 1.1);
       im.setMatrixAt(i, _m.compose(_p, _q, _s));

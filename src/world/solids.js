@@ -12,8 +12,9 @@
 // There is one of these for the whole world. The player, the animals and the
 // camera all read it; whoever puts something solid in the world writes to it.
 
+import { cellKey as ck } from '../core/geom.js';
+
 const CELL = 8;
-const ck = (cx, cz) => (cx + 32768) * 65536 + (cz + 32768);
 
 export class Solids {
   constructor() {

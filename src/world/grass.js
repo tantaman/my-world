@@ -7,10 +7,9 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { mulberry32, hash2i, smoothstep, createSimplex2 } from '../noise.js';
 import { NO_WATER } from './water.js';
-import { growRect } from '../core/geom.js';
+import { growRect, cellKey as tileKey } from '../core/geom.js';
 
 const REGROW_EVERY = 0.35; // seconds between regrowing changed ground
-const tileKey = (tx, tz) => (tx + 32768) * 65536 + (tz + 32768);
 
 // Blade shading multipliers (the hue comes from the ground shader).
 const C_ROOT = new THREE.Color(0.5, 0.5, 0.45);

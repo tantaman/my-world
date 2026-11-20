@@ -448,7 +448,9 @@ export class Buildings {
     }
     for (const r of b.roofs) addRoof(m, r, ROOF.pitch, ROOF.overhang, b.id * 100 + r.id);
     if (!m.empty) {
-      b.mesh = new THREE.Mesh(m.build(), this.material);
+      const at = m.anchor();
+      b.mesh = new THREE.Mesh(m.build(at), this.material);
+      b.mesh.position.copy(at);
       b.mesh.castShadow = true;
       b.mesh.receiveShadow = true;
       b.mesh.userData.building = b;

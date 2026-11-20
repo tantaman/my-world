@@ -30,6 +30,7 @@
 // carves the land around them.
 
 import { hash2i, mulberry32, smoothstep } from '../noise.js';
+import { cellKey as keyOf } from '../core/geom.js';
 
 export const NET = {
   cell: 96, // m between nodes
@@ -67,7 +68,6 @@ const OFFS = [
   [0, 1],
   [1, 1],
 ];
-const keyOf = (i, j) => (i + 32768) * 65536 + (j + 32768);
 // a strict order on nodes: by height, then by key, so ties can't make cycles
 const below = (a, b) => a.e < b.e || (a.e === b.e && a.k < b.k);
 

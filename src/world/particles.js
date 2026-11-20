@@ -1,9 +1,16 @@
 // Drifting pollen / dust motes by day, fireflies by night. One-pixel points
 // in the low-res render, which is exactly what you'd hand-place in pixel art.
 // They belong to the open air, and thin out where the sky doesn't reach (a cave).
+//
+// The motes fill a box that follows you, each wrapping round to the far side
+// as it leaves. The box is the object, put where you are; the shader works
+// out each mote from the middle of it, so its numbers stay small wherever
+// that is (render/origin.js).
 
 import * as THREE from 'three';
 import { SHARED, SKY } from '../render/uniforms.js';
+
+const mod = (a, n) => ((a % n) + n) % n;
 
 export function createParticles(count = 900) {
   const pos = new Float32Array(count * 3);
@@ -20,7 +27,7 @@ export function createParticles(count = 900) {
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       uTime: SHARED.uTime,
-      uCenter: { value: new THREE.Vector3() },
+      uPhase: { value: new THREE.Vector2() }, // where the middle is within the box's own repeat (x, z)
       uGround: { value: 0 },
       uBox: { value: new THREE.Vector3(46, 9, 46) },
       uOpen: { value: 1 },
@@ -30,7 +37,7 @@ export function createParticles(count = 900) {
     vertexShader: /* glsl */ `
       attribute float aSeed;
       uniform float uTime;
-      uniform vec3 uCenter;
+      uniform vec2 uPhase;
       uniform float uGround;
       uniform vec3 uBox;
       uniform float uNight;
@@ -40,8 +47,8 @@ export function createParticles(count = 900) {
         vec3 p = position * uBox;
         float t = uTime * (0.15 + aSeed * 0.2);
         p += vec3(sin(t + aSeed * 31.0) * 1.6, sin(t * 0.7 + aSeed * 17.0) * 0.8 + uTime * 0.05, cos(t * 0.9 + aSeed * 23.0) * 1.6);
-        vec3 c = vec3(uCenter.x, uGround, uCenter.z);
-        p = mod(p - c + uBox * 0.5, uBox) - uBox * 0.5 + c;
+        // each mote keeps its place in the world as the box moves over it
+        p.xz = mod(p.xz - uPhase + uBox.xz * 0.5, uBox.xz) - uBox.xz * 0.5;
         p.y = uGround + mod(p.y - uGround, uBox.y) + 0.2;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
@@ -74,7 +81,9 @@ export function createParticles(count = 900) {
     object: points,
     // open: how much of the sky reaches here (Sky.open)
     update(center, groundY, open = 1) {
-      mat.uniforms.uCenter.value.copy(center);
+      const box = mat.uniforms.uBox.value;
+      points.position.set(center.x, 0, center.z);
+      mat.uniforms.uPhase.value.set(mod(center.x, box.x), mod(center.z, box.z));
       mat.uniforms.uGround.value = groundY - 1;
       mat.uniforms.uOpen.value = open;
     },

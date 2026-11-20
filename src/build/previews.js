@@ -55,16 +55,16 @@ class GridDots {
     previews.add(this.points, 0);
   }
 
+  // The dots are measured from (cx, cz), where the points are put.
   place(cx, cz) {
     const R = this.R;
     const pos = this.points.geometry.attributes.position;
+    this.points.position.set(cx, 0, cz);
     let i = 0;
     for (let dz = -R; dz <= R; dz++) {
       for (let dx = -R; dx <= R; dx++) {
-        const x = cx + dx;
-        const z = cz + dz;
         const inside = dx * dx + dz * dz <= R * R;
-        pos.setXYZ(i++, x, inside ? this.chunks.heightAt(x, z) + 0.04 : -9999, z);
+        pos.setXYZ(i++, dx, inside ? this.chunks.heightAt(cx + dx, cz + dz) + 0.04 : -9999, dz);
       }
     }
     pos.needsUpdate = true;
@@ -83,13 +83,15 @@ export class GroundRing {
     previews.add(this.line, 0);
   }
 
+  // The ring is measured from its middle, where the line is put.
   place(x, z, r) {
     const pos = this.line.geometry.attributes.position;
+    this.line.position.set(x, 0, z);
     for (let i = 0; i < pos.count; i++) {
       const a = (i / pos.count) * Math.PI * 2;
-      const px = x + Math.cos(a) * r;
-      const pz = z + Math.sin(a) * r;
-      pos.setXYZ(i, px, this.chunks.heightAt(px, pz) + 0.05, pz);
+      const dx = Math.cos(a) * r;
+      const dz = Math.sin(a) * r;
+      pos.setXYZ(i, dx, this.chunks.heightAt(x + dx, z + dz) + 0.05, dz);
     }
     pos.needsUpdate = true;
     this.line.visible = true;

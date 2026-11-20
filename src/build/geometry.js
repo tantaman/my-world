@@ -35,6 +35,14 @@ const _m3 = new THREE.Matrix3();
 
 // Accumulates transformed primitives into one vertex-coloured geometry.
 // color(p, n, out) gets the *local* position and normal of each vertex.
+//
+// Pieces may be added where they are in the world (a cabin's logs are). The
+// geometry mustn't hold numbers that big, though: a vertex is a 32-bit float
+// (render/origin.js). So such a mesh is built from a spot of its own:
+//
+//   const at = m.anchor();
+//   const mesh = new THREE.Mesh(m.build(at), material);
+//   mesh.position.copy(at);
 export class Mesher {
   constructor() {
     this.pos = [];
@@ -90,9 +98,24 @@ export class Mesher {
     return this.n === 0;
   }
 
-  build() {
+  // A spot to build from: a whole metre near the first vertex, on the level
+  // of zero (heights are small as they are).
+  anchor() {
+    return new THREE.Vector3(Math.round(this.pos[0] || 0), 0, Math.round(this.pos[2] || 0));
+  }
+
+  // The geometry, measured from `at` (if given, the mesh must be put there).
+  build(at = null) {
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    const pos = new Float32Array(this.pos.length);
+    const [ax, ay, az] = at ? [at.x, at.y, at.z] : [0, 0, 0];
+    for (let i = 0; i < pos.length; i += 3) {
+      // taken away as 64-bit numbers, before they're cut down to floats
+      pos[i] = this.pos[i] - ax;
+      pos[i + 1] = this.pos[i + 1] - ay;
+      pos[i + 2] = this.pos[i + 2] - az;
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     g.setIndex(this.idx);

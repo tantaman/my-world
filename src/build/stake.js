@@ -21,21 +21,22 @@ export class GradeStake {
       new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
-        uniforms: { uCenter: { value: new THREE.Vector2() } },
         vertexShader: /* glsl */ `
-          varying vec3 vW;
+          varying vec3 vW; // as drawn: whole metres from the world, so the grid lines up (render/origin.js)
+          varying vec2 vOut; // from the stake
           void main() {
             vec4 w = modelMatrix * vec4(position, 1.0);
             vW = w.xyz;
+            vOut = position.xz;
             gl_Position = projectionMatrix * viewMatrix * w;
           }`,
         fragmentShader: /* glsl */ `
-          uniform vec2 uCenter;
           varying vec3 vW;
+          varying vec2 vOut;
           void main() {
             vec2 g = abs(fract(vW.xz + 0.5) - 0.5);
             float line = 1.0 - smoothstep(0.0, 0.035, min(g.x, g.y));
-            float d = length(vW.xz - uCenter);
+            float d = length(vOut);
             float fade = 1.0 - smoothstep(7.0, 12.5, d);
             vec3 col = mix(vec3(0.25, 0.55, 0.75), vec3(0.85, 0.95, 1.0), line);
             gl_FragColor = vec4(col * 0.9, (0.26 + line * 0.4) * fade);
@@ -74,7 +75,6 @@ export class GradeStake {
     this.plane.visible = on && !!this.datum;
     if (!this.plane.visible) return;
     this.plane.position.set(this.datum.x, this.datum.y, this.datum.z);
-    this.plane.material.uniforms.uCenter.value.set(this.datum.x, this.datum.z);
   }
 
   load(datum) {

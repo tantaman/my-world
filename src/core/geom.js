@@ -31,5 +31,12 @@ export function growRect(r, x, z, pad = 0) {
   return [Math.min(r[0], x - pad), Math.min(r[1], z - pad), Math.max(r[2], x + pad), Math.max(r[3], z + pad)];
 }
 
+// One number for a pair of whole numbers (a chunk, a tile, a grid node, a
+// metre of ground), to key a Map by. Good for 33 million either way: at a
+// metre to the cell, several times round the Earth. Keys sort by i, then j.
+const KEY_OFF = 2 ** 25;
+const KEY_SPAN = 2 ** 26;
+export const cellKey = (i, j) => (i + KEY_OFF) * KEY_SPAN + (j + KEY_OFF);
+
 // A scratch record for ChunkManager.waterAt(x, z, out).
 export const waterSample = () => ({ level: 0, depth: 0, flowX: 0, flowZ: 0, foam: 0 });

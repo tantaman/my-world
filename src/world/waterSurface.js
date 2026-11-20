@@ -18,13 +18,33 @@
 // (materials.js), so shallow water shows its stones.
 
 import * as THREE from 'three';
-import { NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL } from '../render/glsl.js';
+import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL, PERIOD } from '../render/glsl.js';
 import { SHARED, SKY, WADE } from '../render/uniforms.js';
 import { NO_WATER } from './water.js';
 import { WATER_STRIDE as WS } from './chunkGen.js';
 
 
 const UNSET = NO_WATER * 0.5;
+
+// The wind's ripples on still water are two layers of noise, each on a grid
+// turned (by ROT1 and ROT2 in the shader: a 3-4-5 and a 7-24-25 triangle) so
+// that neither grid shows. For a turned grid to repeat on the world's period
+// (render/glsl.js) the cells across it must come to a multiple of 5, or of
+// 25, and the lattice then wraps a fifth, or a twenty-fifth, of the way.
+// → the GLSL arguments of rippleGrad for a first layer of about f cells to
+// the metre and a second k times finer: its scale, and the two wraps.
+function turned(f, k) {
+  const n1 = Math.round((f * PERIOD) / 5) * 5;
+  const n2 = Math.round((f * k * PERIOD) / 25) * 25;
+  const lit = (v) => (Number.isInteger(v) ? v.toFixed(1) : v.toPrecision(9));
+  return { scale: lit(n1 / PERIOD), args: `${lit(n1 / 5)}, ${lit(n2 / n1)}, ${lit(n2 / 25)}` };
+}
+const RUFFLE_A = turned(0.9, 2.3);
+const RUFFLE_B = turned(0.37, 2.3);
+const LEAVES = turned(0.35, 2.9);
+// Running water's patterns are drawn in a frame that turns with the current,
+// which can't repeat on any period: their lattice just wraps far away.
+const LOOSE = '4096.0, 2.3, 4096.0';
 
 // Water geometry for a chunk, or null if it has none. Positions are local to
 // the chunk, like its terrain mesh.
@@ -136,7 +156,7 @@ export function createWaterMaterial() {
     blendDst: THREE.OneMinusSrcAlphaFactor,
   });
   mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, SKY, WADE, { uPlayer: SHARED.uPlayer, uWind: SHARED.uWind });
+    Object.assign(shader.uniforms, SKY, WADE, { uPlayer: SHARED.uPlayer, uWind: SHARED.uWind, uOrigin: SHARED.uOrigin });
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -173,31 +193,35 @@ export function createWaterMaterial() {
         varying float vFoam;
         varying float vDepth;
         varying vec2 vSky; // x: leaves overhead, y: how open it is
-        varying vec3 vWPos;
+        varying vec3 vWPos; // as drawn: see worldXZ
         ${NOISE_GLSL}
+        ${WORLD_GLSL}
+        ${WORLD_NOISE_GLSL}
         ${SKY_GLSL}
         // Smooth value noise (quintic, so its slope has no creases) with its
-        // gradient: (value, d/dx, d/dy).
-        vec3 vnoiseD(vec2 p) {
+        // gradient: (value, d/dx, d/dy). Its lattice repeats every m cells.
+        vec3 vnoiseD(vec2 p, float m) {
           vec2 i = floor(p);
           vec2 f = fract(p);
           vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
           vec2 du = 30.0 * f * f * (f * (f - 2.0) + 1.0);
-          float a = hash12(i);
-          float b = hash12(i + vec2(1.0, 0.0));
-          float c = hash12(i + vec2(0.0, 1.0));
-          float d = hash12(i + vec2(1.0, 1.0));
+          float a = hash12(wrapCell(i, m));
+          float b = hash12(wrapCell(i + vec2(1.0, 0.0), m));
+          float c = hash12(wrapCell(i + vec2(0.0, 1.0), m));
+          float d = hash12(wrapCell(i + vec2(1.0, 1.0), m));
           float k4 = a - b - c + d;
           return vec3(a + (b - a) * u.x + (c - a) * u.y + k4 * u.x * u.y, du * (vec2(b - a, c - a) + k4 * u.yx));
         }
         // gradient of the ripple field (per unit of p): two layers, turned
-        // against each other so the grid they're made on doesn't show
+        // against each other so the grid they're made on doesn't show. The
+        // second is k2 times finer; m1 and m2 are where their lattices wrap
+        // (see turned(), above).
         const mat2 ROT1 = mat2(0.8, 0.6, -0.6, 0.8);
         const mat2 ROT2 = mat2(0.28, -0.96, 0.96, 0.28);
-        vec2 rippleGrad(vec2 p) {
-          vec2 g1 = vnoiseD(ROT1 * p).yz * ROT1;
-          vec2 g2 = vnoiseD(ROT2 * p * 2.3 + 7.1).yz * ROT2;
-          return g1 * 0.65 + g2 * (0.35 * 2.3);
+        vec2 rippleGrad(vec2 p, float m1, float k2, float m2) {
+          vec2 g1 = vnoiseD(ROT1 * p, m1).yz * ROT1;
+          vec2 g2 = vnoiseD(ROT2 * p * k2 + 7.1, m2).yz * ROT2;
+          return g1 * 0.65 + g2 * (0.35 * k2);
         }
         // a scatter of small specks, one at most to a cell, this many of them
         float fleck(vec2 p, float many) {
@@ -209,7 +233,7 @@ export function createWaterMaterial() {
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
-        vec2 wp = vWPos.xz;
+        vec2 wp = worldXZ(vWPos);
         float depth = max(vDepth, 0.0);
         float speed = length(vFlow);
         float still = 1.0 - smoothstep(0.06, 0.3, speed);
@@ -228,25 +252,25 @@ export function createWaterMaterial() {
         vec2 run1 = fp - vec2(speed * ph1 * CYC, 0.0) + vec2(5.3, 2.9);
         // ripples, and over them streaks drawn out along the current, the
         // faster it runs the longer and finer
-        vec2 g0 = rippleGrad(run0 * 1.1);
-        vec2 g1 = rippleGrad(run1 * 1.1);
+        vec2 g0 = rippleGrad(run0 * 1.1, ${LOOSE});
+        vec2 g1 = rippleGrad(run1 * 1.1, ${LOOSE});
         vec2 gr = g0.x * fdir + g0.y * fper;
         gr = mix(g1.x * fdir + g1.y * fper, gr, wt0) * 1.1;
         float stretch = 1.0 + 1.5 * smoothstep(0.3, 2.0, speed);
         vec2 sk = vec2(0.5 / stretch, 2.2);
-        vec2 s0 = rippleGrad(run0 * sk);
-        vec2 s1 = rippleGrad(run1 * sk + 0.37);
+        vec2 s0 = rippleGrad(run0 * sk, ${LOOSE});
+        vec2 s1 = rippleGrad(run1 * sk + 0.37, ${LOOSE});
         vec2 gs = mix(s1, s0, wt0);
         gs = (gs.x * sk.x) * fdir + (gs.y * sk.y) * fper;
         vec2 gRun = (gr * 0.6 + gs * 0.5) * (0.05 + 0.035 * min(speed, 2.5));
         // Still water: the wind ruffles it in two drifting layers.
-        vec2 gStill = rippleGrad(wp * 0.9 + vec2(uTime * 0.21, uTime * 0.08)) * 0.9 * 0.03
-                    + rippleGrad(wp * 0.37 - vec2(uTime * 0.05, -uTime * 0.09)) * 0.37 * 0.04;
+        vec2 gStill = rippleGrad(wp * ${RUFFLE_A.scale} + vec2(uTime * 0.21, uTime * 0.08), ${RUFFLE_A.args}) * 0.9 * 0.03
+                    + rippleGrad(wp * ${RUFFLE_B.scale} - vec2(uTime * 0.05, -uTime * 0.09), ${RUFFLE_B.args}) * 0.37 * 0.04;
         gStill *= 0.6 + 0.5 * uWind;
         vec2 g = mix(gRun, gStill, still);
 
         // rings spreading out from your legs as you wade
-        vec2 toMe = wp - uPlayer.xz;
+        vec2 toMe = vWPos.xz - uPlayer.xz;
         float rMe = length(toMe);
         float ring = cos(rMe * 8.0 - uTime * 6.5) * exp(-rMe * 0.9) * uWade;
         g += toMe / max(rMe, 1e-3) * ring * 0.35;
@@ -275,7 +299,7 @@ export function createWaterMaterial() {
         // cloudier water)
         float churn = vnoise(run0 * vec2(1.6, 3.4)) * wt0 + vnoise(run1 * vec2(1.6, 3.4) + 3.1) * (1.0 - wt0);
         float foam = smoothstep(0.5, 0.9, vFoam * (0.4 + 0.9 * churn));
-        float lace = vnoise(wp * 3.1 + vec2(uTime * 0.3, 0.0));
+        float lace = wnoise(wp, 3.1, vec2(uTime * 0.3, 0.0));
         foam = max(foam, (1.0 - smoothstep(0.0, 0.07 + 0.05 * lace, depth)) * smoothstep(0.4, 0.7, lace) * 0.8);
         foam = max(foam, (1.0 - smoothstep(0.3, 0.75, rMe)) * smoothstep(0.35, 0.65, churn) * uWade * 0.9);
         foam = max(foam, max(wake, bow) * smoothstep(0.3, 0.6, churn + 0.15));
@@ -324,8 +348,9 @@ export function createWaterMaterial() {
           vec3 trees = (uHorizon * 0.5 + uZenith * 0.5) * vec3(0.09, 0.13, 0.08);
           vec3 refl = mix(trees, sky, smoothstep(tree - 0.015, tree + 0.015, R.y));
           // under the trees, mostly leaves with the odd bright gap
-          vec2 leafUV = wp * 0.35 + R.xz / max(R.y, 0.15) * 1.5;
-          float leafN = vnoiseD(ROT1 * leafUV).x * 0.65 + vnoiseD(ROT2 * leafUV * 2.9 + 3.7).x * 0.35;
+          vec2 leafUV = wp * ${LEAVES.scale} + R.xz / max(R.y, 0.15) * 1.5;
+          const vec3 LEAF = vec3(${LEAVES.args}); // wrap, how much finer, wrap
+          float leafN = vnoiseD(ROT1 * leafUV, LEAF.x).x * 0.65 + vnoiseD(ROT2 * leafUV * LEAF.y + 3.7, LEAF.z).x * 0.35;
           float leaves = vSky.x * smoothstep(0.22, 0.62, leafN + 0.1);
           refl = mix(refl, trees * 1.3, leaves);
           float cosV = clamp(dot(V, waterN), 0.0, 1.0);
@@ -336,6 +361,6 @@ export function createWaterMaterial() {
         #include <opaque_fragment>`,
       );
   };
-  mat.customProgramCacheKey = () => 'water-v4';
+  mat.customProgramCacheKey = () => 'water-v5';
   return mat;
 }

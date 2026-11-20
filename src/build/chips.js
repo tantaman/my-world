@@ -1,7 +1,11 @@
 // Wood chips, leaves, clods of earth: little boxes thrown up by work, that
 // fall, come to rest on the ground and fade.
+//
+// They are drawn from where the mesh stands, which is kept near them (see
+// anchor in render/origin.js).
 
 import * as THREE from 'three';
+import { anchor } from '../render/origin.js';
 
 const _p = new THREE.Vector3();
 
@@ -67,11 +71,12 @@ export class Chips {
     }
     this.p = keep;
     const n = Math.min(this.max, keep.length);
+    const at = n ? anchor(this.mesh, keep[0].x, keep[0].z) : this.mesh.position;
     for (let i = 0; i < n; i++) {
       const q = keep[i];
       const s = Math.min(1, q.life * 2);
       this._q.setFromEuler(this._e.set(q.r, q.r * 0.7, 0));
-      this._m.compose(_p.set(q.x, q.y, q.z), this._q, this._s.set(s, s, s));
+      this._m.compose(_p.set(q.x - at.x, q.y, q.z - at.z), this._q, this._s.set(s, s, s));
       this.mesh.setMatrixAt(i, this._m);
       this.mesh.setColorAt(i, q.color);
     }

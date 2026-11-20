@@ -10,6 +10,7 @@ import { Grass } from './grass.js';
 import { Sky } from './sky.js';
 import { Solids } from './solids.js';
 import { Spaces } from './spaces.js';
+import { CUTS } from './cuts.js';
 import { createParticles } from './particles.js';
 import { createTerrainMaterial, createTerrainDepthMaterial, createVegetationMaterial, createGrassMaterial } from './materials.js';
 import { SHARED } from '../render/uniforms.js';
@@ -40,6 +41,8 @@ export function installWorld(game) {
     grass: createGrassMaterial(),
     water: createWaterMaterial(),
   };
+  // where the holes in the ground start (cuts.js) is a place: slid with the scene to be drawn
+  game.origin.place(CUTS.uCutAt);
   const models = {
     pine: makePine(11),
     broad: makeBroadleaf(23),
@@ -56,6 +59,8 @@ export function installWorld(game) {
   });
   const grass = new Grass(scene, chunks, materials.grass, CONFIG.seed);
   const sky = new Sky(scene);
+  // its position is the way up, not a place: it stays put when the scene is slid to be drawn
+  game.origin.keep(sky.hemi);
   const particles = createParticles();
   scene.add(particles.object);
   placeStructures(scene, STRUCTURES, gen, materials);
