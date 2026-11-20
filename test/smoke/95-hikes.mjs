@@ -48,6 +48,9 @@ export default async function ({ page, step, key, frames, shot }) {
     near(top, h.view, 'the view goes to where the photo was taken');
     const seen = await page.evaluate(() => ({ hours: world.sky.hours, fog: world.game.pipeline.fogFar, climb: world.player.pos.y }));
     assert.ok(seen.fog > 400, `from up there you can see a long way (${Math.round(seen.fog)} m)`);
+    // what the forest grows of its own accord (an old cabin, a dock) keeps off a real place
+    const old = await page.evaluate((v) => world.map.places.within(v.x - 600, v.z - 600, v.x + 600, v.z + 600).filter((p) => !p.id.startsWith('hike:')).map((p) => p.id), h.view);
+    assert.deepEqual(old, [], 'no old place stands on the hike');
     await shot('the-view');
     return { hike: h.id, ...seen };
   });

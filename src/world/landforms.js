@@ -33,6 +33,13 @@ export async function loadHike({ load, ...card }) {
 
 export const loadAll = (entries) => Promise.all(entries.map(loadHike));
 
+// Whether any of the square (x0, z0)–(x1, z1) is within a hike's reach.
+function within(card, x0, z0, x1, z1) {
+  const dx = Math.max(x0 - card.at[0], 0, card.at[0] - x1);
+  const dz = Math.max(z0 - card.at[1], 0, card.at[1] - z1);
+  return dx * dx + dz * dz <= reachOf(card) ** 2;
+}
+
 export class Lands extends Emitter {
   // entries: HIKES (hikes.js): cards, each with load() → its land
   constructor(entries) {
@@ -81,15 +88,21 @@ export class Lands extends Emitter {
     return p;
   }
 
+  // The hike, if there is one, within whose reach the square (x0, z0)–(x1, z1)
+  // lies or partly lies, whether its land is here yet or not: what is grown
+  // there is not the forest's alone.
+  reaches(x0, z0, x1, z1) {
+    for (const c of this.cards) if (within(c, x0, z0, x1, z1)) return c;
+    return null;
+  }
+
   // Is everything the square (x0, z0)–(x1, z1) is grown from here? If not,
   // sends for what's missing (unless ask is false) and says no for now.
   ready(x0, z0, x1, z1, ask = true) {
     let ok = true;
     for (const c of this.cards) {
       if (this.defs.has(c.id)) continue;
-      const dx = Math.max(x0 - c.at[0], 0, c.at[0] - x1);
-      const dz = Math.max(z0 - c.at[1], 0, c.at[1] - z1);
-      if (dx * dx + dz * dz > reachOf(c) ** 2) continue;
+      if (!within(c, x0, z0, x1, z1)) continue;
       ok = false;
       const f = this.failures.get(c.id);
       if (ask && !(f && Date.now() < f.until)) this.ensure(c.id);
