@@ -40,6 +40,7 @@ const WATER = new THREE.Color(0.012, 0.035, 0.042);
 
 const _c = new THREE.Color();
 const _w = new THREE.Color();
+const _u = new THREE.Color();
 
 export class FarView {
   constructor(scene) {
@@ -158,7 +159,7 @@ export class FarView {
 }
 
 // Positions are from the grid's corner (x0, z0), where the mesh is put.
-function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, country }) {
+function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, country, real }) {
   const _g = new THREE.Color();
   const N = n * n;
   const pos = new Float32Array(N * 3);
@@ -191,7 +192,15 @@ function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, c
           // bare ground in broad drifts of its two colours, and beaches
           _c.lerp(_g.copy(G.bareB).lerp(G.bareA, smooth(0.7, 1, bare[k]) * (0.35 + 0.65 * hash(i >> 2, j >> 2))), smooth(0.34, 0.62, bare[k]));
           _c.lerp(G.sand, sand[k]);
-          _c.lerp(_g.copy(ROCK).lerp(G.rock, land[k]), rock);
+          // a sandstone country's walls turn pale towards the rim, and its
+          // slickrock with them
+          const up = G.layers && real ? smooth(G.layers.at - 50, G.layers.at + 50, real[k]) : 0;
+          _u.copy(G.rock);
+          if (up > 0) {
+            _c.lerp(G.upper, up * 0.85 * smooth(0.34, 0.62, bare[k]));
+            _u.lerp(G.upper, up);
+          }
+          _c.lerp(_g.copy(ROCK).lerp(_u, land[k]), rock);
         } else _c.lerp(ROCK, rock);
         _c.lerp(_w, wood);
         // a little variety, so a hillside isn't one flat colour
@@ -231,7 +240,15 @@ function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, c
 }
 
 // What each country says its ground is made of (world/country.js), by id.
-const GROUND = COUNTRIES.map(({ ground: g }) => ({ tint: new THREE.Color(...g.tint), rock: new THREE.Color(...g.rock), bareA: new THREE.Color(...g.bare[0]), bareB: new THREE.Color(...g.bare[1]), sand: new THREE.Color(...g.sand) }));
+const GROUND = COUNTRIES.map(({ ground: g }) => ({
+  tint: new THREE.Color(...g.tint),
+  rock: new THREE.Color(...g.rock),
+  bareA: new THREE.Color(...g.bare[0]),
+  bareB: new THREE.Color(...g.bare[1]),
+  sand: new THREE.Color(...g.sand),
+  layers: g.layers,
+  upper: g.layers ? new THREE.Color(...g.layers.upper) : null,
+}));
 
 const smooth = (a, b, v) => {
   const t = Math.min(1, Math.max(0, (v - a) / (b - a)));

@@ -14,6 +14,10 @@ export const DEFAULTS = {
   fade: 1000, // real metres over which it gives way to the forest
   cell: 30, // real metres between heights
   trees: { cover: 0.85, species: 0.6 },
+  // a finer grid along the walk: { cell, margin }, real metres between its
+  // heights and round the walk; null for none
+  fine: null,
+  fineMargin: 400, // real metres, when only the cell is said
 };
 
 // How near (game m) the photo has to be to a trail for that trail to be the
@@ -53,7 +57,7 @@ const SEA_CELL = 3;
 
 //   photo      { lat, lon, bearing, hour } (readPhoto())
 //   elevation  (lat, lon) -> metres above sea level
-//   trails     [{ name, points: [[lat, lon], ...] }]   (osm.js)
+//   trails     [{ name, points: [[lat, lon], ...], rope? }]   (osm.js)
 //   waters     [{ name, rings: [[[lat, lon], ...]] }]
 //   coast      [[[lat, lon], ...], ...]: the shoreline of the sea, the land
 //              on the left of each line as you go along it (osm.js)
@@ -64,8 +68,10 @@ const SEA_CELL = 3;
 //              each the way it flows
 //   datum      the heights to stand on, shared with a hike this one overlaps
 //              (place.js), or null to set its own
-// → { def, preview: { width, height, rgb } }
-export function buildHike({ id, name, photo, elevation, trails = [], waters = [], coast = [], roads = [], beaches = [], streams = [], at = [0, 0], datum = null, ...opt }) {
+//   fineElevation  (lat, lon) -> metres, for the finer grid along the walk
+//              (opt.fine), where finer heights are to be had; elevation if not
+// → { def, preview: { width, height, rgb }, walk: [[x, z], ...] or null }
+export function buildHike({ id, name, photo, elevation, fineElevation = elevation, trails = [], waters = [], coast = [], roads = [], beaches = [], streams = [], at = [0, 0], datum = null, ...opt }) {
   const o = { ...DEFAULTS, ...opt, trees: { ...DEFAULTS.trees, ...opt.trees } };
   const s = o.scale;
   const frame = localFrame(photo.lat, photo.lon);
@@ -256,10 +262,16 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
     strands.push({ x: round(x0 - m, 100), z: round(z0 - m, 100), w: bw, h: bh, cell: BEACH_CELL, shore: packShore(d) });
   }
 
-  const base = Math.min(...E);
+  let base = Infinity;
+  for (let k = 0; k < n * n; k++) base = Math.min(base, E[k]);
   const H = new Float32Array(n * n);
   for (let k = 0; k < n * n; k++) H[k] = (E[k] - base) * s;
+  let fine = null; // the finer grid along the walk, once there is one
   const heightAt = (x, z) => {
+    if (fine) {
+      const g = fineAt(fine, x, z);
+      if (g !== null) return g;
+    }
     const fi = Math.min(n - 1.001, Math.max(0, x / cell + half));
     const fj = Math.min(n - 1.001, Math.max(0, z / cell + half));
     const i = Math.floor(fi);
@@ -277,7 +289,7 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
     let cur = [];
     const flush = () => {
       if (cur.length > 1) {
-        lines.push({ name: t.name, pts: simplify(cur, SIMPLIFY) });
+        lines.push({ name: t.name, pts: simplify(cur, SIMPLIFY), rope: !!t.rope });
         whole.push({ name: t.name, pts: cur });
       }
       cur = [];
@@ -314,6 +326,31 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
   const route = fromRoad ? { ...fromRoad, pts: simplify(fromRoad.pts, SIMPLIFY) } : walkTo(lines, heightAt);
   const trailhead = route ? { x: route.pts[0][0], z: route.pts[0][1], yaw: route.yaw } : { x: 0, z: 0, yaw: Math.PI - ((photo.bearing || 0) * Math.PI) / 180 };
 
+  // ── A finer grid along the walk ────────────────────────────────────────────
+  // The ground's grid is coarse for land kilometres across, and seen close a
+  // narrow ridge on it is a broad hump. Where the walk goes, a finer grid
+  // keeps it narrow: heights `fine.cell` real metres apart, as far round the
+  // walk as `fine.margin`, with the lakes and the sea as the coarse grid has
+  // them. It gives way to the coarse grid at its edge (landform.js).
+  const fo = o.fine && { margin: o.fineMargin, ...o.fine };
+  if (fo) {
+    const [x0, z0, x1, z1] = fineBox(route ? route.pts : null, fo, s, R);
+    const fc = fo.cell * s;
+    const w = Math.round((x1 - x0) / fc) + 1;
+    const h = Math.round((z1 - z0) / fc) + 1;
+    const F = new Float32Array(w * h);
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        const x = x0 + i * fc;
+        const z = z0 + j * fc;
+        let sum = 0;
+        for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) sum += fineElevation(...fromGame(x + (a * fc) / 3, z + (b * fc) / 3));
+        F[j * w + i] = (watered(lakes, gx(0), cell, x, z, sum / 9) - base) * s;
+      }
+    }
+    fine = { x: round(x0, 100), z: round(z0, 100), w, h, cell: fc, H: F };
+  }
+
   const def = {
     id,
     name,
@@ -335,7 +372,9 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
     ...(strands.length ? { beaches: strands } : {}),
     ...(runs.length ? { streams: runs } : {}),
     paths: lines.map((l) => l.pts.flatMap(([x, z]) => [round(x, 10), round(z, 10)])),
-    ground: { n, cell, heights: packHeights(H, n) },
+    // the stretches of them with chains to hold on to
+    ...(lines.some((l) => l.rope) ? { ropes: lines.filter((l) => l.rope).map((l) => l.pts.flatMap(([x, z]) => [round(x, 10), round(z, 10)])) } : {}),
+    ground: { n, cell, heights: packHeights(H, n), ...(fine ? { fine: { x: fine.x, z: fine.z, w: fine.w, h: fine.h, cell: fine.cell, heights: packHeights(fine.H, fine.w, fine.h) } } : {}) },
   };
   // First in its part of the world: its own trailhead sets the heights, at
   // the level of the forest round it (see WorldGen._settle). Unless the walk
@@ -353,13 +392,67 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
     if (anchor > edge + SUMMIT) anchor = edge;
     def.datum = { at: [...at], outer: def.radius + def.fade, anchor: round(anchor, 1000), base: def.base };
   }
-  return { def, preview: preview(H, n, cell, lakeCells, lines, route, runs) };
+  return { def, preview: preview(H, n, cell, lakeCells, lines, route, runs, fine), walk: route ? route.pts : null };
+}
+
+// The box (game metres round the photo, [x0, z0, x1, z1]) the finer grid
+// covers: the walk, or failing one the spot the photo was taken from, and
+// `margin` real metres round it, on multiples of its cell, kept inside the
+// real land (radius R).
+export function fineBox(walk, { cell, margin }, scale, R) {
+  const pts = walk && walk.length ? walk : [[0, 0]];
+  const m = margin * scale;
+  const c = cell * scale;
+  let [x0, z0, x1, z1] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const [x, z] of [...pts, [0, 0]]) {
+    x0 = Math.min(x0, x - m);
+    z0 = Math.min(z0, z - m);
+    x1 = Math.max(x1, x + m);
+    z1 = Math.max(z1, z + m);
+  }
+  const clip = (v) => Math.max(-R, Math.min(R, v));
+  return [Math.floor(clip(x0) / c) * c, Math.floor(clip(z0) / c) * c, Math.ceil(clip(x1) / c) * c, Math.ceil(clip(z1) / c) * c];
+}
+
+// The finer grid's height at (x, z), bilinear, or null outside it.
+function fineAt(f, x, z) {
+  const fi = (x - f.x) / f.cell;
+  const fj = (z - f.z) / f.cell;
+  if (fi < 0 || fj < 0 || fi > f.w - 1 || fj > f.h - 1) return null;
+  const i = Math.min(f.w - 2, Math.floor(fi));
+  const j = Math.min(f.h - 2, Math.floor(fj));
+  const [u, v] = [fi - i, fj - j];
+  const k = j * f.w + i;
+  return (f.H[k] * (1 - u) + f.H[k + 1] * u) * (1 - v) + (f.H[k + f.w] * (1 - u) + f.H[k + f.w + 1] * u) * v;
+}
+
+// What the lakes and the sea make of real height e at (x, z), as they made of
+// the coarse grid: their level in the water, and just over it at the edge.
+// first: x and z of the coarse grid's first point; cell: its spacing.
+function watered(lakes, first, cell, x, z, e) {
+  for (const l of lakes) {
+    const f = l.own || { x: first + l.box[0] * cell, z: first + l.box[1] * cell, w: l.box[2], h: l.box[3], cell };
+    const fi = (x - f.x) / f.cell;
+    const fj = (z - f.z) / f.cell;
+    let d = Infinity;
+    if (fi >= 0 && fj >= 0 && fi <= f.w - 1 && fj <= f.h - 1) {
+      const i = Math.min(f.w - 2, Math.floor(fi));
+      const j = Math.min(f.h - 2, Math.floor(fj));
+      const [u, v] = [fi - i, fj - j];
+      const k = j * f.w + i;
+      d = (l.d[k] * (1 - u) + l.d[k + 1] * u) * (1 - v) + (l.d[k + f.w] * (1 - u) + l.d[k + f.w + 1] * u) * v;
+    }
+    if (d < 0) return l.levelReal;
+    // the sea keeps all the land over it; a lake, its banks
+    if (l.sea || d < 3) e = Math.max(e, l.levelReal + BANK);
+  }
+  return e;
 }
 
 // A hike as it's kept (see src/world/landforms.js): its card, small, listed in
 // src/world/hikes.js and always loaded; and its land, in a file of its own,
 // fetched the first time it's needed. { ...card, ...land } is the hike again.
-export const LAND_PARTS = ['ground', 'lakes', 'beaches', 'streams', 'paths'];
+export const LAND_PARTS = ['ground', 'lakes', 'beaches', 'streams', 'paths', 'ropes'];
 export function splitHike(def) {
   const card = {};
   const land = {};
@@ -612,7 +705,7 @@ function segDist(p, a, b) {
 // ── A picture of it ──────────────────────────────────────────────────────────
 // Hillshade, lakes, streams, trails, the walk (red) and where the photo was
 // taken.
-function preview(H, n, cellM, lakeCells, lines, route, runs = []) {
+function preview(H, n, cellM, lakeCells, lines, route, runs = [], fine = null) {
   const rgb = new Uint8Array(n * n * 3);
   let lo = Infinity;
   let hi = -Infinity;
@@ -648,6 +741,10 @@ function preview(H, n, cellM, lakeCells, lines, route, runs = []) {
   for (const r of runs) plot(Array.from({ length: r.pts.length / 2 }, (_, k) => [r.pts[k * 2], r.pts[k * 2 + 1]]), r.big ? [70, 130, 215] : [90, 150, 225]);
   for (const l of lines) plot(l.pts, [235, 225, 170]);
   if (route) plot(route.pts, [230, 50, 40]);
+  if (fine) {
+    const [x0, z0, x1, z1] = [fine.x, fine.z, fine.x + (fine.w - 1) * fine.cell, fine.z + (fine.h - 1) * fine.cell];
+    plot([[x0, z0], [x1, z0], [x1, z1], [x0, z1], [x0, z0]], [255, 255, 255]);
+  }
   for (let b = -2; b <= 2; b++) for (let a = -2; a <= 2; a++) rgb.set([255, 255, 255], ((half + b) * n + half + a) * 3);
   return { width: n, height: n, rgb };
 }

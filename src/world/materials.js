@@ -136,7 +136,7 @@ export function createTerrainMaterial() {
         '#include <color_fragment>',
         `#include <color_fragment>
         vec2 wp = worldXZ(vWorldPos);
-        diffuseColor.rgb = groundColor(wp, vGround.x, vGround.y, 1.0 - vWorldNormal.y, vLand, vCountry);
+        diffuseColor.rgb = groundColor(wp, vWorldPos.y, vGround.x, vGround.y, 1.0 - vWorldNormal.y, vLand, vCountry);
         diffuseColor.rgb = highGround(diffuseColor.rgb, wp, vHigh, 1.0 - vWorldNormal.y);
         if (cutF < ${RIM.toFixed(3)} + 1.0) {
           // broken rock round a hole in the ground, ragged at its edge
@@ -354,7 +354,7 @@ export function createGrassMaterial() {
         `#include <color_fragment>
         // blades take the colour of the ground they grow from; vertex colour
         // carries root-to-tip shading. Flowers keep their own colour.
-        if (vGround.x > -0.5) diffuseColor.rgb *= groundColor(vRootW, 0.0, vGround.y * 0.55, 0.0, vec3(0.0, 0.0, vLand), vCountry);`,
+        if (vGround.x > -0.5) diffuseColor.rgb *= groundColor(vRootW, 0.0, 0.0, vGround.y * 0.55, 0.0, vec3(0.0, 0.0, vLand), vCountry);`,
       )
       .replace(
         '#include <normal_fragment_begin>',

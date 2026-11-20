@@ -38,6 +38,10 @@ export const SKY = {
 // the country feature. The terrain says, vertex by vertex, which country it
 // is and how far its colours apply (aLand), so in the forest they show
 // nowhere, and two places side by side each keep their own.
+//
+// A sandstone country's cliffs are banded by real height (ground.layers),
+// so the ground also needs to know how the real place you're on stands in the
+// game: uRealY, set by the country feature as you come onto one.
 export const MAX_COUNTRIES = 8;
 const each = (r, g, b) => ({ value: Array.from({ length: MAX_COUNTRIES }, () => new THREE.Color(r, g, b)) });
 export const LAND = {
@@ -47,6 +51,13 @@ export const LAND = {
   uBareA: each(0.2, 0.135, 0.075),
   uBareB: each(0.115, 0.078, 0.045),
   uSand: each(0.19, 0.16, 0.11),
+  // layers: the rock up high, and (at: real m, bed: real m, varnish, 1 if
+  // there are layers at all)
+  uUpper: each(0.16, 0.155, 0.145),
+  uLayers: { value: Array.from({ length: MAX_COUNTRIES }, () => new THREE.Vector4(0, 1, 0, 0)) },
+  // for the real place you're on: the game height of its sea level, and game
+  // metres to a real one. (Heights aren't slid with the scene: origin.js.)
+  uRealY: { value: new THREE.Vector2(0, 1) },
 };
 
 // A layer of cloud over the country you're in (world/country.js), drawn by

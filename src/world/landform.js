@@ -15,8 +15,12 @@
 //   at: [x, z]      where its middle sits in the world
 //   scale           game metres per real metre
 //   radius, fade    real land out to radius, gone by radius + fade
-//   ground          { n, cell, heights }: an n × n grid of heights `cell`
-//                   apart, centred on `at`, packed by packHeights()
+//   ground          { n, cell, heights, fine? }: an n × n grid of heights
+//                   `cell` apart, centred on `at`, packed by packHeights().
+//                   fine: { x, z, w, h, cell, heights }, a finer w × h grid
+//                   over part of it (the walk), from (x, z) relative to `at`:
+//                   where it is, it is the ground, giving way to the coarse
+//                   grid over FINE_EDGE at its edge
 //   lakes           [{ name, level, box: [i0, j0, w, h], shore, sea? }]: the
 //                   water level, and the signed distance to the shore
 //                   (negative in the water) over part of the same grid, packed
@@ -31,6 +35,8 @@
 //                   of its own, `cell` apart from (x, z) relative to `at`,
 //                   packed by packShore()
 //   paths           [[x, z, x, z, ...], ...]: the footpaths, relative to `at`
+//   ropes           the same, for stretches of them with chains or a fixed
+//                   rope to hold on to (drawn by the hikes feature)
 //   view            { x, z, bearing, hour }: where the photo was taken from,
 //                   which way it looked (degrees clockwise from north) and when
 //   trailhead       { x, z, yaw }: where the walk to the view begins
@@ -96,6 +102,9 @@ const STREAM_RIVER = NET.riverAcc * 1.2; // what a river carries, all the way
 const STREAM_JOIN = 3; // m: a stream that ends this near another's line runs into it
 const STREAM_BUCKET = 64; // m, cells of the lookup grid
 
+// m in from the edge of a finer grid over which it gives way to the coarse one
+const FINE_EDGE = 8;
+
 // What forest() says of land with no trees: low enough that the odd tree the
 // forest plants even in its barest meadows isn't planted either.
 const TREELESS = -0.05;
@@ -132,11 +141,12 @@ const fromB64 = (s) => {
   return out;
 };
 
-export function packHeights(h, n) {
+// (n to a row; as many rows, unless it says)
+export function packHeights(h, n, rows = n) {
   const out = [];
   let rowFirst = 0;
   let prev = 0;
-  for (let j = 0; j < n; j++) {
+  for (let j = 0; j < rows; j++) {
     for (let i = 0; i < n; i++) {
       const q = Math.round(h[j * n + i] / HEIGHT_UNIT);
       const d = q - (i === 0 ? rowFirst : prev);
@@ -153,13 +163,13 @@ export function packHeights(h, n) {
   return toB64(Uint8Array.from(out));
 }
 
-export function unpackHeights(s, n) {
+export function unpackHeights(s, n, rows = n) {
   const b = fromB64(s);
-  const h = new Float32Array(n * n);
+  const h = new Float32Array(n * rows);
   let p = 0;
   let rowFirst = 0;
   let prev = 0;
-  for (let k = 0; k < n * n; k++) {
+  for (let k = 0; k < n * rows; k++) {
     let z = 0;
     let mul = 1;
     let byte;
@@ -210,6 +220,21 @@ function fieldAt(f, lx, lz) {
   return (D[k] * (1 - u) + D[k + 1] * u) * (1 - v) + (D[k + f.w] * (1 - u) + D[k + f.w + 1] * u) * v;
 }
 const cr = (a, b, c, d, t) => b + 0.5 * t * (c - a + t * (2 * a - 5 * b + 4 * c - d + t * (3 * (b - c) + d - a)));
+// A w × h grid of heights H at (fx, fz) in its own cells, smoothly
+// interpolated (Catmull-Rom), and level with its edge past it.
+function gridAt(H, w, h, fx, fz) {
+  fx = Math.min(w - 1.001, Math.max(0, fx));
+  fz = Math.min(h - 1.001, Math.max(0, fz));
+  const i = Math.floor(fx);
+  const j = Math.floor(fz);
+  const u = fx - i;
+  const v = fz - j;
+  const row = (jj) => {
+    const r = Math.min(h - 1, Math.max(0, jj)) * w;
+    return cr(H[r + Math.max(0, i - 1)], H[r + i], H[r + i + 1], H[r + Math.min(w - 1, i + 2)], u);
+  };
+  return cr(row(j - 1), row(j), row(j + 1), row(j + 2), v);
+}
 
 export class Landform {
   constructor(def) {
@@ -226,6 +251,8 @@ export class Landform {
     this.cell = g.cell;
     this.half = ((g.n - 1) / 2) * g.cell;
     this.h = unpackHeights(g.heights, g.n);
+    const f = g.fine;
+    this.fine = f ? { x: f.x, z: f.z, w: f.w, h: f.h, cell: f.cell, H: unpackHeights(f.heights, f.w, f.h) } : null;
     this.lakes = (def.lakes || []).map((l) => ({ ...l, sea: !!l.sea, d: unpackShore(l.shore) }));
     this.beaches = (def.beaches || []).map((b) => ({ ...b, d: unpackShore(b.shore) }));
     this.view = def.view;
@@ -264,26 +291,41 @@ export class Landform {
   }
 
   // The real ground at (x, z), relative to the land's lowest point, smoothly
-  // interpolated (Catmull-Rom) between the grid's heights.
+  // interpolated (Catmull-Rom) between the grid's heights: the finer grid's,
+  // where there is one.
   raw(x, z) {
-    const n = this.n;
-    const fx = Math.min(n - 1.001, Math.max(0, (x - this.cx + this.half) / this.cell));
-    const fz = Math.min(n - 1.001, Math.max(0, (z - this.cz + this.half) / this.cell));
-    const i = Math.floor(fx);
-    const j = Math.floor(fz);
-    const u = fx - i;
-    const v = fz - j;
-    const H = this.h;
-    const row = (jj) => {
-      const r = Math.min(n - 1, Math.max(0, jj)) * n;
-      return cr(H[r + Math.max(0, i - 1)], H[r + i], H[r + i + 1], H[r + Math.min(n - 1, i + 2)], u);
-    };
-    return cr(row(j - 1), row(j), row(j + 1), row(j + 2), v);
+    const f = this.fine;
+    if (f) {
+      const fx = (x - this.cx - f.x) / f.cell;
+      const fz = (z - this.cz - f.z) / f.cell;
+      // metres in from its edge
+      const m = Math.min(fx, fz, f.w - 1 - fx, f.h - 1 - fz) * f.cell;
+      if (m > 0) {
+        const g = gridAt(f.H, f.w, f.h, fx, fz);
+        if (m >= FINE_EDGE) return g;
+        const h = this._coarse(x, z);
+        return h + (g - h) * smoothstep(0, FINE_EDGE, m);
+      }
+    }
+    return this._coarse(x, z);
+  }
+
+  _coarse(x, z) {
+    return gridAt(this.h, this.n, this.n, (x - this.cx + this.half) / this.cell, (z - this.cz + this.half) / this.cell);
+  }
+
+  // The spacing of the heights at (x, z).
+  cellAt(x, z) {
+    const f = this.fine;
+    if (!f) return this.cell;
+    const fx = (x - this.cx - f.x) / f.cell;
+    const fz = (z - this.cz - f.z) / f.cell;
+    return fx > 0 && fz > 0 && fx < f.w - 1 && fz < f.h - 1 ? f.cell : this.cell;
   }
 
   // Rise over run of the real ground.
   slope(x, z) {
-    const e = this.cell * 0.5;
+    const e = this.cellAt(x, z) * 0.5;
     return Math.hypot(this.raw(x + e, z) - this.raw(x - e, z), this.raw(x, z + e) - this.raw(x, z - e)) / (2 * e);
   }
 
@@ -607,7 +649,13 @@ export class Landform {
   // steep ground.
   forest(x, z) {
     if (this.trees.cover <= 0) return TREELESS;
-    return this.trees.cover * (1 - smoothstep(ROCK_SLOPE[0], ROCK_SLOPE[1], this.slope(x, z)));
+    return this.trees.cover * (1 - this.rocky(x, z));
+  }
+
+  // How far (x, z) is bare rock for being steep, 0..1: where the trees give
+  // out, and the grass with them.
+  rocky(x, z) {
+    return smoothstep(ROCK_SLOPE[0], ROCK_SLOPE[1], this.slope(x, z));
   }
 
   // Metres past the edge of the ground kept clear of trees (negative inside):

@@ -31,8 +31,11 @@ In the game, press **J** (or tap *hikes*) for the list of them: each with its
 trail, how long it is, how far it climbs (or drops: a cove is walked down
 to) and the water on it, and two ways in. **trailhead** puts you at the
 start, by a signpost, with the HUD pointing the way to the top. The trail is
-the real one, switchbacks and all, cut into the hillside as a level tread. At
-the end of it a cairn stands where you took the photo. **the view** takes you
+the real one, switchbacks and all, cut into the hillside as a level tread.
+Where the map says it has chains to hold on to, as on the last of Angels
+Landing, they're there: a steel post every couple of metres on the side that
+drops away, and the chain slung between them. At the end of it a cairn stands
+where you took the photo. **the view** takes you
 straight there: you're standing where you stood, facing the way you faced, at
 the hour you were there. From the top you can see across the whole of it, the
 lake below, the ridges beyond, the valley running off into the haze. In the
@@ -68,10 +71,22 @@ ones that run all year: a gulch that is dry till it rains is left dry.) The
 walk starts where you'd leave the car, at the nearest road or car park along
 the paths, and goes by them to where the photo was taken, uphill or down.
 (Failing a road, it's the trail the photo was taken on, from its lower end.)
-Steep ground is bare rock, the rest is wooded (`--cover`, `--species`;
+Steep ground is bare rock, with not a blade of grass on it; the rest is wooded (`--cover`, `--species`;
 `--cover 0` for land above the tree line, with nothing standing on it at
 all), and the spot the photo was taken from is kept clear of trees, with
 nothing growing in front of it to block the view.
+
+**Finer land along the walk.** Kilometres of land at one height every 30 m
+(6 m in the game) is plenty for the far side of a valley, but seen close a
+narrow ridge on it comes out a broad hump. `--fine 5` keeps a second, finer
+grid, a height every 5 m (a metre in the game, as fine as the ground is
+drawn), along the walk and `--fine-margin` (400 m) round it, which gives way
+to the coarse one at its edge. In the United States `--dem 3dep` takes the
+heights from the USGS's own elevation, which is lidar for most of the country
+and good to a metre or two, in place of Terrain Tiles, which are coarser and
+in steep country can be tens of metres out. With both, Angels Landing is the
+narrow fin it really is, with sheer drops either side, and Refrigerator
+Canyon a slot.
 
 **What kind of country it is.** Not everywhere is a northern forest. A hike
 says what kind of country it's in (`--country "cinder desert"`), and that
@@ -86,13 +101,17 @@ sky over it is doing, each as one entry in one table
 | `tropical coast` | cinder cliffs, black lava at the water, beaches where the map has them | ironwoods, broadleaves, coconut palms | fair-weather cloud |
 | `cinder desert` | bare cinder, red and grey | nothing but the odd silversword | clear thin air, over a sea of cloud |
 | `lava coast` | wind-cropped grass and red dirt down to a black rock shelf | a few ironwoods, low bushes | overcast |
+| `red rock canyon` | red sand and slickrock; sandstone cliffs in beds, streaked dark, turning white towards the rim | ponderosa pines and oaks over scrub | clear and dry, fair-weather cloud over the rims |
 
 The cloud is a layer at its real height, so you can be under it or over it:
 walk up through it and it closes round you. A rocky shore keeps its cliffs
 where a gentle one would be given a beach. Animals that don't live there
 (bears, on an island) don't turn up, and a tree is called what it would be
 there: fell a broadleaf on Maui and it's a kamani or an ʻōhiʻa that comes
-down, not an oak. The map and the far view take the country's colours too.
+down, not an oak. A sandstone canyon's cliffs show the beds they're cut
+through, by their real height, so a bed runs at the same level all round the
+canyon, and turn pale towards the rim where the real rock does. The map and
+the far view take the country's colours too.
 Every piece of ground knows which country it's in, so where two places of
 different kinds overlap, each keeps its own colours right up to the other.
 A walk that starts on top of its mountain (a summit you drive to) stands the
@@ -160,6 +179,8 @@ each wait for it.
 | `--scale` | `0.2` | game metres per real metre |
 | `--radius`, `--fade` | `4000`, `1000` | real metres of real land, and of blending into the forest |
 | `--cell` | `30` | real metres between heights |
+| `--fine`, `--fine-margin` | none, `400` | real metres between heights along the walk, and how far round it |
+| `--dem` | `terrain` | where the heights come from: `terrain` (AWS Terrain Tiles) or `3dep` (USGS, US only) |
 | `--cover`, `--species` | `0.85`, `0.6` | how wooded (0–1), and broadleaf (−1) to conifers (1) |
 | `--lat --lon --bearing --hour` | from the photo | for a photo that doesn't say |
 
@@ -167,18 +188,19 @@ Downloads are kept in `node_modules/.cache/hike`. To take a hike out, delete
 its entry in `src/world/hikes.js` and its file. From the console:
 `world.hikes.list()` and `await world.hikes.go('mount-storm-king', 'view')`.
 
-Elevation: AWS Terrain Tiles (USGS 3DEP and others). Trails and lakes: ©
+Elevation: AWS Terrain Tiles (USGS 3DEP and others), and with `--dem 3dep`
+the USGS 3D Elevation Program from The National Map. Trails and lakes: ©
 OpenStreetMap contributors, under the
 [ODbL](https://www.openstreetmap.org/copyright).
 
 ## Files
 
 ```
-index.js              plugs it into the game: the list (J), the way to the view, signpost and cairn
+index.js              plugs it into the game: the list (J), the way to the view, signpost, cairn and chains
 farView.js            the land past the loaded chunks, seen from up high
 farGrid.js            that land, sampled coarsely (pure)
 farWorker.js          Web Worker wrapper around farGrid
-waymarks.js           the cairn and the signpost
+waymarks.js           the cairn, the signpost and the chains
 hikesPanel.js         the list of hikes (J), and the way to each
 hikes.css             its styles
 ```
