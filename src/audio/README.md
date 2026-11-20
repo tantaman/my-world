@@ -29,7 +29,12 @@ interact, so it fades in after your first click, key press or tap.
   first, and so does water with a bank between you and it. Stand in it and
   you hear it gurgle round your legs, more the faster it's going past them.
   Still water laps at the shore in slow swells, something small plops in now
-  and then, and from dusk the frogs start up.
+  and then, and from dusk the frogs start up. The sea roars along its shore,
+  and every so often a wave builds, breaks, and runs hissing back down the
+  sand.
+- **Under the water** everything from above goes dull and far away
+  (`sound.muffle()`), under the slow hush of the water itself. See
+  [Under the water](../underwater/README.md).
 - **Voices** of the people you share a world with: from where they stand
   when they talk aloud, and through your radio when they're on it. See
   [Talking](../voice/README.md).

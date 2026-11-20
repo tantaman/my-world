@@ -88,6 +88,32 @@ export function definePose(kind, keys) {
 // at the mouth however the body leans.
 const RAISED = { sh: -1.02, tw: -0.82, inw: -0.06, el: -2.105, wrist: -0.05, roll: 0.68 };
 const IN_HAND = 0.35; // how far up the arm is when the hand has hold of it
+// Swimming: the body turns about this point (m above the feet) to lie flat;
+// strokes a second, still and going full tilt.
+const SWIM_PIVOT = 1.1;
+const STROKES = [0.45, 0.95];
+// Breaststroke over one stroke (u = 0..1): sh shoulder pitch, ab arm out to
+// the side, el elbow. Pull out and back, bring the hands in under the chest,
+// reach forward and glide.
+const BREAST = [
+  [0, { sh: -2.9, ab: 0.25, el: -0.15 }],
+  [0.32, { sh: -1.35, ab: 1.1, el: -0.85 }],
+  [0.5, { sh: -1.55, ab: 0.35, el: -2.0 }],
+  [0.72, { sh: -2.85, ab: 0.22, el: -0.2 }],
+  [1, { sh: -2.9, ab: 0.25, el: -0.15 }],
+];
+const _stroke = { sh: 0, ab: 0, el: 0 };
+function sampleStroke(u, out) {
+  let i = 0;
+  while (i < BREAST.length - 2 && u > BREAST[i + 1][0]) i++;
+  const [ua, a] = BREAST[i];
+  const [ub, b] = BREAST[i + 1];
+  const t = smoothstep(0, 1, (u - ua) / (ub - ua));
+  out.sh = lerp(a.sh, b.sh, t);
+  out.ab = lerp(a.ab, b.ab, t);
+  out.el = lerp(a.el, b.el, t);
+  return out;
+}
 function samplePose(keys, p, out) {
   let i = 0;
   while (i < keys.length - 2 && p > keys[i + 1][0]) i++;
@@ -172,6 +198,10 @@ export class Character {
     this.glanceTo = 0;
     this.glanceAt = 2;
     this.hill = 0; // rise per metre ahead, smoothed
+    // swimming (see swim()): how far into it, what it was asked, the stroke
+    this.swimBlend = 0;
+    this.swimTo = { amount: 0, prone: 0, pitch: 0, under: false };
+    this.stroke = 0;
     // called as onFootstep(run 0..1) each time a heel comes down
     this.onFootstep = null;
     // Optional (x, z) -> ground height in world space, so feet meet the slope.
@@ -480,6 +510,17 @@ export class Character {
     return !!this.action;
   }
 
+  // In deep water: amount 0..1, how flat the body lies (prone 0..1), how far
+  // it's pitched head down besides (radians), and whether it's under the
+  // surface. Say so every frame, before update().
+  swim(amount, prone = 0, pitch = 0, under = false) {
+    const s = this.swimTo;
+    s.amount = amount;
+    s.prone = prone;
+    s.pitch = pitch;
+    s.under = under;
+  }
+
   // speed: horizontal m/s, grounded: bool, vy: vertical velocity, turn: rad/s
   update(dt, speed, grounded, vy, turn) {
     dt = Math.min(dt, 1 / 15);
@@ -747,8 +788,14 @@ export class Character {
       this.head.rotation.z += 0.12 * w;
     }
 
+    // ── Swimming ───────────────────────────────────────────────────────────
+    this.swimBlend = lerp(this.swimBlend, this.swimTo.amount, 1 - Math.exp(-dt * 4));
+    const swim = this.swimBlend;
+    if (swim > 0.001) this.#swimPose(dt, swim);
+    else if (this.root.rotation.x) this.root.rotation.x = 0;
+
     // ── Meet the ground ────────────────────────────────────────────────────
-    if (this.groundAt && ab < 0.999 && sit < 0.999) this.#feelGround(dt, (1 - ab) * (1 - sit));
+    if (this.groundAt && ab < 0.999 && sit < 0.999 && swim < 0.5) this.#feelGround(dt, (1 - ab) * (1 - sit) * (1 - swim * 2));
 
     // The body banks into turns about the feet; keep the feet on the ground.
     const bank = this.root.rotation.z;
@@ -782,6 +829,54 @@ export class Character {
     _inv.copy(this.hips.matrix).invert();
     this.#reach(this.legL, this.footL, hPitch, hYaw, hRoll + bank);
     this.#reach(this.legR, this.footR, hPitch, hYaw, hRoll + bank);
+  }
+
+  // Kick and stroke, blended in by w over whatever the walk made of the legs
+  // and arms, and lie the body along the way it's swimming.
+  #swimPose(dt, w) {
+    const { prone, pitch, under } = this.swimTo;
+    const going = smoothstep(0.05, 0.6, prone);
+    this.stroke += dt * lerp(STROKES[0], STROKES[1], going);
+    const ph = this.stroke * TAU;
+    const mix = (cur, val) => cur + (val - cur) * w;
+
+    // legs: treading water under you, or long behind in a flutter kick
+    for (const F of [this.footL, this.footR]) {
+      const s = F.side;
+      const off = s > 0 ? 0 : Math.PI;
+      const kick = Math.sin(ph * 2 + off);
+      F.x = mix(F.x, s * 0.1);
+      F.y = mix(F.y, lerp(0.2 + 0.08 * Math.cos(ph + off), 0.1 + 0.03 * Math.abs(kick), prone));
+      F.z = mix(F.z, lerp(0.02 + 0.1 * Math.sin(ph + off), 0.17 * kick, prone));
+      F.p = mix(F.p, lerp(0.35, 1.15, prone));
+      F.out = mix(F.out, s * 0.06);
+      F.load = mix(F.load, 0);
+    }
+
+    // arms: sculling while treading water, breaststroke while swimming
+    sampleStroke(this.stroke % 1, _stroke);
+    for (const [A, s] of [[this.armL, 1], [this.armR, -1]]) {
+      const scull = Math.sin(ph * 1.6 + (s > 0 ? 0 : 0.6));
+      A.shoulder.rotation.x = mix(A.shoulder.rotation.x, lerp(-0.55 + 0.15 * scull, _stroke.sh, going));
+      A.shoulder.rotation.y = mix(A.shoulder.rotation.y, 0);
+      A.shoulder.rotation.z = mix(A.shoulder.rotation.z, s * lerp(0.8 + 0.25 * scull, _stroke.ab, going));
+      A.elbow.rotation.x = mix(A.elbow.rotation.x, lerp(-0.9, _stroke.el, going));
+    }
+
+    // lie along the way you swim, turning about the chest; the head up to
+    // see where you're going (and out of the water, at the surface)
+    const r = this.root;
+    if (r.rotation.order !== 'YXZ') r.rotation.order = 'YXZ'; // pitch in the body's own frame
+    const tilt = clamp((prone * 1.4 + pitch) * w, -0.3, 2.6);
+    r.rotation.x = tilt;
+    const back = SWIM_PIVOT * Math.sin(tilt);
+    r.position.y += SWIM_PIVOT * (1 - Math.cos(tilt));
+    r.position.x -= Math.sin(r.rotation.y) * back;
+    r.position.z -= Math.cos(r.rotation.y) * back;
+    this.spine.rotation.x = mix(this.spine.rotation.x, -0.12 * prone);
+    this.spine.rotation.y = mix(this.spine.rotation.y, 0);
+    this.head.rotation.x = mix(this.head.rotation.x, -clamp(tilt, 0, 1.6) * (under ? 0.6 : 0.8));
+    this.head.rotation.y = mix(this.head.rotation.y, 0);
   }
 
   // Ankle target and foot pitch for one foot at gait phase u.

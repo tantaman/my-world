@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, GROUND_GLSL, wave } from '../render/glsl.js';
-import { SHARED, LAND } from '../render/uniforms.js';
+import { SHARED, LAND, UNDER } from '../render/uniforms.js';
 import { CUTS, CUT_GLSL, SHRINK, RIM } from './cuts.js';
+import { SEA } from './sea.js';
 
 // A shader here that needs to know where in the world something is asks
 // worldXZ() (render/glsl.js), never modelMatrix alone: while a frame is drawn
@@ -18,9 +19,13 @@ import { CUTS, CUT_GLSL, SHRINK, RIM } from './cuts.js';
 // hand-placed pixel texture.
 // Under water it turns to silt, pebbles and cobbles, darkening (reds first)
 // with depth, with the light netted over it by the ripples, and a damp band
-// and a little beach along the shore. Where the ground is cut away for
-// something else to stand in for it (a cave's mouth: world/cuts.js), it isn't
-// drawn, and round the hole it is bare rock.
+// and a little beach along the shore. By the sea the beach is sand, and so is
+// the seabed, in ripples, with rock where it's steep. Where the ground is cut
+// away for something else to stand in for it (a cave's mouth:
+// world/cuts.js), it isn't drawn, and round the hole it is bare rock.
+// With the camera under water, the post-process does the darkening (for
+// everything down there, not just the ground), and the net of light reaches
+// further down.
 export function createTerrainMaterial() {
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
   mat.onBeforeCompile = (shader) => {
@@ -28,6 +33,8 @@ export function createTerrainMaterial() {
     shader.uniforms.uOrigin = SHARED.uOrigin;
     Object.assign(shader.uniforms, LAND);
     Object.assign(shader.uniforms, CUTS);
+    shader.uniforms.uSea = UNDER.uSea;
+    shader.uniforms.uUnder = UNDER.uUnder;
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -67,6 +74,8 @@ export function createTerrainMaterial() {
         varying vec3 vWorldPos;
         varying vec3 vWorldNormal;
         uniform float uTime;
+        uniform float uSea;
+        uniform float uUnder;
         ${NOISE_GLSL}
         ${WORLD_GLSL}
         ${WORLD_NOISE_GLSL}
@@ -138,6 +147,18 @@ export function createTerrainMaterial() {
         vec2 wp = worldXZ(vWorldPos);
         diffuseColor.rgb = groundColor(wp, vWorldPos.y, vGround.x, vGround.y, 1.0 - vWorldNormal.y, vLand, vCountry);
         diffuseColor.rgb = highGround(diffuseColor.rgb, wp, vHigh, 1.0 - vWorldNormal.y);
+        // by the sea: a beach of pale sand, up from the waterline
+        float seaY = vWorldPos.y - uSea;
+        bool seaWater = uSea > -1000.0 && abs(vWater.x - uSea) < 0.05; // the water here is the sea's
+        bool bySea = seaY < ${(SEA.sand + 1).toFixed(1)} && seaY > -400.0 && (seaWater || vWater.y < 0.01);
+        if (bySea) {
+          float s1 = wnoise(wp, 0.5);
+          float s2 = wnoise(wp, 3.7, vec2(11.0));
+          vec3 sand = mix(vec3(0.36, 0.31, 0.22), vec3(0.3, 0.26, 0.19), smoothstep(0.3, 0.75, s2)) * (0.9 + 0.2 * s1);
+          float onSand = 1.0 - smoothstep(${(SEA.sand * 0.75).toFixed(2)}, ${(SEA.sand * 1.2).toFixed(2)}, seaY + (s1 - 0.5) * 0.8);
+          onSand *= 1.0 - smoothstep(0.42, 0.6, 1.0 - vWorldNormal.y); // not on a cliff
+          diffuseColor.rgb = mix(diffuseColor.rgb, sand, onSand);
+        }
         if (cutF < ${RIM.toFixed(3)} + 1.0) {
           // broken rock round a hole in the ground, ragged at its edge
           float rn = wnoise(wp, 1.3, vec2(vWorldPos.y)) * 0.65 + wnoise(wp, 4.7) * 0.35;
@@ -153,7 +174,7 @@ export function createTerrainMaterial() {
           // a beach of sand and gravel just above the water, damp at the edge
           vec3 sand = mix(vec3(0.19, 0.16, 0.11), vec3(0.15, 0.135, 0.11), smoothstep(0.35, 0.7, n2));
           float beach = (1.0 - smoothstep(0.08, 0.3 + 0.35 * n1, -wd)) * vWater.y;
-          diffuseColor.rgb = mix(diffuseColor.rgb, sand, beach * 0.85);
+          if (!seaWater) diffuseColor.rgb = mix(diffuseColor.rgb, sand, beach * 0.85);
           diffuseColor.rgb *= 1.0 - 0.4 * (1.0 - smoothstep(0.0, 0.1 + 0.08 * n2, -wd)) * vWater.y;
           if (wd > 0.0) {
             // silt, pebbles and cobbles, rounded so they catch the light on
@@ -172,15 +193,31 @@ export function createTerrainMaterial() {
             bed = mix(bed, pebC * (0.8 + 0.35 * sqrt(max(0.0, 1.0 - peb * peb))), onPeb);
             // a hairline of shadow round each stone where it sits in the silt
             bed *= 1.0 - 0.35 * (smoothstep(0.85, 1.0, cob) - smoothstep(1.0, 1.15, cob)) * isCob;
+            if (seaWater) {
+              // sand in ripples across the swell, a scatter of shell and
+              // weed, and rock where the bed is steep
+              // (ripples run one way here, the other way there: two ways,
+              // each coming round on the world's period, blended)
+              float warp = wnoise(wp, 0.6) * 4.0;
+              float ripple = mix(sin(wp.x * ${wave(4.2)} + warp), sin(wp.y * ${wave(4.2)} + warp), smoothstep(0.35, 0.65, wnoise(wp, 0.04)));
+              vec3 sea = mix(vec3(0.3, 0.27, 0.2), vec3(0.24, 0.22, 0.17), smoothstep(0.3, 0.7, n1));
+              sea *= 0.86 + 0.14 * ripple * smoothstep(1.0, 4.0, wd);
+              float shells = cellsIn(3.1);
+              sea = mix(sea, vec3(0.42, 0.4, 0.36), step(0.985, hash12(wrapCell(floor(wp * (shells / PERIOD)), shells))) * 0.8);
+              sea = mix(sea, vec3(0.06, 0.1, 0.05), smoothstep(0.62, 0.8, wnoise(wp, 0.21, vec2(3.0))) * smoothstep(2.0, 6.0, wd) * 0.7);
+              float steep = smoothstep(0.25, 0.45, 1.0 - vWorldNormal.y + (n2 - 0.5) * 0.15);
+              bed = mix(sea, mix(cobC, vec3(0.12, 0.12, 0.11), 0.5), max(steep, isCob * (1.0 - smoothstep(0.82, 1.0, cob)) * 0.6));
+            }
             float caustic = causticAt(wp, uTime);
-            bed *= 1.0 + caustic * 0.8 * exp(-wd * 1.5);
+            bed *= 1.0 + caustic * mix(0.8 * exp(-wd * 1.5), 1.1 * exp(-wd * 0.11), uUnder);
             diffuseColor.rgb = mix(diffuseColor.rgb, bed, smoothstep(0.0, 0.12, wd));
-            diffuseColor.rgb *= exp(-wd * vec3(1.15, 0.6, 0.48));
+            // (from below the surface, the post-process does this for everything)
+            if (uUnder < 0.5) diffuseColor.rgb *= exp(-wd * vec3(1.15, 0.6, 0.48));
           }
         }`,
       );
   };
-  mat.customProgramCacheKey = () => 'terrain-v6';
+  mat.customProgramCacheKey = () => 'terrain-v7';
   return mat;
 }
 

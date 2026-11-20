@@ -20,6 +20,9 @@ export class WorldGen {
     const n = (k) => createSimplex2((seed * 131 + k * 7919) >>> 0);
     this.seed = seed;
     this.land = 1;
+    // The sea, on a land that has one (land3.js, sea.js): none here. Set
+    // before the fields, which is where such a land puts it.
+    this.sea = null;
     this._fields(n);
     // The real places set into this land, each a Landform (landform.js):
     // none, unless realPlaces.js is grown from it.
@@ -249,6 +252,13 @@ export class WorldGen {
   }
   get highGround() {
     return false;
+  }
+
+  // How high a real place set into this land stands (realPlaces.js), given
+  // the forest's height round it (m): at that height, here. (A land with a
+  // sea raises one that would be under it into an island: land3.js.)
+  datumLevel(h) {
+    return h;
   }
 
   // Whatever else a land asks of a place to start from (a path in the woods,

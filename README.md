@@ -67,6 +67,7 @@ See [Building together](src/save/README.md) to set the server up, or skip it
 | **W A S D** / arrows | walk (relative to the camera) |
 | **Shift** | run |
 | **Space** | jump |
+| **Shift** / **Space**, out of your depth | dive / come back up (under water, **W** swims the way you look) |
 | **click**, then move the mouse | look around (pointer lock; drag works too) |
 | **Q / E** | turn the camera |
 | **scroll** | zoom |
@@ -83,12 +84,13 @@ On a phone or tablet, drag with your left thumb to walk (push it all the way
 to run), drag with your right thumb to look, and tap on the right to jump.
 Tap a tool in the bar at the bottom. The **use**, **alt** and **stake**
 buttons on the right stand in for the mouse buttons and **G**, and in a shared
-world, hold **talk** or **radio** beside them to talk.
+world, hold **talk** or **radio** beside them to talk. Out of your depth, hold
+**dive** to go under; let go and you drift back up.
 
 Your position, the time of day, your look settings and whether sound is on
 are remembered between visits. Add `?reset` to the URL to start fresh (your
-map marks are kept). A world you made before the land got more varied is
-still there at `?land=1` (see [Lands](src/world/README.md#lands)). To keep a world somewhere other than this browser — and
+map marks are kept). A world you made on an earlier land is still there at
+`?land=1` or `?land=2` (see [Lands](src/world/README.md#lands)). To keep a world somewhere other than this browser — and
 to build in it with other people — see [Building together](src/save/README.md).
 
 ## Tuning from the URL
@@ -170,6 +172,7 @@ place in that order, not at the end:
 | `audio/sfx.js` | a one-off sound | `defineSfx(kind, play)` |
 | `audio/soundscape.js` | a sound that plays all the time | `game.sound.addLayer({ build, update })` |
 | `audio/soundscape.js` | being shut in: the open air muffled, the rest echoing | `game.sound.setEnclosed(0..1)` |
+| `audio/soundscape.js` | everything heard as if through something | `game.sound.muffle(amount)` |
 | `build/builder.js` | a tool | `game.builder.register(tool)` |
 | `build/builder.js` | hands too full for tools | `builder.idleWhile(fn)` |
 | `build/inventory.js` | a material to carry (`optional`: on the HUD only while you have some) | `game.builder.stock.define({ id, label, optional })` |
@@ -211,12 +214,13 @@ Each of those files opens with what the thing is and what it is handed.
 
 - *The forest is grown, not stored.* The same seed always grows the same
   land, so a save holds only what was changed. Anything that alters what a
-  seed grows (`world/worldgen.js`, `land2.js`, `chunkGen.js`, `water.js`,
-  `drainage.js`, the order of `world/flora.js`) moves every saved cabin
-  relative to its hillside — so a change to how the forest grows is a new
-  [land](src/world/README.md#lands), and the old ones keep growing as they did.
-  Real places are part of what is grown too, but only where each one is, and
-  on whichever land ([real places](src/world/README.md#real-places)).
+  seed grows (`world/worldgen.js`, `land2.js`, `land3.js`, `sea.js`,
+  `chunkGen.js`, `water.js`, `drainage.js`, the order of `world/flora.js`)
+  moves every saved cabin relative to its hillside — so a change to how the
+  forest grows is a new [land](src/world/README.md#lands), and the old ones
+  keep growing as they did. Real places are part of what is grown too, but
+  only where each one is, and on whichever land
+  ([real places](src/world/README.md#real-places)).
 - *A save is spelled once, for good.* Each system says how its share of a
   save is cut into elements (`t:120:-40`, `l:x:0:0:4:0`), next to the class
   that owns it. Worlds on the server are spelled that way now: add new kinds,

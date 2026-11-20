@@ -124,7 +124,7 @@ export function withRealPlaces(Land) {
         const a = (k / K) * Math.PI * 2;
         sum += this._baseHeight(d.at[0] + Math.cos(a) * d.outer, d.at[1] + Math.sin(a) * d.outer);
       }
-      L.offset = sum / K - d.anchor + ((def.base || 0) - (d.base || 0)) * def.scale;
+      L.offset = this.datumLevel(sum / K) - d.anchor + ((def.base || 0) - (d.base || 0)) * def.scale;
     }
 
     // For a hike that doesn't say: its own trailhead (or, failing one, the

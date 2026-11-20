@@ -33,6 +33,7 @@ function controls() {
     isDown: (a) => held.has(a),
     moveAxes: () => ({ x: 0, y: held.has('forward') ? 1 : 0 }),
     running: () => held.has('run'),
+    diving: () => held.has('run'), // (shift, out of your depth on foot)
     jumped() {
       const j = jump;
       jump = false;

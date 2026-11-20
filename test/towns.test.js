@@ -302,11 +302,19 @@ test('people go about their town, stop for you, and say hello', () => {
   assert.equal(said.length, 0, 'nobody to talk to');
   const moved = folk.people.filter((p, i) => Math.hypot(p.x - from[i][0], p.z - from[i][1]) > 3).length;
   assert.ok(moved > 0, 'some walk somewhere else');
-  // walk up to someone standing about
-  const p = folk.people.find((q) => !q.path.length);
+  // walk up to someone standing about (they come and go as they please, so
+  // now and then everyone is on their way somewhere: wait for one to stop)
+  let p = folk.people.find((q) => !q.path.length);
+  for (let i = 0; !p && i < 2400; i++) {
+    folk.update(0.05, ctx);
+    p = folk.people.find((q) => !q.path.length);
+  }
+  assert.ok(p, 'someone stops to stand about');
   folk.update(0.05, { ...ctx, player: { x: p.x + 1.5, z: p.z } });
   assert.ok(said.length === 1 && said[0].line.length > 2 && Number.isFinite(said[0].y), `they say something (${said[0] && said[0].line})`);
-  assert.ok(p.body.waving > 0, 'and wave');
+  // (whoever it was: someone standing beside them may have got in first)
+  const greeter = folk.people.find((q) => q.x === said[0].x && q.z === said[0].z);
+  assert.ok(greeter && greeter.body.waving > 0, 'and wave');
   folk.update(0.05, { ...ctx, player: { x: p.x + 1.5, z: p.z } });
   assert.equal(said.length, 1, 'once, not every frame');
   // after dark they go in

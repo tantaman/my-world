@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { mulberry32, hash2i, smoothstep, createSimplex2 } from '../noise.js';
 import { NO_WATER } from './water.js';
+import { SEA } from './sea.js';
 import { growRect, cellKey as tileKey } from '../core/geom.js';
 
 const REGROW_EVERY = 0.35; // seconds between regrowing changed ground
@@ -50,6 +51,9 @@ export class Grass {
     // where reeds and lily pads grow in clumps
     this.nReed = createSimplex2((seed ^ 0x2eed5) >>> 0);
     this.nLily = createSimplex2((seed ^ 0x1117) >>> 0);
+    // the sea's level, on a land with a sea: its beaches are sand, and
+    // nothing grows in it here
+    this.sea = chunks.gen && chunks.gen.sea ? chunks.gen.sea.level : null;
     // Places nothing grows: under a floor, in a tent, round a dock. See
     // addClearing().
     this.clearings = [];
@@ -192,9 +196,11 @@ export class Grass {
       this.chunks.groundAt(ox + lx, oz + lz, _g);
       const meadow = 1 - smoothstep(0.25, 0.9, _g.forest);
       const onPath = smoothstep(0.3, 0.62, _g.path);
-      // none under water, and thinning out on the damp edge of the bank
+      // none under water, and thinning out on the damp edge of the bank,
+      // and none on a beach by the sea
       const wd = waterDepth();
-      const bank = wd > -0.4 ? smoothstep(-0.03, -0.3, wd) : 1;
+      let bank = wd > -0.4 ? smoothstep(-0.03, -0.3, wd) : 1;
+      if (this.sea !== null) bank *= smoothstep(SEA.sand * 0.8, SEA.sand * 1.25, _g.h - this.sea);
       // above the trees it's short and thin, and none grows through the snow
       const high = 1 - _g.above * 0.45;
       // and none on bare ground or a beach, where a real place has them
@@ -290,6 +296,7 @@ export class Grass {
       const wd = waterDepth();
       if (wd < -0.3 || wd > 1.5) continue;
       if (kept.length && bare(wx, wz)) continue;
+      if (this.sea !== null && Math.abs(_g.wLevel - this.sea) < 0.01) continue; // salt water
       // still, and not broken: nothing roots in rapids, or in the sea's surf and chop
       const calm = (1 - smoothstep(0.2, 0.6, _g.wSpeed)) * (1 - smoothstep(0.12, 0.28, _g.wFoam));
       gPath = -1;

@@ -6,6 +6,11 @@
 
 import assert from 'node:assert/strict';
 
+// m: how far the floor you walk on may lie from the layout's floor at a node.
+// Where passages and a chamber meet their rock is blended (caves/shape.js), and
+// that sinks the floor up to about half a metre.
+const DIP = 0.8;
+
 export default async function ({ page, step, key, open, shot }) {
   await step('explore a cave', async () => {
     // The nearest cave: stand a few steps from its mouth, looking in.
@@ -43,11 +48,14 @@ export default async function ({ page, step, key, open, shot }) {
       player.steer = null;
       await T.frames(40);
       const p = player.pos;
-      return { reached: Math.hypot(p.x - c.deep.x, p.z - c.deep.z), under: chunks.heightAt(p.x, p.z) - p.y, floor: p.y - c.deep.floor, inside: !!player.space, open: sky.open, lamp: headlamp.level, said: window._said };
+      const here = {};
+      const space = player.spaces.at(p.x, p.z, p.y + 0.05, here);
+      return { reached: Math.hypot(p.x - c.deep.x, p.z - c.deep.z), under: chunks.heightAt(p.x, p.z) - p.y, stands: space ? p.y - here.floor : null, floor: p.y - c.deep.floor, inside: !!player.space, open: sky.open, lamp: headlamp.level, said: window._said };
     }, cave);
     assert.ok(deep.reached < 0.5, `followed the passage (${deep.reached.toFixed(2)} m off)`);
     assert.ok(deep.inside && deep.under > 2.5, 'deep in the cave');
-    assert.ok(Math.abs(deep.floor) < 0.5, 'on its floor');
+    assert.ok(deep.stands !== null && Math.abs(deep.stands) < 0.1, `on its floor (${deep.stands?.toFixed(2)} m over it)`);
+    assert.ok(Math.abs(deep.floor) < DIP, `as deep as the cave goes there (${deep.floor.toFixed(2)} m from its layout)`);
     assert.ok(deep.open < 0.4, `out of the daylight (${deep.open.toFixed(2)})`);
     assert.ok(deep.lamp > 0.9, 'with the headlamp on');
     assert.ok(deep.said.includes(cave.name), `and told where (${deep.said.join(' · ')})`);
@@ -59,7 +67,7 @@ export default async function ({ page, step, key, open, shot }) {
     await page.evaluate(() => new Promise((r) => setTimeout(r, 2500))); // where you stand is noted every 2 s
     await open();
     const back = await page.evaluate((c) => ({ inside: !!world.player.space, d: Math.hypot(world.player.pos.x - c.deep.x, world.player.pos.z - c.deep.z), floor: world.player.pos.y - c.deep.floor }), cave);
-    assert.ok(back.inside && back.d < 2 && Math.abs(back.floor) < 0.5, 'a reload finds you still in the cave');
+    assert.ok(back.inside && back.d < 2 && Math.abs(back.floor) < DIP, 'a reload finds you still in the cave');
     // and out again the way you came
     const out = await page.evaluate(async (c) => {
       const { player } = world;

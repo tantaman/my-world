@@ -328,7 +328,7 @@ for (const land of LANDS) test(`the world grows a hike: the real land, its trail
   // the trailhead stands at the level of the forest round the hike
   let sum = 0;
   for (let k = 0; k < 64; k++) sum += gen._baseHeight(L.cx + Math.cos((k / 64) * Math.PI * 2) * L.outer, L.cz + Math.sin((k / 64) * Math.PI * 2) * L.outer);
-  near(L.raw(L.cx + L.trailhead.x, L.cz + L.trailhead.z) + L.offset, sum / 64, 1e-3, 'settled (its datum is kept to the millimetre)');
+  near(L.raw(L.cx + L.trailhead.x, L.cz + L.trailhead.z) + L.offset, gen.datumLevel(sum / 64), 1e-3, 'settled (its datum is kept to the millimetre)');
   // and nothing of the forest's own water is on it
   for (let z = -480; z <= 480; z += 40) {
     for (let x = -480; x <= 480; x += 40) {

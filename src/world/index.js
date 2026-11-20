@@ -13,7 +13,7 @@ import { Spaces } from './spaces.js';
 import { CUTS } from './cuts.js';
 import { createParticles } from './particles.js';
 import { createTerrainMaterial, createTerrainDepthMaterial, createVegetationMaterial, createGrassMaterial } from './materials.js';
-import { SHARED } from '../render/uniforms.js';
+import { SHARED, UNDER } from '../render/uniforms.js';
 import { createWaterMaterial } from './waterSurface.js';
 import { makePine, makeBroadleaf, makeBirch, makeBush, makeFern, makeRock, makeLog } from './models.js';
 import { makePalm, makeIronwood, makeTreeFern, makeSilversword } from './modelsIsland.js';
@@ -70,6 +70,7 @@ export function installWorld(game) {
   scene.add(particles.object);
   placeStructures(scene, STRUCTURES, gen, materials);
   SHARED.uGrassRadius.value = CONFIG.grassRadius;
+  if (gen.sea) UNDER.uSea.value = gen.sea.level;
 
   game.provide('gen', gen);
   game.provide('chunks', chunks);

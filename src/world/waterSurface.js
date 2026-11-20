@@ -16,10 +16,16 @@
 // the shore and around your legs, and where it runs past you it opens into a
 // wake. The bed beneath is darkened with depth by the terrain shader
 // (materials.js), so shallow water shows its stones.
+//
+// The forest's own sea (sea.js) rises and falls in a slow swell and is bluer
+// than a lake; it breaks white along the shore, as a real place's sea does,
+// by the foam it carries. Seen from underneath, any water is a ceiling of
+// moving light: the sky through a bright round window straight overhead, and
+// beyond it, the water mirrored back down (Snell's window).
 
 import * as THREE from 'three';
-import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL, PERIOD } from '../render/glsl.js';
-import { SHARED, SKY, WADE } from '../render/uniforms.js';
+import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL, UNDER_GLSL, PERIOD, wave } from '../render/glsl.js';
+import { SHARED, SKY, WADE, UNDER } from '../render/uniforms.js';
 import { NO_WATER } from './water.js';
 import { WATER_STRIDE as WS } from './chunkGen.js';
 
@@ -45,6 +51,28 @@ const LEAVES = turned(0.35, 2.9);
 // Running water's patterns are drawn in a frame that turns with the current,
 // which can't repeat on any period: their lattice just wraps far away.
 const LOOSE = '4096.0, 2.3, 4096.0';
+
+// The sea's swell: a few long, low waves running in from different ways
+// (which way, waves per 10 m, and how high, m), each brought round on the
+// world's period (render/glsl.js) so it never jumps: as a height (m) and its
+// slope, at world place p.
+const SWELLS = [
+  [0.8, 0.6, 0.45, 0.16],
+  [-0.3, 0.95, 0.7, 0.09],
+  [0.95, -0.3, 1.05, 0.05],
+];
+const SWELL_GLSL = /* glsl */ `
+vec3 swell(vec2 p, float t) {
+  vec3 o = vec3(0.0); // height, d/dx, d/dz
+${SWELLS.map(([dx, dz, n, h]) => {
+  const k = n * 0.6283;
+  const kx = wave(dx * k);
+  const kz = wave(dz * k);
+  return `  { float ph = ${kx} * p.x + ${kz} * p.y - t * ${Math.sqrt(9.8 * k).toFixed(6)}; o.x += ${h.toFixed(3)} * sin(ph); o.yz += ${h.toFixed(3)} * cos(ph) * vec2(${kx}, ${kz}); }`;
+}).join('\n')}
+  return o;
+}
+`;
 
 // Water geometry for a chunk, or null if it has none. Positions are local to
 // the chunk, like its terrain mesh.
@@ -148,6 +176,7 @@ export function createWaterMaterial() {
     metalness: 0,
     transparent: true,
     depthWrite: true,
+    side: THREE.DoubleSide, // so it can be seen from under it
     // The shader works out what light the water itself sends back (scatter,
     // glints, reflected sky) and how much of the bed it hides (alpha):
     // out = water + bed × (1 − alpha).
@@ -156,7 +185,7 @@ export function createWaterMaterial() {
     blendDst: THREE.OneMinusSrcAlphaFactor,
   });
   mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, SKY, WADE, { uPlayer: SHARED.uPlayer, uWind: SHARED.uWind, uOrigin: SHARED.uOrigin });
+    Object.assign(shader.uniforms, SKY, WADE, UNDER, { uPlayer: SHARED.uPlayer, uWind: SHARED.uWind, uOrigin: SHARED.uOrigin });
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -165,11 +194,26 @@ export function createWaterMaterial() {
         attribute float aFoam;
         attribute float aDepth;
         attribute vec2 aSky;
+        uniform float uTime;
+        uniform float uSea;
         varying vec2 vFlow;
         varying float vFoam;
         varying float vDepth;
         varying vec2 vSky;
-        varying vec3 vWPos;`,
+        varying vec3 vWPos;
+        varying float vSea;
+        ${WORLD_GLSL}
+        ${SWELL_GLSL}`,
+      )
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        // the sea's swell, lower over the shallows
+        vSea = abs(position.y - uSea) < 0.02 ? 1.0 : 0.0;
+        if (vSea > 0.5) {
+          vec2 wxz = worldXZ((modelMatrix * vec4(position, 1.0)).xyz);
+          transformed.y += swell(wxz, uTime).x * mix(0.35, 1.0, smoothstep(0.3, 3.0, aDepth));
+        }`,
       )
       .replace(
         '#include <fog_vertex>',
@@ -189,15 +233,20 @@ export function createWaterMaterial() {
         uniform float uWade;
         uniform vec2 uWadeFlow;
         uniform float uWind;
+        uniform float uSea;
+        uniform float uUnderSea;
         varying vec2 vFlow;
         varying float vFoam;
         varying float vDepth;
         varying vec2 vSky; // x: leaves overhead, y: how open it is
         varying vec3 vWPos; // as drawn: see worldXZ
+        varying float vSea; // 1 on the sea
         ${NOISE_GLSL}
         ${WORLD_GLSL}
         ${WORLD_NOISE_GLSL}
         ${SKY_GLSL}
+        ${UNDER_GLSL}
+        ${SWELL_GLSL}
         // Smooth value noise (quintic, so its slope has no creases) with its
         // gradient: (value, d/dx, d/dy). Its lattice repeats every m cells.
         vec3 vnoiseD(vec2 p, float m) {
@@ -268,6 +317,8 @@ export function createWaterMaterial() {
                     + rippleGrad(wp * ${RUFFLE_B.scale} - vec2(uTime * 0.05, -uTime * 0.09), ${RUFFLE_B.args}) * 0.37 * 0.04;
         gStill *= 0.6 + 0.5 * uWind;
         vec2 g = mix(gRun, gStill, still);
+        // the sea's swell under the ripples
+        if (vSea > 0.5) g += swell(wp, uTime).yz * mix(0.35, 1.0, smoothstep(0.3, 3.0, depth));
 
         // rings spreading out from your legs as you wade
         vec2 toMe = vWPos.xz - uPlayer.xz;
@@ -314,6 +365,7 @@ export function createWaterMaterial() {
         // Running water is clearer: it doesn't stand long enough to silt up.
         float murk = 1.0 - exp(-depth * mix(0.45, 0.75, still));
         vec3 body = mix(vec3(0.05, 0.085, 0.06), vec3(0.012, 0.04, 0.045), smoothstep(0.3, 3.0, depth));
+        body = mix(body, mix(vec3(0.04, 0.1, 0.1), vec3(0.008, 0.04, 0.075), smoothstep(0.5, 6.0, depth)), vSea);
         float scatter = mix(0.06, 0.8, murk) + cloud;
         body = mix(body, vec3(0.5, 0.58, 0.55), cloud);
         diffuseColor.rgb = mix(body * scatter, vec3(0.78, 0.8, 0.78), foam);`,
@@ -335,7 +387,20 @@ export function createWaterMaterial() {
       )
       .replace(
         '#include <opaque_fragment>',
-        `{
+        `if (!gl_FrontFacing && cameraPosition.y < vWPos.y + 0.05) {
+          // From underneath. Looking up within about 48 degrees of straight
+          // up, the sky comes through, bent; further over, the surface is a
+          // mirror for the water below it.
+          vec3 I = normalize(vWPos - cameraPosition);
+          vec3 T = refract(I, -waterN, 1.33);
+          float win = step(1e-4, dot(T, T));
+          float cosI = clamp(dot(I, waterN), 0.0, 1.0);
+          float edge = smoothstep(0.62, 0.7, cosI); // softened by the ripples
+          vec3 sky = skyGradient(normalize(T + vec3(0.0, 1e-4, 0.0))) * 1.5;
+          vec3 mirror = waterGlow(uUnderSea, 0.0) * 0.7;
+          outgoingLight = mix(mirror, sky, win * edge) + vec3(0.7, 0.75, 0.72) * foam * 0.4;
+          diffuseColor.a = 1.0;
+        } else {
           // Reflection: the sky, except low down, where it would be the trees
           // across the water. The narrower the water, the higher its banks
           // and the trees on them stand in the reflection.
@@ -361,6 +426,6 @@ export function createWaterMaterial() {
         #include <opaque_fragment>`,
       );
   };
-  mat.customProgramCacheKey = () => 'water-v5';
+  mat.customProgramCacheKey = () => 'water-v6';
   return mat;
 }
