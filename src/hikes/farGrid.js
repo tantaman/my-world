@@ -22,6 +22,8 @@ const RIVER_SEEN = 0.45;
 //            which country's it is (WorldGen.surface)
 //   real     how high it really is (m over the sea) on a real place, for the
 //            beds in a sandstone country's cliffs; NaN elsewhere
+//   above, snow   how far it is above the trees, and how much snow lies there
+//            (0..1 each: a land's or a real place's high ground)
 export function sampleFar(gen, x0, z0, n, step) {
   const h = new Float32Array(n * n);
   const water = new Float32Array(n * n);
@@ -32,6 +34,9 @@ export function sampleFar(gen, x0, z0, n, step) {
   const land = new Float32Array(n * n);
   const country = new Uint8Array(n * n);
   const real = new Float32Array(n * n);
+  const above = new Float32Array(n * n);
+  const snow = new Float32Array(n * n);
+  const high = gen.highIn(x0, z0, x0 + (n - 1) * step, z0 + (n - 1) * step);
   const at = { bare: 0, sand: 0, land: 0, country: 0 };
   const w = gen.water;
   for (let j = 0; j < n; j++) {
@@ -60,7 +65,11 @@ export function sampleFar(gen, x0, z0, n, step) {
       country[k] = at.country;
       real[k] = NaN;
       for (const L of gen.landforms) if (L.weight(x, z) > 0) real[k] = (g - L.offset) / L.def.scale + (L.def.base || 0);
+      if (high) {
+        above[k] = gen.above(x, z, g);
+        snow[k] = gen.snow(x, z, g);
+      }
     }
   }
-  return { x0, z0, n, step, h, water, forest, species, bare, sand, land, country, real };
+  return { x0, z0, n, step, h, water, forest, species, bare, sand, land, country, real, above, snow };
 }

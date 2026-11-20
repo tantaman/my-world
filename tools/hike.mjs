@@ -29,6 +29,9 @@
 //   --country "…"     what kind of country it is (src/world/country.js): what
 //                     the ground is made of, what grows and lives there, what
 //                     the sky does. Unsaid, it's forest like the rest
+//   --middle lat,lon  where to centre the land, if not on the photo: so that
+//                     --radius can take in the whole of a long trail with the
+//                     photo part way along it
 //   --at x,z          where in the game world (game metres; default: where it
 //                     really is, at the same scale, from the middle of the world
 //                     in the Hoh rain forest: see hike/place.js)
@@ -46,7 +49,7 @@ import { readPhoto } from './hike/exif.js';
 import { decodePng, encodePng } from './hike/png.js';
 import { localFrame, tileXY, terrarium, metresPerDegree } from './hike/geo.js';
 import { blockOf, blockTiles, missing } from './hike/usgs.js';
-import { parseOsm, mergeOsm, trails, waters, coastlines, roads, beaches, streams, peaks, incompleteWaters } from './hike/osm.js';
+import { parseOsm, mergeOsm, trails, waters, coastlines, roads, beaches, streams, covers, peaks, incompleteWaters } from './hike/osm.js';
 import { buildHike, splitHike, fineBox, DEFAULTS } from './hike/build.js';
 import { placeHike } from './hike/place.js';
 import { COUNTRY } from '../src/world/country.js';
@@ -96,6 +99,16 @@ if (photo.lat === null || photo.lon === null) {
   process.exit(1);
 }
 console.log(`photo: ${photo.lat.toFixed(5)}, ${photo.lon.toFixed(5)}${photo.bearing !== null ? `, looking ${Math.round(photo.bearing)}°` : ''}${photo.hour !== null ? `, at ${fmtHour(photo.hour)}` : ''}`);
+// where the land is centred: the photo, unless it's said
+let middle = null;
+if (flags.middle) {
+  const [lat, lon] = flags.middle.split(',').map(Number);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    console.error('--middle wants lat,lon');
+    process.exit(1);
+  }
+  middle = { lat, lon };
+}
 
 const DEM = flags.dem || 'terrain';
 if (!DEMS.includes(DEM)) {
@@ -195,7 +208,7 @@ async function heightsFrom(source, z, [north, west, south, east], what) {
   };
 }
 // The heights for a grid `cell` real metres apart, over a box (game metres
-// round the photo): from 3DEP if asked, with Terrain Tiles where it has none.
+// round the land's middle): from 3DEP if asked, with Terrain Tiles where it has none.
 async function elevationFor(cell, [x0, z0, x1, z1], what) {
   const pad = cell * 2;
   const [north, west] = frame.toLatLon(x0 / opt.scale - pad, -z0 / opt.scale + pad);
@@ -209,7 +222,8 @@ async function elevationFor(cell, [x0, z0, x1, z1], what) {
     return Number.isNaN(h) ? terrain(lat, lon) : h;
   };
 }
-const frame = localFrame(photo.lat, photo.lon);
+const centre = middle || photo;
+const frame = localFrame(centre.lat, centre.lon);
 const reachG = (opt.radius + opt.fade) * opt.scale;
 const elevation = await elevationFor(opt.cell, [-reachG, -reachG, reachG, reachG], 'elevation');
 
@@ -238,7 +252,8 @@ for (const id of incompleteWaters(osm)) osm = mergeOsm([osm, parseOsm(await cach
 const ts = trails(osm);
 const ws = waters(osm);
 const coast = coastlines(osm);
-console.log(`${ts.length} paths, ${ws.length} lakes and ponds${coast.length ? ', and the coast' : ''}`);
+const cover = covers(osm);
+console.log(`${ts.length} paths, ${ws.length} lakes and ponds${coast.length ? ', and the coast' : ''}${cover.length ? `; ${cover.length} areas of woods, scrub, scree, rock and the like` : ''}`);
 
 // ── Its name ─────────────────────────────────────────────────────────────────
 // What it's called: as you say, or the nearest named peak, or the trail the
@@ -276,11 +291,15 @@ const others = existing.filter((h) => h.id !== id).map(({ load, ...h }) => h);
 let at;
 let datum = null;
 let placed = null;
+if (already && JSON.stringify(already.middle || null) !== JSON.stringify(middle && { lat: Math.round(middle.lat * 1e6) / 1e6, lon: Math.round(middle.lon * 1e6) / 1e6 })) {
+  console.error(`${id} is centred ${already.middle ? `on ${already.middle.lat},${already.middle.lon}` : 'on its photo'}: import it again centred the same way (--middle), or it would move.`);
+  process.exit(1);
+}
 if (already) ({ at, datum } = already);
 else if (flags.at) at = flags.at.split(',').map(Number);
 else {
   try {
-    placed = placeHike({ photo, scale: opt.scale, radius: opt.radius * opt.scale, fade: opt.fade * opt.scale }, others);
+    placed = placeHike({ photo: centre, scale: opt.scale, radius: opt.radius * opt.scale, fade: opt.fade * opt.scale }, others);
   } catch (err) {
     console.error(`Can't put it there: ${err.message}.`);
     process.exit(1);
@@ -289,12 +308,12 @@ else {
 }
 
 // ── Build it ─────────────────────────────────────────────────────────────────
-const parts = { id, name, photo, elevation, trails: ts, waters: ws, coast, roads: roads(osm), beaches: beaches(osm), streams: streams(osm), at, datum, ...opt };
+const parts = { id, name, photo, middle, elevation, trails: ts, waters: ws, coast, roads: roads(osm), beaches: beaches(osm), streams: streams(osm), covers: cover, at, datum, ...opt };
 let built = buildHike({ ...parts, fine: null });
 // The finer grid goes where the walk goes, which is known now: its heights
 // are fetched for there, and it is built again with them.
 if (opt.fine) {
-  const fineElevation = await elevationFor(opt.fine.cell, fineBox(built.walk, opt.fine, opt.scale, opt.radius * opt.scale), 'along the walk');
+  const fineElevation = await elevationFor(opt.fine.cell, fineBox(built.walk, opt.fine, opt.scale, opt.radius * opt.scale, [built.def.view.x, built.def.view.z]), 'along the walk');
   built = buildHike({ ...parts, fineElevation });
 }
 const { def, preview } = built;
@@ -323,7 +342,7 @@ fs.writeFileSync(previewFile, encodePng(preview.width, preview.height, preview.r
 console.log(`\n${def.name} → src/world/hikes/${id}.js (${Math.round(module.length / 1024)} kB, fetched when it's needed)`);
 const F = def.ground.fine;
 if (F) console.log(`  along the walk, heights every ${Math.round((F.cell / def.scale) * 10) / 10} m for ${Math.round(((F.w - 1) * F.cell) / def.scale)} × ${Math.round(((F.h - 1) * F.cell) / def.scale)} m${DEM === '3dep' ? ', from 3DEP' : ''}`);
-console.log(`  at ${def.at[0]}, ${def.at[1]} in the world, ${Math.round(Math.hypot(...def.at) / def.scale / 1000)} km from the middle as the crow flies: the real land for ${Math.round(def.radius)} m round the photo, at 1 : ${Math.round(1 / def.scale)}`);
+console.log(`  at ${def.at[0]}, ${def.at[1]} in the world, ${Math.round(Math.hypot(...def.at) / def.scale / 1000)} km from the middle as the crow flies: the real land for ${Math.round(def.radius)} m round ${middle ? 'its middle' : 'the photo'}, at 1 : ${Math.round(1 / def.scale)}`);
 if (placed && placed.near) console.log(`  it meets ${placed.near.name}: placed exactly from it, and standing on the same heights`);
 for (const note of placed ? placed.notes : []) console.log(`  note: ${note}`);
 if (def.trail) console.log(`  the walk: ${def.trail.name || 'a trail'}, ${def.trail.length} m, ${def.trail.climb < 0 ? `going down ${-def.trail.climb}` : `climbing ${def.trail.climb}`} m`);

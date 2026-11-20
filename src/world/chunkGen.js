@@ -10,10 +10,11 @@
 // The water surface itself is meshed on the main thread from these and the
 // heights (waterSurface.js), so it can follow the digging.
 //
-// A land with high ground (a treeline and snow: see land2.js) also gets
+// A land with high ground (a treeline and snow: see land2.js), or a chunk on
+// a real place with high ground of its own, also gets
 //   high    2 per vertex: how far above the trees (0..1), snow (0..1)
 //   hi      the same per vertex of the mesh, skirts included
-// which the land with none goes without.
+// which a chunk with none goes without.
 
 import { mulberry32, hash2i, smoothstep } from '../noise.js';
 import { VEG_STRIDE, VEG_KINDS } from './flora.js';
@@ -35,7 +36,7 @@ export function generateTerrain(gen, cx, cz, step, size) {
   const wLevel = new Float32Array(N * N);
   const wData = new Float32Array(N * N * WATER_STRIDE);
   const water = gen.water;
-  const high = gen.highGround ? new Float32Array(N * N * 2) : null;
+  const high = gen.highIn(x0 - step, z0 - step, x0 + size + step, z0 + size + step) ? new Float32Array(N * N * 2) : null;
   for (let gz = 0; gz < G; gz++) {
     for (let gx = 0; gx < G; gx++) {
       const x = x0 + (gx - 1) * step;
@@ -214,8 +215,17 @@ export function generateSurface(gen, cx, cz, step, size) {
 //
 // The rules are the forest's. A real place with its own kind of country
 // (country.js) keeps them for where a thing grows and how thickly, and says
-// what the thing is: a palm where the forest would have stood an oak.
+// what the thing is: a palm where the forest would have stood an oak, and
+// how it grows (a spruce is a slimmer spire than the forest's pines: the
+// `extra` of a tree is how much of its width it has lost). Where a real
+// place's map says what covers the land (landform.js), its thickets are
+// thick with shrubs and its screes strewn with boulders.
 export { VEG_STRIDE, VEG_KINDS };
+
+// How much more often a bush stands where it's all thicket, and how much
+// bigger (a willow over your head, not a bush at your knee).
+const THICKET = 0.75;
+const THICKET_SIZE = 0.8;
 
 export function generateVegetation(gen, cx, cz, size, trunkRadius) {
   if (gen.land >= 2) return generateVegetation2(gen, cx, cz, size, trunkRadius);
@@ -271,7 +281,9 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
       const tint = rng();
       if (!kind) continue;
       if (!dry(x, z, 1.4 + r5 * 1.6)) continue;
-      put(kind, x, z, -0.1, r6 * Math.PI * 2, s, tint);
+      // near a real place's own treeline, small
+      s *= 1 - gen.above(x, z, y) * 0.55;
+      put(kind, x, z, -0.1, r6 * Math.PI * 2, s, tint, country ? country.slim[kind] || 0 : 0);
       colliders.push(x, z, trunkRadius[kind] * s + 0.08);
     }
   }
@@ -290,7 +302,8 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
       const f = gen.forest(x, z);
       const m = gen.moisture(x, z);
       const fernP = f * smoothstep(0.35, 0.75, m) * 0.55;
-      const bushP = (0.06 + Math.max(0, 1 - Math.abs(f - 0.45) * 2.5) * 0.22) * (0.5 + f * 0.5);
+      const th = gen.thicket(x, z);
+      const bushP = (0.06 + Math.max(0, 1 - Math.abs(f - 0.45) * 2.5) * 0.22) * (0.5 + f * 0.5) + th * THICKET;
       if (r1 > fernP + bushP) continue;
       gen.pathMask(x, z);
       if (gen.pathEdge < 0.35 + r4) continue;
@@ -310,7 +323,7 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
           continue;
         }
         if (kind === 'fern') put('fern', x, z, -0.05, r2 * Math.PI * 2, 0.8 + r3 * 0.7, tint);
-        else put('bush', x, z, -0.15, r2 * Math.PI * 2, 0.7 + r3 * 0.9, tint);
+        else put('bush', x, z, -0.15, r2 * Math.PI * 2, (0.7 + r3 * 0.9) * (1 + th * THICKET_SIZE), tint);
         continue;
       }
       if (r1 < fernP) put('fern', x, z, -0.05, r2 * Math.PI * 2, 0.8 + r3 * 0.7, tint);
@@ -368,9 +381,49 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
     }
   }
 
+  strewTalus(gen, cx, cz, size, lists.rock, colliders);
   const out = {};
   for (const k of VEG_KINDS) out[k] = new Float32Array(lists[k]);
   return { lists: out, colliders: new Float32Array(colliders) };
+}
+
+// ── Talus ──────────────────────────────────────────────────────────────────
+// Where a real place's map has a scree (landform.js), a field of boulders, as
+// thick as they lie under a cliff, on a grid of their own: one candidate to
+// a cell, from a stream of numbers of its own, so nothing else in the chunk
+// moves for them (and a chunk with no scree draws nothing at all).
+const TALUS_CELL = 2.3; // m
+const TALUS_MOST = 0.95; // the share of cells with a boulder where it is all scree
+const TALUS_SEED = 0x7a1e5;
+
+function strewTalus(gen, cx, cz, size, rocks, colliders) {
+  const x0 = cx * size;
+  const z0 = cz * size;
+  if (gen.landformClearance(x0 + size / 2, z0 + size / 2) > size * 0.75) return;
+  const rng = mulberry32(hash2i(cx, cz, gen.seed ^ TALUS_SEED));
+  const water = gen.water;
+  const cells = Math.floor(size / TALUS_CELL);
+  for (let j = 0; j < cells; j++) {
+    for (let i = 0; i < cells; i++) {
+      const x = x0 + (i + rng()) * TALUS_CELL;
+      const z = z0 + (j + rng()) * TALUS_CELL;
+      const r1 = rng();
+      const r2 = rng();
+      const r3 = rng();
+      const r4 = rng();
+      const r5 = rng();
+      if (r1 > gen.talus(x, z) * TALUS_MOST) continue;
+      // blocks from a metre or so to the size of a car, most of them small
+      const s = 0.45 + r2 * r2 * 2.1;
+      gen.pathMask(x, z);
+      if (gen.pathEdge < s * 1.1 + 0.3) continue;
+      if (gen.padClearance(x, z) < s + 1) continue;
+      const y = gen.height(x, z);
+      if (water.edge < 0.3) continue;
+      rocks.push(x, y - 0.28 * s, z, r3 * Math.PI * 2, s, r4, r5);
+      if (s > 0.55) colliders.push(x, z, s * 0.85);
+    }
+  }
 }
 
 // ── Vegetation, on the second land ─────────────────────────────────────────
@@ -458,7 +511,7 @@ function generateVegetation2(gen, cx, cz, size, trunkRadius) {
       // a lone tree in the open grows big; one near the treeline, small
       s *= 1 + smoothstep(0.3, 0.05, f) * 0.35;
       s *= 1 - gen.above(x, z, y) * 0.55;
-      put(kind, x, z, -0.1, r6 * Math.PI * 2, s, tint);
+      put(kind, x, z, -0.1, r6 * Math.PI * 2, s, tint, real ? real.slim[kind] || 0 : 0);
       colliders.push(x, z, trunkRadius[kind] * s + 0.08);
     }
   }
@@ -484,7 +537,8 @@ function generateVegetation2(gen, cx, cz, size, trunkRadius) {
       const deep = smoothstep(0.15, 0.55, wd);
       const park = smoothstep(-0.3, -0.62, wd);
       const fernP = f * smoothstep(0.35, 0.75, m) * 0.55 * (1 + deep * 0.6);
-      let bushP = (0.06 + Math.max(0, 1 - Math.abs(f - 0.45) * 2.5) * 0.22) * (0.5 + f * 0.5) + park * (1 - f) * 0.07;
+      const th = gen.thicket(x, z);
+      let bushP = (0.06 + Math.max(0, 1 - Math.abs(f - 0.45) * 2.5) * 0.22) * (0.5 + f * 0.5) + park * (1 - f) * 0.07 + th * THICKET;
       if (r1 > fernP + bushP + SHRUBS) continue; // nothing, however high up
       gen.pathMask(x, z);
       if (gen.pathEdge < 0.35 + r4) continue;
@@ -510,7 +564,7 @@ function generateVegetation2(gen, cx, cz, size, trunkRadius) {
           continue;
         }
         if (kind === 'fern') put('fern', x, z, -0.05, r2 * Math.PI * 2, 0.8 + r3 * 0.7, tint);
-        else put('bush', x, z, -0.15, r2 * Math.PI * 2, 0.7 + r3 * 0.9, tint);
+        else put('bush', x, z, -0.15, r2 * Math.PI * 2, (0.7 + r3 * 0.9) * (1 + th * THICKET_SIZE) * (1 - ab * 0.4), tint);
         continue;
       }
       if (fern) put('fern', x, z, -0.05, r2 * Math.PI * 2, 0.8 + r3 * 0.7, tint);
@@ -571,6 +625,7 @@ function generateVegetation2(gen, cx, cz, size, trunkRadius) {
     }
   }
 
+  strewTalus(gen, cx, cz, size, lists.rock, colliders);
   const out = {};
   for (const k of VEG_KINDS) out[k] = new Float32Array(lists[k]);
   return { lists: out, colliders: new Float32Array(colliders) };

@@ -174,6 +174,10 @@ export class WorldGen {
   //                          country: here nothing, and null
   //   countryAt(x, z)        the country a plant there grows in, or null in
   //                          the forest
+  //   thicket(x, z)          0..1 how much of a thicket of shrubs it is (a
+  //                          real place's willows): here none
+  //   talus(x, z)            0..1 how thickly strewn with boulders (a real
+  //                          place's screes): here none
   forestHeight(x, z, minWavelength = 0) {
     return this.broadHeight(x, z, minWavelength);
   }
@@ -192,6 +196,12 @@ export class WorldGen {
   }
   countryAt() {
     return null;
+  }
+  thicket() {
+    return 0;
+  }
+  talus() {
+    return 0;
   }
 
   height(x, z, pm = this.pathMask(x, z)) {
@@ -241,6 +251,8 @@ export class WorldGen {
   //   above(x, z, h)   0..1 how far above the trees: alpine ground
   //   snow(x, z, h)    0..1 snow lying on the ground
   //   highGround       whether above() and snow() are ever more than 0
+  //   highIn(x0, z0, x1, z1)  whether they may be anywhere in that square (a
+  //                    real place can have high ground of its own)
   groves() {
     return 0;
   }
@@ -252,6 +264,9 @@ export class WorldGen {
   }
   get highGround() {
     return false;
+  }
+  highIn() {
+    return this.highGround;
   }
 
   // How high a real place set into this land stands (realPlaces.js), given

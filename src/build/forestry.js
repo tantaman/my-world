@@ -174,7 +174,10 @@ export class Forestry extends Emitter {
       const mesh = new THREE.Mesh(this.models[f.kind].lod0, this.mat.still);
       mesh.position.y = -CUT_H;
       mesh.rotation.y = f.yaw;
-      mesh.scale.setScalar(f.s);
+      // as slim as it grew where it stood (a spruce: world/country.js)
+      const own = this.chunks.gen.countryAt(f.x, f.z);
+      const w = f.s * (1 - ((own && own.slim[f.kind]) || 0));
+      mesh.scale.set(w, f.s, w);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       const pivot = new THREE.Group();

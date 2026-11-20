@@ -47,6 +47,7 @@ export function installCountry(game) {
       LAND.uUpper.value[c.id].setRGB(...L.upper);
       LAND.uLayers.value[c.id].set(L.at, L.bed, L.varnish, 1);
     }
+    LAND.uRubble.value[c.id] = g.rubble;
   }
 
   game.addSystem({

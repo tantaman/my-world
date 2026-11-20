@@ -58,6 +58,7 @@ export const LAND = {
   // for the real place you're on: the game height of its sea level, and game
   // metres to a real one. (Heights aren't slid with the scene: origin.js.)
   uRealY: { value: new THREE.Vector2(0, 1) },
+  uRubble: { value: new Array(MAX_COUNTRIES).fill(0) }, // how much of its bare ground is broken stone, 0..1
 };
 
 // A layer of cloud over the country you're in (world/country.js), drawn by

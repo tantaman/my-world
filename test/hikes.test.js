@@ -12,12 +12,12 @@ import { localFrame, tileXY, terrarium, toTerrarium } from '../tools/hike/geo.js
 import { readTiff, writeTiff } from '../tools/hike/tiff.js';
 import { blockOf, blockTiles, missing, BLOCK } from '../tools/hike/usgs.js';
 import { makeChains } from '../src/hikes/waymarks.js';
-import { parseOsm, trails, waters, coastlines, roads, streams } from '../tools/hike/osm.js';
-import { buildHike, splitHike, fineBox, simplify, signedDistance, coastDistance, walkFromRoad } from '../tools/hike/build.js';
-import { placeHike, project, ORIGIN } from '../tools/hike/place.js';
-import { Landform, packHeights, unpackHeights, packShore, unpackShore } from '../src/world/landform.js';
+import { parseOsm, trails, waters, coastlines, roads, streams, covers } from '../tools/hike/osm.js';
+import { buildHike, splitHike, fineBox, simplify, signedDistance, coastDistance, walkFromRoad, fillRings } from '../tools/hike/build.js';
+import { placeHike, project, centreOf, ORIGIN } from '../tools/hike/place.js';
+import { Landform, packHeights, unpackHeights, packShore, unpackShore, packCover, unpackCover } from '../src/world/landform.js';
 import { growWorld, LANDS } from '../src/world/lands.js';
-import { generateVegetation } from '../src/world/chunkGen.js';
+import { generateVegetation, generateTerrain } from '../src/world/chunkGen.js';
 import { sampleFar } from '../src/hikes/farGrid.js';
 import { NO_WATER, LANDFORM_REACH, LANDFORM_DRY } from '../src/world/water.js';
 import { NET } from '../src/world/drainage.js';
@@ -579,6 +579,126 @@ test('nothing grows where the photo was taken, nor in front of it', () => {
   }
 });
 
+// ── What covers the land ─────────────────────────────────────────────────────
+test('OpenStreetMap: what covers the land, holes and all', () => {
+  const xml = `<osm>
+    <node id="1" lat="0" lon="0"/><node id="2" lat="0" lon="0.01"/><node id="3" lat="0.01" lon="0.01"/><node id="4" lat="0.01" lon="0"/>
+    <node id="5" lat="0.004" lon="0.004"/><node id="6" lat="0.004" lon="0.006"/><node id="7" lat="0.006" lon="0.006"/><node id="8" lat="0.006" lon="0.004"/>
+    <way id="10"><nd ref="1"/><nd ref="2"/><nd ref="3"/><nd ref="4"/><nd ref="1"/></way>
+    <way id="11"><nd ref="5"/><nd ref="6"/><nd ref="7"/><nd ref="8"/><nd ref="5"/></way>
+    <way id="12"><nd ref="5"/><nd ref="6"/><nd ref="7"/><nd ref="8"/><nd ref="5"/><tag k="natural" v="scree"/></way>
+    <way id="13"><nd ref="1"/><nd ref="2"/><nd ref="3"/><tag k="natural" v="scrub"/></way>
+    <way id="14"><nd ref="1"/><nd ref="3"/><nd ref="4"/><nd ref="1"/><tag k="natural" v="glacier"/></way>
+    <way id="15"><nd ref="1"/><nd ref="2"/><nd ref="3"/><nd ref="1"/><tag k="landuse" v="farmland"/></way>
+    <relation id="20"><member type="way" ref="10" role="outer"/><member type="way" ref="11" role="inner"/>
+      <tag k="type" v="multipolygon"/><tag k="natural" v="wood"/></relation>
+  </osm>`;
+  const c = covers(parseOsm(xml)).map((x) => [x.kind, x.rings.length]);
+  assert.deepEqual(c.sort(), [['ice', 1], ['scree', 1], ['wood', 2]], 'closed areas only, and a wood with a clearing in it');
+});
+
+test('cover packs small and comes back as it went', () => {
+  const c = Uint8Array.from({ length: 5000 }, (_, k) => (k < 3000 ? 1 : k < 4000 ? (k % 7 === 0 ? 3 : 5) : 0));
+  const packed = packCover(c);
+  assert.deepEqual(unpackCover(packed, c.length), c);
+  assert.ok(packed.length < 1000, `${packed.length} characters`);
+  // a square with a square hole in it, on a grid a metre apart
+  const got = new Set();
+  fillRings([[[-4, -4], [4, -4], [4, 4], [-4, 4], [-4, -4]], [[-1.5, -1.5], [1.5, -1.5], [1.5, 1.5], [-1.5, 1.5], [-1.5, -1.5]]], (i, j) => got.add(`${i - 10},${j - 10}`), 21, 1, 10);
+  assert.ok(got.has('-3,-3') && got.has('3,2') && got.has('-2,0'), 'inside');
+  assert.ok(!got.has('0,0') && !got.has('1,-1') && !got.has('5,0'), 'not in the hole, nor outside');
+});
+
+// The made-up mountain, as the map might have it: wooded all over, with a
+// scree on its west side, bare rock above that, willows by the lake, and ice
+// on the top.
+const rect = (e0, n0, e1, n1) => [toLL(e0, n0), toLL(e1, n0), toLL(e1, n1), toLL(e0, n1), toLL(e0, n0)];
+const COVERS = [
+  { kind: 'scree', rings: [rect(-900, -300, -500, 300)] },
+  { kind: 'wood', rings: [rect(-2300, -2300, 2300, 2300)] },
+  { kind: 'rock', rings: [rect(-450, -300, -250, 300)] },
+  { kind: 'scrub', rings: [rect(-1150, -900, -900, -500)] },
+  { kind: 'ice', rings: [rect(-150, -150, 150, 150)] },
+  { kind: 'parking', rings: [rect(1000, 1000, 1200, 1200)] },
+];
+const coveredDef = buildHike({
+  id: 'made-up',
+  name: 'Made-up Mountain',
+  photo: PHOTO,
+  elevation,
+  trails: [{ name: 'Up', points: TRAIL }],
+  waters: [{ name: 'Mere', rings: [LAKE] }],
+  covers: COVERS,
+  at: AT,
+  radius: 2400,
+  fade: 600,
+  cell: 40,
+}).def;
+
+for (const land of LANDS) test(`where the map says what covers the land, it is so${onLand(land)}`, () => {
+  assert.ok(coveredDef.cover && splitHike(coveredDef).land.cover && !('cover' in splitHike(coveredDef).card), 'it goes with the land, not the card');
+  assert.deepEqual({ ...coveredDef, cover: undefined }, { ...hike, cover: undefined }, 'and changes nothing else');
+  const gen = world([coveredDef], land);
+  const plain = world([hike], land);
+  const L = gen.landforms[0];
+  const at = (e, n) => [AT[0] + e * 0.2, AT[1] - n * 0.2];
+  // in the woods (the trees thin out at the top: it's steep there)
+  near(L.forest(...at(1200, 1200)), plain.landforms[0].forest(...at(1200, 1200)), 1e-9, 'woods are as wooded as the land says');
+  // the scree is in the woods, but drawn over them: what lies in another wins
+  const scree = at(-700, 150);
+  assert.ok(L.forest(...scree) > 0 && L.forest(...scree) < 0.1, `the odd tree on a scree (${L.forest(...scree)})`);
+  near(L.bare(...scree), 1, 1e-9, 'bare');
+  near(L.talus(...scree), 1, 1e-9, 'strewn with boulders');
+  near(L.thicket(...scree), 0, 1e-9, 'with no willows');
+  const out = { bare: 0, sand: 0, land: 0, country: 0 };
+  gen.surface(...scree, out);
+  near(out.bare, 1, 1e-9, 'its ground bare stone');
+  assert.ok(L.forest(...at(-350, 150)) < 0, 'none on bare rock');
+  near(L.bare(...at(-350, 150)), 1, 1e-9, 'bare rock');
+  near(L.thicket(...at(-1020, -700)), 1, 1e-9, 'a thicket of willows');
+  // the ice lies all year, and makes high ground of a hike that has no treeline
+  assert.ok(L.high && !plain.landforms[0].high);
+  assert.ok(gen.snow(...at(0, 60), 0) > 0.99 && gen.forest(...at(0, 60)) < 0, 'ice on the top');
+  assert.equal(gen.snow(...at(1200, 1200), 0), 0, 'and nowhere else');
+  // a chunk of it carries how high and snowy it is; one of the forest's, as ever
+  const [cx, cz] = [Math.floor(AT[0] / 64), Math.floor(AT[1] / 64)];
+  assert.ok(generateTerrain(gen, cx, cz, 2, 64).high, 'on the mountain');
+  assert.equal(!!generateTerrain(gen, 0, 0, 2, 64).high, land > 1, 'in the forest, only if the land has high ground of its own');
+  // boulders all over the scree, more willows in the thicket
+  const count = (g, e, n, kind) => {
+    const [x, z] = at(e, n);
+    return generateVegetation(g, Math.floor(x / 64), Math.floor(z / 64), 64, TRUNK).lists[kind].length / 7;
+  };
+  assert.ok(count(gen, -700, 150, 'rock') > count(plain, -700, 150, 'rock') + 100, `boulders (${count(gen, -700, 150, 'rock')}, not ${count(plain, -700, 150, 'rock')})`);
+  assert.ok(count(gen, -1020, -700, 'bush') > count(plain, -1020, -700, 'bush') * 2, `willows (${count(gen, -1020, -700, 'bush')}, not ${count(plain, -1020, -700, 'bush')})`);
+});
+
+test('a long trail: the land centred part way along it, and the photo where it was', () => {
+  const [lat, lon] = toLL(-1000, 0);
+  const long = buildHike({
+    id: 'made-up',
+    name: 'Made-up Mountain',
+    photo: PHOTO,
+    middle: { lat, lon },
+    elevation,
+    trails: [{ name: 'Up', points: TRAIL }],
+    at: AT,
+    radius: 2400,
+    fade: 600,
+    cell: 40,
+  }).def;
+  assert.deepEqual(long.middle, { lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6 });
+  assert.deepEqual(centreOf(long), long.middle);
+  assert.deepEqual(centreOf(hike), hike.photo, 'centred on the photo, unless it says');
+  near(long.view.x, 200, 0.1, 'the photo, 1000 real m east of the middle');
+  near(long.view.z, 0, 0.1, 'and level with it');
+  near(long.trailhead.x, 0, 1, 'the walk starts at the middle, at the foot of the trail');
+  near(long.trail.length, hike.trail.length, 1, 'and is the same walk');
+  near(long.trail.climb, hike.trail.climb, 1, 'up the same mountain');
+  const L = world([long]).landforms[0];
+  near(L.raw(AT[0] + 200, AT[1]), new Landform(hike).raw(AT[0], AT[1]), 1, 'the top is at the photo');
+});
+
 for (const land of LANDS) test(`a hike leaves the water outside it alone${onLand(land)}`, () => {
   const plain = world([], land);
   const withHike = world([hike], land);
@@ -911,7 +1031,7 @@ test('the hikes in the game are where they really are, and those that meet share
   assert.equal(new Set(HIKES.map((h) => h.id)).size, HIKES.length, 'each has its own id');
   for (const h of HIKES) {
     assert.ok(Math.hypot(...h.at) - h.radius - h.fade > 1500, `${h.id} is out in the world, clear of where people start`);
-    const [x, z] = project(h.photo.lat, h.photo.lon, h.scale);
+    const [x, z] = project(centreOf(h).lat, centreOf(h).lon, h.scale);
     assert.ok(Math.hypot(x - h.at[0], z - h.at[1]) < 400, `${h.id} is where it really is`);
     assert.ok(h.datum && h.base !== undefined, `${h.id} says what its heights stand on`);
     for (const o of HIKES) {
