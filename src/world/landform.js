@@ -37,8 +37,17 @@
 //   paths           [[x, z, x, z, ...], ...]: the footpaths, relative to `at`
 //   ropes           the same, for stretches of them with chains or a fixed
 //                   rope to hold on to (drawn by the hikes feature)
-//   view            { x, z, bearing, hour }: where the photo was taken from,
-//                   which way it looked (degrees clockwise from north) and when
+//   cover           { kinds, cells }: what covers the land (woods, scrub,
+//                   scree, bare rock, tundra, ice: COVER), one of `kinds` (or
+//                   nothing said, 0) at each point of the ground's grid,
+//                   packed by packCover(). Where it says nothing, or there is
+//                   no cover, the land is wooded by `trees` and steep ground
+//                   is rock
+//   view            { x, z, bearing, hour }: where the photo was taken from
+//                   (relative to `at`: the middle of the land, unless it was
+//                   centred somewhere else to take in the whole of a long
+//                   trail), which way it looked (degrees clockwise from
+//                   north) and when
 //   trailhead       { x, z, yaw }: where the walk to the view begins
 //   trees           { cover, species }: how thickly it is wooded (0..1; at 0
 //                   nothing stands on it at all, as above the tree line) and
@@ -47,6 +56,9 @@
 //   country         what kind of country it is, by name (country.js): what
 //                   its ground is made of, what grows and lives there, what
 //                   its sky does. Unsaid, it is forest like the rest
+//   photo, middle   { lat, lon }: where the photo was taken, and where the
+//                   land is centred if not there (the importer's `--middle`):
+//                   what `at` is the real place of
 //   base            the real height (m) the heights are measured up from
 //   datum           { at, outer, anchor, base }: what sets its heights in the
 //                   world. The first hike in a part of the world is its own
@@ -57,7 +69,7 @@
 //
 // WorldGen settles it (`offset`) by its datum.
 
-import { smoothstep } from '../noise.js';
+import { smoothstep, createSimplex2 } from '../noise.js';
 import { countryOf } from './country.js';
 import { NET, channelHalf } from './drainage.js';
 
@@ -117,6 +129,36 @@ const FINE_EDGE = 8;
 // forest plants even in its barest meadows isn't planted either.
 const TREELESS = -0.05;
 
+// What covers the land, where the map says (tools/hike/osm.js): the kinds a
+// hike's cover can be, and what each means for what grows on it.
+export const COVER = ['wood', 'scrub', 'meadow', 'tundra', 'scree', 'rock', 'ice'];
+//   trees   how thickly wooded (as forest() says), before slope and the
+//           treeline thin it; null: as thickly as the land's own `trees`
+//   bare    how much of the ground is bare (stone, as the country's bare
+//           ground: see surface() in realPlaces.js)
+//   thicket how much of it is a thicket of shrubs (willow, alder)
+//   talus   how thickly strewn with boulders
+//   above   how far it is ground above the trees (thin turf among stones),
+//           whatever the height
+//   ice     how far it is snow and ice all year
+const COVER_IS = {
+  wood: { trees: null, bare: 0, thicket: 0, talus: 0, above: 0, ice: 0 },
+  scrub: { trees: 0.1, bare: 0, thicket: 1, talus: 0, above: 0, ice: 0 },
+  meadow: { trees: 0.02, bare: 0, thicket: 0, talus: 0, above: 0, ice: 0 },
+  tundra: { trees: TREELESS, bare: 0.3, thicket: 0, talus: 0.1, above: 1, ice: 0 },
+  scree: { trees: 0.06, bare: 1, thicket: 0, talus: 1, above: 0, ice: 0 },
+  rock: { trees: TREELESS, bare: 1, thicket: 0, talus: 0.85, above: 0, ice: 0 },
+  ice: { trees: TREELESS, bare: 0, thicket: 0, talus: 0, above: 0, ice: 1 },
+};
+// The edges of the cover are drawn on a grid as coarse as the heights'; they
+// wander this far (m) either side of it, over about this many metres, so they
+// don't come out as rows of squares.
+const COVER_WANDER = 4;
+const COVER_WAVE = 22;
+// Boulders don't lie on a cliff: they thin out from this slope (rise over
+// run) to none by this one, and bare rock that isn't steep is broken rock.
+const TALUS_SLOPE = [0.7, 1.15];
+
 // Where the forest gives way: steep ground is rock, and the view is kept open.
 const ROCK_SLOPE = [1.0, 1.7]; // rise over run: trees thin from, gone by
 const VIEW_CLEAR = 6; // m round the spot the photo was taken from with no trees…
@@ -128,6 +170,13 @@ const TRAILHEAD_CLEAR = 5; // m
 // first thing you see isn't the inside of one.
 const CAMERA_BACK = 6;
 const CAMERA_CLEAR = 3.5;
+
+// A number of its own for a hike's id.
+function hashId(id) {
+  let h = 2166136261;
+  for (const ch of String(id)) h = Math.imul(h ^ ch.codePointAt(0), 16777619);
+  return h >>> 0;
+}
 
 // ── Packing ──────────────────────────────────────────────────────────────────
 // Heights go as tenths of a metre, each the difference from the one before
@@ -209,6 +258,46 @@ export function unpackShore(s) {
   return d;
 }
 
+// Cover: one byte a point (0 for nothing said, else 1 + its place in the
+// cover's own list of kinds), as runs: the byte, then how many in a row as a
+// varint, in base64. Woods and screes are big, so a row is a few runs.
+export function packCover(c) {
+  const out = [];
+  for (let k = 0; k < c.length; ) {
+    let run = 1;
+    while (k + run < c.length && c[k + run] === c[k]) run++;
+    out.push(c[k]);
+    let z = run;
+    while (z >= 128) {
+      out.push((z & 127) | 128);
+      z = Math.floor(z / 128);
+    }
+    out.push(z);
+    k += run;
+  }
+  return toB64(Uint8Array.from(out));
+}
+
+export function unpackCover(s, count) {
+  const b = fromB64(s);
+  const c = new Uint8Array(count);
+  let k = 0;
+  for (let p = 0; p < b.length && k < count; ) {
+    const v = b[p++];
+    let run = 0;
+    let mul = 1;
+    let byte;
+    do {
+      byte = b[p++];
+      run += (byte & 127) * mul;
+      mul *= 128;
+    } while (byte & 128);
+    c.fill(v, k, Math.min(count, k + run));
+    k += run;
+  }
+  return c;
+}
+
 // ── The land ─────────────────────────────────────────────────────────────────
 const NONE = [];
 
@@ -267,6 +356,24 @@ export class Landform {
     this.trailhead = def.trailhead;
     this.trees = { cover: 0.85, species: 0.6, ...def.trees };
     this.country = countryOf(def.country);
+    this.scale = def.scale || 0.2;
+    this.base = def.base || 0;
+    // what covers it, as COVER's kinds (1 + index; 0 nothing said), and the
+    // last answer coverAt() gave
+    this.cover = null;
+    if (def.cover) {
+      const own = unpackCover(def.cover.cells, g.n * g.n);
+      const to = Uint8Array.from([0, ...def.cover.kinds.map((k) => COVER.indexOf(k) + 1)]);
+      this.cover = own.map((v) => to[v] || 0);
+      this._wander = createSimplex2(hashId(def.id));
+    }
+    this._cw = new Float64Array(COVER.length + 1);
+    this._cqx = NaN;
+    this._cqz = NaN;
+    // whether it has ground above the trees, or snow: a treeline, a snow
+    // line, tundra or ice
+    const c = this.country;
+    this.high = !!(c.treeline || c.snowline || (this.cover && this.cover.some((v) => v && (COVER_IS[COVER[v - 1]].above || COVER_IS[COVER[v - 1]].ice))));
     this._bucketPaths(def.paths || []);
     // its streams, as pieces of channel: made by settled(), once it's known
     // how high the land stands
@@ -655,15 +762,123 @@ export class Landform {
   // ── What grows ─────────────────────────────────────────────────────────────
   // How thickly wooded (0..1): the land's own cover, thinning to bare rock on
   // steep ground.
+  // Where the map says what covers the land, as it says: thick in the woods,
+  // the odd tree on a scree, none on bare rock or ice. Above the country's
+  // treeline (if it has one) the trees thin out to none.
   forest(x, z) {
     if (this.trees.cover <= 0) return TREELESS;
-    return this.trees.cover * (1 - this.rocky(x, z));
+    if (!this.cover && !this.country.treeline) return this.trees.cover * (1 - this.rocky(x, z));
+    let f = this.trees.cover;
+    if (this.cover) {
+      const w = this.coverAt(x, z);
+      f = w[0] * this.trees.cover;
+      for (let k = 1; k < w.length; k++) if (w[k] > 0) f += w[k] * (COVER_IS[COVER[k - 1]].trees ?? this.trees.cover);
+    }
+    const up = this.treeline(x, z);
+    if (f <= 0) return f;
+    return f * (1 - this.rocky(x, z)) * (1 - up) + TREELESS * up;
   }
 
   // How far (x, z) is bare rock for being steep, 0..1: where the trees give
   // out, and the grass with them.
   rocky(x, z) {
     return smoothstep(ROCK_SLOPE[0], ROCK_SLOPE[1], this.slope(x, z));
+  }
+
+  // ── Cover ──────────────────────────────────────────────────────────────────
+  // How much of each kind of cover (x, z) is under: a share for nothing said,
+  // then one for each of COVER, adding up to 1, blended between the grid's
+  // points (whose edges wander a little). The same array each time: copy it
+  // to keep it.
+  coverAt(x, z) {
+    const w = this._cw;
+    if (x === this._cqx && z === this._cqz) return w;
+    this._cqx = x;
+    this._cqz = z;
+    w.fill(0);
+    if (!this.cover) {
+      w[0] = 1;
+      return w;
+    }
+    const nz = this._wander;
+    const f = 1 / COVER_WAVE;
+    const wx = x + nz(x * f, z * f) * COVER_WANDER;
+    const wz = z + nz(x * f + 31.7, z * f - 12.9) * COVER_WANDER;
+    const n = this.n;
+    const fx = Math.min(n - 1.001, Math.max(0, (wx - this.cx + this.half) / this.cell));
+    const fz = Math.min(n - 1.001, Math.max(0, (wz - this.cz + this.half) / this.cell));
+    const i = Math.floor(fx);
+    const j = Math.floor(fz);
+    const u = fx - i;
+    const v = fz - j;
+    const C = this.cover;
+    const k = j * n + i;
+    w[C[k]] += (1 - u) * (1 - v);
+    w[C[k + 1]] += u * (1 - v);
+    w[C[k + n]] += (1 - u) * v;
+    w[C[k + n + 1]] += u * v;
+    return w;
+  }
+
+  // How much the cover at (x, z) is what COVER_IS says `what` is (0..1).
+  _covered(x, z, what) {
+    if (!this.cover) return 0;
+    const w = this.coverAt(x, z);
+    let sum = 0;
+    for (let k = 1; k < w.length; k++) if (w[k] > 0) sum += w[k] * COVER_IS[COVER[k - 1]][what];
+    return sum;
+  }
+
+  // How much of the ground is bare stone (a scree, bare rock), 0..1.
+  bare(x, z) {
+    return this._covered(x, z, 'bare');
+  }
+
+  // How much of it is a thicket of shrubs, 0..1.
+  thicket(x, z) {
+    return this._covered(x, z, 'thicket');
+  }
+
+  // How thickly strewn with boulders, 0..1: a scree under a cliff, and bare
+  // rock wherever it isn't too steep to lie on.
+  talus(x, z) {
+    const t = this._covered(x, z, 'talus');
+    return t > 0 ? t * (1 - smoothstep(TALUS_SLOPE[0], TALUS_SLOPE[1], this.slope(x, z))) : 0;
+  }
+
+  // The real height (m above the sea) of the ground at (x, z).
+  realHeight(x, z) {
+    return this.base + this.raw(x, z) / this.scale;
+  }
+
+  // How far up through the country's treeline (x, z) is, 0..1 (0 with none).
+  treeline(x, z) {
+    const t = this.country.treeline;
+    return t ? smoothstep(t[0], t[1], this.realHeight(x, z)) : 0;
+  }
+
+  // How far (x, z) is ground above the trees, 0..1: tundra where the map has
+  // it; elsewhere, by the country's treeline, wherever the map says nothing
+  // else (a scree is a scree however high).
+  above(x, z) {
+    if (!this.high) return 0;
+    const up = this.treeline(x, z);
+    if (!this.cover) return up;
+    const w = this.coverAt(x, z);
+    let a = (w[0] + w[COVER.indexOf('meadow') + 1] + w[COVER.indexOf('wood') + 1]) * up;
+    for (let k = 1; k < w.length; k++) if (w[k] > 0) a += w[k] * COVER_IS[COVER[k - 1]].above;
+    return Math.min(1, a);
+  }
+
+  // How much snow lies at (x, z), 0..1: all of it on the map's glaciers and
+  // snowfields; elsewhere, by the country's snow line, more the higher up
+  // (patchy at first: the ground shader lays it in drifts).
+  snow(x, z) {
+    if (!this.high) return 0;
+    const s = this.country.snowline;
+    const ice = this._covered(x, z, 'ice');
+    const lying = s ? smoothstep(s[0], s[1], this.realHeight(x, z)) : 0;
+    return ice + (1 - ice) * lying;
   }
 
   // Metres past the edge of the ground kept clear of trees (negative inside):

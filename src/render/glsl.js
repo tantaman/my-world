@@ -153,6 +153,54 @@ uniform vec3 uSand[${MAX_COUNTRIES}];
 uniform vec3 uUpper[${MAX_COUNTRIES}];
 uniform vec4 uLayers[${MAX_COUNTRIES}];
 uniform vec2 uRealY;
+uniform float uRubble[${MAX_COUNTRIES}];
+// Broken stone: a jumble of blocks, from about a metre across down to a
+// hand's breadth, their edges wandering, each lit its own way, dark in the
+// gaps between. How lit it is (0 in a gap .. 1 on a lit face), and which
+// shade of the stone it is (0..1) in id.
+float stones(vec2 p, float m, out float id, out float gap) {
+  vec2 c = floor(p);
+  vec2 f = fract(p);
+  float d1 = 9.0;
+  float d2 = 9.0;
+  vec2 at1 = vec2(0.0);
+  id = 0.0;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 o = vec2(float(i), float(j));
+      vec2 k = wrapCell(c + o, m);
+      vec2 at = o + 0.1 + 0.8 * vec2(hash12(k), hash12(k + 23.1));
+      float d = length(f - at);
+      if (d < d1) {
+        d2 = d1;
+        d1 = d;
+        at1 = at;
+        id = hash12(k + 7.7);
+      } else if (d < d2) d2 = d;
+    }
+  }
+  gap = smoothstep(0.0, 0.05 + 0.12 * fract(id * 5.3), d2 - d1);
+  // a face tipped its own way: lighter on one side of the stone than the other
+  float a = id * 6.2832;
+  float face = dot(f - at1, vec2(cos(a), sin(a)));
+  return clamp(0.35 + 0.6 * fract(id * 3.7) + face * 0.5, 0.0, 1.0);
+}
+float rubble(vec2 wp, out float id) {
+  // the edges wander, so no block is a tidy polygon
+  vec2 w = wp + (vec2(wnoise(wp, 1.7), wnoise(wp, 1.7, vec2(9.1))) - 0.5) * 0.7;
+  float m = cellsIn(1.2);
+  float gap;
+  float big = stones(w * (m / PERIOD), m, id, gap);
+  float m2 = cellsIn(3.1);
+  float id2;
+  float gap2;
+  float small = stones(w * (m2 / PERIOD) + 3.3, m2, id2, gap2);
+  // smaller stones fill the low places between the blocks
+  float fill = smoothstep(0.45, 0.75, wnoise(wp, 0.45, vec2(4.0)));
+  float lit = mix(big * mix(0.25, 1.0, gap), small * mix(0.35, 1.0, gap2) * 0.85, fill);
+  id = mix(id, id2, fill);
+  return lit;
+}
 vec3 groundColor(vec2 wp, float y, float pathM, float forestM, float slope, vec3 land, float which) {
   int c = clamp(int(which + 0.5), 0, ${MAX_COUNTRIES} - 1);
   float n1 = wnoise(wp, 0.33);
@@ -206,11 +254,22 @@ vec3 groundColor(vec2 wp, float y, float pathM, float forestM, float slope, vec3
   // all bare it is the first of the country's two colours, with drifts of
   // the second; a patch among the grass is the second
   float bareM = smoothstep(0.34, 0.62, land.x + (n2 - 0.5) * 0.42 * (1.0 - land.x));
+  // (a path across broken stone is trodden clear of it)
+  bareM *= 1.0 - uRubble[c] * smoothstep(0.45, 0.6, pm);
   float first = smoothstep(0.7, 1.0, land.x) * (1.0 - 0.8 * smoothstep(0.38, 0.68, n3 + (n1 - 0.5) * 0.3));
   vec3 bare = mix(uBareB[c], uBareA[c], first) * (0.72 + 0.4 * n4 + 0.16 * n2);
   bare = mix(bare, bare * 1.5 + 0.02, peb * 0.6);
   // (up in the pale beds, the slickrock is pale too)
   bare = mix(bare, uUpper[c] * (0.78 + 0.3 * n4), up * 0.85 * layered);
+  // in a country whose bare ground is broken stone (talus), blocks of it
+  if (uRubble[c] > 0.0 && bareM > 0.01) {
+    float rid;
+    float lit = rubble(wp, rid);
+    vec3 block = mix(uBareB[c], uBareA[c], 0.3 + 0.7 * rid) * (0.35 + 0.9 * lit);
+    // lichen, pale green and rust, here and there on the stone
+    block = mix(block, block * vec3(1.05, 1.15, 0.85), smoothstep(0.6, 0.8, fract(rid * 11.3)) * 0.6);
+    bare = mix(bare, block, uRubble[c]);
+  }
   col = mix(col, bare, bareM);
 
   // rock on steep slopes

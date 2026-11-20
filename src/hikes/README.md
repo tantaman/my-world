@@ -56,8 +56,8 @@ keeps off a hike: a real place has what is really there.
 slopes are as steep as they really are: 2.5 km of trail and 600 m of climb
 become a four-minute walk up 120 m, and the game's trees stand against the
 mountain about as big as real ones do. Inside 4 km of the photo (800 m in the
-game) the ground is the real ground; over the next kilometre it gives way to
-the forest around it. Every footpath, track and lake that OpenStreetMap has
+game; `--radius`, `--middle`) the ground is the real ground; over the next
+kilometre it gives way to the forest around it. Every footpath, track and lake that OpenStreetMap has
 in there comes too, and the sea, up to its real shoreline: it breaks white
 along the shore, and stops at a low bank a little short of the edge of the
 land that was imported, where the forest begins. (From on the land you
@@ -71,10 +71,22 @@ ones that run all year: a gulch that is dry till it rains is left dry.) The
 walk starts where you'd leave the car, at the nearest road or car park along
 the paths, and goes by them to where the photo was taken, uphill or down.
 (Failing a road, it's the trail the photo was taken on, from its lower end.)
-Steep ground is bare rock, with not a blade of grass on it; the rest is wooded (`--cover`, `--species`;
-`--cover 0` for land above the tree line, with nothing standing on it at
-all), and the spot the photo was taken from is kept clear of trees, with
-nothing growing in front of it to block the view.
+Where OpenStreetMap says what covers the land, it comes too: woods, willow
+scrub and wetland, meadow, alpine tundra, scree and bare rock, glaciers. A
+scree is grey with broken stone and strewn with boulders, bare rock that
+isn't a cliff is a jumble of them, scrub is a thicket of shrubs over your
+head, tundra is thin turf among stones, and a glacier lies white all year.
+Wherever the map says nothing, steep ground is bare rock, with not a blade
+of grass on it, and the rest is wooded (`--cover`, `--species`; `--cover 0`
+for land above the tree line, with nothing standing on it at all). The spot
+the photo was taken from is kept clear of trees, with nothing growing in
+front of it to block the view.
+
+A long trail can be taken in whole: `--middle lat,lon` centres the land
+somewhere along it instead of on the photo, and `--radius` says how far
+round that to bring in. Cascade Canyon is brought in that way, from Jenny
+Lake up the canyon to the Forks and on to Lake Solitude, with the photo
+part way up it.
 
 **Finer land along the walk.** Kilometres of land at one height every 30 m
 (6 m in the game) is plenty for the far side of a valley, but seen close a
@@ -102,6 +114,7 @@ sky over it is doing, each as one entry in one table
 | `cinder desert` | bare cinder, red and grey | nothing but the odd silversword | clear thin air, over a sea of cloud |
 | `lava coast` | wind-cropped grass and red dirt down to a black rock shelf | a few ironwoods, low bushes | overcast |
 | `red rock canyon` | red sand and slickrock; sandstone cliffs in beds, streaked dark, turning white towards the rim | ponderosa pines and oaks over scrub | clear and dry, fair-weather cloud over the rims |
+| `high mountains` | granite cliffs, talus of broken stone, pale grit paths; turf and stones over a treeline at 3,000 m, snow lying above it | slim spruces and firs, a few aspens, willow thickets | clear, thin air |
 
 The cloud is a layer at its real height, so you can be under it or over it:
 walk up through it and it closes round you. A rocky shore keeps its cliffs
@@ -184,7 +197,8 @@ each wait for it.
 | `--cell` | `30` | real metres between heights |
 | `--fine`, `--fine-margin` | none, `400` | real metres between heights along the walk, and how far round it |
 | `--dem` | `terrain` | where the heights come from: `terrain` (AWS Terrain Tiles) or `3dep` (USGS, US only) |
-| `--cover`, `--species` | `0.85`, `0.6` | how wooded (0–1), and broadleaf (−1) to conifers (1) |
+| `--cover`, `--species` | `0.85`, `0.6` | how wooded (0–1), and broadleaf (−1) to conifers (1), where the map doesn't say |
+| `--middle lat,lon` | the photo | where to centre the land: somewhere along a long trail, to take in the whole of it |
 | `--lat --lon --bearing --hour` | from the photo | for a photo that doesn't say |
 
 Downloads are kept in `node_modules/.cache/hike`. To take a hike out, delete

@@ -69,7 +69,11 @@ export function project(lat, lon, scale) {
   return [east * scale, -north * scale];
 }
 
-// photo: { lat, lon }; existing: the cards of the hikes already in the game.
+// The real place a hike's land is centred on: its photo, unless it says.
+export const centreOf = (h) => h.middle || h.photo;
+
+// photo: { lat, lon }, where the land is centred; existing: the cards of the
+// hikes already in the game.
 // → { at, datum, near, stretch, notes }: datum is the datum to share (null:
 // this hike sets its own), near the hike it was placed from (or null),
 // stretch how many times wider than life the map is there.
@@ -88,7 +92,7 @@ export function placeHike({ photo, scale, radius, fade }, existing = []) {
     .map(({ h }) => h);
   if (overlaps.length) {
     near = overlaps[0];
-    const [e, n] = localFrame(near.photo.lat, near.photo.lon).toEN(photo.lat, photo.lon);
+    const [e, n] = localFrame(centreOf(near).lat, centreOf(near).lon).toEN(photo.lat, photo.lon);
     at = [near.at[0] + e * near.scale, near.at[1] - n * near.scale];
     datum = near.datum || null;
     const key = (h) => JSON.stringify(h.datum && h.datum.at);

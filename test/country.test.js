@@ -22,14 +22,18 @@ const SEED = 20261119;
 const world = (hikes = [], land = 1) => growWorld(SEED, [], land, hikes);
 // ("on land 2", for a test's name)
 const onLand = (land) => (land > 1 ? `, on land ${land}` : '');
+const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} is not within ${tol} of ${b}`);
 const TRUNK = { pine: 0.3, broad: 0.4, birch: 0.2, bush: 0, fern: 0, rock: 0.7, log: 0, palm: 0.17, ironwood: 0.26, treefern: 0.2, silversword: 0 };
 
 test('every country says everything, in words the rest of the game knows', () => {
   for (const [name, c] of Object.entries(COUNTRY)) {
     for (const col of [c.ground.tint, c.ground.dirt, c.ground.rock, c.ground.sand, ...c.ground.bare]) assert.ok(col.length === 3 && col.every((v) => v >= 0 && v < 2), `${name}: a colour`);
-    assert.ok(c.ground.barren >= 0 && c.ground.barren <= 1 && c.ground.shelf >= 0, name);
+    assert.ok(c.ground.barren >= 0 && c.ground.barren <= 1 && c.ground.shelf >= 0 && c.ground.rubble >= 0 && c.ground.rubble <= 1, name);
     const L = c.ground.layers;
     if (L) assert.ok(L.upper.length === 3 && L.upper.every((v) => v >= 0 && v < 2) && L.at > 0 && L.bed > 0 && L.varnish >= 0 && L.varnish <= 1, `${name}: its layers`);
+    for (const [kind, k] of Object.entries(c.slim)) assert.ok(TIMBER[kind] && k >= 0 && k < 1, `${name}: ${kind} grows slimmer`);
+    for (const [kind, col] of Object.entries(c.tints)) assert.ok(FLORA[kind] && col.length === 3 && col.every((v) => v > 0 && v < 2), `${name}: what colour a ${kind} is`);
+    for (const line of [c.treeline, c.snowline].filter(Boolean)) assert.ok(line.length === 2 && line[0] < line[1], `${name}: a treeline or snow line, from low to high`);
     for (const [kind, share] of c.trees || []) {
       assert.ok(TREE_KINDS.includes(kind), `${name}: ${kind} is a tree`);
       assert.ok(TIMBER[kind], `${name}: ${kind} can be felled`);
@@ -215,6 +219,47 @@ test('what a land has high up stops at the edge of a real place', () => {
   // out past the island's edge the land is the land again
   const [ox, oz] = [AT[0], AT[1] + gen.landforms[0].outer + 50];
   assert.deepEqual([gen.above(ox, oz, 200), gen.snow(ox, oz, 200), gen.forest(ox, oz), gen.species(ox, oz)], [bare.above(ox, oz, 200), bare.snow(ox, oz, 200), bare.forest(ox, oz), bare.species(ox, oz)]);
+});
+
+test('high mountains: woods up to the treeline, turf and stones over it, snow on the tops', () => {
+  // A mountain a kilometre high on ground 2,400 m up: its top is over the
+  // treeline, where the snow starts to lie.
+  const peak = (lat, lon) => {
+    const [e, n] = frame.toEN(lat, lon);
+    return 2400 + Math.max(0, 1000 - Math.hypot(e, n) * 0.6);
+  };
+  const def = buildHike({
+    id: 'peak',
+    name: 'A Peak',
+    photo: PHOTO,
+    elevation: peak,
+    trails: [{ name: '', points: Array.from({ length: 57 }, (_, k) => toLL(1400 - k * 25, 0)) }],
+    at: AT,
+    radius: 2400,
+    fade: 600,
+    cell: 40,
+    country: 'high mountains',
+    trees: { cover: 0.85, species: 0.9 },
+  }).def;
+  const [low, top] = [at(-1500, 0), at(0, 0)];
+  for (const land of LANDS) {
+    const gen = world([def], land);
+    const L = gen.landforms[0];
+    near(L.realHeight(...top), 3400, 15, 'the top');
+    near(L.realHeight(...low), 2500, 15, 'low down');
+    assert.ok(L.high && gen.highIn(top[0] - 32, top[1] - 32, top[0] + 32, top[1] + 32), 'it has high ground');
+    assert.ok(gen.forest(...low) > 0.5, `wooded low down (${gen.forest(...low)})`);
+    assert.deepEqual([gen.above(...low, 0), gen.snow(...low, 0)], [0, 0], 'under the trees, no snow');
+    assert.ok(gen.forest(...top) < 0, 'over the treeline, no trees');
+    assert.ok(gen.above(...top, 0) > 0.99, 'but turf and stones');
+    assert.ok(gen.snow(...top, 0) > 0.3 && gen.snow(...top, 0) < 0.8, `and snow lying in drifts (${gen.snow(...top, 0)})`);
+    // its trees are spruces, slimmer than the forest's pines, with an aspen here and there
+    const v = generateVegetation(gen, Math.floor(low[0] / 64), Math.floor(low[1] / 64), 64, TRUNK).lists;
+    assert.ok(v.pine.length / 7 > 20 && v.broad.length === 0, `spruces (${v.pine.length / 7})`);
+    for (let o = 6; o < v.pine.length; o += 7) near(v.pine[o], COUNTRY['high mountains'].slim.pine, 1e-6, 'slim');
+  }
+  assert.equal(treeName('pine', COUNTRY['high mountains']).a, 'a spruce');
+  assert.equal(treeName('birch', COUNTRY['high mountains']).a, 'an aspen');
 });
 
 test('a rocky shore keeps its cliff; a beach comes down to the water', () => {

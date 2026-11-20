@@ -217,7 +217,7 @@ export function createTerrainMaterial() {
         }`,
       );
   };
-  mat.customProgramCacheKey = () => 'terrain-v7';
+  mat.customProgramCacheKey = () => 'terrain-v8';
   return mat;
 }
 

@@ -37,6 +37,8 @@ const BROADLEAF = new THREE.Color(0.03, 0.065, 0.016);
 const MEADOW = new THREE.Color(0.075, 0.13, 0.03);
 const ROCK = new THREE.Color(0.11, 0.1, 0.085);
 const WATER = new THREE.Color(0.012, 0.035, 0.042);
+const TURF = new THREE.Color(0.12, 0.115, 0.07); // above the trees: thin turf among stones
+const SNOW = new THREE.Color(0.6, 0.62, 0.66);
 
 const _c = new THREE.Color();
 const _w = new THREE.Color();
@@ -159,7 +161,7 @@ export class FarView {
 }
 
 // Positions are from the grid's corner (x0, z0), where the mesh is put.
-function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, country, real }) {
+function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, country, real, above, snow }) {
   const _g = new THREE.Color();
   const N = n * n;
   const pos = new Float32Array(N * 3);
@@ -202,6 +204,12 @@ function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, c
           }
           _c.lerp(_g.copy(ROCK).lerp(_u, land[k]), rock);
         } else _c.lerp(ROCK, rock);
+        // above the trees, thin turf among stones; and snow where it lies,
+        // which isn't on the cliffs
+        if (above) {
+          _c.lerp(TURF, above[k] * (1 - rock) * 0.8);
+          _c.lerp(SNOW, smooth(0.3, 0.75, snow[k]) * (1 - smooth(0.55, 1, slope)));
+        }
         _c.lerp(_w, wood);
         // a little variety, so a hillside isn't one flat colour
         const v = 0.85 + 0.3 * hash(i, j);

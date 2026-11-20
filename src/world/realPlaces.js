@@ -191,6 +191,8 @@ export function withRealPlaces(Land) {
             else sand = Math.max(sand, 1 - smoothstep(2, 5, u));
           }
         }
+        // and stone where the map says it is: a scree, bare rock
+        if (L.cover) bare = Math.max(bare, L.bare(x, z));
         bare *= 1 - sand;
         out.bare = Math.max(0, Math.min(1, bare)) * w;
         out.sand = sand * w;
@@ -219,7 +221,8 @@ export function withRealPlaces(Land) {
 
     // What a land has high up (a treeline, snow, birch groves: land2.js) is
     // the forest's: a real place is as high as it really is, and wooded as it
-    // really is.
+    // really is. Its own country may have a treeline and snow of its own, at
+    // their real heights, and its map tundra and ice (landform.js).
     groves(x, z) {
       const v = super.groves(x, z);
       return v > 0 ? v * (1 - this._landformWeight(x, z)) : v;
@@ -227,12 +230,51 @@ export function withRealPlaces(Land) {
 
     above(x, z, h) {
       const v = super.above(x, z, h);
-      return v > 0 ? v * (1 - this._landformWeight(x, z)) : v;
+      return this._ownHigh(x, z, v > 0 ? v * (1 - this._landformWeight(x, z)) : v, 'above');
     }
 
     snow(x, z, h) {
       const v = super.snow(x, z, h);
-      return v > 0 ? v * (1 - this._landformWeight(x, z)) : v;
+      return this._ownHigh(x, z, v > 0 ? v * (1 - this._landformWeight(x, z)) : v, 'snow');
+    }
+
+    _ownHigh(x, z, v, what) {
+      for (const L of this.landforms) {
+        if (!L.high) continue;
+        const w = L.weight(x, z);
+        if (w > 0) v += L[what](x, z) * w;
+      }
+      return v;
+    }
+
+    // Whether above() or snow() can be more than 0 anywhere in the square
+    // (x0, z0)–(x1, z1).
+    highIn(x0, z0, x1, z1) {
+      if (super.highIn(x0, z0, x1, z1)) return true;
+      const mx = (x0 + x1) / 2;
+      const mz = (z0 + z1) / 2;
+      const r = Math.hypot(x1 - x0, z1 - z0) / 2;
+      return this.landforms.some((L) => L.high && L.clearance(mx, mz) < r);
+    }
+
+    // Where the map says what covers a real place's land: how much of a
+    // thicket of shrubs (x, z) is in, and how thickly strewn with boulders.
+    thicket(x, z) {
+      return this._covered(x, z, 'thicket');
+    }
+
+    talus(x, z) {
+      return this._covered(x, z, 'talus');
+    }
+
+    _covered(x, z, what) {
+      let v = 0;
+      for (const L of this.landforms) {
+        if (!L.cover) continue;
+        const w = L.weight(x, z);
+        if (w > 0) v = Math.max(v, L[what](x, z) * w);
+      }
+      return v;
     }
   };
 }

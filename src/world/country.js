@@ -17,9 +17,11 @@
 //              sand    a beach
 //              barren  0..1: how much of the ground is bare. In between, it
 //                      is bare in patches
+//              rubble  0..1: how far its bare ground is broken stone (talus,
+//                      scree), in blocks, rather than fine cinder or dirt
 //              shelf   m in from the sea that is bare rock whatever else
-//              layers  for sandstone country: the beds a cliff is cut
-//                      through. { upper, at, bed, varnish }: the rock is
+//              layers  for sandstone country (or banded gneiss): the beds a
+//                      cliff is cut through. { upper, at, bed, varnish }: the rock is
 //                      `rock` low down and `upper` above `at` (real m over
 //                      the sea), as a canyon's red walls turn white towards
 //                      the rim; laid in beds about `bed` real m thick, swept
@@ -44,6 +46,16 @@
 //            any that like the ground
 //   names    what its trees are called, where that isn't what the forest
 //            calls them: { broad: ['kamani', 'a kamani'] }
+//   slim     how much slimmer a kind of tree grows here than the forest's
+//            own, as a share of its width: { pine: 0.45 } makes a spire of
+//            a spruce
+//   tints    what colour a kind of plant (or stone) is here, as what the
+//            forest's own colour is multiplied by: { rock: [1.4, 1.4, 1.3] }
+//   treeline [from, to]: the real heights (m above the sea) over which the
+//            trees thin out to none, and the ground above is thin turf among
+//            stones; or null for none
+//   snowline [from, to]: the real heights over which snow comes to lie on all
+//            the gentle ground, in drifts at first; or null for none
 //
 // Each also gets an id, its place in the table: the ground carries it vertex
 // by vertex, so the shaders, which are handed every country's colours, know
@@ -60,6 +72,7 @@ const FOREST = {
     bare: [[0.2, 0.135, 0.075], [0.115, 0.078, 0.045]],
     sand: [0.19, 0.16, 0.11],
     barren: 0,
+    rubble: 0,
     shelf: 0,
     layers: null,
   },
@@ -71,6 +84,10 @@ const FOREST = {
   haze: 1,
   animals: null,
   names: {},
+  slim: {},
+  tints: {},
+  treeline: null,
+  snowline: null,
 };
 
 const kind = (over) => ({ ...FOREST, ...over, ground: { ...FOREST.ground, ...over.ground }, clouds: { ...FOREST.clouds, ...over.clouds } });
@@ -174,6 +191,35 @@ export const COUNTRY = {
     haze: 0.6,
     animals: ['deer', 'cougar', 'bobcat', 'fox', 'rabbit', 'squirrel', 'chipmunk', 'mouse', 'snake', 'flock', 'flit', 'crows', 'hawk', 'butterflies'],
     names: { pine: ['ponderosa pine', 'a ponderosa pine'] },
+  }),
+
+  // High mountains in the dry interior of a continent (the Tetons, the
+  // Rockies): canyons of spruce and subalpine fir, slim and dark, with a few
+  // aspens low down and willow thickets in the wet bottoms; talus under
+  // granite walls; a treeline at about 3,000 m, and snow lying above it into
+  // the summer. The paths are pale grit, the rock pale granite. What covers
+  // the land, a hike's map says where it can (landform.js).
+  'high mountains': kind({
+    ground: {
+      tint: [0.74, 0.92, 0.8],
+      dirt: [0.25, 0.21, 0.155],
+      rock: [0.25, 0.24, 0.22],
+      bare: [[0.2, 0.196, 0.18], [0.1, 0.099, 0.09]],
+      sand: [0.19, 0.18, 0.155],
+      rubble: 1,
+      // banded gneiss: ledges by their real height, streaked dark where
+      // water runs down, paler up on the peaks
+      layers: { upper: [0.3, 0.29, 0.27], at: 3300, bed: 22, varnish: 0.35 },
+    },
+    trees: [['pine', 0.92], ['birch', 0.08]],
+    under: { fern: [['fern', 0.3], ['bush', 0.4]], bush: [['bush', 1]] },
+    rocks: 0.42,
+    haze: 0.8,
+    names: { pine: ['spruce', 'a spruce'], birch: ['aspen', 'an aspen'] },
+    slim: { pine: 0.5 },
+    tints: { rock: [1.45, 1.43, 1.36], pine: [0.85, 0.9, 0.95], bush: [0.62, 0.72, 0.66] },
+    treeline: [2950, 3250],
+    snowline: [3050, 3750],
   }),
 };
 

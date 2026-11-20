@@ -5,7 +5,9 @@
 // relations tagged natural=water (lakes, ponds, reservoirs); an outer ring
 // made of several ways is joined end to end. The coast is ways tagged
 // natural=coastline, which OpenStreetMap always draws with the land on their
-// left and the sea on their right.
+// left and the sea on their right. What covers the land (woods, scrub, scree,
+// bare rock, alpine tundra, glaciers) is closed ways and multipolygons too,
+// holes and all.
 
 const attr = (s, name) => {
   const m = new RegExp(`\\b${name}="([^"]*)"`).exec(s);
@@ -62,9 +64,10 @@ export function peaks(osm) {
   return out;
 }
 
-// Water relations some of whose ways weren't in the box: they need fetching whole.
+// Water and land cover relations some of whose ways weren't in the box: they
+// need fetching whole.
 export function incompleteWaters(osm) {
-  return osm.relations.filter((r) => r.tags.type === 'multipolygon' && isWater(r.tags) && r.members.some((m) => m.type === 'way' && !osm.ways.has(m.ref))).map((r) => r.id);
+  return osm.relations.filter((r) => r.tags.type === 'multipolygon' && (isWater(r.tags) || coverOf(r.tags)) && r.members.some((m) => m.type === 'way' && !osm.ways.has(m.ref))).map((r) => r.id);
 }
 
 const FOOT = new Set(['path', 'footway', 'track', 'steps', 'bridleway']);
@@ -190,4 +193,39 @@ function joinRings(lines) {
     if (ring[0] === ring[ring.length - 1] && ring.length > 3) rings.push(ring);
   }
   return rings;
+}
+
+// ── What covers the land ─────────────────────────────────────────────────────
+// The kinds of cover a hike keeps (see COVER in src/world/landform.js), from
+// OpenStreetMap's tags for them. Anything else is left to the country's own
+// rules (steep ground is rock, the rest wooded).
+const COVER_TAGS = [
+  ['wood', (t) => t.natural === 'wood' || t.landuse === 'forest'],
+  ['scrub', (t) => t.natural === 'scrub' || t.natural === 'wetland'],
+  ['meadow', (t) => ['grassland', 'heath'].includes(t.natural) || ['meadow', 'grass'].includes(t.landuse)],
+  ['tundra', (t) => t.natural === 'tundra' || t.natural === 'fell'],
+  ['scree', (t) => t.natural === 'scree' || t.natural === 'shingle'],
+  ['rock', (t) => t.natural === 'bare_rock'],
+  ['ice', (t) => t.natural === 'glacier'],
+];
+const coverOf = (t) => (COVER_TAGS.find(([, is]) => is(t)) || [null])[0];
+
+// [{ kind, rings: [[[lat, lon], ...], ...] }]: every ring of each area, outer
+// and inner alike, so that filled even-odd its holes are holes.
+export function covers(osm) {
+  const out = [];
+  for (const w of osm.ways.values()) {
+    const kind = coverOf(w.tags);
+    if (!kind || w.refs.length < 4 || w.refs[0] !== w.refs[w.refs.length - 1]) continue;
+    out.push({ kind, rings: [coords(osm, w.refs)] });
+  }
+  for (const r of osm.relations) {
+    const kind = r.tags.type === 'multipolygon' && coverOf(r.tags);
+    if (!kind) continue;
+    const parts = r.members.filter((m) => m.type === 'way').map((m) => osm.ways.get(m.ref));
+    if (parts.some((p) => !p)) continue; // part of it is outside what we were sent
+    const rings = joinRings(parts.map((p) => p.refs)).map((refs) => coords(osm, refs));
+    if (rings.length) out.push({ kind, rings });
+  }
+  return out;
 }

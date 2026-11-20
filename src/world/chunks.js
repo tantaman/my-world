@@ -26,6 +26,7 @@ const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _c = new THREE.Color();
+const _t = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
 // A land with no high ground (see chunkGen.js) draws its terrain with nothing
 // above the trees and no snow: one array of zeros per size of chunk.
@@ -619,6 +620,9 @@ export class ChunkManager extends Emitter {
       const model = this.models[kind];
       const count = list.length / VEG_STRIDE;
       const mesh = new THREE.InstancedMesh(model.lod0, this.materials.vegetation, count);
+      const tree = FLORA[kind].tree;
+      // (only a chunk on a real place can be anything but the forest's colours)
+      const tints = this.gen.landformClearance(ch.x0 + this.size / 2, ch.z0 + this.size / 2) < this.size;
       for (let k = 0; k < count; k++) {
         const o = k * VEG_STRIDE;
         const s = list[o + 4];
@@ -628,12 +632,20 @@ export class ChunkManager extends Emitter {
         if (kind === 'rock') {
           const e = list[o + 6];
           _s.set(s * (0.8 + e * 0.6), s * (0.7 + tint * 0.5), s * (1.3 - e * 0.5));
+        } else if (tree) {
+          // (a tree's extra is how much slimmer it grows here: chunkGen.js)
+          const w = s * (1 - list[o + 6]);
+          _s.set(w, s, w);
         } else {
           _s.set(s, s, s);
         }
         _m.compose(_p, _q, _s);
         mesh.setMatrixAt(k, _m);
-        mesh.setColorAt(k, tintFor(kind, tint, _c));
+        tintFor(kind, tint, _c);
+        // the colour it is in a real place's own country
+        const c = tints && this.gen.countryAt(list[o], list[o + 2]);
+        if (c && c.tints[kind]) _c.multiply(_t.setRGB(...c.tints[kind]));
+        mesh.setColorAt(k, _c);
       }
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
