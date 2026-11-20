@@ -66,6 +66,8 @@ export function installPlayer(game) {
       const speed = Math.hypot(player.vel.x, player.vel.z);
       const wade = player.wade > 0.02 ? Math.min(1, player.wade * 3) * (0.35 + 0.65 * Math.min(1, speed / 2)) : 0;
       WADE.uWade.value += (wade - WADE.uWade.value) * (1 - Math.exp(-dt * 4));
+      // the water going past your legs: the current, less your own way through it
+      WADE.uWadeFlow.value.set(player.current.x - player.vel.x, player.current.z - player.vel.z);
     },
   });
 }

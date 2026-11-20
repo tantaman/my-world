@@ -6,8 +6,9 @@ import { SHARED } from '../render/uniforms.js';
 // The ground colour is computed per pixel from world position: meadow grass,
 // leaf litter and moss under the trees, packed dirt on the paths, bare rock on
 // steep slopes. At low resolution this reads as hand-placed pixel texture.
-// Under water it turns to silt and stones, darkening (reds first) with depth,
-// with a damp band and a little beach along the shore.
+// Under water it turns to silt, pebbles and cobbles, darkening (reds first)
+// with depth, with the light netted over it by the ripples, and a damp band
+// and a little beach along the shore.
 export function createTerrainMaterial() {
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
   mat.onBeforeCompile = (shader) => {
@@ -41,7 +42,37 @@ export function createTerrainMaterial() {
         varying vec3 vWorldNormal;
         uniform float uTime;
         ${NOISE_GLSL}
-        ${GROUND_GLSL}`,
+        ${GROUND_GLSL}
+        // Round stones, one at most to a cell: how far into the nearest one p
+        // is (0 at its middle, 1 at its edge), and a number of its own.
+        float pebble(vec2 p, float size, out float id) {
+          vec2 c = floor(p);
+          vec2 f = fract(p);
+          float best = 9.0;
+          id = 0.0;
+          for (int j = -1; j <= 1; j++) {
+            for (int i = -1; i <= 1; i++) {
+              vec2 o = vec2(float(i), float(j));
+              vec2 at = o + 0.2 + 0.6 * vec2(hash12(c + o), hash12(c + o + 17.3));
+              vec2 d = (f - at) / (size * (0.7 + 0.5 * hash12(c + o + 5.1)));
+              // a little longer one way than the other, like a worn stone
+              float a = hash12(c + o + 9.7) * 6.2832;
+              d = mat2(cos(a), sin(a), -sin(a), cos(a)) * d * vec2(1.0, 1.35);
+              float r = length(d);
+              if (r < best) {
+                best = r;
+                id = hash12(c + o + 3.3);
+              }
+            }
+          }
+          return best;
+        }
+        // Light gathered into a moving net by the ripples overhead.
+        float causticAt(vec2 p, float t) {
+          vec2 q = p * 1.3 + vec2(vnoise(p * 0.6 + t * 0.21), vnoise(p * 0.6 - t * 0.17 + 4.0)) * 1.4;
+          float n = vnoise(q) * 0.6 + vnoise(q * 2.1 + 7.0) * 0.4;
+          return pow(1.0 - abs(n * 2.0 - 1.0), 8.0);
+        }`,
       )
       .replace(
         '#include <color_fragment>',
@@ -58,20 +89,31 @@ export function createTerrainMaterial() {
           diffuseColor.rgb = mix(diffuseColor.rgb, sand, beach * 0.85);
           diffuseColor.rgb *= 1.0 - 0.4 * (1.0 - smoothstep(0.0, 0.1 + 0.08 * n2, -wd)) * vWater.y;
           if (wd > 0.0) {
-            // silt and stones, the light dappled by the ripples overhead
+            // silt, pebbles and cobbles, rounded so they catch the light on
+            // top, and the light dappled by the ripples overhead
             vec3 silt = vec3(0.11, 0.095, 0.065) * (0.8 + 0.4 * n1);
-            vec2 sq = wp * 3.2 + vec2(vnoise(wp * 1.3), vnoise(wp * 1.3 + 9.0)) * 1.6;
-            float stone = step(0.62, hash12(floor(sq))) * smoothstep(0.3, 0.6, n2);
-            vec3 bed = mix(silt, vec3(0.17, 0.16, 0.14) * (0.7 + 0.6 * hash12(floor(sq) + 3.0)), stone);
-            float caustic = smoothstep(0.62, 0.9, vnoise(wp * 1.7 + vec2(uTime * 0.31, uTime * 0.17)) * vnoise(wp * 1.9 - vec2(uTime * 0.23, -uTime * 0.29)) * 2.6);
-            bed *= 1.0 + caustic * 0.7 * exp(-wd * 1.5);
+            vec3 bed = silt;
+            float cid;
+            float cob = pebble(wp * 1.4, 0.55, cid);
+            float isCob = step(0.45, fract(cid * 3.7)); // not every cell has one
+            vec3 cobC = mix(vec3(0.15, 0.145, 0.13), vec3(0.19, 0.16, 0.11), cid) * (0.75 + 0.5 * fract(cid * 7.3));
+            bed = mix(bed, cobC * (0.65 + 0.4 * sqrt(max(0.0, 1.0 - cob * cob))), (1.0 - smoothstep(0.82, 1.0, cob)) * isCob);
+            float id;
+            float peb = pebble(wp * 4.3, 0.42, id);
+            vec3 pebC = mix(vec3(0.13, 0.12, 0.10), vec3(0.2, 0.18, 0.14), id) * (0.8 + 0.4 * fract(id * 5.1));
+            float onPeb = (1.0 - smoothstep(0.75, 1.0, peb)) * smoothstep(0.25, 0.55, n2) * (1.0 - isCob * step(cob, 0.82));
+            bed = mix(bed, pebC * (0.8 + 0.35 * sqrt(max(0.0, 1.0 - peb * peb))), onPeb);
+            // a hairline of shadow round each stone where it sits in the silt
+            bed *= 1.0 - 0.35 * (smoothstep(0.85, 1.0, cob) - smoothstep(1.0, 1.15, cob)) * isCob;
+            float caustic = causticAt(wp, uTime);
+            bed *= 1.0 + caustic * 0.8 * exp(-wd * 1.5);
             diffuseColor.rgb = mix(diffuseColor.rgb, bed, smoothstep(0.0, 0.12, wd));
             diffuseColor.rgb *= exp(-wd * vec3(1.15, 0.6, 0.48));
           }
         }`,
       );
   };
-  mat.customProgramCacheKey = () => 'terrain-v2';
+  mat.customProgramCacheKey = () => 'terrain-v3';
   return mat;
 }
 

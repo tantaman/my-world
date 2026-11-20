@@ -52,7 +52,7 @@ const WIDTH_VARY = 0.22;
 const WIDTH_WAVE = 14;
 // White water churned up in the pool at the foot of a cascade dies away over
 // about this many metres.
-const PLUNGE = 2.5;
+const PLUNGE = 1.6;
 const BASIN_REGION = 2.5;
 const OPEN = { lake: 1, pond: 0.8 };
 
@@ -302,7 +302,7 @@ export class Water {
         const speed = (mix(SMALL.speed[0], BIG.speed[0], L.size) + L.slope * mix(SMALL.speed[1], BIG.speed[1], L.size) + surf * 3) * L.g;
         fx = L.tx * speed;
         fz = L.tz * speed;
-        foam = Math.max(smoothstep(0.1, 0.45, surf), 0.8 * plunge) * L.g;
+        foam = Math.max(smoothstep(0.1, 0.45, surf), 0.6 * plunge) * L.g;
       }
       this._offer(L.Wq, region, edge, kind, fx, fz, foam, mix(SMALL.open, BIG.open, L.size));
     }
