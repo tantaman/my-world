@@ -16,6 +16,47 @@ import { rand, wrapAngle as wrap } from '../core/geom.js';
 const range = (r) => rand(r[0], r[1]);
 const FRIGHT = new Set(['flee', 'leave', 'toTree', 'climb', 'toCover', 'hide', 'stand', 'watch', 'freeze']);
 const MOVES = new Set(['wander', 'travel', 'follow', 'prowl', 'sniff']);
+// Already making for a trunk or a hole: a fresh fright doesn't turn it round.
+const BOLTING = new Set(['toTree', 'climb', 'toCover', 'hide']);
+
+// The torso as something to be hit (Beast.hit): a capsule from the rump to
+// the brisket, as fractions of the body's length (from the hips to the
+// shoulders), round it as thick as this much of the height at the shoulder
+// or of that length, whichever is more, and centred this much of the way up
+// to the hips. Read off the torsos in mammals.js, a little generous.
+const BODY = { rump: -0.82, brisket: 0.72, girth: 0.27, girthByLength: 0.2, centre: 0.95 };
+const _A = { x: 0, y: 0, z: 0 };
+const _B = { x: 0, y: 0, z: 0 };
+
+// Where a ray from o along d (unit) first meets a capsule round the segment
+// a–b of radius r, within `far`: -> t, or null. (The entry point is taken
+// as the closest approach, less how far the ray runs inside the radius
+// there: exact for a ray square on to the capsule, near enough otherwise.)
+export function rayCapsule(o, d, a, b, r, far = Infinity) {
+  const ux = b.x - a.x;
+  const uy = b.y - a.y;
+  const uz = b.z - a.z;
+  const wx = o.x - a.x;
+  const wy = o.y - a.y;
+  const wz = o.z - a.z;
+  const bb = d.x * ux + d.y * uy + d.z * uz;
+  const cc = ux * ux + uy * uy + uz * uz;
+  const dd = d.x * wx + d.y * wy + d.z * wz;
+  const ee = ux * wx + uy * wy + uz * wz;
+  const den = cc - bb * bb;
+  // the closest points: u along the segment, t along the ray
+  let u = cc < 1e-12 ? 0 : den > 1e-9 ? clamp((ee - bb * dd) / den, 0, 1) : 0;
+  let t = Math.max(0, u * bb - dd);
+  if (cc > 1e-12) u = clamp((ee + t * bb) / cc, 0, 1);
+  t = Math.max(0, u * bb - dd);
+  const px = o.x + d.x * t - (a.x + ux * u);
+  const py = o.y + d.y * t - (a.y + uy * u);
+  const pz = o.z + d.z * t - (a.z + uz * u);
+  const miss = px * px + py * py + pz * pz;
+  if (miss > r * r) return null;
+  const at = Math.max(0, t - Math.sqrt(r * r - miss));
+  return at <= far ? at : null;
+}
 
 function pickWeighted(w) {
   let total = 0;
@@ -144,6 +185,38 @@ export class Beast {
     if (sp.escape === 'tree') this.refuge = ctx.nearestTree(this.x, this.z, 14, from);
     else if (sp.escape === 'cover') this.refuge = ctx.nearestCover(this.x, this.z, 10, from);
     if (this.refuge) this.setState(sp.escape === 'tree' ? 'toTree' : 'toCover', 8);
+  }
+
+  // A sudden loud noise from `from` (a shot): run from it, unless already
+  // bolting for a trunk or a hole.
+  startle(ctx, from) {
+    if (!BOLTING.has(this.state)) this.startFlee(ctx, from);
+  }
+
+  // The torso, as a capsule (BODY above): from `a` to `b` metres ahead of
+  // where it stands, `y` up off the ground, `r` round.
+  get torso() {
+    const D = this.quad.d;
+    const s = this.scale;
+    const r = Math.max(D.shoulderH * BODY.girth, D.bodyLen * BODY.girthByLength) * s;
+    const a = BODY.rump * D.bodyLen * s + r;
+    return { a, b: Math.max(a, BODY.brisket * D.bodyLen * s - r), y: D.hipH * BODY.centre * s, r };
+  }
+
+  // Where a ray from o along d (unit) first meets the body, within `far`
+  // metres: -> t, or null. The torso only.
+  hit(o, d, far) {
+    const { a, b, y, r } = this.torso;
+    const fx = Math.sin(this.yaw);
+    const fz = Math.cos(this.yaw);
+    const h = this.mesh.position.y + y;
+    _A.x = this.x + fx * a;
+    _A.y = h;
+    _A.z = this.z + fz * a;
+    _B.x = this.x + fx * b;
+    _B.y = h;
+    _B.z = this.z + fz * b;
+    return rayCapsule(o, d, _A, _B, r, far);
   }
 
   call(ctx, when) {

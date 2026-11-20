@@ -2,7 +2,8 @@
 //
 // The materials are a list, not four fields, so a feature can add its own
 // (inventory.define({ id: 'clay', label: 'clay', format: (v) => `${v} kg` }))
-// and the HUD line and the save pick it up.
+// and the HUD line and the save pick it up. One that is `optional` is only
+// on the line while you have some: what most people never carry stays off it.
 
 const tenths = (m) => (Math.round(m * 10) / 10).toString();
 
@@ -46,7 +47,10 @@ export class Inventory {
   // "logs 4 m · timber 0 m · stone 2 · soil 0.0 m³"
   line() {
     if (this.creative) return 'creative · unlimited materials';
-    return this.kinds.map((k) => `${k.label} ${k.format(this.amounts[k.id])}`).join(' · ');
+    return this.kinds
+      .filter((k) => !k.optional || this.amounts[k.id] > 1e-6)
+      .map((k) => `${k.label} ${k.format(this.amounts[k.id])}`)
+      .join(' · ');
   }
 
   load(data) {

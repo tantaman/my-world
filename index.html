@@ -73,6 +73,7 @@
       @keyframes nudge { 25% { transform: translateX(calc(-50% - 5px)); } 75% { transform: translateX(calc(-50% + 5px)); } }
       #hotbar {
         position: absolute; left: 50%; bottom: calc(14px + var(--inset-b)); transform: translateX(-50%); display: flex; gap: 3px; pointer-events: auto;
+        flex-wrap: wrap-reverse; justify-content: center; width: max-content; max-width: calc(100vw - 12px);
       }
       #hotbar .slot {
         font: inherit; font-size: 10.5px; color: var(--ink-dim); background: var(--panel); border: 1px solid var(--line); padding: 4px 7px;
@@ -135,12 +136,14 @@
       @media (hover: hover) { .touch { display: none; } }
       /* Along the bottom, the tool bar and the corner buttons share the width.
          Where both don't fit, the tools go by their short names, and narrower
-         still, the corner buttons move up top. */
-      @media (max-width: 1040px) {
+         still, the corner buttons move up top. On the narrowest screens the
+         slots close up, and if it still doesn't fit, it takes a second row.
+         (The widths are for ten tools and five corner buttons.) */
+      @media (max-width: 1340px) {
         #hotbar .slot .long { display: none; }
         #hotbar .slot .short { display: inline; }
       }
-      @media (max-width: 900px) {
+      @media (max-width: 1230px) {
         /* the corner buttons take the top line; what you carry goes under them */
         #corner { bottom: auto; top: calc(10px + var(--inset-t)); }
         #inv { top: calc(42px + var(--inset-t)); max-width: calc(100vw - 32px); }
@@ -157,6 +160,10 @@
         #track { bottom: auto; top: calc(60px + var(--inset-t)); }
         #debug { top: calc(78px + var(--inset-t)); }
         #hint { bottom: calc(130px + var(--inset-b)); }
+      }
+      @media (max-width: 360px) {
+        #hotbar { gap: 1px; }
+        #hotbar .slot { padding: 6px 2px; font-size: 9.5px; }
       }
     </style>
   </head>

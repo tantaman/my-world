@@ -22,6 +22,8 @@ import { rand, pick, wrapAngle as wrap, segDist, waterSample } from '../core/geo
 import { TREE_KINDS as TREES } from '../world/flora.js';
 
 const article = (s) => (/^[aeiou]/i.test(s) ? `an ${s}` : `a ${s}`);
+// What to call one animal of a group: its own name, or its kind's.
+const labelOf = (e, who) => who.label ?? article((SPECIES[who.kind] ?? e.sp).name);
 const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
 const _v = new THREE.Vector3();
 const _sphere = new THREE.Sphere();
@@ -77,6 +79,28 @@ class Herd {
       }
     }
     this.done = this.members.length === 0;
+  }
+  // The first of them a ray meets within `far`. -> { t, who } or null
+  hit(o, d, far) {
+    let best = null;
+    for (const m of this.members) {
+      const t = m.hit(o, d, best ? best.t : far);
+      if (t !== null) best = { t, who: m };
+    }
+    return best;
+  }
+  // One of them is gone for good (shot): the rest go on without it, and the
+  // next in line leads.
+  remove(m) {
+    const i = this.members.indexOf(m);
+    if (i < 0) return false;
+    this.members.splice(i, 1);
+    this.meshes = this.meshes.filter((mesh) => mesh !== m.mesh);
+    this.done = this.members.length === 0;
+    return true;
+  }
+  startle(x, z, ctx) {
+    for (const m of this.members) m.startle(ctx, { x, z });
   }
   dispose() {
     for (const m of this.members) m.dispose();
@@ -188,6 +212,12 @@ class Serpent {
     this.mesh.rotation.y = dir;
     cr.update(dt, ctx.ground);
   }
+  startle(x, z) {
+    if (this.state === 'flee') return;
+    this.state = 'flee';
+    this.t = 0;
+    this.heading = Math.atan2(this.x - x, this.z - z);
+  }
   dispose() {
     disposeAnimal(this.mesh);
   }
@@ -287,6 +317,15 @@ class Flutter {
 //   update(ctx)     every frame; ctx is what an animal may ask about the world
 //                   (see _makeCtx: ground, nearest person, cover, calls...)
 //   dispose()       free its geometry
+//
+// and if it can be startled or shot (both optional):
+//
+//   startle(x, z, ctx)   a sudden loud noise from (x, z): a shot
+//   hit(o, d, far)       the first of it a ray meets within `far` metres:
+//                        -> { t, who } or null. `who` has a `mesh`, x, z,
+//                        yaw, scale, kind and label, and is what remove(who)
+//                        takes out of the group when it is killed
+//   remove(who)          -> false if it wasn't there (already gone)
 const CLASSES = new Map();
 
 export function defineAnimalClass(name, make) {
@@ -603,6 +642,43 @@ export class Wildlife {
   list() {
     const p = this.player.pos;
     return this.entities.map((e) => ({ kind: e.kind, label: e.label, x: Math.round(e.x), z: Math.round(e.z), dist: Math.round(Math.hypot(e.x - p.x, e.z - p.z)), leaving: !!e.leaving }));
+  }
+
+  // ── Shot at ───────────────────────────────────────────────────────────────
+  // The first animal a ray from o along d (unit) meets, between `near` and
+  // `far` metres along it, of those `which(animal)` allows (all, without it).
+  // Nothing changes: -> { t, e, who, label } or null (e the animal's group,
+  // who the one in it, label what to call it), to hand to kill().
+  aimed(o, d, far, near = 0, which = null) {
+    let best = null;
+    for (const e of this.entities) {
+      if (!e.hit) continue;
+      const h = e.hit(o, d, best ? best.t : far);
+      if (!h || h.t < near || (which && !which(h.who))) continue;
+      best = { t: h.t, e, who: h.who, label: labelOf(e, h.who) };
+    }
+    return best;
+  }
+
+  // An animal killed: out of the forest for good. Its body is handed over,
+  // out of the scene, for whoever killed it to lay down, and to dispose()
+  // of once done with.
+  // -> { kind, label, mesh, x, z, yaw, scale, torso, dispose } or null
+  //    torso: { a, b, y, r } the body as a capsule, if it says (Beast.torso)
+  kill({ e, who }) {
+    if (!e || !this.entities.includes(e) || !e.remove || !e.remove(who)) return null;
+    this.group.remove(who.mesh);
+    if (e.done) this.entities.splice(this.entities.indexOf(e), 1);
+    const mesh = who.mesh;
+    return { kind: who.kind, label: labelOf(e, who), mesh, x: who.x, z: who.z, yaw: who.yaw ?? 0, scale: who.scale ?? 1, torso: who.torso ?? null, dispose: () => disposeAnimal(mesh) };
+  }
+
+  // A sudden loud noise at (x, z): everything within `reach` metres that
+  // can be startled runs from it.
+  startle(x, z, reach) {
+    for (const e of this.entities) {
+      if (e.startle && Math.hypot(e.x - x, e.z - z) < reach) e.startle(x, z, this.ctx);
+    }
   }
 
   clear() {

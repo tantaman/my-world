@@ -196,11 +196,13 @@ export class Hud {
     if (range) range.textContent = `1–${tools.length}`;
     this.hotbar.textContent = '';
     this.slots = tools.map((t, i) => {
+      // the number keys pick the first ten (0 for the tenth); past that, the bar
+      const key = i < 10 ? String((i + 1) % 10) : '';
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'slot';
-      b.innerHTML = `<kbd>${i + 1}</kbd><span class="long">${t.label}</span><span class="short">${t.short || t.label}</span>`;
-      b.setAttribute('aria-label', `${t.label} (key ${i + 1})`);
+      b.innerHTML = `${key ? `<kbd>${key}</kbd>` : ''}<span class="long">${t.label}</span><span class="short">${t.short || t.label}</span>`;
+      b.setAttribute('aria-label', key ? `${t.label} (key ${key})` : t.label);
       b.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
         onPick(i);

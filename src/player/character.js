@@ -73,6 +73,15 @@ const POSES = {
 };
 const _pose = { sh: 0, el: 0, tool: 0, sp: 0, inw: 0, drop: 0, tw: 0, roll: 0, cock: 0 };
 
+// A work pose of a feature's own (a rifle brought up to the shoulder), as
+// keyframes like the ones above, for Character.play(kind). The left arm
+// mirrors the right whenever a tool is in hand, as it does for the axe.
+export function definePose(kind, keys) {
+  if (POSES[kind]) throw new Error(`pose "${kind}" is already defined`);
+  if (!Array.isArray(keys) || keys.length < 2) throw new Error(`pose "${kind}" needs at least two keyframes`);
+  POSES[kind] = keys;
+}
+
 // The left arm holding something up to the mouth (Character.addRaised): the
 // shoulder's pitch (sh), twist (tw) and swing inward (inw), the elbow, and the
 // wrist (bent, and rolled so what is held stands upright). In the chest's frame, which the head rides on too, so the hand stays
@@ -483,7 +492,8 @@ export class Character {
     if (s) this._seat = s;
   }
 
-  // Start a work animation: 'chop' | 'chopLow' | 'fell' | 'dig' | 'bend' | 'reach'.
+  // Start a work animation: 'chop' | 'chopLow' | 'fell' | 'dig' | 'bend' |
+  // 'reach', or one a feature defined (definePose).
   play(kind, dur, loop = false) {
     if (this.action && this.action.kind === kind && this.action.loop && loop) {
       this.action.dur = dur;
