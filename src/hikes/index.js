@@ -135,7 +135,7 @@ export function installHikes(game) {
 
   // ── The list ─────────────────────────────────────────────────────────────
   // The water on a hike, by name: its lakes, the sea, its streams.
-  const waterOn = (c) => [...(c.lakes || []).map((l) => l.name), ...(c.streams || [])].filter(Boolean);
+  const waterOn = (c) => [...new Set([...(c.lakes || []), ...(c.streams || [])].map((w) => w.name))].filter(Boolean);
   // In the real world's metres, the way you'd describe the hike.
   const panel = new HikesPanel({
     hikes: cards.map((c) => ({

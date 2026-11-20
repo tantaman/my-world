@@ -404,8 +404,12 @@ test("a hike's streams are kept the way they flow, as far as its land goes", () 
   assert.ok(Math.hypot(...runs[4][2]) < 480 && runs[4][2][0] < -370, `it begins at the edge of the land (${runs[4][2]})`);
   // the card names them, once each, for the list of hikes; the lines are with the land
   const { card, land } = splitHike(watered);
-  assert.deepEqual(card.streams, ['Brook', 'Beck', 'Out']);
+  assert.deepEqual(card.streams, [{ name: 'Brook' }, { name: 'Beck' }, { name: 'Out' }]);
   assert.deepEqual(land.streams, watered.streams);
+  assert.deepEqual({ ...card, ...land }, watered, 'and together they are the hike again');
+  // importing another hike splits the cards already there again: they come out as they went in
+  assert.deepEqual(splitHike(card).card, card);
+  assert.deepEqual(splitHike(splitHike(coastal).card).card, splitHike(coastal).card);
   // a hike with none says nothing of them
   assert.ok(!('streams' in hike) && !('streams' in splitHike(hike).card));
 });

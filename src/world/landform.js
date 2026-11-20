@@ -382,6 +382,7 @@ export class Landform {
     // each line, in steps
     const all = [];
     for (const st of this.def.streams || []) {
+      if (!st.pts) continue; // only its name: the land isn't here
       const P = [];
       for (let k = 0; k + 3 < st.pts.length; k += 2) {
         const [ax, az, bx, bz] = [st.pts[k] + this.cx, st.pts[k + 1] + this.cz, st.pts[k + 2] + this.cx, st.pts[k + 3] + this.cz];
