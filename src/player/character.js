@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { smoothstep, lerp, clamp } from '../noise.js';
+import { buildHead } from './head.js';
 
 // Work poses as keyframes over one swing (p = 0..1). Angles in radians:
 //   sh = shoulder pitch (negative raises the arm forward), el = elbow,
@@ -61,6 +62,7 @@ function samplePose(keys, p, out) {
 const HIPS_Y = 0.94; // pelvis height standing
 const HIP_X = 0.095; // hip joints either side of the pelvis
 const HIP_Y = -0.04;
+const NECK = 0.145; // centre of the head above the base of the neck
 const THIGH = 0.42;
 const SHIN = 0.43;
 const REACH = (THIGH + SHIN) * 0.985; // a planted leg never quite locks straight
@@ -150,11 +152,7 @@ export class Character {
   // left shoulder, a brown snapback with a maroon flat brim, white sunglasses
   // and a full dark beard.
   #build() {
-    const SKIN = 0xc68c6c;
-    const BEARD = 0x2a1f19;
-    const skin = M(SKIN, 0.7);
-    const beard = M(BEARD, 0.95);
-    const hair = M(0x221913, 0.95);
+    const skin = M(0xc68c6c, 0.7);
     const shell = M(0xd65a20, 0.6);
     const shellDark = M(0xa8431a, 0.65);
     const hood = M(0xa9aba8, 0.75);
@@ -162,11 +160,6 @@ export class Character {
     const pantsDark = M(0x86602b);
     const boot = M(0x5b3a26, 0.8);
     const sole = M(0x2a211b, 0.95);
-    const crown = M(0x6c5932, 0.95, { side: THREE.DoubleSide });
-    const brim = M(0x7a2233, 0.9, { side: THREE.DoubleSide });
-    const patch = M(0xb98863, 0.8);
-    const frame = M(0xf1f0ec, 0.3);
-    const lens = M(0x14181d, 0.12, { metalness: 0.4 });
     const pack = M(0x1d1d20, 0.75);
     const packDark = M(0x111113, 0.8);
     const logo = M(0x9a9a9a, 0.7);
@@ -276,92 +269,13 @@ export class Character {
     ]);
     this.chest.add(cast(new THREE.Mesh(new THREE.TubeGeometry(hosePath, 18, 0.0095, 5), hose)));
 
-    // head
+    // head: raised clear of the collar so the chin and beard show
     this.neck = group(this.chest, 0, 0.5, 0);
-    const neckM = cyl(0.06, 0.065, 0.1, skin, 8);
-    neckM.position.y = 0.04;
+    const neckM = cyl(0.058, 0.065, 0.13, skin, 8);
+    neckM.position.y = 0.055;
     this.neck.add(neckM);
-    this.head = group(this.neck, 0, 0.12, 0);
-    // The beard is painted on the face: skin over the nose and upper cheeks,
-    // beard from the sideburns down round the jaw and below the lip.
-    const faceGeo = new THREE.SphereGeometry(0.12, 20, 14);
-    const fp = faceGeo.attributes.position;
-    const fc = new Float32Array(fp.count * 3);
-    const cSkin = new THREE.Color(SKIN);
-    const cBeard = new THREE.Color(BEARD);
-    const c = new THREE.Color();
-    for (let i = 0; i < fp.count; i++) {
-      const ny = fp.getY(i) / 0.12;
-      const nz = fp.getZ(i) / 0.12;
-      const line = lerp(0.1, -0.3, smoothstep(0.2, 0.85, nz));
-      const t = clamp((line - ny) / 0.07, 0, 1) * smoothstep(-0.4, -0.15, nz);
-      c.copy(cSkin).lerp(cBeard, t).toArray(fc, i * 3);
-    }
-    faceGeo.setAttribute('color', new THREE.BufferAttribute(fc, 3));
-    const face = cast(new THREE.Mesh(faceGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 })));
-    face.scale.set(0.92, 1.05, 0.95);
-    this.head.add(face);
-    const hairM = ball(0.123, hair, 12, 8);
-    hairM.scale.set(0.95, 0.92, 0.96);
-    hairM.position.set(0, 0.008, -0.018);
-    this.head.add(hairM);
-    for (const sx of [-1, 1]) {
-      const ear = ball(0.03, skin, 6, 5);
-      ear.scale.set(0.45, 1, 0.75);
-      ear.position.set(sx * 0.106, -0.008, -0.01);
-      this.head.add(ear);
-    }
-    // some depth to the beard at the chin and jaw, and a moustache
-    const chin = ball(0.06, beard, 10, 6);
-    chin.scale.set(1.3, 0.85, 0.95);
-    chin.position.set(0, -0.096, 0.052);
-    this.head.add(chin);
-    const stache = cap(0.013, 0.05, beard, 6);
-    stache.rotation.z = Math.PI / 2;
-    stache.scale.set(1, 1, 0.6);
-    stache.position.set(0, -0.036, 0.11);
-    this.head.add(stache);
-    const nose = ball(0.022, skin, 6, 5);
-    nose.scale.set(0.8, 1, 1);
-    nose.position.set(0, -0.004, 0.118);
-    this.head.add(nose);
-
-    // white sunglasses, wrapped a little round the face
-    const glasses = group(this.head, 0, 0.022, 0);
-    for (const sx of [-1, 1]) {
-      const rim = group(glasses, sx * 0.046, 0, 0.106);
-      rim.rotation.y = sx * 0.34;
-      rim.add(box(0.08, 0.048, 0.014, frame));
-      const glass = box(0.064, 0.034, 0.006, lens);
-      glass.position.z = 0.0075;
-      rim.add(glass);
-      const arm = box(0.01, 0.012, 0.13, frame);
-      arm.position.set(sx * 0.1, 0.008, 0.03);
-      glasses.add(arm);
-    }
-    const bridge = box(0.026, 0.01, 0.012, frame);
-    bridge.position.set(0, 0.01, 0.116);
-    glasses.add(bridge);
-
-    // snapback: brown crown, maroon flat brim, a leather patch on the front
-    const hat = group(this.head, 0, 0, 0);
-    hat.rotation.x = -0.18;
-    const dome = cast(new THREE.Mesh(new THREE.SphereGeometry(0.131, 16, 8, 0, TAU, 0, Math.PI / 2), crown));
-    dome.scale.set(0.97, 0.98, 1.06);
-    dome.position.y = 0.028;
-    hat.add(dome);
-    const peak = cyl(0.1, 0.1, 0.012, brim, 20);
-    peak.scale.set(1, 1, 0.86);
-    peak.position.set(0, 0.03, 0.142);
-    peak.rotation.x = 0.06;
-    hat.add(peak);
-    const badge = box(0.07, 0.048, 0.01, patch);
-    badge.position.set(0, 0.092, 0.122);
-    badge.rotation.x = -0.52;
-    hat.add(badge);
-    const button = ball(0.013, crown, 6, 4);
-    button.position.set(0, 0.155, 0);
-    hat.add(button);
+    this.head = group(this.neck, 0, NECK, 0);
+    buildHead(this.head, skin);
 
     // arms
     const arm = (side) => {

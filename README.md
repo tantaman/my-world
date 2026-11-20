@@ -852,6 +852,7 @@ src/
     index.js              ← feature: controls, the hiker, where you arrive
     player.js             movement, collision, wading and swimming, third-person camera
     character.js          procedural hiker model, IK gait, work poses
+    head.js               the hiker's face and beard, sunglasses and snapback
     input.js              keyboard, mouse, touch
     peers.js              everyone else, drawn and eased between messages
   audio/
