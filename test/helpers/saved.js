@@ -7,6 +7,7 @@ import { terrainSave } from '../../src/build/terrainEdits.js';
 import { forestSave } from '../../src/build/forestry.js';
 import { buildingsSave } from '../../src/build/buildings.js';
 import { marksSave } from '../../src/map/marks.js';
+import { firesSave } from '../../src/fires/fires.js';
 
 // The domains whose live halves are bound in the game's install functions.
 // Their ids and scopes are part of the save format; keep them in step.
@@ -31,9 +32,12 @@ const nameSave = {
 };
 
 // live: { [id]: { collect, restore, ... } } to stand in for the game.
-export function makeDomains(live = {}) {
+// except: ids to leave out, to stand in for an older game that didn't have them.
+export function makeDomains(live = {}, { except = [] } = {}) {
   const domains = new SaveDomains();
-  for (const d of [nameSave, terrainSave, forestSave, buildingsSave, marksSave, ...YOURS]) domains.register({ ...d, ...(live[d.id] || {}) });
+  for (const d of [nameSave, terrainSave, forestSave, buildingsSave, firesSave, marksSave, ...YOURS]) {
+    if (!except.includes(d.id)) domains.register({ ...d, ...(live[d.id] || {}) });
+  }
   return domains;
 }
 

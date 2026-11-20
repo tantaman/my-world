@@ -5,8 +5,8 @@
 //   node test/together.mjs http://127.0.0.1:8787
 //
 // One visitor builds a little, puts the world on the server, and a second
-// opens the link. Each then changes things and the other must see them; a
-// reload must bring it all back; and something a *newer* game saved, which
+// opens the link. Each then changes things and the other must see them (a
+// campfire one lights, the other puts out); a reload must bring it all back; and something a *newer* game saved, which
 // this one has never heard of, must survive being walked past.
 
 import { createRequire } from 'node:module';
@@ -58,6 +58,7 @@ async function visitor(name) {
         const sorted = (list) => list.map((piece) => JSON.stringify(piece)).sort();
         return {
           buildings: b.buildings.serialize().map((d) => ({ y0: d.y0, sill: d.sill, footings: sorted(d.footings), logs: sorted(d.logs), roofs: sorted(d.roofs) })),
+          fires: sorted(world.fires.serialize()),
           moved: b.terrain.map.size,
           stumps: forest.stumps.length,
           removed: Object.values(forest.removed).flat().length,
@@ -151,6 +152,27 @@ try {
     await ana.until((w) => JSON.stringify(window.seen()) === JSON.stringify(w), want, 'ana has ben’s mark, and the log is gone');
     const tracking = await ana.page.evaluate(() => world.marks.trackedMark()?.name);
     assert.equal(tracking, "ana's cabin", 'someone else adding a mark does not lose yours');
+  });
+
+  await step('a fire ana lights, ben sees burning — and puts out', async () => {
+    await ana.page.evaluate((s) => {
+      const F = world.fires;
+      const x = s.x - 3;
+      const z = s.z - 3;
+      const f = F.add(x, z, world.chunks.heightAt(x, z));
+      F.lay(f, 1);
+      F.light(f);
+    }, site);
+    await ben.until(() => {
+      const f = world.fires.list.values().next().value;
+      return !!f && world.fires.state(f).state === 'burning';
+    }, null, 'ben sees it burning');
+    await ben.page.evaluate(() => world.fires.douse(world.fires.list.values().next().value));
+    await ana.until(() => {
+      const f = world.fires.list.values().next().value;
+      return world.fires.state(f).state === 'laid' && f.ash === 2;
+    }, null, 'ana sees it put out, with wood left to light again');
+    assert.deepEqual(await ana.seen(), await ben.seen());
   });
 
   await step('a change to something already saved goes out too', async () => {

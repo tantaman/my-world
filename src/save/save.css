@@ -145,7 +145,8 @@
     transition: none;
   }
 }
-@media (max-width: 620px) {
+/* The panel opens under the corner buttons when they move up top (index.html). */
+@media (max-width: 900px) {
   #share {
     top: calc(44px + var(--inset-t));
     bottom: auto;

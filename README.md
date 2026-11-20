@@ -9,7 +9,8 @@ painting made of pixels.
 
 You can also **build**: fell trees, buck them into logs, hew timbers, clear
 and grade the ground, set stone footings, and raise a notched log cabin with
-rooms, doors, windows and a roof. See [Building](#building).
+rooms, doors, windows and a roof. And when it gets dark, ring a pit with
+stones and light a **campfire**. See [Building](#building).
 
 And you're not alone out there: deer, elk, moose, black bears, wolves,
 mountain lions, bobcats, foxes, rabbits, squirrels, chipmunks, mice, snakes,
@@ -47,7 +48,7 @@ See [Building together](#building-together) to set the server up, or skip it
 | **R** | back to the starting path |
 | **M** | map: pan, zoom, and mark places (also the *map* button, bottom right) |
 | **L** | save this world, and get a link others can build in with you |
-| **1 – 7** | tools: hands, axe, shovel, footing, log wall, timber, roof |
+| **1 – 8** | tools: hands, axe, shovel, footing, log wall, timber, roof, campfire |
 | **click** (while looking) | use the tool, hold to keep working |
 | **right-click** | the tool's second action, or take a piece down |
 | **G** | set or pull up a grade stake |
@@ -121,7 +122,7 @@ The *save* button says where things stand — *live · 2*, *saving…*, *offline
 and **L** opens the panel with the link and a name for the world.
 
 What is the world's is shared: the ground, the felled trees, what is built,
-the marks, the name. What is yours stays yours — your materials, your grade
+the fires, the marks, the name. What is yours stays yours — your materials, your grade
 stake, the hour you set. Where you are standing is passed on so people can see
 you, and never stored.
 
@@ -129,13 +130,19 @@ you, and never stored.
 
 Everything you can change is one **element** with a key every machine works
 out the same way — a ground vertex, a removed plant, a stump, a felled tree, a
-footing, a log, a roof, a mark:
+footing, a log, a roof, a fire, a mark:
 
 ```
 t:120:-40      the ground vertex at (120, -40)
 l:x:0:0:4:0    the log running along x at line 0, from 0 to 4, course 0
+c:12:-40       the fire on the grid node at (12, -40)
 m:k3f9x1       a mark
 ```
+
+A fire burning down doesn't send anything. Its value is how much wood was put
+on it and when it was lit, and every machine works out from those how far it
+has burned — so changes only travel when someone lays, lights, feeds or puts
+out a fire.
 
 A change is one of those taking a value, and it travels on its own:
 
@@ -284,6 +291,9 @@ interact, so it fades in after your first click, key press or tap.
   trunk), a tree creaking as it goes, then the crash and the crown thrashing
   through the brush. There's the scrape and toss of the spade, the knock of a
   log set down on another, and the clack of stones.
+- **Fires** breathe and crackle where they burn, with the odd pop of resin.
+  You'll hear the flint strike and the tinder catch with a rush, and a long
+  hiss when you kick earth over the coals.
 
 Sound pauses when the tab is hidden. Add `?mute` to the URL to start silent.
 
@@ -359,7 +369,7 @@ Example: `/?soft=0.3&px=5&time=7.5`
   also find bushes, boulders and fallen logs.
 - **Time of day.** Palettes are keyed to the sun's elevation, from dawn to
   midday, golden hour, dusk and night. At night there's moonlight, stars and
-  fireflies. In daytime there's drifting pollen.
+  fireflies, and whatever fires you've lit. In daytime there's drifting pollen.
 - **The hiker** is built from primitives: an orange rain shell with the hood
   rolled at the collar, a black daypack with a hydration hose, tan trousers,
   a brown snapback with a maroon brim, white sunglasses and a beard. The
@@ -502,9 +512,38 @@ above the tool bar always says what a click would do, or why it can't.
 Round logs get clay chinking between the courses. Hewn timbers stack flush
 with tight corners.
 
+**Campfire (8).**
+- **Ring a pit.** Aim at the ground and hold **click** to scrape a shallow
+  pit and ring it with 4 stones. It snaps to the grid like everything else.
+  The spot needs to be fairly level and dry, at least 2 m from any standing
+  trunk (for the branches' sake), under open sky rather than a roof, and
+  clear of stumps, boulders, felled trees, walls and other fires. The prompt
+  says what's in the way.
+- **Lay a fire.** Click the ring to split 1 m of log and stand it up in a
+  teepee over some kindling.
+- **Light it.** Click again to strike a light. It takes a few seconds to catch
+  properly.
+- **Feed it.** While it burns, click to put on another 0.5 m of log. A fire
+  holds up to 3 m of wood. Each metre burns for about 5 minutes. As the wood
+  goes the teepee burns down and falls in.
+- **Embers.** When the wood runs out it glows as embers for a couple of
+  minutes. Put wood on them while they're hot and they rekindle. After that
+  it's cold ash.
+- **Right-click** a burning fire, or embers, to kick earth over it and put it
+  out. Any unburned wood is left charred in the ring, and you can light it
+  again. Right-click a ring with no fire in it to take it apart. You get the
+  stones back, and any unburned wood in half metres.
+
+Fires burn by the clock on the wall, not the hour in the sky (that's yours to
+scrub with **, .**). So everyone in a world watches the same fire burn down,
+and one you left burning is cold ash when you come back tomorrow. You can't
+walk into a fire with wood in it, and neither the shovel nor a footing, a wall
+or a roof will go where a fire ring is. A fire also lights the world around
+it, which matters a great deal more after dark than at noon.
+
 Everything you change is saved in your browser, separately for each world
-seed. That covers felled trees, stumps, the shape of the ground, buildings
-and what you're carrying. Add `?clearbuild` to start over, or `?creative` to
+seed. That covers felled trees, stumps, the shape of the ground, buildings,
+fires and what you're carrying. Add `?clearbuild` to start over, or `?creative` to
 skip the gathering.
 
 ## Adding a structure
@@ -541,7 +580,7 @@ adds what it does each frame — and `src/main.js` is little more than the list:
 
 ```js
 const FEATURES = [installRender, installHud, installWorld, installPlayer, installAudio,
-                  installBuild, installMap, installSave, installWildlife, installDebug];
+                  installBuild, installFires, installMap, installSave, installWildlife, installDebug];
 ```
 
 A feature lives in a folder of its own, and its `index.js` is the only file in
@@ -611,33 +650,35 @@ Each of those files opens with what the thing is and what it is handed.
 
 ### Extending the game
 
-**A feature.** Say, campfires. Make `src/fires/`, with the fire itself in
-plain modules and an `index.js` that plugs it in:
+**A feature.** Campfires are one. `src/fires/` holds the fire itself in
+plain modules (what a fire is and how it burns down, the tool, the look, the
+sound) and an `index.js` that plugs it in:
 
 ```js
-// src/fires/index.js
+// src/fires/index.js, in short
 export function installFires(game) {
-  const { scene, solids, builder, save, sound } = game;
-  const fires = new Fires({ scene, solids });
+  const { scene, camera, solids, sky, builder, sound, save } = game;
+  const fires = new Fires({ scene, solids, sky });
+  game.provide('fires', fires);                              // world.fires in the console
 
-  builder.register(fireTool(fires));                         // key 8, on the tool bar
-  builder.obstacles.addSource((x, z, R, out) => {            // walls and spades go round it
-    for (const f of fires.near(x, z, R)) out.push({ x: f.x, z: f.z, what: 'a fire ring', dig: 1.3, wall: 0.8, footing: 1.4 });
+  builder.register(campfireTool(fires, solids));             // key 8, on the tool bar
+  builder.obstacles.addSource((x, z, R, out) => {            // spades, walls, footings and roofs go round it
+    for (const f of fires.list.values()) out.push({ x: f.x, z: f.z, what: 'a fire ring', dig: 1.05, wall: 0.55, footing: 1.15, roof: 0.5 });
   });
-  save.register({                                            // kept, shared, and synced live
-    id: 'fires', kinds: ['c'],
-    collect: () => fires.serialize(), restore: (data) => fires.load(data),
-    encode: (data, put) => data.forEach((f) => put(regionOf(f.x, f.z), `c:${f.x}:${f.z}`, [f.wood, f.lit])),
-    decode: () => { const out = []; return { take: (region, kind, rest, v) => out.push(fromElement(rest, v)), done: () => out }; },
-  });
+  save.register({ ...firesSave, collect: () => fires.serialize(),   // kept, shared, and synced live;
+    restore: (data) => fires.load(data), adopt: (data) => fires.adopt(data) });  // spelled in fires.js
   fires.on('change', () => save.touch());
   sound.addLayer(crackle(fires));                            // heard from where each one burns
-  game.addSystem({ name: 'fires', phase: 'world', update: ({ dt }) => fires.update(dt) });
+  game.addSystem({ name: 'fires', phase: 'world', update: ({ dt }) => fires.update(dt, camera.position) });
 }
 ```
 
-and add `installFires` to the list in `main.js`, after `installBuild`. That
-line is the only change outside the new folder.
+`installFires` comes after `installBuild` in the list in `main.js`, because
+it needs the builder. Nothing else in the game was told about fires, with
+one exception: a fire ring was the first thing a roof couldn't go over, so
+obstacles learned a `roof` radius and the roof tool now checks it. When a new
+thing needs something the game doesn't offer yet, add it like that: as a
+general idea in the place that owns it, not as a special case for the thing.
 
 **A tool** is an object with `target(b)` — what would a click do, here, now?
 — and `work(b, t, io)` — act on the buttons. The contract, and everything the
@@ -681,7 +722,8 @@ code changed something it shouldn't have; only re-record
 (`UPDATE_GOLDEN=1 npm test`) when the change is meant.
 
 `npm run smoke` plays: it fells a tree, bucks and hews it, picks up a stone,
-digs, raises and roofs a cabin, reloads to see it was all kept, opens the map
+digs, raises and roofs a cabin, lights a campfire in it (and finds the roof
+won't go over that), reloads to see it was all kept, opens the map
 and leaves a mark, makes some noise and calls up one of every animal. It
 drives the keys and the crosshair and reads results through `window.world`,
 so it doesn't care how the insides are arranged. The last two need
@@ -757,6 +799,13 @@ src/
     aim.js                rays against ground and trunks
     geometry.js           logs, timbers, chinking, piers, roofs, stumps, tools
     constants.js          dimensions: course height, overhang, pier range, reach…
+  fires/
+    index.js              ← feature: campfires
+    fires.js              what a fire is, how it burns down by the clock, how it is saved
+    tool.js               the campfire tool: ring, lay, light, feed, put out
+    look.js               flames, glowing coals, smoke and sparks
+    geometry.js           the stone ring, the teepee of firewood, the ash
+    sound.js              the crackle; the strike, the catch and the hiss
   map/
     index.js              ← feature
     mapRender.js          pure top-down tile renderer (runs in a worker)

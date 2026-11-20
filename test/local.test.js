@@ -75,15 +75,15 @@ test('another seed is another world', () => {
 
 test('a new domain is kept without anyone being told', () => {
   const { domains } = world({ terrain: [], inv: { log: 1 } });
-  let fires = [{ x: 3, z: 4, wood: 2 }];
-  domains.register({ id: 'fires', kinds: ['c'], encode() {}, decode: () => ({ take() {}, done: () => [] }), collect: () => fires, restore: (d) => void (fires = d) });
+  let wells = [{ x: 3, z: 4, depth: 2 }];
+  domains.register({ id: 'wells', kinds: ['w'], encode() {}, decode: () => ({ take() {}, done: () => [] }), collect: () => wells, restore: (d) => void (wells = d) });
   const storage = memoryStorage();
   const store = new LocalStore({ domains, storage, seed: SEED });
   store.flush();
-  assert.deepEqual(storage.get(KEYS.build(SEED)).fires, [{ x: 3, z: 4, wood: 2 }]);
-  fires = null;
+  assert.deepEqual(storage.get(KEYS.build(SEED)).wells, [{ x: 3, z: 4, depth: 2 }]);
+  wells = null;
   domains.restore(new LocalStore({ domains, storage, seed: SEED }).read());
-  assert.deepEqual(fires, [{ x: 3, z: 4, wood: 2 }]);
+  assert.deepEqual(wells, [{ x: 3, z: 4, depth: 2 }]);
 });
 
 test('changes are written after a lull, and not at all once the server keeps the world', () => {

@@ -8,7 +8,7 @@
 // register() call next to the system that owns it; nothing in src/save/ has
 // to learn about it.
 //
-//   domains.register({
+//   domains.register({                 // campfires (src/fires/fires.js), say
 //     id: 'fires',                      // its name in a save, for good
 //     scope: 'world',                   // 'world': part of the place, shared with everyone in it
 //                                       // 'yours': travels with you (what you carry, where you stand)
@@ -17,7 +17,7 @@
 //
 //     // 'world' domains also say how they are cut into elements (see below)
 //     kinds: ['c'],
-//     encode(data, put) { for (const f of data) put(regionOf(f.x, f.z), `c:${f.x}:${f.z}`, [f.wood, f.lit]); },
+//     encode(data, put) { for (const [x, z, y, wood, lit, ash] of data) put(regionOf(x, z), `c:${x}:${z}`, [y, wood, lit, ash]); },
 //     decode() {
 //       const out = [];
 //       return { take(region, kind, rest, value) { ... out.push(...) }, done: () => out };

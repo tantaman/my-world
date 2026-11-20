@@ -6,8 +6,8 @@
 // Now whoever owns a kind of thing registers a source, and tools ask one
 // question.
 //
-//   obstacles.addSource((x, z, R, out) => {
-//     for (const f of fires.near(x, z, R)) out.push({ x: f.x, z: f.z, what: 'a fire ring', dig: 1.3, wall: 0.8, footing: 1.4 });
+//   obstacles.addSource((x, z, R, out) => {      // from src/fires/index.js
+//     for (const f of fires.list.values()) out.push({ x: f.x, z: f.z, what: 'a fire ring', dig: 1.05, wall: 0.55, footing: 1.15, roof: 0.5 });
 //   });
 //
 // An obstacle says how much room it needs for each kind of work, as a radius
@@ -18,6 +18,8 @@
 //   wall      a wall can't run this close
 //   low       ...but only its lowest courses are stopped (a stump is short)
 //   footing   a footing can't be set this close
+//   roof      a roof can't go over it: no room whose floor comes this close
+//   roofWhy   ...and why not, for the prompt ('no chimney')
 
 export class Obstacles {
   constructor() {
