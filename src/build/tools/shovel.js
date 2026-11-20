@@ -7,6 +7,7 @@ import { makeShovel } from '../geometry.js';
 import { GroundRing } from '../previews.js';
 
 const GRUB_TIME = 2.4; // seconds to get a stump out
+export const BRUSH = ['bush', 'fern', 'log', 'rock']; // what a spade clears away as it goes (rocks only if small)
 const EARTH = 0x4a3524;
 
 export const shovel = {
@@ -42,24 +43,12 @@ export const shovel = {
       b.dropHold();
       return false;
     }
-    const ch = b.player.character;
     if (t.type === 'stump') {
       if (!io.use) {
         b.dropHold();
         return false;
       }
-      const done = b.holding(t.stump, GRUB_TIME, io.dt);
-      b.face(t.x, t.z);
-      ch.play('dig', 0.85, true);
-      b.digNoise(io.dt, 'grub', t.stump, 0x5a4330);
-      if (done) {
-        const s = t.stump;
-        b.forest.removeStump(s);
-        b.terrain.clear(s.x, s.z, s.r + 0.9, -0.12);
-        b.regrow(s.x, s.z, 2);
-        b.sound.sfx('thud', { size: 0.5 });
-        b.flash('stump grubbed out');
-      }
+      grubStump(b, t.stump, io.dt);
       return true;
     }
     b.dropHold();
@@ -99,13 +88,7 @@ export function digObstacles(b, x, z) {
 // out of, what you carry. The blueprint foreman levels a site with this too.
 // -> whether any ground moved
 export function spadeWork(b, x, z, mode, dt, datum, blocked) {
-  b.chunks.forEachPlant(x, z, DIG.radius * 0.85, ['bush', 'fern', 'log', 'rock'], (c, kind, k, px, py, pz, s) => {
-    if (kind === 'rock') {
-      if (s > LIFTABLE) return;
-      b.gain('stone', stonesIn(s));
-    }
-    b.forest.removePlant(c, kind, k);
-  });
+  clearBrush(b, x, z, DIG.radius * 0.85);
   const r = b.terrain.stroke({ x, z, mode, dt, datum, soil: b.creative ? Infinity : b.inv.soil, blocked });
   if (r.soil > 0) b.gain('soil', r.soil);
   else if (r.soil < 0) b.spend('soil', -r.soil);
@@ -114,4 +97,33 @@ export function spadeWork(b, x, z, mode, dt, datum, blocked) {
   b.player.character.play('dig', 0.9, true);
   if (r.moved) b.digNoise(dt, mode, { x, z }, EARTH);
   return r.moved;
+}
+
+// Clear the brush within r of (x, z): bushes, ferns and old fallen logs go,
+// and small stones go in your pocket. Boulders stay.
+export function clearBrush(b, x, z, r) {
+  b.chunks.forEachPlant(x, z, r, BRUSH, (c, kind, k, px, py, pz, s) => {
+    if (kind === 'rock') {
+      if (s > LIFTABLE) return;
+      b.gain('stone', stonesIn(s));
+    }
+    b.forest.removePlant(c, kind, k);
+  });
+}
+
+// One frame of grubbing out a stump; call it every frame the work goes on.
+// The blueprint foreman clears a site of stumps this way too.
+// -> true on the frame it comes out
+export function grubStump(b, stump, dt) {
+  const done = b.holding(stump, GRUB_TIME, dt);
+  b.face(stump.x, stump.z);
+  b.player.character.play('dig', 0.85, true);
+  b.digNoise(dt, 'grub', stump, 0x5a4330);
+  if (!done) return false;
+  b.forest.removeStump(stump);
+  b.terrain.clear(stump.x, stump.z, stump.r + 0.9, -0.12);
+  b.regrow(stump.x, stump.z, 2);
+  b.sound.sfx('thud', { size: 0.5 });
+  b.flash('stump grubbed out');
+  return true;
 }

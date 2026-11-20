@@ -7,8 +7,9 @@
 // each frame it:
 //   1. asks the plan what's next (plan.js nextJob): a notch to cut, a
 //      footing, the nearest log of the lowest course, a roof. Before the
-//      footings, if they can't all reach one level or the ground stands
-//      above the sills, it levels the site first (grade.js);
+//      footings it clears the site of trees, stumps and brush (clear.js),
+//      and if the footings can't all reach one level or the ground stands
+//      above the sills, it levels it (grade.js);
 //   2. checks it can be done, here and now, with the tools' own checks
 //      (footingCheck, logCheck, roofCheck). Short of stones, logs, timber or
 //      soil, it goes and gets what the rest of the plan needs (gather.js):
@@ -36,7 +37,7 @@ import { footingCheck, digFooting } from '../build/tools/footing.js';
 import { logCheck, layLog } from '../build/tools/wall.js';
 import { axe, cutNotch, swingAt, hew, HEW } from '../build/tools/axe.js';
 import { roofCheck, raiseRoof } from '../build/tools/roof.js';
-import { spadeWork, digObstacles } from '../build/tools/shovel.js';
+import { spadeWork, digObstacles, grubStump, clearBrush, BRUSH } from '../build/tools/shovel.js';
 import { pickUp } from '../build/tools/hands.js';
 import { SPECIES } from '../build/forestry.js';
 import { LIFTABLE } from '../build/constants.js';
@@ -44,6 +45,7 @@ import { TREE_KINDS } from '../world/flora.js';
 import { normalize, place, findBuilding, survey, nextJob, progress, standAt, route, grow, inside } from './plan.js';
 import { levelling, nextSpot, siteGround, TOL } from './grade.js';
 import { stillNeeded, pickTree, fellingSpot, trunkSpot, pickStone, borrowSpots, middle, RANGE } from './gather.js';
+import { zone, lyingOn, nextClearing, BRUSH_ZONE } from './clear.js';
 
 const STAND_OFF = 1.2; // m outside the footprint that work is done from
 const KEEP_OFF = 0.9; // m the way round keeps clear of the footprint (walls, log ends)
@@ -55,11 +57,12 @@ const SIDESTEP = 1.6; // m to one side, to get round whatever is in the way
 const TRIES = 4; // sidesteps before giving up and asking for help
 // m from the work that will do, if where it's meant to be done from can't be
 // reached; a notch is cut from wherever you stand, if it's this close
-const REACH = { grade: 2.6, footing: 2.2, log: 4.5, notch: 2.6, roof: 6, fell: 2, buck: 2.3, stone: 2.2, borrow: 2.6 };
+const REACH = { grade: 2.6, footing: 2.2, log: 4.5, notch: 2.6, roof: 6, fell: 2, buck: 2.3, stone: 2.2, borrow: 2.6, grub: 2.2, brush: 2.2 };
+const BRUSH_REACH = 1.3; // m round where the spade goes in that one swing clears of brush
 const SPADE = { near: 0.5, off: 1.5 }; // m: no nearer than this to the spot you're levelling; stand this far off it
 const STUCK = 1; // s of spade work without a spot moving before leaving it be
 const SETTLE = 0.35; // s squaring up to a log or a roof before setting it down
-const BREATHER = { grade: 0.05, footing: 0.4, log: 0.6, notch: 0.15, roof: 0.9, fell: 0.1, buck: 0.1, hew: 0.05, stone: 0.2, borrow: 0.05 }; // s after each piece
+const BREATHER = { grade: 0.05, footing: 0.4, log: 0.6, notch: 0.15, roof: 0.9, fell: 0.1, buck: 0.1, hew: 0.05, stone: 0.2, borrow: 0.05, grub: 0.3, brush: 0.1 }; // s after each piece
 const BORROW_DEPTH = 0.4; // m: soil is dug this deep at a spot, at most, before moving on
 const SOIL_SPARE = 0.3; // m³ more than levelling needs, dug while at it
 const FALLEN_RANGE = RANGE + 15; // m from the site a tree already down is worth bucking
@@ -197,7 +200,10 @@ export class Foreman extends Emitter {
     if (clash) return this._stuck(b, `another building is closer than ${JOIN_RADIUS} m: its footings would join this one`);
     const first = at ? null : survey(this.placed, (x, z) => b.chunks.heightAt(x, z)).first;
     let job = nextJob(this.placed, at, P.pos, first);
-    if (job.type === 'footing') {
+    // before the footings: clear the site, then level it
+    let clearing = job.type === 'footing' && this._clear(b);
+    if (clearing) job = clearing;
+    else if (job.type === 'footing') {
       const grade = this._grade(b, at);
       if (grade && grade.trouble) return this._stuck(b, grade.trouble);
       if (grade) job = grade;
@@ -209,10 +215,16 @@ export class Foreman extends Emitter {
       return false;
     }
     let chk = check(b, at, job);
+    // a tree or a stump in the way of a wall: clear the site, then carry on
+    if (job.type === 'log' && chk.blocked) clearing = this._clear(b);
+    if (clearing) {
+      job = clearing;
+      chk = { reason: null };
+    }
     // short of something for it? go and get what the rest of the plan needs
     const lack = chk.short ? lacking(job) : null;
     if (lack && !this.gathering) this.gathering = { kind: lack, until: job.type === 'grade' ? job.fill + SOIL_SPARE : 0, dug: new Set() };
-    if (this.gathering) {
+    if (this.gathering && !clearing) {
       const g = this._gather(b, at);
       if (g && g.trouble) return this._stuck(b, g.trouble);
       if (g) {
@@ -226,7 +238,7 @@ export class Foreman extends Emitter {
     if (chk.reason) return this._stuck(b, chk.reason);
     const key = jobKey(job);
     if (key !== this.key) this._begin(job, key);
-    this.doing = this.gathering ? `${this._gatheringWords(b, at)}: ${describe(job)}` : describe(job);
+    this.doing = clearing ? `clearing the site: ${describe(job)}` : this.gathering ? `${this._gatheringWords(b, at)}: ${describe(job)}` : describe(job);
     if (job.type === 'hew' || job.type === 'wait') this.there = true; // done where you stand
     if (!this.there && !this._walk(b, job, dt)) return false;
     P.steer = null;
@@ -260,6 +272,43 @@ export class Foreman extends Emitter {
     return { type: 'grade', x: v.ix, z: v.iz, mode: v.mode, level: lv.level, fill: lv.fill };
   }
 
+  // ── Clearing ──────────────────────────────────────────────────────────────
+  // Anything standing on the site to clear? -> a 'wait' (a tree coming
+  // down), 'buck', 'fell', 'grub' or 'brush' job, or null once it's clear.
+  _clear(b) {
+    const rect = this.placed.rect;
+    const Z = zone(rect);
+    const pad = grow(rect, BRUSH_ZONE);
+    const F = b.forest;
+    const c = middle(rect);
+    const R = Math.hypot(Z.x1 - c.x, Z.z1 - c.z) + 1;
+    const about = { falling: [], down: [], trees: [], stumps: [], brush: [] };
+    for (const f of F.felled.values()) {
+      if (f.state === 'falling') {
+        if (inside(f, Z)) about.falling.push(f);
+      } else if (lyingOn(f, trunkTop(F, f), rect)) about.down.push(f);
+    }
+    b.chunks.forEachPlant(c.x, c.z, R, TREE_KINDS, (ch, kind, k, x, y, z) => {
+      if (inside({ x, z }, Z)) about.trees.push({ x, z });
+    });
+    for (const s of F.stumps.values()) if (inside(s, Z)) about.stumps.push(s);
+    b.chunks.forEachPlant(c.x, c.z, R, BRUSH, (ch, kind, k, x, y, z, s) => {
+      if (inside({ x, z }, pad) && (kind !== 'rock' || s <= LIFTABLE)) about.brush.push({ x, z });
+    });
+    // nearest to where it last worked: it keeps at one thing, and works outward
+    const P = this.player.pos;
+    const next = nextClearing(about, this.lastAt || P);
+    if (!next) return null;
+    const it = next.it;
+    if (next.type === 'wait') return { type: 'wait', f: it, x: it.x, z: it.z };
+    if (next.type === 'buck') return buckJob(F, it, P);
+    if (next.type === 'grub') return { type: 'grub', stump: it, x: it.x, z: it.z, stand: toward(it, P, it.r + 1) };
+    if (next.type === 'brush') return { type: 'brush', x: it.x, z: it.z, stand: toward(it, P, 1.2) };
+    const tree = F.treeNear(it.x, it.z, 0.05);
+    const r = SPECIES[tree.kind].r * tree.s;
+    return { type: 'fell', tree, r, x: tree.x, z: tree.z, stand: fellingSpot({ x: tree.x, z: tree.z, r }, rect, P) };
+  }
+
   // ── Gathering ─────────────────────────────────────────────────────────────
   // The next thing to do for what it went to get. -> a job, { trouble } if
   // there's none of it to be had, or null once it has enough.
@@ -288,12 +337,7 @@ export class Foreman extends Emitter {
       if (f.state === 'falling') return { type: 'wait', f, x: f.x, z: f.z };
       if (!down || Math.hypot(f.x - P.x, f.z - P.z) < Math.hypot(down.x - P.x, down.z - P.z)) down = f;
     }
-    if (down) {
-      const d = F.axisOf(down);
-      const l = Math.hypot(d.x, d.z) || 1;
-      const { work, stand } = trunkSpot(down.x, down.z, d.x / l, d.z / l, F.reach(down), P);
-      return { type: 'buck', f: down, x: work.x, z: work.z, stand };
-    }
+    if (down) return buckJob(F, down, P);
     // the tree it chose, while it stands; else the best about
     const g = this.gathering;
     let tree = g.tree && F.treeNear(g.tree.x, g.tree.z, 0.05);
@@ -354,6 +398,7 @@ export class Foreman extends Emitter {
   _begin(job, key) {
     this._reset();
     this.key = key;
+    this.lastAt = { x: job.x, z: job.z };
     const P = this.player.pos;
     if (job.stand) {
       this.spot = job.stand;
@@ -438,6 +483,18 @@ export class Foreman extends Emitter {
       this.rest = BREATHER[job.type];
       return true;
     }
+    if (job.type === 'grub') {
+      this._hold('shovel');
+      if (grubStump(b, job.stump, dt)) this.rest = BREATHER.grub;
+      return true;
+    }
+    if (job.type === 'brush') {
+      this._hold('shovel');
+      b.face(job.x, job.z);
+      b.swing('dig', 0.7, 0.5, () => clearBrush(b, job.x, job.z, BRUSH_REACH));
+      this.rest = BREATHER.brush;
+      return true;
+    }
     if (job.type === 'stone') {
       this._hold(null);
       pickUp(b, job.rock);
@@ -519,11 +576,13 @@ export class Foreman extends Emitter {
     this.settle = 0;
     this.rest = 0;
     this.still = 0;
+    this.lastAt = null;
   }
 }
 
 // Can the job be done, here and now? -> { reason, ...what doing it needs }
 function check(b, at, job) {
+  if (job.type === 'notch' || !CHECKED.has(job.type)) return { reason: null };
   if (job.type === 'grade') {
     if (job.mode === 'fill' && !b.have('soil', 0.02)) return { short: true, reason: `out of soil to level with (about ${tenths(job.fill)} m³ more): dig some with the shovel` };
     return { reason: null };
@@ -539,6 +598,25 @@ function check(b, at, job) {
   const r = chk.c.roof;
   if (!chk.reason && (r.x0 !== job.x0 || r.z0 !== job.z0 || r.x1 !== job.x1 || r.z1 !== job.z1)) return { reason: 'the room under this roof is not the one in the plan' };
   return chk;
+}
+
+// The jobs a plan is made of, which the tools' own checks look at first;
+// clearing and gathering are checked as they're chosen.
+const CHECKED = new Set(['grade', 'footing', 'notch', 'log', 'roof']);
+
+// Working a felled trunk f: near its foot, from beside it. P: where you are.
+function buckJob(F, f, P) {
+  const d = F.axisOf(f);
+  const l = Math.hypot(d.x, d.z) || 1;
+  const { work, stand } = trunkSpot(f.x, f.z, d.x / l, d.z / l, F.reach(f), P);
+  return { type: 'buck', f, x: work.x, z: work.z, stand };
+}
+
+// Where a felled trunk's top end is, on the ground.
+function trunkTop(F, f) {
+  const d = F.axisOf(f);
+  const len = F.reach(f);
+  return { x: f.x + d.x * len, z: f.z + d.z * len };
 }
 
 // What a job that's short is short of.
@@ -570,6 +648,8 @@ function jobKey(j) {
   if (j.type === 'stone') return `s:${j.x}:${j.z}`;
   if (j.type === 'borrow') return `p:${j.x}:${j.z}`;
   if (j.type === 'hew') return 'h';
+  if (j.type === 'grub') return `u:${j.stump.id}`;
+  if (j.type === 'brush') return `c:${j.x}:${j.z}`;
   if (j.type === 'grade') return `g:${j.x}:${j.z}`;
   if (j.type === 'notch') return `n:${j.L.axis}:${j.L.line}:${j.L.s0}:${j.L.k}:${j.n}`;
   if (j.type === 'log') return `l:${j.axis}:${j.line}:${j.s0}:${j.s1}:${j.k}`;
@@ -584,6 +664,8 @@ function describe(j) {
   if (j.type === 'hew') return 'hewing a log square';
   if (j.type === 'stone') return 'picking up a stone';
   if (j.type === 'borrow') return 'digging';
+  if (j.type === 'grub') return 'grubbing out a stump';
+  if (j.type === 'brush') return 'clearing brush';
   if (j.type === 'grade') return `levelling the site: ${j.mode === 'dig' ? 'cutting' : 'filling'}`;
   if (j.type === 'footing') return 'setting a footing';
   if (j.type === 'notch') return 'cutting a notch';

@@ -14,6 +14,7 @@ import { Library } from '../src/blueprints/library.js';
 import { validSite } from '../src/blueprints/foreman.js';
 import { stillNeeded, pickTree, fellingSpot, trunkSpot, pickStone, borrowSpots, middle, RANGE, CLEAR } from '../src/blueprints/gather.js';
 import { levelling, nextSpot, balance, padNodes, TOL } from '../src/blueprints/grade.js';
+import { zone, clearable, lyingOn, nextClearing, clearingWords, ZONE } from '../src/blueprints/clear.js';
 import { TerrainEdits } from '../src/build/terrainEdits.js';
 import { PIER, DIG } from '../src/build/constants.js';
 import { memoryStorage, KEYS } from '../src/core/storage.js';
@@ -397,4 +398,50 @@ test('which stone next, and where soil can be dug', () => {
   const pad = grow(rect, 1 + CLEAR - 0.01);
   assert.ok(spots.length > 8 && spots.every((s) => !inside(s, pad)), 'all clear of the pad');
   assert.ok(spots[0].x > rect.x1, 'nearest you first');
+});
+
+// ── Clearing ────────────────────────────────────────────────────────────────
+
+test('what has to come off the site, and in what order', () => {
+  const rect = place(PLANS[0], 0, 0, 0).rect;
+  // trees and stumps on the footprint or close by it; nothing that stays put
+  assert.equal(clearable({ x: 0, z: 0, clear: 'fell' }, rect), true);
+  assert.equal(clearable({ x: rect.x1 + ZONE - 0.1, z: 0, clear: 'grub' }, rect), true);
+  assert.equal(clearable({ x: rect.x1 + ZONE + 0.5, z: 0, clear: 'fell' }, rect), false, 'too far off to be in the way');
+  assert.equal(clearable({ x: 0, z: 0, what: 'a boulder' }, rect), false, 'a boulder stays');
+  // a trunk lying over it, or only its top end, counts; one beside it doesn't
+  const Z = zone(rect);
+  assert.equal(lyingOn({ x: Z.x0 - 5, z: 0 }, { x: Z.x1 + 5, z: 0 }, rect), true, 'right across it');
+  assert.equal(lyingOn({ x: Z.x1 + 9, z: 0 }, { x: Z.x1 - 1, z: 0 }, rect), true, 'its top on the site');
+  assert.equal(lyingOn({ x: Z.x1 + 1, z: 0 }, { x: Z.x1 + 9, z: 0 }, rect), false);
+  // falling first, then down, standing, stumps, brush; nearest first within each
+  const near = { x: 0, z: 0 };
+  const far = { x: 3, z: 3 };
+  const close = { x: 1, z: 0 };
+  assert.equal(nextClearing({ falling: [far], down: [close], trees: [close], stumps: [], brush: [] }, near).type, 'wait');
+  assert.equal(nextClearing({ falling: [], down: [], trees: [far, close], stumps: [close], brush: [] }, near).it, close);
+  assert.equal(nextClearing({ falling: [], down: [], trees: [], stumps: [far], brush: [close] }, near).type, 'grub');
+  assert.equal(nextClearing({ falling: [], down: [], trees: [], stumps: [], brush: [close] }, near).type, 'brush');
+  assert.equal(nextClearing({ falling: [], down: [], trees: [], stumps: [], brush: [] }, near), null);
+  assert.equal(clearingWords(2, 1), 'clearing 2 trees · a stump');
+  assert.equal(clearingWords(0, 0), '');
+  // a tree in the very middle is felled from your side
+  const mid = { x: (rect.x0 + rect.x1) / 2, z: (rect.z0 + rect.z1) / 2, r: 0.3 };
+  const spot = fellingSpot(mid, rect, { x: mid.x + 10, z: mid.z });
+  assert.ok(spot.x > mid.x && Math.abs(spot.z - mid.z) < 1e-9, 'between it and you');
+});
+
+test('levelling looks past what will be cleared, not past what stays', () => {
+  const placed = place(PLANS[0], 0, 0, 0);
+  const f = placed.footings.find((g) => g.x === placed.rect.x1);
+  const low = placed.footings.find((g) => g.x === placed.rect.x0);
+  const y0 = 2 + 0.2 * low.x + PIER.first;
+  const built = new Set([`${low.x},${low.z}`]);
+  for (const [o, trouble] of [
+    [{ x: f.x + 0.5, z: f.z, dig: 1.2, what: 'a pine', clear: 'fell' }, false],
+    [{ x: f.x + 0.5, z: f.z, dig: 1.2, what: 'a boulder' }, true],
+  ]) {
+    const site = hillside((x) => 2 + 0.2 * x, { blockers: [o].filter((q) => !clearable(q, placed.rect)) });
+    assert.equal(!!levelling(placed, site.ground, { y0, built }).trouble, trouble, o.what);
+  }
 });

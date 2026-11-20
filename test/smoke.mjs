@@ -132,9 +132,10 @@ function installHelpers() {
   T.prompt = () => document.getElementById('prompt').textContent;
   // Move the crosshair about, rings out from `from`, until the plan tool's
   // ghost is green and its prompt matches `want`, as you would. Only spots
-  // whose 4 × 3 m of ground falls between fall[0] and fall[1] m, with no
-  // trees or boulders right on them, are tried. -> { x, z, prompt } or null
-  T.siteFor = async (from, { r0 = 20, fall = [0, 0.2], want }) => {
+  // whose 4 × 3 m of ground falls between fall[0] and fall[1] m are tried:
+  // with no trees or boulders right on them, or, if `wooded`, with a tree
+  // standing on them. -> { x, z, prompt } or null
+  T.siteFor = async (from, { r0 = 20, fall = [0, 0.2], want, wooded = false }) => {
     const H = (x, z) => w.chunks.heightAt(x, z);
     const busy = (x, z) => T.plants(x, z, 5, TREES).length + T.plants(x, z, 3, ['rock']).length;
     const x0 = Math.round(from.x);
@@ -148,7 +149,7 @@ function installHelpers() {
           const z = z0 + dz;
           const hs = [H(x - 2, z - 1), H(x + 2, z - 1), H(x - 2, z + 2), H(x + 2, z + 2)];
           const f = Math.max(...hs) - Math.min(...hs);
-          if (f < fall[0] || f > fall[1] || busy(x, z + 0.5)) continue;
+          if (f < fall[0] || f > fall[1] || (wooded ? !T.plants(x, z + 0.5, 2.5, TREES).length : busy(x, z + 0.5))) continue;
           if (++tried > 40) return null;
           await T.aimGround(x, z, 7);
           if (new RegExp(want).test(T.prompt())) return { x, z, prompt: T.prompt() };
@@ -574,9 +575,9 @@ try {
 
   const plot = await step('stake one out', async () => {
     // Move the crosshair about until the ghost is green, as you would: well
-    // clear of the cabin, on a slope it will have to level first.
-    const found = await page.evaluate((m) => T.siteFor(m, { fall: [0.4, 0.9], want: '^click stake out the .*levelling' }), middle);
-    assert.ok(found, 'somewhere the first plan will go, once levelled');
+    // clear of the cabin, among trees, on a slope it will have to level.
+    const found = await page.evaluate((m) => T.siteFor(m, { fall: [0.3, 0.9], wooded: true, want: '^click stake out the .*clearing .*levelling' }), middle);
+    assert.ok(found, 'somewhere the first plan will go, once cleared and levelled');
     for (let i = 0; i < 4; i++) await page.evaluate(() => T.tap('alt')); // turned all the way round
     await page.evaluate(() => T.tap('use'));
     const site = await page.evaluate(() => world.blueprints.site());
@@ -590,9 +591,19 @@ try {
     const from = await page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z }));
     await key('KeyB');
     assert.equal(await page.evaluate(() => world.blueprints.foreman.state), 'working', 'B sets it going');
-    // it levels the site, sets the footings, then lays the first course with each crossing notched in
-    const levelled = await page.evaluate(() => T.until(() => /footing/.test(world.blueprints.foreman.doing), 90000));
-    assert.ok(levelled, `levelled (it says: "${await page.evaluate(() => T.prompt())}")`);
+    // it clears the site, levels it, sets the footings, then lays the first course with each crossing notched in
+    const onSite = () =>
+      page.evaluate(() => {
+        const R = world.blueprints.foreman.placed.rect;
+        const on = (p) => p.x > R.x0 - 1.5 && p.x < R.x1 + 1.5 && p.z > R.z0 - 1.5 && p.z < R.z1 + 1.5;
+        const F = world.builder.forest;
+        return { trees: T.trees((R.x0 + R.x1) / 2, (R.z0 + R.z1) / 2, 12).filter(on).length, stumps: [...F.stumps.values()].filter(on).length, felled: [...F.felled.values()].filter(on).length };
+      });
+    const wooded = await onSite();
+    assert.ok(wooded.trees > 0, 'a tree stands on the site');
+    const levelled = await page.evaluate(() => T.until(() => /footing/.test(world.blueprints.foreman.doing), 120000));
+    assert.ok(levelled, `cleared and levelled (it says: "${await page.evaluate(() => T.prompt())}")`);
+    assert.deepEqual(await onSite(), { trees: 0, stumps: 0, felled: 0 }, 'nothing left standing or lying on the site');
     const pad = await page.evaluate(() => {
       const f = world.blueprints.foreman;
       return { level: f.site.level, off: Math.max(...f.placed.footings.map((p) => Math.abs(world.chunks.heightAt(p.x, p.z) - f.site.level))), moved: world.builder.terrain.map.size };
@@ -616,7 +627,7 @@ try {
     const f = await page.evaluate(() => [world.blueprints.foreman.state, world.blueprints.foreman.why]);
     assert.deepEqual(f, ['paused', 'paused: you took over']);
     await shot('8-blueprint-started');
-    return { walked: walked > 2, paused: f[1], levelled: { moved: pad.moved, off: Math.round(pad.off * 100) } };
+    return { walked: walked > 2, paused: f[1], cleared: wooded, levelled: { moved: pad.moved, off: Math.round(pad.off * 100) } };
   });
 
   await page.evaluate(() => T.frames(120));

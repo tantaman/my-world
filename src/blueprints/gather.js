@@ -50,12 +50,15 @@ export function pickTree(trees, rect, near) {
 }
 
 // Where to stand to fell a tree: between it and the site, so that it falls
-// away from the site (a tree falls away from whoever cuts it).
-export function fellingSpot(tree, rect) {
+// away from the site (a tree falls away from whoever cuts it). A tree right
+// in the middle of the site has no "away", so it's felled from the side
+// `near` is on.
+export function fellingSpot(tree, rect, near = null) {
   const c = middle(rect);
-  const d = dist(tree, c) || 1;
+  const from = dist(tree, c) < 0.3 && near ? near : c;
+  const d = dist(tree, from) || 1;
   const k = tree.r + FELL_FROM;
-  return { x: tree.x + ((c.x - tree.x) / d) * k, z: tree.z + ((c.z - tree.z) / d) * k };
+  return { x: tree.x + ((from.x - tree.x) / d) * k, z: tree.z + ((from.z - tree.z) / d) * k };
 }
 
 // Where to work a felled trunk lying from (x, z) along (dx, dz) (flat, unit

@@ -131,13 +131,14 @@ export function wallTool(kind, { label, short }) {
 // `at`, here and now? What the prompt says, and what the blueprint foreman
 // asks before it lays one.
 // -> { c: logCandidate, len, reason: why not (the rules, something in the
-//      way, or not enough wood) or null, short: it's the wood that's lacking }
+//      way, or not enough wood) or null, blocked: something stands in the
+//      way, short: it's the wood that's lacking }
 export function logCheck(b, at, kind, axis, line, s0, s1) {
   const c = b.buildings.logCandidate(at, axis, line, s0, s1);
   const len = s1 - s0;
   if (!c.ok) return { c, len, reason: c.reason };
   const blocker = inTheWay(b, axis, line, s0, s1, c.k);
-  if (blocker) return { c, len, reason: `${blocker} is in the way` };
+  if (blocker) return { c, len, blocked: true, reason: `${blocker} is in the way` };
   if (!b.have(kind, len)) return { c, len, short: true, reason: `you need ${len} m of ${kind === 'log' ? 'log' : 'timber'} (have ${tenths(b.inv[kind])})` };
   return { c, len, reason: null };
 }
@@ -156,13 +157,13 @@ export function layLog(b, at, kind, axis, line, s0, s1) {
   return L;
 }
 
-// Something standing on a wall line (a tree; for the lowest courses, a stump).
-// -> what to call it, or null.
-export function inTheWay(b, axis, line, s0, s1, k) {
+// Something standing on a wall line (a tree; for the lowest courses, a
+// stump), but what `ignore` says will be gone by then. -> what to call it, or null.
+export function inTheWay(b, axis, line, s0, s1, k, ignore = null) {
   const [mx, mz] = axis === 'x' ? [(s0 + s1) / 2, line] : [line, (s0 + s1) / 2];
   const R = (s1 - s0) / 2 + 2;
   for (const o of b.obstacles.near(mx, mz, R)) {
-    if (!o.wall || (o.low && k > 2)) continue;
+    if (!o.wall || (o.low && k > 2) || (ignore && ignore(o))) continue;
     const along = axis === 'x' ? o.x : o.z;
     const across = axis === 'x' ? o.z : o.x;
     if (along > s0 - 0.3 - o.wall && along < s1 + 0.3 + o.wall && Math.abs(across - line) < o.wall + 0.2) return o.what;

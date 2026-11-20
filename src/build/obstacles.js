@@ -20,6 +20,9 @@
 //   footing   a footing can't be set this close
 //   roof      a roof can't go over it: no room whose floor comes this close
 //   roofWhy   ...and why not, for the prompt ('no chimney')
+//   clear     how it can be got out of the way, if it can: 'fell' (a standing
+//             tree) or 'grub' (a stump). The blueprint foreman clears a site
+//             of these; leave it out for anything that stays put (a fire ring).
 
 export class Obstacles {
   constructor() {
