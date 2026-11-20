@@ -699,14 +699,15 @@ piece by piece, with the same tools and the same rules as building by hand.
 - **Click** to stake it out. The plan stays on the ground as a pale-blue
   ghost of whatever is still to go up, whatever tool you hold.
 - **Click** again (or press **B** with any tool in hand) and the hiker gets
-  on with it: levels the site if it needs it, walks round the site rather
-  than through it, digs and sets each footing, lays the logs a course at a
-  time, cuts every notch with the axe and raises the roof. It's no faster
-  than you: a small cabin takes two or three minutes, and levelling a
-  hillside for it about another half minute.
-- It stops and says why when it can't go on: out of logs, stones or soil,
-  too steep to level, a tree in the way. Put it right and **click** to
-  carry on. Touch the controls and you have the hiker back
+  on with it: levels the site if it needs it, gathers what it hasn't got,
+  walks round the site rather than through it, digs and sets each footing,
+  lays the logs a course at a time, cuts every notch with the axe and
+  raises the roof. It's no faster than you: a small cabin takes two or three
+  minutes with the wood to hand, and about seven from nothing, levelling a
+  hillside and felling eight trees included.
+- It stops and says why when it can't go on: too steep to level, a tree in
+  the way of a wall, nothing left to gather within reach. Put it right and
+  **click** to carry on. Touch the controls and you have the hiker back
   (it pauses). Putting the plan tool down pauses it too.
 - **Right-click** twice pulls up the stakes. What is built stays built.
 
@@ -732,6 +733,23 @@ It can't level where a footing would need more than 1.6 m of cut or fill
 spade at a footing, or where a levelled footing would be under water. The
 ghost goes red and the prompt says which; fell the tree, try another spot,
 or turn the plan.
+
+**Gathering.** When a piece needs something you haven't got, the hiker goes
+and gets all that the rest of the plan will need of it, then carries on:
+
+- **Stones**: picks up small ones, nearest first.
+- **Logs**: fells trees, limbs them and bucks them into logs, the most wood
+  for the walk first. It stands between the tree and the site, so trees
+  fall away from what's being built, and leaves alone anything within a
+  few metres of the levelled ground. A tree already down nearby is bucked
+  before another is felled. Enough is cut for the timber still to hew.
+- **Timber**: hews logs square, as many as the walls can spare.
+- **Soil**: should levelling run short, it digs shallow pits, 40 cm at
+  most, round the site.
+
+It goes up to 40 m from the site. Stumps stay where the trees stood, and
+what's left over stays in your pack. With `?creative` there's nothing to
+gather.
 
 **Your own.** Aim the plan tool at a building you've put up and **click** to
 copy it down as a blueprint; doors, windows and all come with it, since
@@ -919,7 +937,7 @@ written from the same list, and two features wanting one key are warned about.
 
 ```bash
 npm test             # in Node, a second or so
-npm run smoke        # a play-through in a headless browser, two or three minutes
+npm run smoke        # a play-through in a headless browser, three or four minutes
 npm run together     # two visitors in one world (run `npm run serve` first)
 ```
 
@@ -939,7 +957,8 @@ code changed something it shouldn't have; only re-record
 `npm run smoke` plays: it fells a tree, bucks and hews it, picks up a stone,
 digs, raises and roofs a cabin, lights a campfire in it (and finds the roof
 won't go over that), reloads to see it was all kept, stakes out a blueprint
-and lets the hiker build it, opens the map and leaves a mark, makes some
+and lets the hiker level the ground and build it, lets it gather everything
+for a small one from nothing, opens the map and leaves a mark, makes some
 noise, wades into a stream to be carried by it and runs up it splashing, and
 calls up one of every animal. It
 drives the keys and the crosshair and reads results through `window.world`,
@@ -1039,9 +1058,10 @@ src/
     index.js              ← feature: the plan tool, B, the site you staked out
     plan.js               what a blueprint is; putting one down; what to do next
     grade.js              levelling a site: when, to what grade, which spot next
+    gather.js             what a plan still needs, and where round the site to get it
     plans.js              the blueprints that come with the game
     library.js            those, and the ones you copied, kept in this browser
-    foreman.js            levelling and building a staked-out site for you
+    foreman.js            levelling, gathering for and building a staked-out site
     ghost.js              what's still to go up, drawn where it will stand
     tool.js               the plan tool (9)
   map/

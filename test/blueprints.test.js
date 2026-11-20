@@ -12,6 +12,7 @@ import { PLANS } from '../src/blueprints/plans.js';
 import { normalize, place, capture, nextJob, progress, survey, findBuilding, needs, bounds, route, crosses, standAt, grow, inside } from '../src/blueprints/plan.js';
 import { Library } from '../src/blueprints/library.js';
 import { validSite } from '../src/blueprints/foreman.js';
+import { stillNeeded, pickTree, fellingSpot, trunkSpot, pickStone, borrowSpots, middle, RANGE, CLEAR } from '../src/blueprints/gather.js';
 import { levelling, nextSpot, balance, padNodes, TOL } from '../src/blueprints/grade.js';
 import { TerrainEdits } from '../src/build/terrainEdits.js';
 import { PIER, DIG } from '../src/build/constants.js';
@@ -345,4 +346,55 @@ test("too steep, roots in the way or water, and it says so", () => {
   const skip = new Set(lv.work.map((v) => `${v.ix},${v.iz}`));
   assert.equal(nextSpot(lv.work, { x: 0, z: 0 }, skip), null);
   assert.equal(nextSpot(lv.work, { x: 0, z: 0 }).mode, 'dig', 'cut before fill');
+});
+
+// ── Gathering ───────────────────────────────────────────────────────────────
+
+test('what the rest of a plan still takes', () => {
+  const placed = place(PLANS[0], 0, 0, 0);
+  const all = stillNeeded(placed, null);
+  assert.deepEqual(all, needs(PLANS[0]));
+  const B = make();
+  for (const f of placed.footings) B.addFooting(f.x, f.z, 2);
+  const b = B.list[0];
+  const sill = placed.logs[0];
+  B.addLog(b, sill.kind, sill.axis, sill.line, sill.s0, sill.s1);
+  assert.deepEqual(stillNeeded(placed, b), { stone: 0, log: all.log - (sill.s1 - sill.s0), timber: all.timber });
+  assert.equal(stillNeeded(place(PLANS[3], 0, 0), null).log, 0, 'the timber hut wants no round logs');
+});
+
+test('which tree to fell, and where to stand so it falls away from the site', () => {
+  const placed = place(PLANS[0], 0, 0, 0);
+  const rect = placed.rect;
+  const trees = [
+    { x: 1, z: 1, r: 0.3, meters: 14 }, // on the site: left alone
+    { x: rect.x1 + 2, z: 0, r: 0.3, meters: 14 }, // too close to the site
+    { x: 12, z: 0, r: 0.3, meters: 6 },
+    { x: 14, z: 2, r: 0.4, meters: 14 }, // a bigger one, a little further
+    { x: 80, z: 0, r: 0.3, meters: 20 }, // out of range
+  ];
+  assert.deepEqual(pickTree(trees, rect, { x: 6, z: 0 }), trees[3]);
+  assert.equal(pickTree(trees.slice(0, 2), rect, { x: 6, z: 0 }), null);
+  const t = trees[3];
+  const spot = fellingSpot(t, rect);
+  const c = middle(rect);
+  assert.ok(Math.hypot(spot.x - c.x, spot.z - c.z) < Math.hypot(t.x - c.x, t.z - c.z), 'between the tree and the site');
+  assert.ok(Math.abs(Math.hypot(spot.x - t.x, spot.z - t.z) - (t.r + 1.1)) < 1e-9, 'an axe-length from the bark');
+  // a felled trunk: swing near its foot, from beside it on your side
+  const { work, stand } = trunkSpot(10, 0, 1, 0, 12, { x: 12, z: -5 });
+  assert.deepEqual(work, { x: 12.5, z: 0 });
+  assert.ok(stand.z < 0 && Math.abs(stand.x - 12.5) < 1e-9, 'beside it, on the near side');
+  assert.equal(trunkSpot(10, 0, 1, 0, 1, { x: 0, z: 0 }).work.x, 10.5, 'a short one, near its foot');
+});
+
+test('which stone next, and where soil can be dug', () => {
+  const rect = place(PLANS[0], 0, 0, 0).rect;
+  const stones = [{ x: 30, z: 0 }, { x: 5, z: 5 }, { x: RANGE + 10, z: 0 }];
+  assert.deepEqual(pickStone(stones, rect, { x: 0, z: 0 }), stones[1]);
+  assert.deepEqual(pickStone(stones, rect, { x: 35, z: 0 }), stones[0], 'the nearest to you, within range of the site');
+  assert.equal(pickStone([stones[2]], rect, { x: 0, z: 0 }), null);
+  const spots = borrowSpots(rect, { x: 20, z: 0 });
+  const pad = grow(rect, 1 + CLEAR - 0.01);
+  assert.ok(spots.length > 8 && spots.every((s) => !inside(s, pad)), 'all clear of the pad');
+  assert.ok(spots[0].x > rect.x1, 'nearest you first');
 });

@@ -1,14 +1,16 @@
 // Blueprints: plans for buildings, staked out on the ground and put up for
 // you. A plan is the same pieces you'd build by hand (a levelled site,
 // footings, logs a course at a time, notches, roofs) and the foreman walks
-// the hiker through them with the same tools and rules. Where the ground or the wood won't let it,
-// it stops and says why; put it right and carry on.
+// the hiker through them with the same tools and rules, gathering what you
+// haven't got. Where it can't go on, it stops and says why; put it right and
+// carry on.
 //
 //   plan.js      what a blueprint is; putting one on the ground; what's next
 //   grade.js     levelling a site first, when it needs it
+//   gather.js    what a plan still needs, and where to get it
 //   plans.js     the ones that come with the game
 //   library.js   those, and the ones you copy from your own buildings
-//   foreman.js   the site you staked out, and building it for you
+//   foreman.js   the site you staked out, and levelling, gathering for and building it
 //   ghost.js     what's still to go up, drawn where it will stand
 //   tool.js      the blueprint tool, 'plan' on the tool bar
 //

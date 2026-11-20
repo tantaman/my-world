@@ -12,7 +12,7 @@ npm run dev          # the game, http://localhost:5173
 npm run api          # the save server (wrangler dev), http://127.0.0.1:8787
 npm run build        # static site in dist/
 npm test             # unit and golden tests, in Node, ~1 s
-npm run smoke        # builds, then a play-through in headless Chromium, ~2½ min
+npm run smoke        # builds, then a play-through in headless Chromium, ~3½ min
 npm run serve        # built site + save server together on :8787
 npm run together     # two visitors in one world; needs `npm run serve` running
 ```

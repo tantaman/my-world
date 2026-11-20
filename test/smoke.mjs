@@ -130,6 +130,33 @@ function installHelpers() {
   };
   T.trees = (x, z, r) => T.plants(x, z, r, TREES);
   T.prompt = () => document.getElementById('prompt').textContent;
+  // Move the crosshair about, rings out from `from`, until the plan tool's
+  // ghost is green and its prompt matches `want`, as you would. Only spots
+  // whose 4 × 3 m of ground falls between fall[0] and fall[1] m, with no
+  // trees or boulders right on them, are tried. -> { x, z, prompt } or null
+  T.siteFor = async (from, { r0 = 20, fall = [0, 0.2], want }) => {
+    const H = (x, z) => w.chunks.heightAt(x, z);
+    const busy = (x, z) => T.plants(x, z, 5, TREES).length + T.plants(x, z, 3, ['rock']).length;
+    const x0 = Math.round(from.x);
+    const z0 = Math.round(from.z);
+    let tried = 0;
+    for (let r = r0; r < 90; r++) {
+      for (let dz = -r; dz <= r; dz++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+          const x = x0 + dx;
+          const z = z0 + dz;
+          const hs = [H(x - 2, z - 1), H(x + 2, z - 1), H(x - 2, z + 2), H(x + 2, z + 2)];
+          const f = Math.max(...hs) - Math.min(...hs);
+          if (f < fall[0] || f > fall[1] || busy(x, z + 0.5)) continue;
+          if (++tried > 40) return null;
+          await T.aimGround(x, z, 7);
+          if (new RegExp(want).test(T.prompt())) return { x, z, prompt: T.prompt() };
+        }
+      }
+    }
+    return null;
+  };
   T.tool = () => [...document.querySelectorAll('#hotbar .slot')].findIndex((b) => b.getAttribute('aria-pressed') === 'true') + 1;
   // What has been changed about the world, the way a save sees it.
   T.state = () => {
@@ -548,29 +575,7 @@ try {
   const plot = await step('stake one out', async () => {
     // Move the crosshair about until the ghost is green, as you would: well
     // clear of the cabin, on a slope it will have to level first.
-    const found = await page.evaluate(async (m) => {
-      const H = (x, z) => world.chunks.heightAt(x, z);
-      const busy = (x, z) => T.plants(x, z, 5, ['pine', 'broad', 'birch']).length + T.plants(x, z, 3, ['rock']).length;
-      const x0 = Math.round(m.x);
-      const z0 = Math.round(m.z);
-      let tried = 0;
-      for (let r = 20; r < 90; r++) {
-        for (let dz = -r; dz <= r; dz++) {
-          for (let dx = -r; dx <= r; dx++) {
-            if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
-            const x = x0 + dx;
-            const z = z0 + dz;
-            const hs = [H(x - 2, z - 1), H(x + 2, z - 1), H(x - 2, z + 2), H(x + 2, z + 2)];
-            const fall = Math.max(...hs) - Math.min(...hs);
-            if (fall < 0.4 || fall > 0.9 || busy(x, z + 0.5)) continue;
-            if (++tried > 40) return null;
-            await T.aimGround(x, z, 7);
-            if (/^click stake out the .*levelling/.test(T.prompt())) return { x, z, prompt: T.prompt() };
-          }
-        }
-      }
-      return null;
-    }, middle);
+    const found = await page.evaluate((m) => T.siteFor(m, { fall: [0.4, 0.9], want: '^click stake out the .*levelling' }), middle);
     assert.ok(found, 'somewhere the first plan will go, once levelled');
     for (let i = 0; i < 4; i++) await page.evaluate(() => T.tap('alt')); // turned all the way round
     await page.evaluate(() => T.tap('use'));
@@ -676,6 +681,44 @@ try {
     assert.equal(kept.names.at(-1), kept.stored.plans[0].name);
     assert.equal(kept.stored.plans[0].footings.length, 4);
     return { name: kept.names.at(-1), logs: kept.stored.plans[0].logs.length };
+  });
+
+  await step('it gathers what it needs', async () => {
+    // From nothing, without creative: two footings and a hewn sill between
+    // them want stones, a tree felled and bucked, and its log hewn square.
+    await open('&reset&clearbuild');
+    const sill = { name: 'A hewn sill', footings: [[0, 0], [4, 0]], logs: [['timber', 'x', 0, 0, 4, 0]], roofs: [] };
+    const name = await page.evaluate((p) => world.blueprints.import(JSON.stringify(p)), sill);
+    assert.equal(name, sill.name, 'a blueprint taken in from JSON');
+    await key('Digit9');
+    await page.evaluate((n) => world.blueprints.pick(n), name);
+    const before = await state();
+    assert.deepEqual([before.inv.log, before.inv.timber, before.inv.stone], [0, 0, 0], 'nothing in hand');
+    const found = await page.evaluate(() => T.siteFor(world.player.pos, { r0: 6, want: '^click stake out the A hewn sill \\(4 m timber · 4 stones\\)' }));
+    assert.ok(found, 'somewhere level for it');
+    await page.evaluate(() => T.tap('use'));
+    await key('KeyB');
+    const t0 = await page.evaluate(() => world.game.frame.time);
+    // everything it turns its hand to, on the way
+    const { done, saw } = await page.evaluate(async () => {
+      const f = world.blueprints.foreman;
+      const seen = new Set();
+      const ok = await T.until(() => {
+        seen.add(f.doing.split(': ').at(-1));
+        return !world.blueprints.site() || f.state !== 'working';
+      }, 180000);
+      return { done: ok, saw: [...seen] };
+    });
+    assert.ok(done && !(await page.evaluate(() => world.blueprints.site())), `built (it says: "${await page.evaluate(() => T.prompt())}")`);
+    const s = await state();
+    assert.equal(s.buildings.length, 1);
+    assert.deepEqual([s.buildings[0].footings.length, s.buildings[0].logs.map((L) => L[0])], [2, ['timber']], 'the footings and the sill are in');
+    assert.ok(s.stumps.length >= 1, 'a tree was felled for it');
+    for (const what of ['picking up a stone', 'felling', 'limbing it', 'bucking it into logs', 'hewing a log square']) {
+      assert.ok(saw.some((d) => d.startsWith(what)), `it was seen ${what} (saw: ${saw.join(', ')})`);
+    }
+    await shot('10-gathered');
+    return { took: Math.round((await page.evaluate(() => world.game.frame.time)) - t0), trees: s.stumps.length, left: s.inv };
   });
 
   console.log('around the edges');
