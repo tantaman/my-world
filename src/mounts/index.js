@@ -569,6 +569,7 @@ export function installMounts(game) {
   }
 
   // What Z would do here, said in place of the tool's prompt.
+  let cued = false;
   function cue(wild) {
     const touch = input.isTouch;
     let html = '';
@@ -599,7 +600,10 @@ export function installMounts(game) {
       if (mine) html = `<b>${K('ride')}</b> ride your ${mine.def.name}`;
       else if (tameOnes().length) K('call');
     }
-    hud.cue(html ? { html, bad, progress } : null);
+    // (and leave the prompt alone when there's nothing to say, for whoever else has)
+    if (html) hud.cue({ html, bad, progress });
+    else if (cued) hud.cue(null);
+    cued = !!html;
     btn.hidden = !touch || !word;
     if (word && btn.textContent !== word) btn.textContent = word;
   }

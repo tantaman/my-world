@@ -12,8 +12,9 @@
 //
 // Something can carry you instead (player.carrier: a mount). Then it's its
 // speeds, its depth, its width and head room that count, and if it flies,
-// space climbs and shift stoops. Or you can be aboard something that goes
-// where it goes whatever you do (player.aboard: a train), and just sit.
+// space climbs and shift stoops. Or something else can move you itself
+// (player.aboard): a train you sit in, going where it goes whatever you do,
+// or skis that you steer, which work out for themselves where that takes you.
 //
 // Under the ground, in a cave (world/spaces.js), its floor is what you stand
 // on, its walls and roof keep you in, and the camera keeps to its air.
@@ -75,6 +76,9 @@ const _wall = { d: 0, nx: 0, nz: 0 };
 // finely along the way back from your head, and comes in as close as it has
 // to — right up to your head, if your back is to the wall.
 const CAVE_CAM = { clear: 0.25, steps: 16, nearest: 0.15 };
+// Moved by something that swings the camera round behind you (aboard.behind),
+// it waits this long (s) after you last looked about before it does.
+const LOOK_HOLD = 1.5;
 
 // Where someone at (x, z) stands: on the ground, afloat in deep water, or on
 // the floor of a space they are in (feet about y; spaces: world/spaces.js).
@@ -175,13 +179,23 @@ export class Player extends Emitter {
     //                  are negative), and how high over the ground it goes (m)
     //   landing        set by its owner while it comes down to land
     this.carrier = null;
-    // Something you're aboard that moves you itself (a train), or null.
-    // Your keys don't move you while you're on it: each frame it says where
-    // you are, and the camera comes along and turns as it turns.
-    //   place(out)   fills out.x, out.y, out.z (where your feet are), out.yaw
+    // Something that moves you itself (a train, skis), or null. Your keys
+    // don't move you while it does (it may read them itself, as skis do,
+    // before a jump is taken from you so you don't jump off): each frame it
+    // says where you are, and the camera comes along and turns as it turns.
+    //   place(out, dt)  fills out.x, out.y, out.z (where your feet are),
+    //                   out.yaw (which way you face), and if it likes:
+    //     heading    which way you're going, for the camera to turn with,
+    //                if not the way you face (spinning in the air)
+    //     grounded   false while you're off the ground (in the air)
+    //     behind     how quickly (1/s) the camera swings round behind the
+    //                way you're going, when you aren't looking about
+    //     back       how much further back the camera sits (m)
     this.aboard = null;
-    this._at = { x: 0, y: 0, z: 0, yaw: 0 };
+    this._at = { x: 0, y: 0, z: 0, yaw: 0, heading: undefined, grounded: true, behind: 0, back: 0 };
     this._rode = false;
+    this._heading = 0;
+    this._looked = 0; // s since you last looked about, while aboard
     // Something held up to the eye (a rifle's scope), or null. While there
     // is one the camera looks out from your eye the way it was looking,
     // `zoom` times closer; you aren't drawn (it would be the back of your own
@@ -261,7 +275,7 @@ export class Player extends Emitter {
     if (z) this.camDist = clamp(this.camDist * (z > 0 ? 1.12 : 1 / 1.12), 2.2, 16);
     if (input.isDown('turnLeft')) this.camYaw += dt * 1.8;
     if (input.isDown('turnRight')) this.camYaw -= dt * 1.8;
-    if (this.aboard) return this._ride(dt);
+    if (this.aboard) return this._ride(dt, look.x || look.y || input.isDown('turnLeft') || input.isDown('turnRight'));
     this._rode = false;
 
     // Camera-relative movement
@@ -574,27 +588,40 @@ export class Player extends Emitter {
     return y >= this.world.heightAt(x, z) + 0.35;
   }
 
-  // Aboard something that moves you: wherever it puts you, sitting still.
-  _ride(dt) {
+  // Moved by something else: wherever it puts you. (looked: whether you
+  // looked about this frame.)
+  _ride(dt, looked) {
     const at = this._at;
-    this.aboard.place(at);
+    at.heading = undefined;
+    at.grounded = true;
+    at.behind = 0;
+    at.back = 0;
+    this.aboard.place(at, dt);
     const dx = at.x - this.pos.x;
     const dy = at.y - this.pos.y;
     const dz = at.z - this.pos.z;
     this.input.jumped(); // no jumping off: it's a long way down from a trestle
-    const turn = this._rode ? Math.atan2(Math.sin(at.yaw - this.yaw), Math.cos(at.yaw - this.yaw)) : 0;
+    const heading = at.heading ?? at.yaw;
+    const turn = this._rode ? Math.atan2(Math.sin(heading - this._heading), Math.cos(heading - this._heading)) : 0;
+    this._heading = heading;
     // the camera comes along, and swings round the bends with you
     this.camTarget.x += dx;
     this.camTarget.y += dy;
     this.camTarget.z += dz;
     this.camYaw += turn;
+    // ...and round behind you, if it should, while you aren't looking about
+    this._looked = looked ? 0 : this._looked + dt;
+    if (at.behind > 0 && this._looked > LOOK_HOLD) {
+      const off = Math.atan2(Math.sin(heading + Math.PI - this.camYaw), Math.cos(heading + Math.PI - this.camYaw));
+      this.camYaw += off * (1 - Math.exp(-dt * at.behind));
+    }
     const k = this._rode && Math.hypot(dx, dz) < 5 ? 1 / Math.max(dt, 1e-4) : 0;
     this.vel.set(dx * k, dy * k, dz * k);
     this.pos.set(at.x, at.y, at.z);
     this.yaw = at.yaw;
     this._rode = true;
     this.turnRate = 0;
-    this.grounded = true;
+    this.grounded = at.grounded !== false;
     this.flying = this.climbing = this.swimming = this.manual = false;
     this.wade = 0;
     this.current.x = this.current.z = 0;
@@ -603,7 +630,7 @@ export class Player extends Emitter {
     const root = this.character.root;
     root.position.copy(this.pos);
     root.rotation.y = this.yaw;
-    this.character.update(dt, 0, true, 0, 0);
+    this.character.update(dt, 0, this.grounded, this.vel.y, 0);
     this.updateCamera(dt, false);
   }
 
@@ -615,7 +642,7 @@ export class Player extends Emitter {
 
     // Pull in if the hillside is between us and the camera (or in a cave,
     // its rock: looked for more finely, and let come in closer).
-    let dist = this.camDist + (this.carrier ? this.carrier.back : 0);
+    let dist = this.camDist + (this.carrier ? this.carrier.back : 0) + (this.aboard ? this._at.back : 0);
     const cp = Math.cos(this.camPitch);
     const dir = _dir.set(Math.sin(this.camYaw) * cp, Math.sin(this.camPitch), Math.cos(this.camYaw) * cp);
     const under = !!this.space;
