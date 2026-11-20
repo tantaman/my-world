@@ -14,7 +14,7 @@ export default async function ({ page, step, shot }) {
       if (!h) return null;
       await world.hikes.go(h.id, 'view');
       const { gen, chunks, player, sound } = world;
-      const L = gen.lands.find((l) => l.def.id === h.id);
+      const L = gen.landforms.find((l) => l.def.id === h.id);
       const out = { hike: h.id, country: L.def.country || 'forest', pieces: L.segs.length, layers: sound.layers.map((l) => l.name) };
       // beside the stretch of stream nearest the view that has grown to some size
       const here = (s) => Math.hypot(s.pts[0] - player.pos.x, s.pts[1] - player.pos.z);

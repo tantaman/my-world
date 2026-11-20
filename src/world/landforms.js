@@ -1,4 +1,5 @@
-// Which hikes' land is here yet.
+// Which hikes' land is here yet. (Their land, not the land a world is grown
+// on: that is lands.js. A hike's land is a Landform, landform.js.)
 //
 // A hike is two things (see hikes.js): a card, which says what and where it
 // is and is always here, and its land (the heights, lakes and trails, about
@@ -18,12 +19,12 @@
 // gone; only a reload mends that.)
 
 import { Emitter } from '../core/events.js';
-import { LAND_REACH } from './water.js';
+import { LANDFORM_REACH } from './water.js';
 
 const RETRY = [2, 5, 15, 30]; // s to wait before asking again, after each failure in a row
 
 // How far (m) from a hike's middle its land can change anything.
-export const reachOf = (card) => card.radius + card.fade + LAND_REACH;
+export const reachOf = (card) => card.radius + card.fade + LANDFORM_REACH;
 
 // The whole hike for a registry entry: its card, with its land.
 export async function loadHike({ load, ...card }) {
@@ -40,7 +41,7 @@ function within(card, x0, z0, x1, z1) {
   return dx * dx + dz * dz <= reachOf(card) ** 2;
 }
 
-export class Lands extends Emitter {
+export class Landforms extends Emitter {
   // entries: HIKES (hikes.js): cards, each with load() → its land
   constructor(entries) {
     super();

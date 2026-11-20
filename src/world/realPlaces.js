@@ -24,18 +24,18 @@ export function withRealPlaces(Land) {
       // Settled into the land around them before anything is asked of them.
       // More can come later (addHike), as their land is fetched.
       this.hikes = [];
-      this.lands = [];
+      this.landforms = [];
       for (const def of hikes) this.addHike(def);
     }
 
     // A hike, whole (card and land: see landforms.js). Ask for nothing within
     // its reach before it's here: what was grown there without it is wrong.
     addHike(def) {
-      if (this.lands.some((L) => L.id === def.id)) return;
+      if (this.landforms.some((L) => L.id === def.id)) return;
       const L = new Landform(def);
       this._settle(L);
       L.settled();
-      this.lands.push(L);
+      this.landforms.push(L);
       this.hikes.push(def);
       // (a structure on real land stands on the real ground)
       for (const p of this.pads) p.y = this.naturalHeight(p.x, p.z);
@@ -45,13 +45,13 @@ export function withRealPlaces(Land) {
     // On real land the forest's paths fade away and the real trails take over.
     pathMask(x, z) {
       const m = super.pathMask(x, z);
-      if (!this.lands.length) return m;
-      const keep = 1 - this._landWeight(x, z);
+      if (!this.landforms.length) return m;
+      const keep = 1 - this._landformWeight(x, z);
       if (keep >= 1) return m;
       let mask = m * keep;
       this.pathEdgeMain += (1 - keep) * 40;
       this.pathEdgeSide += (1 - keep) * 40;
-      for (const L of this.lands) {
+      for (const L of this.landforms) {
         if (L.weight(x, z) <= 0) continue;
         const d = L.trail(x, z);
         mask = Math.max(mask, 1 - smoothstep(0.5, 1.0, d / TRAIL_HALF));
@@ -67,12 +67,12 @@ export function withRealPlaces(Land) {
     // ── Height ──────────────────────────────────────────────────────────────
     broadHeight(x, z, minWavelength = 0) {
       const h = super.broadHeight(x, z, minWavelength);
-      return this.lands.length ? this._onLand(x, z, h, 0, false) : h;
+      return this.landforms.length ? this._onLandforms(x, z, h, 0, false) : h;
     }
 
     naturalHeight(x, z, pm = this.pathMask(x, z)) {
       const h = super.naturalHeight(x, z, pm);
-      return this.lands.length ? this._onLand(x, z, h, pm, true) : h;
+      return this.landforms.length ? this._onLandforms(x, z, h, pm, true) : h;
     }
 
     // The forest's own land, as if there were no real places in it.
@@ -85,8 +85,8 @@ export function withRealPlaces(Land) {
     }
 
     // The ground h blended toward any real land at (x, z).
-    _onLand(x, z, h, pm, detail) {
-      for (const L of this.lands) {
+    _onLandforms(x, z, h, pm, detail) {
+      for (const L of this.landforms) {
         const w = L.weight(x, z);
         if (w <= 0) continue;
         let g = L.ground(x, z) + L.offset;
@@ -97,16 +97,16 @@ export function withRealPlaces(Land) {
       return h;
     }
 
-    _landWeight(x, z) {
+    _landformWeight(x, z) {
       let w = 0;
-      for (const L of this.lands) w = Math.max(w, L.weight(x, z));
+      for (const L of this.landforms) w = Math.max(w, L.weight(x, z));
       return w;
     }
 
     // Metres past the outer edge of the nearest real place. Large if none.
-    landClearance(x, z) {
+    landformClearance(x, z) {
       let best = 1e9;
-      for (const L of this.lands) best = Math.min(best, L.clearance(x, z));
+      for (const L of this.landforms) best = Math.min(best, L.clearance(x, z));
       return best;
     }
 
@@ -138,12 +138,12 @@ export function withRealPlaces(Land) {
     }
 
     // A real place's clearings (where its photo was taken, its trailhead)
-    // count as a structure's does, so nothing grows on them, unless `lands`
+    // count as a structure's does, so nothing grows on them, unless `real`
     // is false: the drainage network asks about the forest alone.
-    padClearance(x, z, lands = true) {
+    padClearance(x, z, real = true) {
       let best = super.padClearance(x, z);
-      if (!lands) return best;
-      for (const L of this.lands) {
+      if (!real) return best;
+      for (const L of this.landforms) {
         if (L.weight(x, z) <= 0) continue;
         const d = L.clearing(x, z);
         if (d < best) best = d;
@@ -154,7 +154,7 @@ export function withRealPlaces(Land) {
     // ── Ecology ─────────────────────────────────────────────────────────────
     forest(x, z) {
       let f = super.forest(x, z);
-      for (const L of this.lands) {
+      for (const L of this.landforms) {
         const w = L.weight(x, z);
         if (w > 0) f += (L.forest(x, z) - f) * w;
       }
@@ -172,7 +172,7 @@ export function withRealPlaces(Land) {
       out.land = 0;
       out.country = 0;
       let country = null;
-      for (const L of this.lands) {
+      for (const L of this.landforms) {
         const w = L.weight(x, z);
         if (w <= out.land) continue;
         const g = L.country.ground;
@@ -202,13 +202,13 @@ export function withRealPlaces(Land) {
     // The country a plant at (x, z) grows in, if it isn't the forest: a real
     // place's, on its own ground and half way out through where it gives way.
     countryAt(x, z) {
-      for (const L of this.lands) if (L.weight(x, z) > 0.5) return L.country;
+      for (const L of this.landforms) if (L.weight(x, z) > 0.5) return L.country;
       return null;
     }
 
     species(x, z) {
       let s = super.species(x, z);
-      for (const L of this.lands) {
+      for (const L of this.landforms) {
         const w = L.weight(x, z);
         if (w > 0) s += (L.species(x, z, s) - s) * w;
       }
@@ -220,17 +220,17 @@ export function withRealPlaces(Land) {
     // really is.
     groves(x, z) {
       const v = super.groves(x, z);
-      return v > 0 ? v * (1 - this._landWeight(x, z)) : v;
+      return v > 0 ? v * (1 - this._landformWeight(x, z)) : v;
     }
 
     above(x, z, h) {
       const v = super.above(x, z, h);
-      return v > 0 ? v * (1 - this._landWeight(x, z)) : v;
+      return v > 0 ? v * (1 - this._landformWeight(x, z)) : v;
     }
 
     snow(x, z, h) {
       const v = super.snow(x, z, h);
-      return v > 0 ? v * (1 - this._landWeight(x, z)) : v;
+      return v > 0 ? v * (1 - this._landformWeight(x, z)) : v;
     }
   };
 }

@@ -21,9 +21,9 @@ export class WorldGen {
     this.seed = seed;
     this.land = 1;
     this._fields(n);
-    // The real places set into this land: none, unless realPlaces.js is
-    // grown from it.
-    this.lands = [];
+    // The real places set into this land, each a Landform (landform.js):
+    // none, unless realPlaces.js is grown from it.
+    this.landforms = [];
 
     // Structures carve flat clearings. Their pad height is the natural
     // ground height at their centre.
@@ -163,7 +163,7 @@ export class WorldGen {
   //                          own workings ask this, never broadHeight(), which
   //                          real places change
   //   forestNaturalHeight()  naturalHeight() likewise
-  //   landClearance(x, z)    m past the edge of the nearest real place
+  //   landformClearance(x, z)  m past the edge of the nearest real place
   // And what whoever draws the ground asks: what it is made of where a real
   // place has its own kind of country (country.js).
   //   surface(x, z, out)     fills out.bare, out.sand and out.land (0..1 each)
@@ -177,7 +177,7 @@ export class WorldGen {
   forestNaturalHeight(x, z) {
     return this.naturalHeight(x, z);
   }
-  landClearance() {
+  landformClearance() {
     return 1e9;
   }
   surface(x, z, out) {

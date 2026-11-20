@@ -25,7 +25,7 @@ import { formatDistance } from '../core/format.js';
 import { hash2i } from '../noise.js';
 import { FarView, FAR_CLIP } from './farView.js';
 import { sampleFar } from './farGrid.js';
-import { makeCairn, makeSignpost } from './landmarks.js';
+import { makeCairn, makeSignpost } from './waymarks.js';
 import { HikesPanel } from './hikesPanel.js';
 
 const FAR_MARGIN = 700; // m of the forest round a hike that its far view takes in
@@ -37,7 +37,7 @@ const FOG_EASE = 1.2; // 1/s: how quickly the fog follows
 const VIEW_PITCH = 0.18; // rad: the camera looks out, a little down, as a photo does
 const CAIRN_ASIDE = 1.4; // m to the left of where the photo was taken
 const SIGN_ASIDE = 1.6; // m to the side of the trail where it starts
-const LANDMARKS_NEAR = 400; // m: landmarks nearer than this are kept on the ground
+const WAYMARKS_NEAR = 400; // m: waymarks nearer than this are kept on the ground
 const GUIDE_COLOR = '#eadfb4';
 // What the map draws for where a photo was taken, and for a trailhead (7×7).
 const PEAK = ['.......', '...#...', '..###..', '..###..', '.#####.', '.#####.', '#######'];
@@ -46,8 +46,8 @@ const SIGN = ['.......', '.####..', '.#####.', '.####..', '...#...', '...#...', 
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player', 'map'];
 export function installHikes(game) {
-  const { scene, gen, lands, chunks, player, hud, commands, pipeline, camera, sky, map, input } = game;
-  const cards = lands.cards;
+  const { scene, gen, landforms, chunks, player, hud, commands, pipeline, camera, sky, map, input } = game;
+  const cards = landforms.cards;
   const deg = (b) => (b * Math.PI) / 180;
   const real = (c, m) => formatDistance(m / c.scale);
   const outer = (c) => c.radius + c.fade;
@@ -79,11 +79,11 @@ export function installHikes(game) {
   });
 
   // ── What stands there ────────────────────────────────────────────────────
-  const landmarks = [];
+  const waymarks = [];
   const stand = (object, x, z) => {
     object.position.set(x, chunks.heightAt(x, z), z);
     scene.add(object);
-    landmarks.push({ object, x, z });
+    waymarks.push({ object, x, z });
   };
   for (const c of cards) {
     const v = spot(c, 'view');
@@ -108,10 +108,10 @@ export function installHikes(game) {
   let going = 0; // the latest trip asked for: an earlier one still waiting gives way
   async function go(c, at) {
     const trip = ++going;
-    if (!lands.has(c.id)) {
+    if (!landforms.has(c.id)) {
       hud.flash(`${c.name} · on the way…`);
       try {
-        await lands.ensure(c.id);
+        await landforms.ensure(c.id);
       } catch {
         hud.flash(`couldn't fetch ${c.name} · try again`);
         return false;
@@ -182,16 +182,16 @@ export function installHikes(game) {
   game.origin.place(far.mid);
   const asked = new Set();
   let worker = null;
-  lands.on('land', (def) => {
+  landforms.on('land', (def) => {
     if (worker) worker.postMessage({ type: 'hike', def });
   });
   // The ground near it waits for its land: say why, rather than leave a gap.
-  lands.on('failed', (c) => hud.flash(`can't fetch ${c ? c.name : 'a hike'} yet · trying again (or reload the page)`));
+  landforms.on('failed', (c) => hud.flash(`can't fetch ${c ? c.name : 'a hike'} yet · trying again (or reload the page)`));
   function makeFar(c) {
     if (far.has(c.id) || asked.has(c.id)) return;
     const half = outer(c) + FAR_MARGIN;
     const [x0, z0] = [c.at[0] - half, c.at[1] - half];
-    if (!lands.ready(x0, z0, x0 + 2 * half, z0 + 2 * half)) return;
+    if (!landforms.ready(x0, z0, x0 + 2 * half, z0 + 2 * half)) return;
     asked.add(c.id);
     const n = Math.round((2 * half) / FAR_STEP) + 1;
     const job = { type: 'far', id: c.id, x0, z0, n, step: FAR_STEP };
@@ -252,9 +252,9 @@ export function installHikes(game) {
       if (c && c !== arrivedOn) hud.flash(c.name);
       arrivedOn = c;
 
-      // Landmarks stand on the ground, wherever it has been dug.
-      for (const m of landmarks) {
-        if (Math.abs(m.x - at.x) < LANDMARKS_NEAR && Math.abs(m.z - at.z) < LANDMARKS_NEAR) m.object.position.y = chunks.heightAt(m.x, m.z);
+      // Waymarks stand on the ground, wherever it has been dug.
+      for (const m of waymarks) {
+        if (Math.abs(m.x - at.x) < WAYMARKS_NEAR && Math.abs(m.z - at.z) < WAYMARKS_NEAR) m.object.position.y = chunks.heightAt(m.x, m.z);
       }
     },
   });
@@ -269,7 +269,7 @@ export function installHikes(game) {
           view: spot(c, 'view'),
           trail: c.trail,
           water: waterOn(c),
-          land: lands.has(c.id),
+          land: landforms.has(c.id),
           farView: far.has(c.id),
         })),
       // Resolves once you're there, the forest has streamed in and the far

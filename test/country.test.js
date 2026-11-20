@@ -15,7 +15,7 @@ import { sampleFar } from '../src/hikes/farGrid.js';
 import { localFrame } from '../tools/hike/geo.js';
 import { buildHike, splitHike } from '../tools/hike/build.js';
 import { parseOsm, beaches } from '../tools/hike/osm.js';
-import { nearestLand, deckHeight, weatherAt } from '../src/country/here.js';
+import { nearestLandform, deckHeight, weatherAt } from '../src/country/here.js';
 
 const SEED = 20261119;
 // A world with these hikes set into it, on the first land unless another is asked for.
@@ -92,7 +92,7 @@ test('a hike says what kind of country it is, and keeps its beaches', () => {
   assert.equal(def.beaches.length, 1);
   assert.ok(splitHike(def).land.beaches, 'the beach goes with its land');
   const gen = world([def]);
-  const L = gen.lands[0];
+  const L = gen.landforms[0];
   assert.equal(L.country, COUNTRY['lava coast']);
   assert.ok(L.strand(...at(1480, 450)) < -1, 'on the beach');
   assert.ok(L.strand(...at(1480, 200)) > 5, 'and off the end of it');
@@ -108,7 +108,7 @@ test('the walk starts on top of the mountain: the mountain stands over the fores
   // forest, the top would leave the whole mountain in a pit.
   const summit = island({ roads: [[toLL(-30, -3000), toLL(-30, 3000)]], trails: [{ name: '', points: [toLL(-30, 0), toLL(-15, 0), toLL(0, 0)] }] });
   const gen = world([summit]);
-  const L = gen.lands[0];
+  const L = gen.landforms[0];
   const peak = L.raw(...at(0, 0));
   assert.ok(Math.abs(summit.trailhead.x) < 8, 'the walk does start at the top');
   assert.ok(peak > 190, `which is ${Math.round(peak)} m up`);
@@ -118,7 +118,7 @@ test('the walk starts on top of the mountain: the mountain stands over the fores
   assert.ok(peak + L.offset - forest > 150, `so the top is ${Math.round(peak + L.offset - forest)} m over the forest round it`);
   // a walk that starts at the foot still stands its start level with the forest
   const shore = island();
-  const foot = world([shore]).lands[0];
+  const foot = world([shore]).landforms[0];
   assert.ok(Math.abs(shore.datum.anchor - foot.raw(foot.cx + shore.trailhead.x, foot.cz + shore.trailhead.z)) < 0.01);
 });
 
@@ -205,12 +205,12 @@ test('what a land has high up stops at the edge of a real place', () => {
   const bare = world([], 2);
   const [x, z] = at(-100, 0);
   const h = gen.height(x, z);
-  assert.ok(h > gen.lands[0].offset + 150, `near the top (${h - gen.lands[0].offset} m over the sea)`);
+  assert.ok(h > gen.landforms[0].offset + 150, `near the top (${h - gen.landforms[0].offset} m over the sea)`);
   assert.ok(bare.above(x, z, h) > 0.9 && bare.snow(x, z, h) > 0.9, 'the land itself would have that high up bare, under snow');
   assert.deepEqual([gen.above(x, z, h), gen.snow(x, z, h), gen.groves(x, z)], [0, 0, 0], 'on the island, none of it');
   assert.ok(gen.forest(x, z) > 0.5, `and it is wooded (${gen.forest(x, z)})`);
   // out past the island's edge the land is the land again
-  const [ox, oz] = [AT[0], AT[1] + gen.lands[0].outer + 50];
+  const [ox, oz] = [AT[0], AT[1] + gen.landforms[0].outer + 50];
   assert.deepEqual([gen.above(ox, oz, 200), gen.snow(ox, oz, 200), gen.forest(ox, oz), gen.species(ox, oz)], [bare.above(ox, oz, 200), bare.snow(ox, oz, 200), bare.forest(ox, oz), bare.species(ox, oz)]);
 });
 
@@ -222,7 +222,7 @@ test('a rocky shore keeps its cliff; a beach comes down to the water', () => {
   };
   const height = (country, e, n) => {
     const gen = world([island({ elevation: cliff, country })]);
-    return gen.height(...at(e, n)) - gen.lands[0].offset;
+    return gen.height(...at(e, n)) - gen.landforms[0].offset;
   };
   // 5 real m in from the water: one in the game
   const [rock, beach, strand] = [height('lava coast', COAST - 5, -800), height(undefined, COAST - 5, -800), height('lava coast', COAST - 5, 450)];
@@ -234,17 +234,17 @@ test('a rocky shore keeps its cliff; a beach comes down to the water', () => {
 test('the weather is the country’s, as far as you are onto it', () => {
   const cinder = world([island({ country: 'cinder desert', trees: { cover: 0 } })]);
   const cloud = world([island({ country: 'cloud forest' })]);
-  const L = cinder.lands[0];
-  assert.equal(nearestLand([], 0, 0), null);
-  assert.equal(nearestLand(cinder.lands, 0, 0), L);
+  const L = cinder.landforms[0];
+  assert.equal(nearestLandform([], 0, 0), null);
+  assert.equal(nearestLandform(cinder.landforms, 0, 0), L);
   // its cloud lies at 2250 real metres: on this island (1000 m high), far overhead
   const deck = deckHeight(L);
   const top = L.raw(...at(0, 0)) + L.offset;
   assert.ok(Math.abs(deck - top - (2250 - 1015) * 0.2) < 2, `${Math.round(deck - top)} m over a 1015 m top`);
-  assert.ok(Number.isNaN(deckHeight(world([island()]).lands[0])), 'the forest has none');
+  assert.ok(Number.isNaN(deckHeight(world([island()]).landforms[0])), 'the forest has none');
   // under it, on the land: its cover, and (cinder desert: shade 0) the sun still out
   assert.deepEqual(weatherAt(L, ...AT, top), { cover: 0.97, haze: 0.35, overcast: 0 });
-  const C = cloud.lands[0];
+  const C = cloud.landforms[0];
   const under = weatherAt(C, ...AT, deckHeight(C) - 50);
   assert.ok(Math.abs(under.overcast - 0.35 * 0.8) < 1e-9, 'under a cloud forest’s cloud, the light is flat');
   assert.equal(weatherAt(C, ...AT, deckHeight(C) + 50).overcast, 0, 'over it, the sun is out');

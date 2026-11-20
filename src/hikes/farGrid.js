@@ -42,7 +42,7 @@ export function sampleFar(gen, x0, z0, n, step) {
       if (w.kind === 'river' && w.edge < step * RIVER_SEEN && w.level > NO_WATER / 2) water[k] = w.level;
       // where the real sea runs on past a hike's land, it is sea from afar
       if (water[k] === NO_WATER) {
-        for (const L of gen.lands) {
+        for (const L of gen.landforms) {
           if (!L.openSea(x, z)) continue;
           water[k] = L.level + L.offset;
           h[k] = water[k] - 1;

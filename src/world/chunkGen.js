@@ -178,7 +178,7 @@ export function generateSurface(gen, cx, cz, step, size) {
   const z0 = cz * size;
   const mid = size / 2;
   // (corner to corner, a chunk reaches 0.71 of its side from its middle)
-  if (!gen.lands.some((L) => L.clearance(x0 + mid, z0 + mid) < size * 0.75)) return null;
+  if (!gen.landforms.some((L) => L.clearance(x0 + mid, z0 + mid) < size * 0.75)) return null;
   const n = Math.round(size / step);
   const N = n + 1;
   const S = SURFACE_STRIDE;

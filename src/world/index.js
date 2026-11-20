@@ -20,7 +20,7 @@ import { makePalm, makeIronwood, makeTreeFern, makeSilversword } from './modelsI
 import { STRUCTURES } from '../structures/index.js';
 import { placeStructures } from '../structures/loader.js';
 import { HIKES } from './hikes.js';
-import { Lands } from './landforms.js';
+import { Landforms } from './landforms.js';
 
 const DAY_MINUTES = 24; // how long a full day takes when time flows
 const wrapHours = (h) => ((h % 24) + 24) % 24;
@@ -33,7 +33,7 @@ export function installWorld(game) {
   // The forest a seed grows on its land. The real hikes are set into it as
   // their land arrives, which it does the first time something near one is
   // grown.
-  const lands = new Lands(HIKES);
+  const landforms = new Landforms(HIKES);
   const gen = growWorld(CONFIG.seed, STRUCTURES, CONFIG.land);
   const materials = {
     terrain: createTerrainMaterial(),
@@ -57,8 +57,8 @@ export function installWorld(game) {
     treefern: makeTreeFern(85),
     silversword: makeSilversword(87),
   };
-  const chunks = new ChunkManager(scene, gen, materials, models, STRUCTURES, { ready: (x0, z0, x1, z1) => lands.ready(x0, z0, x1, z1) });
-  lands.on('land', (def) => {
+  const chunks = new ChunkManager(scene, gen, materials, models, STRUCTURES, { ready: (x0, z0, x1, z1) => landforms.ready(x0, z0, x1, z1) });
+  landforms.on('land', (def) => {
     gen.addHike(def);
     chunks.addHike(def);
   });
@@ -77,7 +77,7 @@ export function installWorld(game) {
   game.provide('sky', sky);
   game.provide('materials', materials);
   game.provide('structures', STRUCTURES);
-  game.provide('lands', lands);
+  game.provide('landforms', landforms);
   // Built things you bump into and stand on. Whoever builds, writes to it.
   game.provide('solids', new Solids());
   // Places under the ground you can be in (caves). Whoever makes one, adds it.

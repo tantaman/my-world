@@ -45,7 +45,7 @@ const _d = new THREE.Vector3();
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player', 'build', 'map'];
 export function installLandmarks(game) {
-  const { scene, gen, lands, chunks, grass, solids, player, builder, map, hud, save } = game;
+  const { scene, gen, landforms, chunks, grass, solids, player, builder, map, hud, save } = game;
   const sites = new Sites(gen, { start: player.start });
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
   const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset ? chunks.heightOffset(x, z) : 0);
@@ -64,7 +64,7 @@ export function installLandmarks(game) {
     yes = true;
     // nor on a real place, or near enough one that the land there isn't the
     // forest's alone (world/landforms.js): it has what is really there
-    if (lands.reaches(s.box[0], s.box[1], s.box[2], s.box[3])) {
+    if (landforms.reaches(s.box[0], s.box[1], s.box[2], s.box[3])) {
       standing.set(s.id, false);
       return false;
     }
