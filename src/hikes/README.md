@@ -17,10 +17,10 @@ it:
 
 ```
 photo: 48.05540, -123.77340, looking 280°, at 16:21
-Mount Storm King → src/world/hikes/mount-storm-king.js (206 kB)
+Mount Storm King → src/world/hikes/mount-storm-king.js (223 kB, fetched when it's needed)
   at 27149.5, -1553.7 in the world, 136 km from the middle as the crow flies: the real land for 800 m round the photo, at 1 : 5
-  the walk: Mt. Storm King Trail, 496 m, climbing 122 m
-  water: Lake Crescent
+  the walk: Mt. Storm King Trail, 567 m, climbing 125 m
+  water: Lake Crescent, Falls Creek, Smith Creek, Barnes Creek, 78 unnamed streams
 ```
 
 A photo that has lost its location on the way (sent through a chat, say)
