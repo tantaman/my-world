@@ -22,14 +22,17 @@ Mount Storm King → src/world/hikes/mount-storm-king.js (206 kB)
   lakes: Lake Crescent
 ```
 
-In the game, press **K**. You're at the trailhead, by a signpost, and the HUD
-points the way to the top. The trail is the real one, switchbacks and all,
-cut into the hillside as a level tread. At the end of it a cairn stands where
-you took the photo. Press **K** again to go straight there: you're standing
-where you stood, facing the way you faced, at the hour you were there. From
-the top you can see across the whole of it, the lake below, the ridges
-beyond, the valley running off into the haze. The map names the hike and its
-trail.
+In the game, press **K** (or tap *hikes*) for the list of them: each with its
+trail, how long it is, how far it climbs and the lakes on it, and two ways
+in. **trailhead** puts you at the start, by a signpost, with the HUD pointing
+the way to the top. The trail is the real one, switchbacks and all, cut into
+the hillside as a level tread. At the end of it a cairn stands where you took
+the photo. **the view** takes you straight there: you're standing where you
+stood, facing the way you faced, at the hour you were there. From the top
+you can see across the whole of it, the lake below, the ridges beyond, the
+valley running off into the haze. The map names the hike and its trail. In
+the list, the arrow keys move between the buttons and **Esc** or **K**
+closes it.
 
 **What gets imported.** The land is scaled 1 : 5, the same across and up, so
 slopes are as steep as they really are: 2.5 km of trail and 600 m of climb
@@ -48,6 +51,14 @@ everything else a seed grows, it is part of the world description: a world
 built in near a hike keeps it there. Importing a hike again (`--force`)
 leaves it where it is, and `npm test` checks that hikes leave the rest of the
 world alone.
+
+**Where it's kept.** In the code, not on the save server: the import writes
+`src/world/hikes/<id>.js` and lists it in `src/world/hikes.js`. The save
+server only ever holds what people *change* in a world, and a hike is part
+of what every world grows, like its hills, so it ships with the game itself.
+That means every world, saved or not, on every seed, has every hike, in the
+same place. `npm run dev` shows a new one straight away; for anyone else to
+walk it, commit it and deploy (`npm run deploy`).
 
 | option | default | |
 |---|---|---|
@@ -69,9 +80,11 @@ OpenStreetMap contributors, under the
 ## Files
 
 ```
-index.js              plugs it into the game: K, the way to the view, signpost and cairn
+index.js              plugs it into the game: the list (K), the way to the view, signpost and cairn
 farView.js            the land past the loaded chunks, seen from up high
 farGrid.js            that land, sampled coarsely (pure)
 farWorker.js          Web Worker wrapper around farGrid
 landmarks.js          the cairn and the signpost
+hikesPanel.js         the list of hikes (K), and the way to each
+hikes.css             its styles
 ```

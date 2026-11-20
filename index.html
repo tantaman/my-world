@@ -150,9 +150,12 @@
         #hotbar .slot { padding: 6px 5px; font-size: 10.5px; gap: 3px; }
         #prompt { white-space: normal; text-align: center; width: max-content; bottom: calc(78px + var(--inset-b)); }
         #coords { bottom: calc(50px + var(--inset-b)); }
-        #track { bottom: auto; top: calc(30px + var(--inset-t)); }
+        /* the corner buttons take the top line; what you carry and where
+           you're heading go under them */
         #corner { bottom: auto; top: calc(10px + var(--inset-t)); }
-        #inv { max-width: calc(100vw - 150px); }
+        #inv { top: calc(42px + var(--inset-t)); max-width: calc(100vw - 32px); }
+        #track { bottom: auto; top: calc(60px + var(--inset-t)); }
+        #debug { top: calc(78px + var(--inset-t)); }
         #hint { bottom: calc(130px + var(--inset-b)); }
       }
     </style>
@@ -189,6 +192,7 @@
       <div id="coords"></div>
       <div id="corner">
         <button id="save-btn" type="button" aria-label="Save this world">save</button>
+        <button id="hikes-btn" type="button" aria-label="Hikes" hidden>hikes</button>
         <button id="map-btn" type="button" aria-label="Open the map">map</button>
         <button id="sound-btn" type="button" aria-pressed="true">sound on</button>
         <button id="help-btn" type="button" aria-label="Show controls">?</button>
