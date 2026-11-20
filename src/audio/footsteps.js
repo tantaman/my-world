@@ -122,6 +122,17 @@ defineSurface('litter', {
   },
 });
 
+// Boards with air under them: a dock, a cabin floor. A hollow knock that
+// rings a little in the space beneath, and a creak now and then.
+defineSurface('boards', {
+  thump: 0.95,
+  step({ s, t, run, sharp, noise }) {
+    noise(s.pink, t, 0.18, [['bandpass', rand(260, 340), 2.2]], 1.1 * sharp, 0.002, 0.11 + run * 0.03);
+    noise(s.white, t + 0.004, 0.06, [['bandpass', 1900, 1.4]], 0.28 * sharp, 0.001, 0.03);
+    if (Math.random() < 0.18) noise(s.pink, t + rand(0.05, 0.12), 0.3, [['bandpass', rand(600, 900), 9]], 0.25, 0.04, 0.18);
+  },
+});
+
 defineSurface('water', {
   // afloat, your weight doesn't land on anything
   thump: (kind) => (kind === 'swim' ? 0 : 0.15),

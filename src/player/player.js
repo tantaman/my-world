@@ -87,6 +87,10 @@ export class Player extends Emitter {
     // out of your depth and swimming.
     this.wade = 0;
     this.swimming = false;
+    // The solid you're standing on (a sill, a dock), or null on the ground.
+    // One with a `surface` says what your footsteps sound like on it.
+    this.underfoot = null;
+    this.groundSolid = null; // ...and the one the last groundAt() found
     // Something else can walk you: { x, z, run } to head for, or null (the
     // blueprint foreman sets it). Your own keys or stick always win, and
     // `manual` says whether they moved you this frame.
@@ -95,14 +99,19 @@ export class Player extends Emitter {
   }
 
   // Ground height under (x, z) for feet at y: terrain or the top of something built.
+  // (Which solid that was, if any, is left in this.groundSolid.)
   groundAt(x, z, y = Infinity) {
     let g = standHeight(this.world, x, z);
+    this.groundSolid = null;
     if (this.solids) {
       this.solids.forEachNear(x, z, 1, (s) => {
         segDist(x, z, s.ax, s.az, s.bx, s.bz, _seg);
         if (_seg.d > s.r + 0.08) return;
         const top = s.topA + (s.topB - s.topA) * _seg.t;
-        if (top > g && y >= top - (s.step ?? STEP_UP)) g = top;
+        if (top > g && y >= top - (s.step ?? STEP_UP)) {
+          g = top;
+          this.groundSolid = s;
+        }
       });
     }
     return g;
@@ -167,8 +176,9 @@ export class Player extends Emitter {
       wx /= wl;
       wz /= wl;
     }
-    // water: wading drags at you; swimming is slow, and there's no running
-    const inWater = this.world.waterAt(this.pos.x, this.pos.z, _w) && _w.depth > 0;
+    // water: wading drags at you; swimming is slow, and there's no running.
+    // Standing on something built over it (a dock, a boat) you're out of it.
+    const inWater = this.world.waterAt(this.pos.x, this.pos.z, _w) && _w.depth > 0 && !(this.underfoot && this.pos.y > _w.level);
     const depth = inWater ? _w.depth : 0;
     this.wade = depth;
     this.current.x = inWater ? _w.flowX : 0;
@@ -240,6 +250,7 @@ export class Player extends Emitter {
     const wasGrounded = this.grounded;
     const fallSpeed = -this.vel.y;
     const gh = this.groundAt(this.pos.x, this.pos.z, this.pos.y);
+    const under = this.groundSolid;
     if (this.pos.y <= gh) {
       this.pos.y = gh;
       this.vel.y = 0;
@@ -250,6 +261,7 @@ export class Player extends Emitter {
     } else {
       this.grounded = false;
     }
+    this.underfoot = this.grounded ? under : null;
     if (!wasGrounded && this.grounded && fallSpeed > 2.5) this.emit('land', Math.min(1, fallSpeed / 12));
 
     // Facing

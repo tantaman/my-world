@@ -19,6 +19,12 @@ mountain lions, bobcats, foxes, rabbits, squirrels, chipmunks, mice, snakes,
 salamanders, songbirds, crows, hawks, owls, bees and butterflies come and go.
 See [Wildlife](#wildlife).
 
+Somebody was here before you, too. Here and there, a few hundred metres
+apart, there's an old log cabin, the ruins of a homestead, a hunting cabin, a
+tent left pitched by a cold fire ring, a stone well, a dock with a rowboat
+tied up, or a canoe turned over on a river bank. Each has a name and is on
+the map, so you can go and find it. See [Old places](#old-places).
+
 Over time we'll also add hand-made **structures**: places to keep thoughts and
 ideas, and places to explore. See [Adding a structure](#adding-a-structure).
 
@@ -98,6 +104,14 @@ so the map opens already drawn.
 | **C** / *me* | back to where you are |
 | **M** / **Esc** | close |
 
+**Old places** — the cabins, wells, docks and so on that the forest has (see
+[Old places](#old-places)) — are on the map as little square badges with
+their names under them, paler once you've been. Close up, the map draws what
+stands there: a roof, a tent, a deck. Click one to see what it is and how far
+it is, and press *track* to have the HUD lead you there, just as for a mark.
+The nearest are listed beside the map under *nearby*, and clicking one there
+flies to it.
+
 **Marks** tag places of interest. Each has a name, one of eight pixel icons,
 a colour and an optional note. They're listed beside the map by distance
 (behind the *marks* button on a phone), and clicking one there flies to it.
@@ -131,7 +145,7 @@ and *sign out*.
 
 What is the world's is shared: the ground, the felled trees, what is built,
 the fires, the marks, the name. What is yours stays yours — your materials, your grade
-stake, the hour you set, where you last stood. Where you are standing is
+stake, the hour you set, where you last stood, the old places you've been to. Where you are standing is
 passed on so people can see you, and never stored.
 
 ### Talking
@@ -405,7 +419,8 @@ interact, so it fades in after your first click, key press or tap.
 - **Footsteps** follow the stride of the walk and run animation. They
   change with the ground under you: packed earth and grit on paths, a swish
   in grass, crackling leaf litter in the woods, a slosh and a splash and
-  falling drops in water. They get sharper when you run, there's a thud when
+  falling drops in water, a hollow knock on the boards of a dock or a cabin
+  floor. They get sharper when you run, there's a thud when
   you land a jump, and out of your depth each stroke sweeps through the water.
 
 - **Work** makes noise too. You'll hear the axe biting (deeper on a thick
@@ -590,6 +605,64 @@ world.wildlife.species.deer.notice = 60            // tune a temperament
 
 Species: `deer elk moose bear wolf cougar bobcat fox rabbit squirrel
 chipmunk mouse snake salamander flock flit crows hawk owl bees butterflies`.
+
+## Old places
+
+Out in the forest, few and far between, are places somebody left: about one
+every 400 m, so a long walk turns up two or three. Each is one of:
+
+| | |
+|---|---|
+| **old cabin** | a notched log cabin on stone piers, its door hanging open, a stone chimney, a bunk and a table inside, firewood stacked under the eaves |
+| **ruined homestead** | a few courses of wall, a roof beam fallen in, a rusted stove, and the chimney still standing |
+| **hunting cabin** | a board shack on posts at the edge of the woods, looking out over open ground; a tin roof, antlers over the door, a game pole |
+| **tent** | an A-frame pitched by a ring of stones round a cold fire, a pot on a tripod, a log to sit on, a crate with a lantern |
+| **well** | a round stone well with a windlass, a bucket on the rim and a little roof |
+| **dock** | planks out over a pond or a lake, and a rowboat tied up at the end, riding the water |
+| **canoe** | turned over on two logs on the bank of a river, a pond or a lake, a paddle in the grass |
+
+Each has a name (*Pellerin cabin*, *Old Yates well*, *Ellery dock*), and every
+one is on the map (see [The map](#the-map)), so you can pick one out, track
+it, and go and find it. When you get there its name comes up, and it's
+remembered that you've been: its badge on the map turns paler.
+
+You can go in. Walk up the steps and over the threshold of a cabin onto its
+floorboards (they sound like it), and the camera stays inside the walls with
+you. Walk out to the end of a dock and step down into the boat. Walls, steps,
+woodpiles, wells and tents are solid, and animals go round them.
+
+**Where they are** is grown from the seed, like the trees (`src/landmarks/sites.js`):
+everyone in a world finds the same cabin in the same place, and nothing about
+them is saved but which you've visited. The world is cut into 300 m squares,
+and a bit over half of them have something in them. Each kind looks for
+somewhere that suits it: a cabin wants dry, fairly level ground in the woods
+near a footpath, with its door turned to the path; a hunting cabin, the edge
+of the woods with open ground to look out over; a tent, open ground within
+reach of water; a well, a meadow near a path; a dock, the shore of a pond or
+a lake, deep enough at the end for a boat; a canoe, a river bank or a shore.
+None is put within 150 m of where you first arrive.
+
+**Nothing about the land changes for them.** A save is the difference from
+what a seed grows (see [What a save actually holds](#what-a-save-actually-holds)),
+so the ground isn't levelled and no tree is moved: a site is found where the
+land already suits it, and what stands there stands on piers or posts over
+whatever slope is left, taller on the downhill side. The trees, bushes and
+stones that would stand inside one are hidden as it comes into view, the way
+a felled tree is, and grass doesn't grow through its floor. Building goes
+round them, and a blueprint can't be staked over one. If an old save already
+has something built, a fire laid or a stump left where a site would be, that
+site isn't there.
+
+From the console:
+
+```js
+world.landmarks.list()            // what's within 600 m, nearest first
+world.landmarks.nearest('dock')   // the nearest of a kind
+```
+
+Kinds are a table in `src/landmarks/kinds.js` (what each is called, how
+common, where it suits it, the ground it covers, its map glyph), and each
+one's look is a function in `src/landmarks/models.js`.
 
 ## Building
 
@@ -813,8 +886,8 @@ adds what it does each frame — and `src/main.js` is little more than the list:
 
 ```js
 const FEATURES = [installRender, installHud, installWorld, installPlayer, installAudio,
-                  installBuild, installFires, installBlueprints, installMap, installSave, installVoice,
-                  installWildlife, installSplashes, installDebug];
+                  installBuild, installFires, installBlueprints, installMap, installLandmarks,
+                  installSave, installVoice, installWildlife, installSplashes, installDebug];
 ```
 
 A feature lives in a folder of its own, and its `index.js` is the only file in
@@ -848,6 +921,9 @@ a place to go, so that adding one doesn't mean editing the others:
 | something that is saved | `game.save.register({ id, collect, restore, … })` | `save/domains.js` |
 | a tool | `game.builder.register(tool)` | `build/builder.js` |
 | a thing tools must work round | `game.builder.obstacles.addSource(fn)` | `build/obstacles.js` |
+| a place on the map, to look up and track | `game.map.places.addSource({ within, get })` | `map/places.js` |
+| somewhere grass doesn't grow | `game.grass.addClearing(fn)` | `world/grass.js` |
+| something solid to bump into and stand on | `game.solids.set(owner, [capsule])` (`surface: 'boards'` for its footsteps) | `world/solids.js` |
 | a material to carry | `game.builder.stock.define({ id, label })` | `build/inventory.js` |
 | a one-off sound | `defineSfx(kind, play)` | `audio/sfx.js` |
 | an animal's voice | `defineCall(kind, reach, play)` | `audio/calls.js` |
@@ -970,7 +1046,8 @@ digs, raises and roofs a cabin, lights a campfire in it (and finds the roof
 won't go over that), reloads to see it was all kept, stakes out a blueprint
 among trees and lets the hiker clear it, level the ground and build it, lets
 it gather everything for a small one from nothing, opens the map and leaves a
-mark, makes some noise, wades into a stream to be carried by it and runs up it
+mark, picks an old place off the map and goes there, walks into an old cabin,
+makes some noise, wades into a stream to be carried by it and runs up it
 splashing, and calls up one of every animal. It
 drives the keys and the crosshair and reads results through `window.world`,
 so it doesn't care how the insides are arranged. The last two need
@@ -1083,6 +1160,7 @@ src/
     tiles.js              tile cache + worker scheduling
     mapView.js            the map overlay: pan/zoom, pins, mark editor, list
     marks.js              the marks, their icons and colours
+    places.js             places other features put on the map (an old cabin), to look up and track
     markers.js            your marks as pennants in the world
     map.css               map styles
   save/
@@ -1113,6 +1191,11 @@ src/
     flyers.js             flocks, passing birds, a soaring hawk, owls
     crawlers.js           snakes and salamanders
     insects.js            bee swarms and butterflies
+  landmarks/
+    index.js              ← feature: old places, stood up as you come near and on the map
+    sites.js              where they are, grown from the seed: which kind, where it suits it
+    kinds.js              the kinds, in one table: names, rarity, habitat, footprint, glyph
+    models.js             what each looks like: cabins, a ruin, a tent, a well, a dock and boats
   structures/
     index.js              ← register structures here
     loader.js             places structures on their pads

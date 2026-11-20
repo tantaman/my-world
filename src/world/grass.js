@@ -51,6 +51,16 @@ export class Grass {
     // where reeds and lily pads grow in clumps
     this.nReed = createSimplex2((seed ^ 0x2eed5) >>> 0);
     this.nLily = createSimplex2((seed ^ 0x1117) >>> 0);
+    // Places nothing grows: under a floor, in a tent, round a dock. See
+    // addClearing().
+    this.clearings = [];
+  }
+
+  // Keep the grass (and reeds and lilies) off somewhere. `fn(x0, z0, x1, z1)`
+  // is asked once per tile as it grows, and answers null if it has nothing
+  // there, or a test (x, z) -> true where nothing should grow.
+  addClearing(fn) {
+    this.clearings.push(fn);
   }
 
   update(px, pz, budgetMs = 3, dt = 0) {
@@ -138,6 +148,16 @@ export class Grass {
       if (!this.chunks.groundAt(x, z, _g)) return false;
     }
 
+    const kept = [];
+    for (const fn of this.clearings) {
+      const test = fn(ox, oz, ox + T, oz + T);
+      if (test) kept.push(test);
+    }
+    const bare = (x, z) => {
+      for (let i = 0; i < kept.length; i++) if (kept[i](x, z)) return true;
+      return false;
+    };
+
     const rng = mulberry32(hash2i(tx, tz, this.seed ^ 0x51f15e));
     const candidates = Math.floor(T * T * CONFIG.grassDensity);
     const pos = [];
@@ -174,6 +194,7 @@ export class Grass {
       const bank = wd > -0.4 ? smoothstep(-0.03, -0.3, wd) : 1;
       let density = (0.26 + meadow * 0.74) * (1 - onPath * 0.97) * bank;
       if (r1 > density) continue;
+      if (kept.length && bare(ox + lx, oz + lz)) continue;
 
       const edgeShort = 1 - smoothstep(0.1, 0.45, _g.path) * 0.6;
       const h = (0.22 + r2 * 0.32) * (0.6 + meadow * 0.75) * edgeShort;
@@ -258,6 +279,7 @@ export class Grass {
       this.chunks.groundAt(wx, wz, _g);
       const wd = waterDepth();
       if (wd < -0.3 || wd > 1.5) continue;
+      if (kept.length && bare(wx, wz)) continue;
       const calm = 1 - smoothstep(0.2, 0.6, _g.wSpeed);
       gPath = -1;
       gForest = 0;

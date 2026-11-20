@@ -23,6 +23,8 @@
 //   clear     how it can be got out of the way, if it can: 'fell' (a standing
 //             tree) or 'grub' (a stump). The blueprint foreman clears a site
 //             of these; leave it out for anything that stays put (a fire ring).
+//   grown     true for what the seed grows (a tree, a boulder, an old cabin),
+//             as against what someone has put there since
 
 export class Obstacles {
   constructor() {

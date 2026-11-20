@@ -30,6 +30,8 @@ export function installAudio(game) {
     return ground;
   }
   function surfaceHere() {
+    // something built underfoot says what it's made of (a dock: 'boards')
+    if (player.underfoot && player.underfoot.surface) return player.underfoot.surface;
     if (player.wade > 0.04) return 'water';
     const g = groundHere();
     if (g.path > 0.45) return 'dirt';

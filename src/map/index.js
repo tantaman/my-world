@@ -1,9 +1,11 @@
 // The map (M), and the marks you leave on it: listed beside the map, tracked
-// on the HUD, and standing in the world as pennants.
+// on the HUD, and standing in the world as pennants. Other features put
+// places on it too, through map.places (places.js).
 
 import { MarkStore, marksSave, markLabel } from './marks.js';
 import { MapView } from './mapView.js';
 import { Markers } from './markers.js';
+import { Places } from './places.js';
 import { SHARED } from '../render/uniforms.js';
 import { CONFIG } from '../config.js';
 
@@ -16,7 +18,10 @@ export function installMap(game) {
   const marks = new MarkStore();
   const markers = new Markers(scene, (x, z) => chunks.heightAt(x, z));
   marks.subscribe(() => markers.sync(marks.list()));
-  const map = new MapView({ seed: CONFIG.seed, structures, marks, player, input });
+  // Places other features put on the map (an old cabin, a dock): see places.js.
+  const places = new Places();
+  marks.findPlace = (id) => places.get(id);
+  const map = new MapView({ seed: CONFIG.seed, structures, marks, player, input, places });
   game.provide('marks', marks);
   game.provide('map', map);
 

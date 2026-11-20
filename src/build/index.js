@@ -57,10 +57,10 @@ export function installBuild(game) {
   obstacles.addSource((x, z, R, out) => {
     chunks.forEachPlant(x, z, R + 1, TREE_KINDS, (ch, kind, k, px, py, pz, s) => {
       const r = SPECIES[kind].r * s;
-      out.push({ x: px, z: pz, what: SPECIES[kind].a, dig: r + 0.9, wall: r, footing: 0.9, clear: 'fell' });
+      out.push({ x: px, z: pz, what: SPECIES[kind].a, dig: r + 0.9, wall: r, footing: 0.9, clear: 'fell', grown: true });
     });
     chunks.forEachPlant(x, z, R + 1, ['rock'], (ch, kind, k, px, py, pz, s) => {
-      if (s > LIFTABLE) out.push({ x: px, z: pz, what: 'a boulder', dig: s * 1.05 });
+      if (s > LIFTABLE) out.push({ x: px, z: pz, what: 'a boulder', dig: s * 1.05, grown: true });
     });
   });
   obstacles.addSource((x, z, R, out) => {
