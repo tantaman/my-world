@@ -11,10 +11,9 @@
 import { Quad } from './quadruped.js';
 import { disposeAnimal } from './rig.js';
 import { clamp, lerp } from '../noise.js';
+import { rand, wrapAngle as wrap } from '../core/geom.js';
 
-const rand = (a, b) => a + Math.random() * (b - a);
 const range = (r) => rand(r[0], r[1]);
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const FRIGHT = new Set(['flee', 'leave', 'toTree', 'climb', 'toCover', 'hide', 'stand', 'watch', 'freeze']);
 const MOVES = new Set(['wander', 'travel', 'follow', 'prowl', 'sniff']);
 

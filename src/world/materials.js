@@ -1,13 +1,6 @@
 import * as THREE from 'three';
 import { NOISE_GLSL, GROUND_GLSL } from '../render/glsl.js';
-
-// Uniforms shared by every material that animates or reacts to the player.
-export const SHARED = {
-  uTime: { value: 0 },
-  uWind: { value: 1 },
-  uPlayer: { value: new THREE.Vector3() },
-  uGrassRadius: { value: 40 },
-};
+import { SHARED } from '../render/uniforms.js';
 
 // ── Terrain ────────────────────────────────────────────────────────────────
 // The ground colour is computed per pixel from world position: meadow grass,

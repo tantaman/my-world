@@ -10,7 +10,8 @@
 import './map.css';
 import { TILE, MIN_LEVEL, MAX_LEVEL } from './mapRender.js';
 import { MapTiles, tileKey } from './tiles.js';
-import { ICONS, COLORS, PIN, iconById, iconSvg, markLabel, formatDistance } from './marks.js';
+import { ICONS, COLORS, PIN, iconById, iconSvg, markLabel } from './marks.js';
+import { formatDistance } from '../core/format.js';
 
 // Each level halves the meters per map pixel; within a level a map pixel is
 // drawn 3, 4 or 5 device pixels wide (times the DPR unit) so pixels stay

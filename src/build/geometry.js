@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { LOG_D, TIMBER_H, TIMBER_W } from './constants.js';
+import { phash } from '../noise.js';
 
 const lin = (hex) => new THREE.Color(hex);
 export const WOOD = {
@@ -24,11 +25,6 @@ export const WOOD = {
   leaf: lin(0x2a4518),
   leafDry: lin(0x5a5a26),
 };
-
-export function phash(x, y, z) {
-  const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
-  return s - Math.floor(s);
-}
 
 const _p = new THREE.Vector3();
 const _n = new THREE.Vector3();

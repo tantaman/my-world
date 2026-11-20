@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import { SKY } from '../world/sky.js';
+import { SKY } from './uniforms.js';
 import { SKY_GLSL, SKY_UNIFORMS_GLSL } from './glsl.js';
 
 const FS_VERT = /* glsl */ `

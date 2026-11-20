@@ -2,8 +2,7 @@
 
 import { Input } from './input.js';
 import { Player } from './player.js';
-import { SHARED } from '../world/materials.js';
-import { WADE } from '../world/waterSurface.js';
+import { SHARED, WADE } from '../render/uniforms.js';
 
 const round = (v, f = 100) => Math.round(v * f) / f;
 const finite = (v, otherwise) => (Number.isFinite(v) ? v : otherwise);

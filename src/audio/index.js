@@ -2,8 +2,7 @@
 
 import { CONFIG } from '../config.js';
 import { Soundscape } from './soundscape.js';
-import { SHARED } from '../world/materials.js';
-import { SKY } from '../world/sky.js';
+import { SHARED, SKY } from '../render/uniforms.js';
 
 const WATER_EVERY = 250; // ms between looks round for water to hear
 const WATER_REACH = 45; // metres

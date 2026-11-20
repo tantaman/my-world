@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL } from '../render/glsl.js';
-import { SHARED } from './materials.js';
+import { SKY } from '../render/uniforms.js';
 import { smoothstep, lerp } from '../noise.js';
 
 // Palette keyframes by sun elevation (degrees). Linear HDR colours.
@@ -46,15 +46,6 @@ function sampleKeys(elev) {
 const _right = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _center = new THREE.Vector3();
-
-export const SKY = {
-  uSunDir: { value: new THREE.Vector3(0, 1, 0) },
-  uZenith: { value: new THREE.Color() },
-  uHorizon: { value: new THREE.Color() },
-  uSunColor: { value: new THREE.Color() },
-  uNight: { value: 0 },
-  uTime: SHARED.uTime,
-};
 
 export class Sky {
   constructor(scene) {

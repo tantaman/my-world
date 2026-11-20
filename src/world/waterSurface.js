@@ -16,14 +16,10 @@
 
 import * as THREE from 'three';
 import { NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL } from '../render/glsl.js';
-import { SHARED } from './materials.js';
-import { SKY } from './sky.js';
+import { SHARED, SKY, WADE } from '../render/uniforms.js';
 import { NO_WATER } from './water.js';
 import { WATER_STRIDE as WS } from './chunkGen.js';
 
-// How deep the explorer is standing in water (0 = dry, 1 = up to the waist);
-// set each frame, drives the ripples and foam around them.
-export const WADE = { uWade: { value: 0 } };
 
 const UNSET = NO_WATER * 0.5;
 

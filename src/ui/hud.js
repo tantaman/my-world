@@ -3,7 +3,7 @@
 // HUD: tool bar, materials, what the tool in hand would do, and a progress bar
 // for press-and-hold work.
 
-import { markLabel, formatDistance } from '../map/marks.js';
+import { formatDistance } from '../core/format.js';
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 // relative to where the camera looks: ahead, ahead-right, right, ...
@@ -127,8 +127,9 @@ export class Hud {
     }
   }
 
-  // The tracked mark: name, distance and which way to go from where the
-  // camera is looking. mark = null hides it.
+  // Somewhere you're heading for: its name, how far it is and which way to go
+  // from where the camera is looking. mark: { id, label, color, x, z }, or
+  // null to show nothing.
   updateTrack(mark, pos, camYaw) {
     if (!this.track) return;
     let txt = '';
@@ -137,10 +138,10 @@ export class Hud {
       const dz = mark.z - pos.z;
       const d = Math.hypot(dx, dz);
       if (d < ARRIVED) {
-        txt = `◆ ${markLabel(mark)} · you're here`;
+        txt = `◆ ${mark.label} · you're here`;
         if (this._arrivedAt !== mark.id) {
           this._arrivedAt = mark.id;
-          this.flash(`arrived · ${markLabel(mark)}`);
+          this.flash(`arrived · ${mark.label}`);
         }
       } else {
         if (d > ARRIVED * 2) this._arrivedAt = null;
@@ -148,7 +149,7 @@ export class Hud {
         const fz = -Math.cos(camYaw);
         const rel = Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz);
         const arrow = ARROWS[((Math.round(rel / (Math.PI / 4)) % 8) + 8) % 8];
-        txt = `◆ ${markLabel(mark)} · ${formatDistance(d)} ${arrow}`;
+        txt = `◆ ${mark.label} · ${formatDistance(d)} ${arrow}`;
       }
     } else this._arrivedAt = null;
     if (txt !== this._lastTrack) {

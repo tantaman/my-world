@@ -2,8 +2,7 @@
 // in the low-res render, which is exactly what you'd hand-place in pixel art.
 
 import * as THREE from 'three';
-import { SHARED } from './materials.js';
-import { SKY } from './sky.js';
+import { SHARED, SKY } from '../render/uniforms.js';
 
 export function createParticles(count = 900) {
   const pos = new Float32Array(count * 3);
