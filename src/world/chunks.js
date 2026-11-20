@@ -115,6 +115,11 @@ class Chunk {
   }
 }
 
+// Running water is heard from at most this many places at once, each
+// gathering what runs within SOURCE_SPREAD m of its loudest point.
+export const WATER_SOURCES = 3;
+const SOURCE_SPREAD = 14;
+
 // Emits (synchronously, see core/events.js):
 //   'terrain'     (chunk, buffers)   fresh terrain for a chunk, *before* it is
 //                                    meshed: a listener may patch the buffers
@@ -407,18 +412,18 @@ export class ChunkManager extends Emitter {
   }
 
   // What water there is within r of (x, z), for the soundscape, read straight
-  // off the loaded chunk grids. Fills out with:
-  //   run    0..1 how much running water you'd hear (near, fast, foaming)
-  //   foam   0..1 how much of that is white water
-  //   rx, ry, rz  where it's centred
-  //   still  0..1 how much still-water shore is near
+  // off the loaded chunk grids. Running water is gathered into a few sources
+  // (the loudest stretch, then the loudest of what's left more than
+  // SOURCE_SPREAD m from it, ...), so two streams either side of you are
+  // heard either side of you. Fills out with:
+  //   sources  up to WATER_SOURCES of { x, y, z, loud 0..1, foam 0..1 (how
+  //            much is white water), big 0..1 (stream .. broad river) },
+  //            loudest first; count says how many are in use
+  //   still    0..1 how much still-water shore is near
   //   sx, sy, sz  where that is
   waterAround(x, z, r, out) {
-    let run = 0;
-    let foam = 0;
-    let rx = 0;
-    let ry = 0;
-    let rz = 0;
+    const pts = this._waterPts || (this._waterPts = []);
+    let n = 0;
     let still = 0;
     let sx = 0;
     let sy = 0;
@@ -445,12 +450,15 @@ export class ChunkManager extends Emitter {
             const near = 1 / (1 + d2 / 40);
             const speed = Math.hypot(D[o + 1], D[o + 2]);
             if (speed > 0.15) {
-              const w = (0.25 + Math.min(speed, 2) * 0.35 + D[o + 3] * 2) * near;
-              run += w;
-              foam += D[o + 3] * near;
-              rx += px * w;
-              ry += ch.wLevel[k] * w;
-              rz += pz * w;
+              const p = pts[n] || (pts[n] = { x: 0, y: 0, z: 0, w: 0, foam: 0, big: 0 });
+              p.x = px;
+              p.y = ch.wLevel[k];
+              p.z = pz;
+              p.w = (0.25 + Math.min(speed, 2) * 0.35 + D[o + 3] * 2) * near;
+              p.foam = D[o + 3];
+              // how open the sky is over it grows with a channel's breadth
+              p.big = Math.max(0, Math.min(1, (D[o + 4] - 0.15) / 0.55));
+              n++;
             } else if (depth < 0.35) {
               const w = near;
               still += w;
@@ -462,12 +470,39 @@ export class ChunkManager extends Emitter {
         }
       }
     }
-    out.run = 1 - Math.exp(-run * 0.6);
-    out.foam = run > 0 ? Math.min(1, (foam / run) * 3) : 0;
-    if (run > 0) {
-      out.rx = rx / run;
-      out.ry = ry / run;
-      out.rz = rz / run;
+    const sources = out.sources || (out.sources = []);
+    out.count = 0;
+    while (out.count < WATER_SOURCES) {
+      let best = null;
+      for (let q = 0; q < n; q++) if (pts[q].w > 0 && (!best || pts[q].w > best.w)) best = pts[q];
+      if (!best || best.w < 0.02) break;
+      const bx = best.x;
+      const bz = best.z;
+      let W = 0;
+      let foam = 0;
+      let big = 0;
+      let ax = 0;
+      let ay = 0;
+      let az = 0;
+      for (let q = 0; q < n; q++) {
+        const p = pts[q];
+        if (p.w <= 0 || (p.x - bx) ** 2 + (p.z - bz) ** 2 > SOURCE_SPREAD * SOURCE_SPREAD) continue;
+        W += p.w;
+        foam += p.foam * p.w;
+        big += p.big * p.w;
+        ax += p.x * p.w;
+        ay += p.y * p.w;
+        az += p.z * p.w;
+        p.w = 0;
+      }
+      const src = sources[out.count] || (sources[out.count] = {});
+      src.x = ax / W;
+      src.y = ay / W;
+      src.z = az / W;
+      src.loud = 1 - Math.exp(-W * 0.6);
+      src.foam = Math.min(1, (foam / W) * 3);
+      src.big = big / W;
+      out.count++;
     }
     out.still = 1 - Math.exp(-still * 0.5);
     if (still > 0) {
