@@ -89,11 +89,12 @@ export function createSpecks() {
 // lifts them, and surfaceAt(x, z) says where each bursts (the water's level,
 // or null for no water).
 export function createBubbles() {
-  const pos = new Float32Array(MAX_BUBBLES * 3).fill(-1e5);
+  const pos = new Float32Array(MAX_BUBBLES * 3);
   const size = new Float32Array(MAX_BUBBLES);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+  geo.setDrawRange(0, 0); // only the bubbles there are: the rest are never drawn
   const mat = new THREE.ShaderMaterial({
     uniforms: { ...SKY },
     vertexShader: /* glsl */ `
@@ -140,13 +141,14 @@ export function createBubbles() {
         if (top === null || b.y >= top - 0.03) list.splice(i, 1);
       }
       const at = list.length ? anchor(points, list[0].x, list[0].z) : points.position;
-      for (let i = 0; i < MAX_BUBBLES; i++) {
+      for (let i = 0; i < list.length; i++) {
         const b = list[i];
-        pos[i * 3] = b ? b.x - at.x : 0;
-        pos[i * 3 + 1] = b ? b.y : -1e5;
-        pos[i * 3 + 2] = b ? b.z - at.z : 0;
-        size[i] = b ? b.s : 0;
+        pos[i * 3] = b.x - at.x;
+        pos[i * 3 + 1] = b.y;
+        pos[i * 3 + 2] = b.z - at.z;
+        size[i] = b.s;
       }
+      geo.setDrawRange(0, list.length);
       geo.attributes.position.needsUpdate = true;
       geo.attributes.aSize.needsUpdate = true;
     },

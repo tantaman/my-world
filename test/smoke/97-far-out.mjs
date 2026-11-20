@@ -69,13 +69,22 @@ export default async function ({ page, step, frames, shot }) {
       await page.keyboard.down(code);
       await frames(40);
       await page.keyboard.up(code);
-      const to = await page.evaluate(() => [world.player.pos.x, world.player.pos.z, world.player.pos.y, world.chunks.heightAt(world.player.pos.x, world.player.pos.z)]);
+      // how high you are over the ground, or over the water's surface where
+      // there is water (out here that may be the open sea, far over its bed)
+      const to = await page.evaluate(() => {
+        const { player, chunks } = world;
+        const p = player.pos;
+        const w = {};
+        const ground = chunks.heightAt(p.x, p.z);
+        const top = chunks.waterAt(p.x, p.z, w) && w.depth > 0 ? Math.max(ground, w.level) : ground;
+        return [p.x, p.z, p.y, top];
+      });
       return { d: Math.hypot(to[0] - from[0], to[1] - from[1]), off: to[2] - to[3] };
     };
     const ways = [await walked('KeyW'), await walked('KeyS'), await walked('KeyA')];
     const went = Math.max(...ways.map((w) => w.d));
     assert.ok(went > 0.5, `walking goes somewhere (${went.toFixed(2)} m)`);
-    assert.ok(ways.every((w) => Number.isFinite(w.off) && w.off > -3 && w.off < 3), 'over the ground, or through the water on it');
+    assert.ok(ways.every((w) => Number.isFinite(w.off) && w.off > -3 && w.off < 3), `over the ground, or in the water on it (${ways.map((w) => w.off.toFixed(2)).join(', ')} m)`);
     await shot('the-far-side');
     return { at: got.at, fromOrigin: got.fromOrigin, buffers: got.buffers, aloft: got.aloft, walked: went };
   });
