@@ -61,9 +61,14 @@ and adding it moves nothing that was there. Two that each already stand on
 heights of their own get a step where a third joins them (the importer says
 so).
 
-It's good out to about 5,000 km from the middle (further, the ground's
-finer texture blurs a little; the GPU's floats run short) and goes no
-further than 10,000 km. `--at x,z` puts one somewhere else. Like everything
+The whole Earth fits: its far side is 4,000 km of game from the middle, and
+the game is as sharp there as where you start (the picture is always drawn
+from a spot near you: `src/render/origin.js`). What a flat world can't keep
+is a round one's shape. Distances from the middle are true everywhere, but
+the further out, the wider than life the map is across that line: a tenth at
+5,000 km, half as much again at 10,000. A hike's own land is true wherever
+it is; it's the gaps between hikes far out that are wide, and the importer
+says by how much. `--at x,z` puts one somewhere else. Like everything
 else a seed grows, a hike is part of the world description: a world built in
 near one keeps it there, so once placed it stays put. Importing it again
 (`--force`) leaves it where it is, and `npm test` checks that hikes leave the

@@ -10,11 +10,17 @@
 import * as THREE from 'three';
 
 // Set every frame by the world (time, wind) and the player (where you are).
+//
+// uPlayer is a place, and like every uniform that is, it's set in world
+// coordinates and slid with the scene while a frame is drawn (origin.js,
+// which is also what sets uOrigin: where the drawing origin is in the world,
+// wrapped to the patterns' period. See worldXZ() in glsl.js).
 export const SHARED = {
   uTime: { value: 0 },
   uWind: { value: 1 },
   uPlayer: { value: new THREE.Vector3() },
   uGrassRadius: { value: 40 },
+  uOrigin: { value: new THREE.Vector2() },
 };
 
 // Set every frame by the sky (world/sky.js) from the hour of the day.

@@ -1,13 +1,20 @@
 import * as THREE from 'three';
-import { NOISE_GLSL, GROUND_GLSL } from '../render/glsl.js';
+import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, GROUND_GLSL, wave } from '../render/glsl.js';
 import { SHARED } from '../render/uniforms.js';
 import { CUTS, CUT_GLSL, SHRINK, RIM } from './cuts.js';
 
+// A shader here that needs to know where in the world something is asks
+// worldXZ() (render/glsl.js), never modelMatrix alone: while a frame is drawn
+// the scene sits round an origin near the camera (render/origin.js), so
+// modelMatrix gives a *drawn* position, good for distances and for nothing
+// that should stay put on the ground.
+
 // ── Terrain ────────────────────────────────────────────────────────────────
-// The ground colour is computed per pixel from world position: meadow grass,
-// leaf litter and moss under the trees, packed dirt on the paths, bare rock on
-// steep slopes, and, on a land with high ground, thin turf and stones above
-// the trees and snow on the tops. At low resolution this reads as
+// The ground colour is computed per pixel from where it is in the world:
+// meadow grass, leaf litter and moss under the trees, packed dirt on the
+// paths, bare rock on steep slopes, and, on a land with high ground, thin
+// turf and stones above the trees and snow on the tops. At low resolution
+// this reads as
 // hand-placed pixel texture.
 // Under water it turns to silt, pebbles and cobbles, darkening (reds first)
 // with depth, with the light netted over it by the ripples, and a damp band
@@ -18,6 +25,7 @@ export function createTerrainMaterial() {
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = SHARED.uTime;
+    shader.uniforms.uOrigin = SHARED.uOrigin;
     Object.assign(shader.uniforms, CUTS);
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -52,14 +60,16 @@ export function createTerrainMaterial() {
         varying vec3 vWorldNormal;
         uniform float uTime;
         ${NOISE_GLSL}
+        ${WORLD_GLSL}
+        ${WORLD_NOISE_GLSL}
         ${GROUND_GLSL}
         // Above the trees: thin, tawny turf among stones. Snow on top of that
         // where it lies, in drifts, but not on the cliffs.
         vec3 highGround(vec3 col, vec2 wp, vec2 high, float slope) {
           if (high.x + high.y < 0.001) return col;
-          float n1 = vnoise(wp * 0.45 + 21.0);
-          float n2 = vnoise(wp * 2.3 - 8.0);
-          float n3 = vnoise(wp * 0.12 - 3.0);
+          float n1 = wnoise(wp, 0.45, vec2(21.0));
+          float n2 = wnoise(wp, 2.3, vec2(-8.0));
+          float n3 = wnoise(wp, 0.12, vec2(-3.0));
           float gentle = 1.0 - smoothstep(0.3, 0.45, slope + (n1 - 0.5) * 0.12);
           vec3 turf = mix(vec3(0.085, 0.105, 0.04), vec3(0.15, 0.135, 0.075), smoothstep(0.35, 0.75, n1));
           vec3 stone = vec3(0.17, 0.165, 0.15) * (0.8 + 0.4 * n2);
@@ -71,9 +81,12 @@ export function createTerrainMaterial() {
           return mix(col, snow, lie);
         }
         ${CUT_GLSL}
-        // Round stones, one at most to a cell: how far into the nearest one p
-        // is (0 at its middle, 1 at its edge), and a number of its own.
-        float pebble(vec2 p, float size, out float id) {
+        // Round stones, about "many" to the metre and one at most to a cell:
+        // how far into the nearest one wp is (0 at its middle, 1 at its
+        // edge), and a number of its own.
+        float pebble(vec2 wp, float many, float size, out float id) {
+          float m = cellsIn(many);
+          vec2 p = wp * (m / PERIOD);
           vec2 c = floor(p);
           vec2 f = fract(p);
           float best = 9.0;
@@ -81,24 +94,27 @@ export function createTerrainMaterial() {
           for (int j = -1; j <= 1; j++) {
             for (int i = -1; i <= 1; i++) {
               vec2 o = vec2(float(i), float(j));
-              vec2 at = o + 0.2 + 0.6 * vec2(hash12(c + o), hash12(c + o + 17.3));
-              vec2 d = (f - at) / (size * (0.7 + 0.5 * hash12(c + o + 5.1)));
+              vec2 k = wrapCell(c + o, m);
+              vec2 at = o + 0.2 + 0.6 * vec2(hash12(k), hash12(k + 17.3));
+              vec2 d = (f - at) / (size * (0.7 + 0.5 * hash12(k + 5.1)));
               // a little longer one way than the other, like a worn stone
-              float a = hash12(c + o + 9.7) * 6.2832;
+              float a = hash12(k + 9.7) * 6.2832;
               d = mat2(cos(a), sin(a), -sin(a), cos(a)) * d * vec2(1.0, 1.35);
               float r = length(d);
               if (r < best) {
                 best = r;
-                id = hash12(c + o + 3.3);
+                id = hash12(k + 3.3);
               }
             }
           }
           return best;
         }
         // Light gathered into a moving net by the ripples overhead.
-        float causticAt(vec2 p, float t) {
-          vec2 q = p * 1.3 + vec2(vnoise(p * 0.6 + t * 0.21), vnoise(p * 0.6 - t * 0.17 + 4.0)) * 1.4;
-          float n = vnoise(q) * 0.6 + vnoise(q * 2.1 + 7.0) * 0.4;
+        float causticAt(vec2 wp, float t) {
+          float m = cellsIn(1.3);
+          float m2 = cellsIn(1.3 * 2.1);
+          vec2 q = wp * (m / PERIOD) + vec2(wnoise(wp, 0.6, vec2(t * 0.21)), wnoise(wp, 0.6, vec2(4.0 - t * 0.17))) * 1.4;
+          float n = tnoise(q, m) * 0.6 + tnoise(q * (m2 / m) + 7.0, m2) * 0.4;
           return pow(1.0 - abs(n * 2.0 - 1.0), 8.0);
         }`,
       )
@@ -111,21 +127,21 @@ export function createTerrainMaterial() {
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
-        diffuseColor.rgb = groundColor(vWorldPos.xz, vGround.x, vGround.y, 1.0 - vWorldNormal.y);
-        diffuseColor.rgb = highGround(diffuseColor.rgb, vWorldPos.xz, vHigh, 1.0 - vWorldNormal.y);
+        vec2 wp = worldXZ(vWorldPos);
+        diffuseColor.rgb = groundColor(wp, vGround.x, vGround.y, 1.0 - vWorldNormal.y);
+        diffuseColor.rgb = highGround(diffuseColor.rgb, wp, vHigh, 1.0 - vWorldNormal.y);
         if (cutF < ${RIM.toFixed(3)} + 1.0) {
           // broken rock round a hole in the ground, ragged at its edge
-          float rn = vnoise(vWorldPos.xz * 1.3 + vWorldPos.y) * 0.65 + vnoise(vWorldPos.xz * 4.7) * 0.35;
+          float rn = wnoise(wp, 1.3, vec2(vWorldPos.y)) * 0.65 + wnoise(wp, 4.7) * 0.35;
           float rim = cutRim(cutF + (rn - 0.5) * 2.2);
-          vec3 stone = vec3(0.15, 0.14, 0.125) * (0.65 + 0.6 * vnoise(vWorldPos.xz * 3.1 - vWorldPos.y * 2.0));
-          stone = mix(stone, vec3(0.06, 0.1, 0.03), smoothstep(0.55, 0.8, vnoise(vWorldPos.xz * 0.9)) * 0.6);
+          vec3 stone = vec3(0.15, 0.14, 0.125) * (0.65 + 0.6 * wnoise(wp, 3.1, vec2(-vWorldPos.y * 2.0)));
+          stone = mix(stone, vec3(0.06, 0.1, 0.03), smoothstep(0.55, 0.8, wnoise(wp, 0.9)) * 0.6);
           diffuseColor.rgb = mix(diffuseColor.rgb, stone, rim);
         }
         if (vWater.y > 0.01) {
-          vec2 wp = vWorldPos.xz;
           float wd = vWater.x - vWorldPos.y; // depth under the water surface
-          float n1 = vnoise(wp * 0.7);
-          float n2 = vnoise(wp * 2.9 + 5.0);
+          float n1 = wnoise(wp, 0.7);
+          float n2 = wnoise(wp, 2.9, vec2(5.0));
           // a beach of sand and gravel just above the water, damp at the edge
           vec3 sand = mix(vec3(0.19, 0.16, 0.11), vec3(0.15, 0.135, 0.11), smoothstep(0.35, 0.7, n2));
           float beach = (1.0 - smoothstep(0.08, 0.3 + 0.35 * n1, -wd)) * vWater.y;
@@ -137,12 +153,12 @@ export function createTerrainMaterial() {
             vec3 silt = vec3(0.11, 0.095, 0.065) * (0.8 + 0.4 * n1);
             vec3 bed = silt;
             float cid;
-            float cob = pebble(wp * 1.4, 0.55, cid);
+            float cob = pebble(wp, 1.4, 0.55, cid);
             float isCob = step(0.45, fract(cid * 3.7)); // not every cell has one
             vec3 cobC = mix(vec3(0.15, 0.145, 0.13), vec3(0.19, 0.16, 0.11), cid) * (0.75 + 0.5 * fract(cid * 7.3));
             bed = mix(bed, cobC * (0.65 + 0.4 * sqrt(max(0.0, 1.0 - cob * cob))), (1.0 - smoothstep(0.82, 1.0, cob)) * isCob);
             float id;
-            float peb = pebble(wp * 4.3, 0.42, id);
+            float peb = pebble(wp, 4.3, 0.42, id);
             vec3 pebC = mix(vec3(0.13, 0.12, 0.10), vec3(0.2, 0.18, 0.14), id) * (0.8 + 0.4 * fract(id * 5.1));
             float onPeb = (1.0 - smoothstep(0.75, 1.0, peb)) * smoothstep(0.25, 0.55, n2) * (1.0 - isCob * step(cob, 0.82));
             bed = mix(bed, pebC * (0.8 + 0.35 * sqrt(max(0.0, 1.0 - peb * peb))), onPeb);
@@ -191,33 +207,39 @@ export function createVegetationMaterial({ sway = true } = {}) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = SHARED.uTime;
     shader.uniforms.uWind = sway ? SHARED.uWind : { value: 0 };
+    shader.uniforms.uOrigin = SHARED.uOrigin;
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
         `#include <common>
         attribute float aSway;
         uniform float uTime;
-        uniform float uWind;`,
+        uniform float uWind;
+        ${WORLD_GLSL}`,
       )
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
         {
+          // Where the plant stands in the world sets when the wind reaches
+          // it. (An instance is placed from its mesh, a chunk's corner; the
+          // wavenumbers come round on the period, so nothing jumps when the
+          // drawing origin moves.)
           #ifdef USE_INSTANCING
-            vec3 iPos = instanceMatrix[3].xyz;
+            vec2 iPos = worldXZ(modelMatrix[3].xyz + instanceMatrix[3].xyz);
           #else
-            vec3 iPos = vec3(0.0);
+            vec2 iPos = vec2(0.0);
           #endif
           vec2 wdir = normalize(vec2(1.0, 0.45));
-          float ph = dot(iPos.xz, wdir) * 0.045;
-          float gust = 0.55 + 0.45 * sin(uTime * 0.37 + ph * 0.7);
-          float bend = sin(uTime * 1.25 + ph + iPos.x * 0.21) * 0.65 + sin(uTime * 2.3 + iPos.z * 0.37) * 0.35;
+          float ph = iPos.x * ${wave(0.041)} + iPos.y * ${wave(0.0185)};
+          float gust = 0.55 + 0.45 * sin(uTime * 0.37 + iPos.x * ${wave(0.0287)} + iPos.y * ${wave(0.0129)});
+          float bend = sin(uTime * 1.25 + ph + iPos.x * ${wave(0.21)}) * 0.65 + sin(uTime * 2.3 + iPos.y * ${wave(0.37)}) * 0.35;
           vec3 wd = vec3(wdir.x, 0.0, wdir.y) * bend * gust * uWind * aSway;
           // leafy flutter
           wd += vec3(
-            sin(uTime * 5.1 + position.y * 2.7 + iPos.x),
+            sin(uTime * 5.1 + position.y * 2.7 + iPos.x * ${wave(1.0)}),
             sin(uTime * 4.3 + position.x * 3.1) * 0.5,
-            cos(uTime * 4.7 + position.z * 2.9 + iPos.z)
+            cos(uTime * 4.7 + position.z * 2.9 + iPos.y * ${wave(1.0)})
           ) * 0.035 * uWind * step(0.001, aSway) * min(aSway * 4.0, 1.0);
           #ifdef USE_INSTANCING
             mat3 im = mat3(instanceMatrix);
@@ -235,7 +257,7 @@ export function createVegetationMaterial({ sway = true } = {}) {
       normal = normalize(vNormal);`,
     );
   };
-  mat.customProgramCacheKey = () => 'vegetation-v1';
+  mat.customProgramCacheKey = () => 'vegetation-v2';
   return mat;
 }
 
@@ -255,6 +277,7 @@ export function createGrassMaterial() {
     shader.uniforms.uWind = SHARED.uWind;
     shader.uniforms.uPlayer = SHARED.uPlayer;
     shader.uniforms.uGrassRadius = SHARED.uGrassRadius;
+    shader.uniforms.uOrigin = SHARED.uOrigin;
     Object.assign(shader.uniforms, CUTS);
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -263,11 +286,12 @@ export function createGrassMaterial() {
         attribute vec4 aBlade; // xyz = root (local), w = height fraction
         attribute vec2 aGround; // x = path (-1 = flower), y = forest
         varying vec2 vGround;
-        varying vec2 vRootW;
+        varying vec2 vRootW; // where the root is in the world (worldXZ)
         uniform float uTime;
         uniform float uWind;
         uniform vec3 uPlayer;
         uniform float uGrassRadius;
+        ${WORLD_GLSL}
         ${CUT_GLSL}`,
       )
       .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0.0, 1.0, 0.0);')
@@ -277,17 +301,17 @@ export function createGrassMaterial() {
         {
           vec3 root = aBlade.xyz;
           float hf = aBlade.w;
-          vec3 wroot = (modelMatrix * vec4(root, 1.0)).xyz;
+          vec3 wroot = (modelMatrix * vec4(root, 1.0)).xyz; // as drawn, like uPlayer
           vGround = aGround;
-          vRootW = wroot.xz;
+          vRootW = worldXZ(wroot);
           float dist = distance(wroot.xz, uPlayer.xz);
           float fade = 1.0 - smoothstep(uGrassRadius * 0.6, uGrassRadius, dist);
           if (groundCut(wroot + vec3(0.0, 0.05, 0.0)) < ${(RIM * 0.6).toFixed(3)}) fade = 0.0; // bare rock round a hole
           transformed = root + (transformed - root) * fade;
 
           vec2 wdir = normalize(vec2(1.0, 0.45));
-          float w = sin(uTime * 1.9 + wroot.x * 0.33 + wroot.z * 0.21) * 0.6
-                  + sin(uTime * 0.8 + wroot.x * 0.07 - wroot.z * 0.05) * 0.4;
+          float w = sin(uTime * 1.9 + vRootW.x * ${wave(0.33)} + vRootW.y * ${wave(0.21)}) * 0.6
+                  + sin(uTime * 0.8 + vRootW.x * ${wave(0.07)} - vRootW.y * ${wave(0.05)}) * 0.4;
           float h2 = hf * hf;
           transformed.xz += wdir * (w * 0.5 + 0.35) * 0.16 * uWind * h2;
 
@@ -305,6 +329,8 @@ export function createGrassMaterial() {
         varying vec2 vGround;
         varying vec2 vRootW;
         ${NOISE_GLSL}
+        ${WORLD_GLSL}
+        ${WORLD_NOISE_GLSL}
         ${GROUND_GLSL}`,
       )
       .replace(

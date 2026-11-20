@@ -58,15 +58,87 @@ vec3 skyGradient(vec3 rd) {
 }
 `;
 
-// Ground albedo from world position + masks. Shared by the terrain and the
-// grass so blades grow seamlessly out of the ground they stand on.
-// (requires NOISE_GLSL)
+// ── Patterns over the world ────────────────────────────────────────────────
+// A shader can't be told where in the world a pixel is: far from the middle
+// that number is too big for a 32-bit float to hold to the centimetre, which
+// is the whole reason the scene is drawn from an origin near the camera
+// (origin.js). What it can be told is where the pixel is within a period of a
+// few kilometres, which is all a pattern needs so long as the pattern repeats
+// on that period. So:
+//
+//   worldXZ(drawn)    where a drawn position (modelMatrix * position) is in
+//                     the world, give or take whole periods
+//   wnoise, wfbm4     noise over the world, by cells to the metre. The number
+//                     of cells is rounded so a whole number fit the period,
+//                     and the lattice wraps there: no seam anywhere, and
+//                     nothing changes when the origin moves
+//   wave(k)           (JavaScript, for writing a shader) a wavenumber near k
+//                     rad/m that comes round after a period, for sin(x * k)
+//
+// Noise in a frame that turns from pixel to pixel (water running with its
+// current) can't repeat on any period; it jumps, once, when the origin
+// crosses a period line. That is rare, and water that runs never holds still
+// to be compared.
+
+// m. A power of two, so cells-per-period divides out exactly.
+export const PERIOD = 4096;
+
+const TAU = Math.PI * 2;
+export const wave = (k) => ((Math.round((k * PERIOD) / TAU) * TAU) / PERIOD).toPrecision(9);
+
+export const WORLD_GLSL = /* glsl */ `
+uniform vec2 uOrigin; // the drawing origin, wrapped to the period
+const float PERIOD = ${PERIOD.toFixed(1)};
+vec2 worldXZ(vec3 drawn) { return drawn.xz + uOrigin; }
+`;
+
+// (requires NOISE_GLSL and WORLD_GLSL)
+export const WORLD_NOISE_GLSL = /* glsl */ `
+// Lattice point i brought into 0 .. m-1. (Not mod(): the half keeps the
+// division clear of the whole numbers, where a card may round either way.)
+vec2 wrapCell(vec2 i, float m) { return i - m * floor((i + 0.5) / m); }
+// Value noise whose lattice repeats every m cells.
+float tnoise(vec2 p, float m) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = hash12(wrapCell(i, m));
+  float b = hash12(wrapCell(i + vec2(1.0, 0.0), m));
+  float c = hash12(wrapCell(i + vec2(0.0, 1.0), m));
+  float d = hash12(wrapCell(i + vec2(1.0, 1.0), m));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+// How many cells of a pattern with about f to the metre fit the period.
+float cellsIn(float f) { return floor(f * PERIOD + 0.5); }
+// Noise at world place wp, about f cells to the metre, shifted off cells.
+float wnoise(vec2 wp, float f, vec2 off) {
+  float m = cellsIn(f);
+  return tnoise(wp * (m / PERIOD) + off, m);
+}
+float wnoise(vec2 wp, float f) { return wnoise(wp, f, vec2(0.0)); }
+float wfbm4(vec2 wp, float f, vec2 off) {
+  float s = 0.0;
+  float a = 0.5;
+  float m = cellsIn(f);
+  for (int i = 0; i < 4; i++) {
+    s += a * tnoise(wp * (m / PERIOD) + off, m);
+    m = floor(m * 2.03 + 0.5);
+    off = off * 2.03 + vec2(17.1, -9.7);
+    a *= 0.5;
+  }
+  return s / 0.9375;
+}
+`;
+
+// Ground albedo from where it is in the world (worldXZ) + masks. Shared by
+// the terrain and the grass so blades grow seamlessly out of the ground they
+// stand on. (requires NOISE_GLSL, WORLD_GLSL and WORLD_NOISE_GLSL)
 export const GROUND_GLSL = /* glsl */ `
 vec3 groundColor(vec2 wp, float pathM, float forestM, float slope) {
-  float n1 = vnoise(wp * 0.33);
-  float n2 = vnoise(wp * 1.6 + 13.0);
-  float n3 = fbm4(wp * 0.045 - 7.0);
-  float n4 = vnoise(wp * 4.1 - 3.0);
+  float n1 = wnoise(wp, 0.33);
+  float n2 = wnoise(wp, 1.6, vec2(13.0));
+  float n3 = wfbm4(wp, 0.045, vec2(-7.0));
+  float n4 = wnoise(wp, 4.1, vec2(-3.0));
 
   // meadow grass: green with drifts of dry, golden grass
   vec3 grassA = vec3(0.090, 0.170, 0.032);
@@ -92,8 +164,9 @@ vec3 groundColor(vec2 wp, float pathM, float forestM, float slope) {
   vec3 dirt = vec3(0.200, 0.135, 0.075);
   vec3 dirtDark = vec3(0.115, 0.078, 0.045);
   vec3 dirtc = mix(dirt, dirtDark, smoothstep(0.35, 0.8, n2) * 0.7);
-  vec2 pq = wp * 8.0 + vec2(vnoise(wp * 3.0), vnoise(wp * 3.0 + 7.0)) * 2.0;
-  float peb = step(0.955, hash12(floor(pq)));
+  float pebCells = cellsIn(8.0);
+  vec2 pq = wp * (pebCells / PERIOD) + vec2(wnoise(wp, 3.0), wnoise(wp, 3.0, vec2(7.0))) * 2.0;
+  float peb = step(0.955, hash12(wrapCell(floor(pq), pebCells)));
   dirtc = mix(dirtc, vec3(0.21, 0.18, 0.14), peb * 0.5);
   float edge = smoothstep(0.30, 0.45, pm) * (1.0 - smoothstep(0.45, 0.62, pm));
   col = mix(col, col * 0.62 + dirtDark * 0.3, edge);

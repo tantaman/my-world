@@ -54,8 +54,12 @@ export function cutField(x, y, z, c, out = null) {
 
 // Shared by every material that has to keep out of a cut (see
 // world/materials.js): .value is set in place, so one setCuts reaches them all.
+// Where a cut starts is a place, so uCutAt is slid with the scene while a
+// frame is drawn (world/index.js registers it with game.origin); the rest
+// are lengths and heights, which the slide doesn't touch.
 export const CUTS = {
-  uCutA: { value: Array.from({ length: MAX_CUTS }, () => new THREE.Vector4()) }, // ax, az, bx, bz
+  uCutAt: { value: Array.from({ length: MAX_CUTS }, () => new THREE.Vector2()) }, // ax, az
+  uCutRun: { value: Array.from({ length: MAX_CUTS }, () => new THREE.Vector2()) }, // bx - ax, bz - az
   uCutB: { value: Array.from({ length: MAX_CUTS }, () => new THREE.Vector4()) }, // fa, fb, w, h (h 0: none)
 };
 
@@ -63,17 +67,20 @@ export function setCuts(list) {
   for (let i = 0; i < MAX_CUTS; i++) {
     const c = list[i];
     if (c) {
-      CUTS.uCutA.value[i].set(c.ax, c.az, c.bx, c.bz);
+      CUTS.uCutAt.value[i].set(c.ax, c.az);
+      CUTS.uCutRun.value[i].set(c.bx - c.ax, c.bz - c.az);
       CUTS.uCutB.value[i].set(c.fa, c.fb, c.w, c.h);
     } else CUTS.uCutB.value[i].set(0, 0, 1, 0);
   }
 }
 
-// groundCut(p): how far world point p is outside the nearest cut (about m;
-// < 0 inside one). inCut(p): is it inside one, SHRINK in from its walls?
+// groundCut(p): how far drawn point p (modelMatrix * position, which is
+// where uCutAt is drawn too) is outside the nearest cut (about m; < 0 inside
+// one). inCut(p): is it inside one, SHRINK in from its walls?
 // cutRim(f): 0..1, how much of the rock round a hole there is at groundCut f.
 export const CUT_GLSL = /* glsl */ `
-uniform vec4 uCutA[${MAX_CUTS}];
+uniform vec2 uCutAt[${MAX_CUTS}];
+uniform vec2 uCutRun[${MAX_CUTS}];
 uniform vec4 uCutB[${MAX_CUTS}];
 float archField(float dl, float v, float w, float h) {
   float hc = h * ${ARCH.spring.toFixed(3)};
@@ -84,12 +91,12 @@ float archField(float dl, float v, float w, float h) {
 float groundCut(vec3 p) {
   float best = 1e9;
   for (int i = 0; i < ${MAX_CUTS}; i++) {
-    vec4 a = uCutA[i];
     vec4 b = uCutB[i];
     if (b.w <= 0.0) continue;
-    vec2 e = a.zw - a.xy;
-    float t = clamp(dot(p.xz - a.xy, e) / max(dot(e, e), 1e-9), 0.0, 1.0);
-    float dl = length(p.xz - a.xy - e * t);
+    vec2 e = uCutRun[i];
+    vec2 d = p.xz - uCutAt[i];
+    float t = clamp(dot(d, e) / max(dot(e, e), 1e-9), 0.0, 1.0);
+    float dl = length(d - e * t);
     best = min(best, archField(dl, p.y - mix(b.x, b.y, t), b.z, b.w));
   }
   return best;

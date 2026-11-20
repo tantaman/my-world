@@ -177,6 +177,7 @@ export function installHikes(game) {
   // Made once the land it takes in is here: the hike's own, and any other
   // hike's within reach of it. Until then, asking for it sends for that land.
   const far = new FarView(scene);
+  game.origin.place(far.mid);
   const asked = new Set();
   let worker = null;
   lands.on('land', (def) => {

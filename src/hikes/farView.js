@@ -11,6 +11,9 @@
 // Where the chunks are, it sinks out of sight under them, so near you the
 // real ground and the real trees are what you see, and it only shows past
 // their edge.
+//
+// Each mesh is measured from its own corner and put there, like a chunk
+// (render/origin.js).
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
@@ -41,8 +44,11 @@ export class FarView {
   constructor(scene) {
     this.scene = scene;
     this.meshes = new Map(); // id -> mesh
-    // the loaded chunks' square: x0, z0, x1, z1
-    this.box = { value: new THREE.Vector4(0, 0, 0, 0) };
+    // The loaded chunks' square: its middle (x, z), and how far it reaches
+    // each way. The middle is a place: whoever makes this registers it to be
+    // slid with the scene (origin.place).
+    this.mid = { value: new THREE.Vector2() };
+    this.half = { value: 0 };
     this.material = this._material();
   }
 
@@ -56,6 +62,7 @@ export class FarView {
     const mesh = new THREE.Mesh(buildGeometry(grid), this.material);
     mesh.name = `far view: ${id}`;
     mesh.userData.grid = { x0: grid.x0, z0: grid.z0, x1: grid.x0 + (grid.n - 1) * grid.step, z1: grid.z0 + (grid.n - 1) * grid.step };
+    mesh.position.set(grid.x0, 0, grid.z0);
     this.scene.add(mesh);
     this.meshes.set(id, mesh);
   }
@@ -86,20 +93,22 @@ export class FarView {
     const R = CONFIG.viewRadius;
     const cx = Math.floor(focus.x / S);
     const cz = Math.floor(focus.z / S);
-    this.box.value.set((cx - R) * S, (cz - R) * S, (cx + R + 1) * S, (cz + R + 1) * S);
+    this.mid.value.set((cx + 0.5) * S, (cz + 0.5) * S);
+    this.half.value = (R + 0.5) * S;
   }
 
   _material() {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
     mat.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, SKY, { uBox: this.box });
+      Object.assign(shader.uniforms, SKY, { uMid: this.mid, uHalf: this.half });
       shader.vertexShader = shader.vertexShader
         .replace(
           '#include <common>',
           `#include <common>
           attribute float aCanopy;
           attribute float aWater;
-          uniform vec4 uBox;
+          uniform vec2 uMid;
+          uniform float uHalf;
           varying float vWater;
           varying vec3 vWPos;`,
         )
@@ -109,7 +118,7 @@ export class FarView {
           {
             vec4 wp = modelMatrix * vec4(transformed, 1.0);
             // how far inside the loaded chunks' square this is
-            float e = min(min(wp.x - uBox.x, uBox.z - wp.x), min(wp.z - uBox.y, uBox.w - wp.z));
+            float e = uHalf - max(abs(wp.x - uMid.x), abs(wp.z - uMid.y));
             float under = smoothstep(0.0, ${SINK_BAND.toFixed(1)}, e);
             transformed.y += aCanopy * (1.0 - under) - under * ${SINK.toFixed(1)} - ${UNDER.toFixed(2)};
             vWater = aWater;
@@ -142,12 +151,13 @@ export class FarView {
           #include <opaque_fragment>`,
         );
     };
-    mat.customProgramCacheKey = () => 'far-view-v1';
+    mat.customProgramCacheKey = () => 'far-view-v2';
     return mat;
   }
 }
 
-function buildGeometry({ x0, z0, n, step, h, water, forest, species }) {
+// Positions are from the grid's corner (x0, z0), where the mesh is put.
+function buildGeometry({ n, step, h, water, forest, species }) {
   const N = n * n;
   const pos = new Float32Array(N * 3);
   const col = new Float32Array(N * 3);
@@ -158,9 +168,9 @@ function buildGeometry({ x0, z0, n, step, h, water, forest, species }) {
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const k = j * n + i;
-      pos[k * 3] = x0 + i * step;
+      pos[k * 3] = i * step;
       pos[k * 3 + 1] = y[k];
-      pos[k * 3 + 2] = z0 + j * step;
+      pos[k * 3 + 2] = j * step;
       if (water[k] > NO_WATER * 0.5) {
         wet[k] = 1;
         _c.copy(WATER);

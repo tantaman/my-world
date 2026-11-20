@@ -6,9 +6,15 @@
 // One THREE.Points of POOL drops, moved here on the CPU: there are never many
 // at once, and none lives long. Like the pollen and the fireflies, each is a
 // pixel or two in the low-res render, lit by the sky.
+//
+// A drop's position is kept from where the Points object stands, not from the
+// middle of the world: these are 32-bit floats, and a drop moves a few
+// centimetres a frame. The object is put down again where the splashing is
+// whenever that has moved away (see render/origin.js).
 
 import * as THREE from 'three';
 import { SKY } from '../render/uniforms.js';
+import { anchor } from '../render/origin.js';
 
 const POOL = 384;
 const GRAVITY = 9.8; // m/s²
@@ -64,6 +70,12 @@ export class Splashes {
   // `level`: up at about `up` m/s, `spread` m/s every way across, and
   // carried along at (vx, vz) on top of that.
   burst(x, y, z, level, n, { up = 2.2, spread = 0.9, vx = 0, vz = 0, from = 0.12 } = {}) {
+    // Somewhere new: the drops still in the air back there are out of sight.
+    const { x: wasX, z: wasZ } = this.points.position;
+    const at = anchor(this.points, x, z);
+    if (at.x !== wasX || at.z !== wasZ) this.age.fill(-1);
+    x -= at.x;
+    z -= at.z;
     for (let i = 0; i < n; i++) {
       const k = this.next;
       this.next = (this.next + 1) % POOL;

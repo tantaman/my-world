@@ -54,8 +54,10 @@ export const roof = {
     if (key !== this.ghostKey) {
       const m = new Mesher();
       addRoof(m, r, ROOF.pitch, ROOF.overhang, 1);
+      const at = m.anchor();
       this.ghost.geometry.dispose();
-      this.ghost.geometry = m.build();
+      this.ghost.geometry = m.build(at);
+      this.ghost.position.copy(at);
       this.ghostKey = key;
     }
     b.previews.show(this.ghost, t.ok);

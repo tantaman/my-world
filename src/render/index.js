@@ -1,9 +1,17 @@
 // The picture: renderer, scene, camera and the pixel pipeline, and the keys
 // that change how it looks.
+//
+// The scene is in world coordinates, and so is everything the game does with
+// it. Only while a frame is being drawn is it slid to sit round an origin
+// near the camera, so the graphics card is never handed a big number
+// (origin.js, which says what that asks of anything that draws).
 
 import * as THREE from 'three';
 import { CONFIG, urlHas } from '../config.js';
 import { PixelPipeline } from './pixelPipeline.js';
+import { Origin } from './origin.js';
+import { SHARED } from './uniforms.js';
+import { PERIOD } from './glsl.js';
 
 export function installRender(game) {
   const { settings, commands } = game;
@@ -20,8 +28,11 @@ export function installRender(game) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 1200);
   const pipeline = new PixelPipeline(renderer);
+  const origin = new Origin();
+  origin.place(SHARED.uPlayer);
 
   game.provide('renderer', renderer);
+  game.provide('origin', origin);
   game.provide('scene', scene);
   game.provide('camera', camera);
   game.provide('pipeline', pipeline);
@@ -112,7 +123,15 @@ export function installRender(game) {
     update() {
       renderer.info.reset();
       // Something (the map) may be covering the whole view.
-      if (!game.covered) pipeline.render(scene, camera, game.sky ? game.sky.exposure : 1, game.sky ? game.sky.open : 1);
+      if (game.covered) return;
+      origin.follow(camera.position.x, camera.position.z);
+      origin.wrapped(PERIOD, SHARED.uOrigin.value);
+      origin.begin(scene, camera);
+      try {
+        pipeline.render(scene, camera, game.sky ? game.sky.exposure : 1, game.sky ? game.sky.open : 1);
+      } finally {
+        origin.end(scene, camera);
+      }
     },
   });
 }

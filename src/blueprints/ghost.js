@@ -7,6 +7,11 @@
 // One Ghost is the plan following the crosshair while you choose where to
 // put it (hidden every frame unless the tool shows it, like any preview); the
 // other is the site you staked out, there whatever is in your hands.
+//
+// The pieces are worked out where they'll stand in the world, but the
+// geometry is measured from a corner of the plan, where the ghost is then
+// put: a vertex is a 32-bit float, and can't hold a place far from the
+// middle of the world (render/origin.js).
 
 import * as THREE from 'three';
 import { HALF, LOG_D, TIMBER_W, ROOF, height } from '../build/constants.js';
@@ -34,7 +39,8 @@ function box(m, x, y, z, w, h, d) {
 //   built    the building already standing on the site, or null
 //   trouble  'x,z' of footings the ground won't take
 //   pad      the grade the site will be levelled to, or null
-// -> { pieces, trouble }: BufferGeometry each (empty if there is nothing)
+// -> { pieces, trouble, at }: a BufferGeometry each (empty if there is
+//    nothing), measured from `at`, which is where their meshes must be put
 export function ghostGeometry(placed, { y0, ground, built = null, trouble = new Set(), pad = null }) {
   const left = remaining(placed, built);
   const ok = new Mesher();
@@ -61,8 +67,9 @@ export function ghostGeometry(placed, { y0, ground, built = null, trouble = new 
     const R = grow(placed.rect, PAD);
     box(ok, (R.x0 + R.x1) / 2, pad, (R.z0 + R.z1) / 2, R.x1 - R.x0, PAD_THICK, R.z1 - R.z0);
   }
-  const out = (m) => (m.empty ? new THREE.BufferGeometry() : m.build());
-  return { pieces: out(ok), trouble: out(bad) };
+  const at = new THREE.Vector3(placed.rect.x0, 0, placed.rect.z0);
+  const out = (m) => (m.empty ? new THREE.BufferGeometry() : m.build(at));
+  return { pieces: out(ok), trouble: out(bad), at };
 }
 
 export class Ghost {
@@ -88,6 +95,8 @@ export class Ghost {
     this.trouble.geometry.dispose();
     this.pieces.geometry = g.pieces;
     this.trouble.geometry = g.trouble;
+    this.pieces.position.copy(g.at);
+    this.trouble.position.copy(g.at);
   }
 
   set visible(on) {

@@ -47,6 +47,7 @@ export class BeeSwarm {
     this.z = z;
     this.ground = ground;
     this.mesh = new THREE.InstancedMesh(beeGeo, beeMaterial, count);
+    this.mesh.position.set(x, 0, z); // each bee is placed from the middle of the swarm
     this.mesh.frustumCulled = false; // they move every frame; the swarm is small
     this.mesh.castShadow = false;
     this.bees = [];
@@ -92,7 +93,7 @@ export class BeeSwarm {
       b.z += b.vz * dt;
       if (Math.hypot(b.vx, b.vz) > 0.05) b.yaw = Math.atan2(b.vx, b.vz);
       const jit = 0.012;
-      _p.set(b.x + Math.sin(time * 31 + i) * jit, b.y + Math.sin(time * 23 + i * 3) * jit, b.z + Math.cos(time * 27 + i * 2) * jit);
+      _p.set(b.x - this.x + Math.sin(time * 31 + i) * jit, b.y + Math.sin(time * 23 + i * 3) * jit, b.z - this.z + Math.cos(time * 27 + i * 2) * jit);
       _e.set(0, b.yaw, 0);
       _q.setFromEuler(_e);
       _m.compose(_p, _q, _s.set(1, 1, 1));

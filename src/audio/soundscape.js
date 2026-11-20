@@ -35,7 +35,7 @@
 
 import { clamp } from '../noise.js';
 import { rand } from '../core/geom.js';
-import { makeNoise, makeImpulse, setPos } from './kit.js';
+import { makeNoise, makeImpulse, setPos, HEARD_FROM } from './kit.js';
 import { playSfx } from './sfx.js';
 import { playCall } from './calls.js';
 import { playFootstep } from './footsteps.js';
@@ -253,10 +253,14 @@ export class Soundscape {
     const ux = e[4];
     const uy = e[5];
     const uz = e[6];
+    // sounds are placed from a spot near the listener (kit.js)
+    HEARD_FROM.follow(p.x, p.z);
+    const lx = p.x - HEARD_FROM.x;
+    const lz = p.z - HEARD_FROM.z;
     if (L.positionX) {
-      L.positionX.value = p.x;
+      L.positionX.value = lx;
       L.positionY.value = p.y;
-      L.positionZ.value = p.z;
+      L.positionZ.value = lz;
       L.forwardX.value = fx;
       L.forwardY.value = fy;
       L.forwardZ.value = fz;
@@ -264,7 +268,7 @@ export class Soundscape {
       L.upY.value = uy;
       L.upZ.value = uz;
     } else {
-      L.setPosition(p.x, p.y, p.z);
+      L.setPosition(lx, p.y, lz);
       L.setOrientation(fx, fy, fz, ux, uy, uz);
     }
     this.listener = { x: p.x, y: p.y, z: p.z };
@@ -320,6 +324,8 @@ export class Soundscape {
 
   // Glide a panner to a new spot.
   moveTo(panner, x, y, z, t) {
+    x -= HEARD_FROM.x;
+    z -= HEARD_FROM.z;
     if (panner.positionX) {
       panner.positionX.setTargetAtTime(x, t, 0.25);
       panner.positionY.setTargetAtTime(y, t, 0.25);

@@ -6,6 +6,7 @@
 
 import * as THREE from 'three';
 import { SHARED } from '../render/uniforms.js';
+import { anchor } from '../render/origin.js';
 import { NOISE_GLSL } from '../render/glsl.js';
 
 // Which way smoke drifts and flames lean, as the trees sway.
@@ -168,14 +169,14 @@ export class FireFx {
     this.smokeMat = new THREE.ShaderMaterial({
       uniforms: { uAmbient: { value: new THREE.Color(0.5, 0.5, 0.5) }, uTime: SHARED.uTime },
       vertexShader: /* glsl */ `
-        attribute vec4 aPuff; // xyz centre, w size
+        attribute vec4 aPuff; // xyz centre (from where the mesh stands), w size
         attribute vec3 aLook; // x opacity, y seed, z firelight
         varying vec2 vUv;
         varying vec3 vLook;
         void main() {
           vUv = uv;
           vLook = aLook;
-          vec4 mv = viewMatrix * vec4(aPuff.xyz, 1.0);
+          vec4 mv = modelViewMatrix * vec4(aPuff.xyz, 1.0);
           mv.xy += position.xy * aPuff.w;
           gl_Position = projectionMatrix * mv;
         }`,
@@ -291,8 +292,10 @@ export class FireFx {
       sp[n++] = s;
     }
     sp.length = n;
+    // drawn from where the mesh stands, which is kept near them (render/origin.js)
+    const at = n ? anchor(this.sparksMesh, sp[0].x, sp[0].z) : this.sparksMesh.position;
     for (let i = 0; i < n; i++) {
-      pos.setXYZ(i, sp[i].x, sp[i].y, sp[i].z);
+      pos.setXYZ(i, sp[i].x - at.x, sp[i].y, sp[i].z - at.z);
       life.setX(i, sp[i].life / sp[i].max);
     }
     this.spGeo.setDrawRange(0, n);
@@ -315,11 +318,12 @@ export class FireFx {
     pf.length = m;
     const P = this.pfGeo.attributes.aPuff;
     const L = this.pfGeo.attributes.aLook;
+    const from = m ? anchor(this.smokeMesh, pf[0].x, pf[0].z) : this.smokeMesh.position;
     for (let i = 0; i < m; i++) {
       const p = pf[i];
       const k = p.age / p.life;
       const fade = smooth(Math.min(1, p.age / 0.6)) * (1 - smooth(k));
-      P.setXYZW(i, p.x, p.y, p.z, p.size + p.grow * p.age);
+      P.setXYZW(i, p.x - from.x, p.y, p.z - from.z, p.size + p.grow * p.age);
       L.setXYZ(i, p.opacity * fade * 0.24, p.seed, p.warm * Math.max(0, 1 - (p.y - p.fy) / 2.2));
     }
     this.pfGeo.instanceCount = m;

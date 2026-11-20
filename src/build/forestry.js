@@ -189,7 +189,9 @@ export class Forestry extends Emitter {
       crown.y = this.chunks.heightAt(crown.x, crown.z);
       const flat = new THREE.Vector3(d.x, 0, d.z).normalize();
       addSlash(m, crown, flat, f.id, f.kind === 'pine');
-      const mesh = new THREE.Mesh(m.build(), this.mat.wood);
+      const at = m.anchor();
+      const mesh = new THREE.Mesh(m.build(at), this.mat.wood);
+      mesh.position.copy(at);
       mesh.userData.own = true;
       mesh.castShadow = true;
       mesh.receiveShadow = true;

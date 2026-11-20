@@ -1,6 +1,8 @@
 // The raw materials every sound here is made from: noise, an impulse to
 // convolve with, and an envelope to shape a gain.
 
+import { Origin } from '../render/origin.js';
+
 export const SILENT = 0.0001;
 
 // A buffer of 'white', 'pink' or 'brown' noise.
@@ -61,7 +63,17 @@ export function envelope(param, t, attack, peak, decay) {
   param.exponentialRampToValueAtTime(SILENT, t + attack + decay);
 }
 
+// Where sounds are placed from. A panner's position is a 32-bit float, like
+// a vertex, so sounds too are placed from a spot near the listener and not
+// from the middle of the world (render/origin.js). This one moves a long way
+// at a time and seldom: what is sounding when it does is left behind, as a
+// jump that far would leave it anyway.
+export const HEARD_FROM = new Origin(16384);
+
+// Put a panner (or the listener) at a place in the world.
 export function setPos(node, x, y, z) {
+  x -= HEARD_FROM.x;
+  z -= HEARD_FROM.z;
   if (node.positionX) {
     node.positionX.value = x;
     node.positionY.value = y;
