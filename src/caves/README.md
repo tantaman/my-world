@@ -48,9 +48,11 @@ metres at a time, turning, branching now and then, dropping into a room here
 and there. Each must keep 2.6 m of earth over its roof (more than a spade can
 dig), stay clear of streams and ponds overhead, keep rock between itself and
 any passage it doesn't join (so there's only ever one floor under any spot),
-and stay in its square, so caves never run into each other. Where they are,
-and what each is called, is pinned in `test/golden/caves-*.json`: a cave's
-id is in your save if you've been in it or are tracking it.
+and stay in its square, so caves never run into each other. A square any of
+which is within reach of a real place brought in from a photo (`src/hikes/`)
+has no cave: the land there is what is really there. Where they are, and
+what each is called, is pinned in `test/golden/caves-*.json`: a cave's id is
+in your save if you've been in it or are tracking it.
 
 Then the rock (`shape.js`): each passage an arch swept along it, each room a
 dome with a flat floor, all melted together where they meet and roughened

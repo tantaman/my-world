@@ -14,6 +14,10 @@ import { Spaces } from '../src/world/spaces.js';
 import { cutField, SHRINK } from '../src/world/cuts.js';
 import { Player } from '../src/player/player.js';
 import { matchesGolden } from './helpers/golden.js';
+import { Caves } from '../src/caves/caves.js';
+import { cellOf } from '../src/caves/sites.js';
+import { HIKES } from '../src/world/hikes.js';
+import { Landforms, reachOf } from '../src/world/landforms.js';
 
 const SEED = 20261119;
 // The first land, and a few squares near the start there that have caves
@@ -69,6 +73,20 @@ test('caves are grown from the seed: the same every time, and some near the star
   // and another seed has caves of its own
   const other = growWorld(42, [], 1);
   assert.notDeepEqual(layoutCave(other, 0, 0)?.mouth, caves[0].mouth);
+});
+
+test('no cave is grown where a real place reaches, and everywhere else they are as they were', () => {
+  // told from the hikes' cards alone: their land is never fetched here
+  const landforms = new Landforms(HIKES);
+  const found = new Caves({ gen, keepOff: (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1) });
+  for (const card of HIKES) {
+    const [cx, cz] = cellOf(...card.at);
+    for (const [i, j] of [[0, 0], [1, 0], [0, -1], [-1, 1]]) assert.equal(found.site(cx + i, cz + j), null, `none on ${card.id}`);
+    // a little beyond its reach, the forest's own
+    const [fx, fz] = cellOf(card.at[0] + reachOf(card) + 2 * CAVE.cell, card.at[1]);
+    if (!landforms.reaches(fx * CAVE.cell, fz * CAVE.cell, (fx + 1) * CAVE.cell, (fz + 1) * CAVE.cell)) assert.deepEqual(found.site(fx, fz), layoutCave(gen, fx, fz));
+  }
+  for (const [cx, cz] of SQUARES) assert.deepEqual(found.site(cx, cz), layoutCave(gen, cx, cz), 'the caves near the start are where they were');
 });
 
 test('a cave changes nothing the seed grows', () => {
