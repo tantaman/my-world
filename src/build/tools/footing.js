@@ -85,10 +85,11 @@ export function footingCheck(b, x, z) {
 }
 
 // Whatever but the lie of the land stops a footing at (x, z): water (unless
-// `water` is false), or something standing too close. -> why, or null
-export function footingSpot(b, x, z, { water = true } = {}) {
+// `water` is false), or something standing too close (but what `ignore`
+// says will be gone by then). -> why, or null
+export function footingSpot(b, x, z, { water = true, ignore = null } = {}) {
   if (water && b.chunks.waterAt(x, z, _wet) && _wet.depth > -0.05) return "that's under water: fill it in first (shovel, right-click)";
-  const o = b.obstacles.near(x, z, 3).find((q) => q.footing && Math.hypot(q.x - x, q.z - z) < q.footing);
+  const o = b.obstacles.near(x, z, 3).find((q) => q.footing && Math.hypot(q.x - x, q.z - z) < q.footing && !(ignore && ignore(q)));
   return o ? `${o.what} is in the way` : null;
 }
 

@@ -19,6 +19,7 @@ import { inTheWay } from '../build/tools/wall.js';
 import { tenths } from '../build/inventory.js';
 import { place, findBuilding, survey, needs } from './plan.js';
 import { levelling, siteGround } from './grade.js';
+import { clearable, clearingWords, zone } from './clear.js';
 
 const RECHECK = 0.5; // s between looks at a spot you keep aiming at (the ground can change)
 const CONFIRM = 2.5; // s to right-click again to pull up the stakes
@@ -102,8 +103,9 @@ export function blueprintTool({ library, foreman, ghost, copy }) {
 }
 
 // Would the plan go here? Everything that would stop it, short of materials,
-// which you might yet go and gather. Uneven ground is no trouble if the
-// foreman can level it (grade.js).
+// which the foreman gathers. Trees and stumps on the site are no trouble, as
+// the foreman clears them first (clear.js), nor is uneven ground it can
+// level (grade.js).
 // -> { placed, y0: the footings' level, uneven: 'x,z' of footings that can't
 //      reach it, need: what it takes, in words, pad: the grade it will be
 //      levelled to or null, trouble: words or null }
@@ -111,10 +113,14 @@ function assess(b, plan, x, z, rot) {
   const placed = place(plan, x, z, rot);
   const { b: there, clash } = findBuilding(placed, b.buildings.list, JOIN_RADIUS);
   const built = new Set(there ? [...there.footings.values()].map((f) => `${f.x},${f.z}`) : []);
-  const lv = levelling(placed, siteGround(b, placed.rect), { y0: there ? there.y0 : null, built, earn: !b.creative });
+  const ignore = (o) => clearable(o, placed.rect);
+  const lv = levelling(placed, siteGround(b, placed.rect, { ignore }), { y0: there ? there.y0 : null, built, earn: !b.creative });
   const s = survey(placed, (px, pz) => b.chunks.heightAt(px, pz), there ? there.y0 : lv.need ? lv.level + PIER.first : null);
   const n = needs(plan);
-  const need = [n.log && `${n.log} m log`, n.timber && `${n.timber} m timber`, `${n.stone} stones`, lv.need && `levelling ${tenths(lv.cut + lv.fill)} m³`].filter(Boolean).join(' · ');
+  const Z = zone(placed.rect);
+  const toClear = b.obstacles.near((Z.x0 + Z.x1) / 2, (Z.z0 + Z.z1) / 2, Math.hypot(Z.x1 - Z.x0, Z.z1 - Z.z0) / 2 + 1).filter(ignore);
+  const clearing = clearingWords(toClear.filter((o) => o.clear === 'fell').length, toClear.filter((o) => o.clear === 'grub').length);
+  const need = [n.log && `${n.log} m log`, n.timber && `${n.timber} m timber`, `${n.stone} stones`, clearing, lv.need && `levelling ${tenths(lv.cut + lv.fill)} m³`].filter(Boolean).join(' · ');
   let trouble = null;
   let uneven = new Set();
   if (clash) trouble = `too close to another building (keep ${JOIN_RADIUS} m apart)`;
@@ -125,14 +131,14 @@ function assess(b, plan, x, z, rot) {
     for (const f of placed.footings) {
       if (built.has(`${f.x},${f.z}`)) continue;
       // levelling settles the water question; otherwise the footing tool asks it
-      const why = footingSpot(b, f.x, f.z, { water: !lv.need });
+      const why = footingSpot(b, f.x, f.z, { water: !lv.need, ignore });
       if (why) {
         trouble = `a footing: ${why}`;
         break;
       }
     }
     for (const L of trouble ? [] : placed.logs) {
-      const what = inTheWay(b, L.axis, L.line, L.s0, L.s1, L.k);
+      const what = inTheWay(b, L.axis, L.line, L.s0, L.s1, L.k, ignore);
       if (what) {
         trouble = `${what} is in the way of a wall`;
         break;

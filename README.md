@@ -692,28 +692,39 @@ piece by piece, with the same tools and the same rules as building by hand.
 
 - **Plan (9).** A ghost of the plan follows the crosshair, green where it
   will go and red where it won't, and the prompt says why (too steep to
-  level, a tree on a wall line, another building too close) and what it
-  takes in wood, stone and levelling. **Right-click** turns it a quarter. Press **9** again for
+  level, a boulder in the way, another building too close) and what it
+  takes in wood, stone, clearing and levelling. **Right-click** turns it a
+  quarter. Press **9** again for
   the next plan. Four come with the game: a small cabin, a cabin with
   windows, a two-room cabin and a hewn-timber hut.
 - **Click** to stake it out. The plan stays on the ground as a pale-blue
   ghost of whatever is still to go up, whatever tool you hold.
 - **Click** again (or press **B** with any tool in hand) and the hiker gets
-  on with it: levels the site if it needs it, gathers what it hasn't got,
+  on with it: clears the site, levels it if it needs it, gathers what it
+  hasn't got,
   walks round the site rather than through it, digs and sets each footing,
   lays the logs a course at a time, cuts every notch with the axe and
   raises the roof. It's no faster than you: a small cabin takes two or three
   minutes with the wood to hand, and about seven from nothing, levelling a
   hillside and felling eight trees included.
-- It stops and says why when it can't go on: too steep to level, a tree in
-  the way of a wall, nothing left to gather within reach. Put it right and
-  **click** to carry on. Touch the controls and you have the hiker back
+- It stops and says why when it can't go on: too steep to level, a boulder
+  where it can't level round it, nothing left to gather within reach. Put
+  it right and **click** to carry on. Touch the controls and you have the hiker back
   (it pauses). Putting the plan tool down pauses it too.
 - **Right-click** twice pulls up the stakes. What is built stays built.
 
 The site is saved with your other things, so it's there after a reload and
 the hiker picks up where it was. What is built is the world's, saved and
 shared like anything you build by hand.
+
+**Clearing.** First, whatever stands on the site comes off it: every tree
+within a metre and a half of the footprint is felled, from the site's side
+so it falls away from it, and bucked into logs for the build; the stumps,
+and any that were there already, are grubbed out; and bushes, ferns, old
+fallen logs and small stones are spaded off the pad. A trunk lying across
+the site is bucked away too. Boulders stay where they are, as they do for
+anyone: the ghost goes red if one stops the ground at a footing being
+levelled. The prompt says what's to clear: *clearing 2 trees · a stump*.
 
 **Levelling.** All of a building's footings have to come up to one level,
 and a pier only makes up about 25 cm, so on these hills most sites need
@@ -937,7 +948,7 @@ written from the same list, and two features wanting one key are warned about.
 
 ```bash
 npm test             # in Node, a second or so
-npm run smoke        # a play-through in a headless browser, three or four minutes
+npm run smoke        # a play-through in a headless browser, about four minutes
 npm run together     # two visitors in one world (run `npm run serve` first)
 ```
 
@@ -957,10 +968,10 @@ code changed something it shouldn't have; only re-record
 `npm run smoke` plays: it fells a tree, bucks and hews it, picks up a stone,
 digs, raises and roofs a cabin, lights a campfire in it (and finds the roof
 won't go over that), reloads to see it was all kept, stakes out a blueprint
-and lets the hiker level the ground and build it, lets it gather everything
-for a small one from nothing, opens the map and leaves a mark, makes some
-noise, wades into a stream to be carried by it and runs up it splashing, and
-calls up one of every animal. It
+among trees and lets the hiker clear it, level the ground and build it, lets
+it gather everything for a small one from nothing, opens the map and leaves a
+mark, makes some noise, wades into a stream to be carried by it and runs up it
+splashing, and calls up one of every animal. It
 drives the keys and the crosshair and reads results through `window.world`,
 so it doesn't care how the insides are arranged. The last two need
 [Playwright](https://playwright.dev) (`npm i -D playwright && npx playwright
@@ -1059,9 +1070,10 @@ src/
     plan.js               what a blueprint is; putting one down; what to do next
     grade.js              levelling a site: when, to what grade, which spot next
     gather.js             what a plan still needs, and where round the site to get it
+    clear.js              what has to come off the site first, and in what order
     plans.js              the blueprints that come with the game
     library.js            those, and the ones you copied, kept in this browser
-    foreman.js            levelling, gathering for and building a staked-out site
+    foreman.js            clearing, levelling, gathering for and building a site
     ghost.js              what's still to go up, drawn where it will stand
     tool.js               the plan tool (9)
   map/

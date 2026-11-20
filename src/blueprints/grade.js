@@ -161,12 +161,13 @@ export function nextSpot(work, near, skip = new Set()) {
 }
 
 // The ground of the game, as levelling() wants it, for the pad round `rect`.
-// terrain: TerrainEdits · obstacles: Obstacles · chunks: the ChunkManager
-export function siteGround({ terrain, obstacles, chunks }, rect) {
+// terrain: TerrainEdits · obstacles: Obstacles · chunks: the ChunkManager ·
+// ignore(obstacle): it will be gone before the spade gets there (cleared)
+export function siteGround({ terrain, obstacles, chunks }, rect, { ignore = null } = {}) {
   const R = grow(rect, PAD);
   const cx = (R.x0 + R.x1) / 2;
   const cz = (R.z0 + R.z1) / 2;
-  const near = obstacles.near(cx, cz, Math.hypot(R.x1 - cx, R.z1 - cz) + 1).filter((o) => o.dig);
+  const near = obstacles.near(cx, cz, Math.hypot(R.x1 - cx, R.z1 - cz) + 1).filter((o) => o.dig && !(ignore && ignore(o)));
   const wet = { level: 0, depth: 0, flowX: 0, flowZ: 0, foam: 0 };
   return {
     height: (ix, iz) => terrain.vertexHeight(ix, iz),
