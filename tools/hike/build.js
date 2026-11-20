@@ -22,6 +22,9 @@ const ON_TRAIL = 30;
 // How near (game m) a trail has to come to a road or a car park for the walk
 // to start there.
 const AT_ROAD = 4;
+// A walk that starts this far (game m) over the middle of the land's edge
+// starts on top of the mountain.
+const SUMMIT = 40;
 // Points of two paths nearer than this (game m) are the same point.
 const SAME = 0.05;
 // Lakes stop this far (game m) inside the real land, so they never reach
@@ -35,6 +38,9 @@ const SEA_LEVEL = 0;
 const SEA_NAME = 'the sea';
 // real m: how far over the water a lake's, or the sea's, banks are kept
 const BANK = 0.5;
+// game m: the spacing of a beach's own grid, and how far round it that reaches
+const BEACH_CELL = 1.5;
+const BEACH_MARGIN = 6;
 // and trails this far
 const TRAIL_INSET = 12;
 // what is kept of a trail's line: no point off it by more than this (game m)
@@ -51,10 +57,11 @@ const SEA_MARGIN = 70;
 //              on the left of each line as you go along it (osm.js)
 //   roads      [[[lat, lon], ...], ...]: roads and car parks, where a walk
 //              can begin
+//   beaches    [[[lat, lon], ...], ...]: the outline of each beach
 //   datum      the heights to stand on, shared with a hike this one overlaps
 //              (place.js), or null to set its own
 // → { def, preview: { width, height, rgb } }
-export function buildHike({ id, name, photo, elevation, trails = [], waters = [], coast = [], roads = [], at = [0, 0], datum = null, ...opt }) {
+export function buildHike({ id, name, photo, elevation, trails = [], waters = [], coast = [], roads = [], beaches = [], at = [0, 0], datum = null, ...opt }) {
   const o = { ...DEFAULTS, ...opt, trees: { ...DEFAULTS.trees, ...opt.trees } };
   const s = o.scale;
   const frame = localFrame(photo.lat, photo.lon);
@@ -203,6 +210,29 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
     }
   }
 
+  // ── Beaches ────────────────────────────────────────────────────────────────
+  // A beach can be a few metres across at this scale, far finer than the
+  // ground's grid: each is kept as distances to its edge on a grid of its own.
+  const strands = [];
+  for (const ring of beaches) {
+    const pts = ring.map(toGame);
+    let [x0, z0, x1, z1] = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const [x, z] of pts) {
+      x0 = Math.min(x0, x);
+      z0 = Math.min(z0, z);
+      x1 = Math.max(x1, x);
+      z1 = Math.max(z1, z);
+    }
+    if (!pts.every(([x, z]) => inside(x, z, LAKE_INSET))) continue;
+    const m = BEACH_MARGIN;
+    const bw = Math.ceil((x1 - x0 + 2 * m) / BEACH_CELL) + 1;
+    const bh = Math.ceil((z1 - z0 + 2 * m) / BEACH_CELL) + 1;
+    if (bw * bh > 40000) continue; // a strand for miles: the country's own shore will do
+    const d = new Float32Array(bw * bh);
+    for (let j = 0; j < bh; j++) for (let i = 0; i < bw; i++) d[j * bw + i] = signedDistance([pts], x0 - m + i * BEACH_CELL, z0 - m + j * BEACH_CELL);
+    strands.push({ x: round(x0 - m, 100), z: round(z0 - m, 100), w: bw, h: bh, cell: BEACH_CELL, shore: packShore(d) });
+  }
+
   const base = Math.min(...E);
   const H = new Float32Array(n * n);
   for (let k = 0; k < n * n; k++) H[k] = (E[k] - base) * s;
@@ -258,15 +288,27 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
     trailhead: { x: round(trailhead.x, 10), z: round(trailhead.z, 10), yaw: round(trailhead.yaw, 1000) },
     trail: route ? { name: route.name, length: Math.round(route.length), climb: Math.round(heightAt(0, 0) - heightAt(trailhead.x, trailhead.z)) } : null,
     trees: o.trees,
+    // what kind of country it is (src/world/country.js); unsaid, forest
+    ...(o.country ? { country: o.country } : {}),
     lakes: lakes.map((l) => ({ name: l.name, ...(l.sea ? { sea: true } : {}), level: round((l.levelReal - base) * s, 100), box: l.box, shore: packShore(l.d) })),
+    ...(strands.length ? { beaches: strands } : {}),
     paths: lines.map((l) => l.pts.flatMap(([x, z]) => [round(x, 10), round(z, 10)])),
     ground: { n, cell, heights: packHeights(H, n) },
   };
   // First in its part of the world: its own trailhead sets the heights, at
-  // the level of the forest round it (see WorldGen._settle).
+  // the level of the forest round it (see WorldGen._settle). Unless the walk
+  // starts on top of the mountain (a summit you drive to): the forest stood
+  // level with that would have the mountain in a pit. Then it is the land's
+  // edge, half way up it, that stands level with the forest, and the
+  // mountain stands over it.
   if (!def.datum) {
     const L = new Landform(def);
-    const anchor = L.raw(at[0] + def.trailhead.x, at[1] + def.trailhead.z);
+    let anchor = L.raw(at[0] + def.trailhead.x, at[1] + def.trailhead.z);
+    const rim = [];
+    for (let k = 0; k < 96; k++) rim.push(L.raw(at[0] + Math.cos((k / 96) * Math.PI * 2) * R, at[1] + Math.sin((k / 96) * Math.PI * 2) * R));
+    rim.sort((a, b) => a - b);
+    const edge = rim[rim.length >> 1];
+    if (anchor > edge + SUMMIT) anchor = edge;
     def.datum = { at: [...at], outer: def.radius + def.fade, anchor: round(anchor, 1000), base: def.base };
   }
   return { def, preview: preview(H, n, cell, lakeCells, lines, route) };
@@ -275,7 +317,7 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
 // A hike as it's kept (see src/world/landforms.js): its card, small, listed in
 // src/world/hikes.js and always loaded; and its land, in a file of its own,
 // fetched the first time it's needed. { ...card, ...land } is the hike again.
-export const LAND_PARTS = ['ground', 'lakes', 'paths'];
+export const LAND_PARTS = ['ground', 'lakes', 'beaches', 'paths'];
 export function splitHike(def) {
   const card = {};
   const land = {};

@@ -6,6 +6,8 @@
 // every real tree, bush and boulder from the chunk generator.
 
 import { generateVegetation, VEG_KINDS } from '../world/chunkGen.js';
+import { TREE_KINDS } from '../world/flora.js';
+import { display } from '../world/country.js';
 import { hash2i, smoothstep } from '../noise.js';
 
 export const TILE = 128; // map pixels per tile side
@@ -35,7 +37,14 @@ const WATER_DEEP = [0.2, 0.35, 0.47];
 const WATER_EDGE = [0.25, 0.38, 0.42];
 
 // canopy radius in meters at scale 1
-const CANOPY = { pine: 2.5, broad: 3.4, birch: 2.2 };
+const CANOPY = { pine: 2.5, broad: 3.4, birch: 2.2, palm: 2.7, ironwood: 2.1 };
+const PALM = [0.33, 0.47, 0.16];
+const IRONWOOD = [0.29, 0.38, 0.27];
+const TREEFERN = [0.25, 0.42, 0.14];
+const SILVERSWORD = [0.74, 0.78, 0.72];
+// how a tree's crown is drawn from above: its colour, and how many points to it
+const CROWN = { pine: [PINE, 9], broad: [BROAD, 5], birch: [BIRCH, 0], palm: [PALM, 7], ironwood: [IRONWOOD, 0] };
+const SMALL = { rock: [ROCK, 0.62], bush: [BUSH, 0.85], treefern: [TREEFERN, 1.2], silversword: [SILVERSWORD, 0.45] };
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 const LEVELS = 40;
@@ -103,6 +112,13 @@ export function renderTile(gen, level, tx, tz, vegFor) {
   const GR = new Float32Array(S * S);
   const AB = new Float32Array(S * S);
   const SN = new Float32Array(S * S);
+  // what a real place's ground is made of (WorldGen.surface): how bare, how
+  // sandy, how far it's that country's ground; and that country's colours
+  const BA = new Float32Array(S * S);
+  const SA = new Float32Array(S * S);
+  const LW = new Float32Array(S * S);
+  const sf = { bare: 0, sand: 0, land: 0 };
+  let own = null;
   // water: how much of the pixel is water (0..1), and how deep (m)
   const WA = new Float32Array(S * S);
   const WD = new Float32Array(S * S);
@@ -152,9 +168,19 @@ export function renderTile(gen, level, tx, tz, vegFor) {
         GR[k] = gen.groves(x, z);
         AB[k] = gen.above(x, z, hk);
         SN[k] = gen.snow(x, z, hk);
+        const country = gen.surface(x, z, sf);
+        if (country) {
+          BA[k] = sf.bare;
+          SA[k] = sf.sand;
+          LW[k] = sf.land;
+          own = country.ground;
+        }
       }
     }
   }
+  // (as the map draws colours: lighter than the ground itself)
+  const paper = (col) => display(col).map((v) => Math.min(1, v * 1.2));
+  const P = own && { tint: own.tint.map((v) => v ** 0.45), rock: paper(own.rock), bareA: paper(own.bare[0]), bareB: paper(own.bare[1]), sand: paper(own.sand) };
 
   const fine = level <= TREE_LEVEL;
   const ci = contourInterval(mpp);
@@ -200,6 +226,14 @@ export function renderTile(gen, level, tx, tz, vegFor) {
       mix3(c, c, t, smoothstep(0.3, 0.85, f));
       // above the trees: thin turf among stones
       if (AB[k] > 0) mix3(c, c, ALPINE, AB[k] * 0.7);
+      // a real place's own ground: its green, its bare cinder or lava, its beaches
+      const lw = P ? LW[k] : 0;
+      if (lw > 0) {
+        for (let q = 0; q < 3; q++) c[q] *= 1 + (P.tint[q] - 1) * lw;
+        mix3(t, P.bareB, P.bareA, smoothstep(0.7, 1, BA[k]) * (0.4 + 0.6 * rnd));
+        mix3(c, c, t, smoothstep(0.34, 0.62, BA[k] + (rnd - 0.5) * 0.3 * (1 - BA[k])));
+        mix3(c, c, P.sand, SA[k]);
+      }
 
       // canopy, as a texture, when we're too far out to draw single trees
       if (!fine) {
@@ -219,7 +253,10 @@ export function renderTile(gen, level, tx, tz, vegFor) {
 
       // rock on steep ground
       const rock = smoothstep(0.3, 0.45, slope + (rnd - 0.5) * 0.08);
-      if (rock > 0) mix3(c, c, ROCK, rock);
+      if (rock > 0) {
+        if (lw > 0) mix3(t, ROCK, P.rock, lw);
+        mix3(c, c, lw > 0 ? t : ROCK, rock);
+      }
       // snow, where it lies: not on the cliffs
       if (SN[k] > 0) mix3(c, c, SNOW, SN[k] * (1 - smoothstep(0.32, 0.55, slope)));
 
@@ -306,13 +343,15 @@ function stampVegetation(rgb, shadeA, gen, level, x0, z0, vegFor) {
   for (let cz = cz0; cz <= cz1; cz++) {
     for (let cx = cx0; cx <= cx1; cx++) {
       const lists = vegFor(cx, cz);
-      for (const kind of ['pine', 'broad', 'birch']) {
+      for (const kind of TREE_KINDS) {
         const L = lists[kind];
         for (let n = 0; n < L.length; n += 7) trees.push(kind, L[n], L[n + 2], L[n + 3], L[n + 4], L[n + 5]);
       }
       if (level <= 0) {
-        const B = lists.bush;
-        for (let n = 0; n < B.length; n += 7) small.push('bush', B[n], B[n + 2], B[n + 3], B[n + 4], B[n + 5]);
+        for (const kind of ['bush', 'treefern', 'silversword']) {
+          const B = lists[kind];
+          for (let n = 0; n < B.length; n += 7) small.push(kind, B[n], B[n + 2], B[n + 3], B[n + 4], B[n + 5]);
+        }
       }
       const R = lists.rock;
       for (let n = 0; n < R.length; n += 7) if (level <= 0 || R[n + 4] > 0.6) small.push('rock', R[n], R[n + 2], R[n + 3], R[n + 4], R[n + 5]);
@@ -338,8 +377,8 @@ function stampVegetation(rgb, shadeA, gen, level, x0, z0, vegFor) {
     const kind = small[n];
     const s = small[n + 4];
     const tint = small[n + 5];
-    const r = Math.max(0.6, ((kind === 'rock' ? 0.62 : 0.85) * s) / mpp);
-    const base = kind === 'rock' ? ROCK : BUSH;
+    const [base, across] = SMALL[kind];
+    const r = Math.max(0.6, (across * s) / mpp);
     const b = 0.88 + tint * 0.24;
     drawCrown(rgb, shadeA, px(small[n + 1]), pz(small[n + 2]), r, base, b, 0, 0, col);
   }
@@ -349,8 +388,7 @@ function stampVegetation(rgb, shadeA, gen, level, x0, z0, vegFor) {
     const s = trees[n + 4];
     const tint = trees[n + 5];
     const r = (CANOPY[kind] * s) / mpp;
-    const base = kind === 'pine' ? PINE : kind === 'birch' ? BIRCH : BROAD;
-    const lobes = kind === 'pine' ? 9 : kind === 'broad' ? 5 : 0;
+    const [base, lobes] = CROWN[kind];
     drawCrown(rgb, shadeA, px(trees[n + 1]), pz(trees[n + 2]), r, base, 0.86 + tint * 0.28, lobes, trees[n + 3], col);
   }
 

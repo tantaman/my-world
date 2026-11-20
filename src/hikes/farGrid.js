@@ -14,11 +14,16 @@ const SEEN_FAR = new Set(['lake', 'pond', 'river']);
 //   water    the water's level where there is water over the ground, else NO_WATER
 //   forest   how thickly wooded (0..1)
 //   species  broadleaf (-1) .. conifers (1)
+//   bare, sand, land   what a real place's ground is made of (WorldGen.surface)
 export function sampleFar(gen, x0, z0, n, step) {
   const h = new Float32Array(n * n);
   const water = new Float32Array(n * n);
   const forest = new Float32Array(n * n);
   const species = new Float32Array(n * n);
+  const bare = new Float32Array(n * n);
+  const sand = new Float32Array(n * n);
+  const land = new Float32Array(n * n);
+  const at = { bare: 0, sand: 0, land: 0 };
   const w = gen.water;
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
@@ -30,7 +35,11 @@ export function sampleFar(gen, x0, z0, n, step) {
       water[k] = w.edge < 0 && w.region && SEEN_FAR.has(w.kind) && w.level > g ? w.level : NO_WATER;
       forest[k] = gen.forest(x, z);
       species[k] = gen.species(x, z);
+      gen.surface(x, z, at);
+      bare[k] = at.bare;
+      sand[k] = at.sand;
+      land[k] = at.land;
     }
   }
-  return { x0, z0, n, step, h, water, forest, species };
+  return { x0, z0, n, step, h, water, forest, species, bare, sand, land };
 }

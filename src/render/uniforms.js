@@ -33,6 +33,30 @@ export const SKY = {
   uTime: SHARED.uTime,
 };
 
+// What the ground is made of in the country you're in (world/country.js):
+// set by the country feature from the real place you're on or nearest. The
+// terrain says, vertex by vertex, how far each applies (aLand), so in the
+// forest these show nowhere.
+export const LAND = {
+  uTint: { value: new THREE.Color(1, 1, 1) }, // what grass green is multiplied by
+  uDirt: { value: new THREE.Color(0.2, 0.135, 0.075) },
+  uRock: { value: new THREE.Color(0.16, 0.155, 0.145) },
+  uBareA: { value: new THREE.Color(0.2, 0.135, 0.075) },
+  uBareB: { value: new THREE.Color(0.115, 0.078, 0.045) },
+  uSand: { value: new THREE.Color(0.19, 0.16, 0.11) },
+};
+
+// A layer of cloud over the country you're in (world/country.js), drawn by
+// the composite pass (pixelPipeline.js): from under it, a grey sky with the
+// hilltops lost in it; from over it, a sea of cloud. Set by the country
+// feature. uDeckMid is a place (the middle of the real land it lies over,
+// which its billows are measured from), slid with the scene like any other.
+export const DECK = {
+  uDeck: { value: 0 }, // m: how high it lies
+  uDeckCover: { value: 0 }, // 0..1: how much of it is cloud; 0, and there is none
+  uDeckMid: { value: new THREE.Vector2() },
+};
+
 // The water around the player's legs: how much it's stirred up (0..1), and
 // how fast it's going past them (m/s, x and z: the current less your own
 // way through it), which sets the wake.

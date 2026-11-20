@@ -27,6 +27,7 @@ import { FarView, FAR_CLIP } from './farView.js';
 import { sampleFar } from './farGrid.js';
 import { makeCairn, makeSignpost } from './landmarks.js';
 import { HikesPanel } from './hikesPanel.js';
+import { countryOf } from '../world/country.js';
 
 const FAR_MARGIN = 700; // m of the forest round a hike that its far view takes in
 const FAR_STEP = 16; // m between the far view's heights
@@ -185,6 +186,8 @@ export function installHikes(game) {
   });
   // The ground near it waits for its land: say why, rather than leave a gap.
   lands.on('failed', (c) => hud.flash(`can't fetch ${c ? c.name : 'a hike'} yet · trying again (or reload the page)`));
+  // what a hike's country says its ground is made of
+  const groundOf = (id) => countryOf((cards.find((c) => c.id === id) || {}).country).ground;
   function makeFar(c) {
     if (far.has(c.id) || asked.has(c.id)) return;
     const half = outer(c) + FAR_MARGIN;
@@ -198,7 +201,7 @@ export function installHikes(game) {
         worker = new Worker(new URL('./farWorker.js', import.meta.url), { type: 'module' });
         worker.onmessage = (e) => {
           asked.delete(e.data.id);
-          far.add(e.data.id, e.data.grid);
+          far.add(e.data.id, e.data.grid, groundOf(e.data.id));
         };
         worker.onerror = (e) => {
           console.warn('far view worker failed, drawing it on the main thread', e.message);
@@ -212,7 +215,7 @@ export function installHikes(game) {
     }
     if (worker) worker.postMessage(job);
     else {
-      far.add(c.id, sampleFar(gen, job.x0, job.z0, job.n, job.step));
+      far.add(c.id, sampleFar(gen, job.x0, job.z0, job.n, job.step), groundOf(c.id));
       asked.delete(c.id);
     }
   }

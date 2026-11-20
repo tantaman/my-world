@@ -7,7 +7,7 @@ import { makeShovel } from '../geometry.js';
 import { GroundRing } from '../previews.js';
 
 const GRUB_TIME = 2.4; // seconds to get a stump out
-export const BRUSH = ['bush', 'fern', 'log', 'rock']; // what a spade clears away as it goes (rocks only if small)
+export const BRUSH = ['bush', 'fern', 'log', 'rock', 'treefern', 'silversword']; // what a spade clears away as it goes (rocks only if small)
 const EARTH = 0x4a3524;
 
 export const shovel = {

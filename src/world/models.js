@@ -18,9 +18,9 @@ const _s = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _c = new THREE.Color();
 
-const lin = (hex) => new THREE.Color(hex); // sRGB hex -> linear colour
+export const lin = (hex) => new THREE.Color(hex); // sRGB hex -> linear colour
 
-class GeoBuilder {
+export class GeoBuilder {
   constructor() {
     this.pos = [];
     this.nor = [];
@@ -101,19 +101,19 @@ class GeoBuilder {
   }
 }
 
-function mat(x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = sx) {
+export function mat(x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = sx) {
   _e.set(rx, ry, rz);
   _q.setFromEuler(_e);
   return new THREE.Matrix4().compose(_p.set(x, y, z), _q, _s.set(sx, sy, sz));
 }
 
-function jitter(c, p, amt) {
+export function jitter(c, p, amt) {
   const j = 1 + (phash(p.x, p.y, p.z) - 0.5) * amt;
   return _c.copy(c).multiplyScalar(j);
 }
 
 // ── Bark ───────────────────────────────────────────────────────────────────
-function barkColor(base, dark, p, height) {
+export function barkColor(base, dark, p, height) {
   const t = Math.min(1, Math.max(0, p.y / height));
   _c.copy(dark).lerp(base, Math.min(1, t * 3 + 0.15));
   return _c.multiplyScalar(0.85 + phash(p.x * 3, p.y * 7, p.z * 3) * 0.3);

@@ -56,10 +56,11 @@ export class FarView {
     return this.meshes.has(id);
   }
 
-  // A grid from sampleFar() → a mesh for hike `id`.
-  add(id, grid) {
+  // A grid from sampleFar() → a mesh for hike `id`. ground: what the hike's
+  // country says its ground is made of (world/country.js).
+  add(id, grid, ground = null) {
     this.remove(id);
-    const mesh = new THREE.Mesh(buildGeometry(grid), this.material);
+    const mesh = new THREE.Mesh(buildGeometry(grid, ground), this.material);
     mesh.name = `far view: ${id}`;
     mesh.userData.grid = { x0: grid.x0, z0: grid.z0, x1: grid.x0 + (grid.n - 1) * grid.step, z1: grid.z0 + (grid.n - 1) * grid.step };
     mesh.position.set(grid.x0, 0, grid.z0);
@@ -157,7 +158,10 @@ export class FarView {
 }
 
 // Positions are from the grid's corner (x0, z0), where the mesh is put.
-function buildGeometry({ n, step, h, water, forest, species }) {
+function buildGeometry({ n, step, h, water, forest, species, bare, sand, land }, ground) {
+  // the country's own colours, as far as each spot is that country's
+  const G = ground && { tint: new THREE.Color(...ground.tint), rock: new THREE.Color(...ground.rock), bareA: new THREE.Color(...ground.bare[0]), bareB: new THREE.Color(...ground.bare[1]), sand: new THREE.Color(...ground.sand) };
+  const _g = new THREE.Color();
   const N = n * n;
   const pos = new Float32Array(N * 3);
   const col = new Float32Array(N * 3);
@@ -181,7 +185,15 @@ function buildGeometry({ n, step, h, water, forest, species }) {
         const rock = smooth(0.85, 1.4, slope);
         const wood = smooth(0.25, 0.75, forest[k]) * (1 - rock);
         _w.copy(BROADLEAF).lerp(CONIFER, smooth(-0.3, 0.3, species[k]));
-        _c.copy(MEADOW).lerp(ROCK, rock).lerp(_w, wood);
+        _c.copy(MEADOW);
+        if (G && land[k] > 0) {
+          _c.multiply(_g.setRGB(1, 1, 1).lerp(G.tint, land[k]));
+          // bare ground in broad drifts of its two colours, and beaches
+          _c.lerp(_g.copy(G.bareB).lerp(G.bareA, smooth(0.7, 1, bare[k]) * (0.35 + 0.65 * hash(i >> 2, j >> 2))), smooth(0.34, 0.62, bare[k]));
+          _c.lerp(G.sand, sand[k]);
+          _c.lerp(_g.copy(ROCK).lerp(G.rock, land[k]), rock);
+        } else _c.lerp(ROCK, rock);
+        _c.lerp(_w, wood);
         // a little variety, so a hillside isn't one flat colour
         const v = 0.85 + 0.3 * hash(i, j);
         _c.multiplyScalar(v);

@@ -67,6 +67,9 @@ export class Sky {
     this.open = 1;
     this.sunDir = new THREE.Vector3();
     this.lightDir = new THREE.Vector3(0, 1, 0);
+    // 0..1: how much of the sun cloud overhead is taking (set by whoever
+    // knows what the sky is doing: the country feature). The light goes flat.
+    this.overcast = 0;
 
     const mat = new THREE.ShaderMaterial({
       uniforms: SKY,
@@ -174,10 +177,10 @@ export class Sky {
 
     this.sun.color.setRGB(...k.light);
     const fadeAtHorizon = night > 0.5 ? 1 : smoothstep(-3, 2, elevDeg);
-    this.sun.intensity = k.li * Math.max(fadeAtHorizon, night > 0.5 ? 1 : 0) * this.open;
+    this.sun.intensity = k.li * Math.max(fadeAtHorizon, night > 0.5 ? 1 : 0) * (1 - 0.8 * this.overcast) * this.open;
     this.hemi.color.setRGB(...k.amb);
     this.hemi.groundColor.setRGB(...k.gnd);
-    this.hemi.intensity = k.ai * this.open;
+    this.hemi.intensity = k.ai * (1 + 0.3 * this.overcast) * this.open;
 
     // Shadow camera follows the player, snapped to shadow texels to avoid shimmer.
     const S = CONFIG.shadowExtent;

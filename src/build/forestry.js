@@ -18,6 +18,8 @@ export const SPECIES = {
   pine: { name: 'pine', a: 'a pine', hits: (s) => Math.round(4 + 2.5 * s), meters: (s) => Math.round(11 * s * 2) / 2, r: 0.32, h: 15, bole: 0.62 },
   broad: { name: 'oak', a: 'an oak', hits: (s) => Math.round(6 + 3 * s), meters: (s) => Math.round(6.5 * s * 2) / 2, r: 0.4, h: 11, bole: 0.55 },
   birch: { name: 'birch', a: 'a birch', hits: (s) => Math.round(3 + 1.5 * s), meters: (s) => Math.round(6 * s * 2) / 2, r: 0.2, h: 12, bole: 0.55 },
+  palm: { name: 'palm', a: 'a coconut palm', hits: (s) => Math.round(3 + 2 * s), meters: (s) => Math.round(7 * s * 2) / 2, r: 0.17, h: 8.5, bole: 0.9 },
+  ironwood: { name: 'ironwood', a: 'an ironwood', hits: (s) => Math.round(6 + 3 * s), meters: (s) => Math.round(8 * s * 2) / 2, r: 0.26, h: 13, bole: 0.6 },
 };
 export const BUCK_LEN = 4; // metres per log cut from a felled trunk
 export const BUCK_HITS = 2;

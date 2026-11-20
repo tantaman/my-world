@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { CONFIG, urlHas } from '../config.js';
 import { PixelPipeline } from './pixelPipeline.js';
 import { Origin } from './origin.js';
-import { SHARED } from './uniforms.js';
+import { SHARED, DECK } from './uniforms.js';
 import { PERIOD } from './glsl.js';
 
 export function installRender(game) {
@@ -30,6 +30,7 @@ export function installRender(game) {
   const pipeline = new PixelPipeline(renderer);
   const origin = new Origin();
   origin.place(SHARED.uPlayer);
+  origin.place(DECK.uDeckMid);
 
   game.provide('renderer', renderer);
   game.provide('origin', origin);
