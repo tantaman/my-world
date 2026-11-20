@@ -119,7 +119,8 @@
     transition: none;
   }
 }
-@media (max-width: 620px) {
+/* It opens under the corner buttons when they move up top (index.html). */
+@media (max-width: 900px) {
   #hikes {
     top: calc(44px + var(--inset-t));
     bottom: auto;

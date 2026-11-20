@@ -141,7 +141,10 @@
         #hotbar .slot .short { display: inline; }
       }
       @media (max-width: 900px) {
+        /* the corner buttons take the top line; what you carry goes under them */
         #corner { bottom: auto; top: calc(10px + var(--inset-t)); }
+        #inv { top: calc(42px + var(--inset-t)); max-width: calc(100vw - 32px); }
+        #debug { top: calc(60px + var(--inset-t)); }
       }
       @media (max-width: 620px) {
         #hotbar .slot .long { display: none; }
@@ -150,10 +153,7 @@
         #hotbar .slot { padding: 6px 5px; font-size: 10.5px; gap: 3px; }
         #prompt { white-space: normal; text-align: center; width: max-content; bottom: calc(78px + var(--inset-b)); }
         #coords { bottom: calc(50px + var(--inset-b)); }
-        /* the corner buttons take the top line; what you carry and where
-           you're heading go under them */
-        #corner { bottom: auto; top: calc(10px + var(--inset-t)); }
-        #inv { top: calc(42px + var(--inset-t)); max-width: calc(100vw - 32px); }
+        /* and where you're heading, under that */
         #track { bottom: auto; top: calc(60px + var(--inset-t)); }
         #debug { top: calc(78px + var(--inset-t)); }
         #hint { bottom: calc(130px + var(--inset-b)); }
