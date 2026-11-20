@@ -29,15 +29,25 @@ can still be used: say where it was taken with `--lat` and `--lon`, and
 
 In the game, press **K** (or tap *hikes*) for the list of them: each with its
 trail, how long it is, how far it climbs (or drops: a cove is walked down
-to) and the water on it, and two ways in. **trailhead** puts you at the start, by a signpost, with the HUD pointing
-the way to the top. The trail is the real one, switchbacks and all, cut into
-the hillside as a level tread. At the end of it a cairn stands where you took
-the photo. **the view** takes you straight there: you're standing where you
-stood, facing the way you faced, at the hour you were there. From the top
-you can see across the whole of it, the lake below, the ridges beyond, the
-valley running off into the haze. The map names the hike and its trail. In
-the list, the arrow keys move between the buttons and **Esc** or **K**
-closes it.
+to) and the water on it, and two ways in. **trailhead** puts you at the
+start, by a signpost, with the HUD pointing the way to the top. The trail is
+the real one, switchbacks and all, cut into the hillside as a level tread. At
+the end of it a cairn stands where you took the photo. **the view** takes you
+straight there: you're standing where you stood, facing the way you faced, at
+the hour you were there. From the top you can see across the whole of it, the
+lake below, the ridges beyond, the valley running off into the haze. In the
+list, the arrow keys move between the buttons and **Esc** or **K** closes it.
+
+A hike's trailhead and its view are on [the map](../map/README.md) too, as
+places with a name that you can look up and track like any other. What the
+forest has of its own that way, its [old places](../landmarks/README.md),
+keeps off a hike: a real place has what is really there.
+
+| | |
+|---|---|
+| **K** | the list of hikes (also the *hikes* button at the top) |
+| **arrows**, **Enter** | in the list: move between the buttons, and go |
+| **Esc** / **K** | close it |
 
 **What gets imported.** The land is scaled 1 : 5, the same across and up, so
 slopes are as steep as they really are: 2.5 km of trail and 600 m of climb
@@ -55,14 +65,13 @@ they really run, in channels like the forest's own: each lies just under
 the ground its line was drawn over, never rises as it goes, takes on what
 runs into it, and comes down to the lake or the sea it ends in. (Only the
 ones that run all year: a gulch that is dry till it rains is left dry.) The
-walk starts where you'd
-leave the car, at the nearest road or car park along the paths, and goes by
-them to where the photo was taken, uphill or down. (Failing a road, it's the
-trail the photo was taken on, from its lower end.) Steep ground is bare rock,
-the rest is wooded (`--cover`, `--species`; `--cover 0` for land above the
-tree line, with nothing standing on it at all), and the spot the photo was
-taken from is kept clear of trees, with nothing growing in front of it to
-block the view.
+walk starts where you'd leave the car, at the nearest road or car park along
+the paths, and goes by them to where the photo was taken, uphill or down.
+(Failing a road, it's the trail the photo was taken on, from its lower end.)
+Steep ground is bare rock, the rest is wooded (`--cover`, `--species`;
+`--cover 0` for land above the tree line, with nothing standing on it at
+all), and the spot the photo was taken from is kept clear of trees, with
+nothing growing in front of it to block the view.
 
 **What kind of country it is.** Not everywhere is a northern forest. A hike
 says what kind of country it's in (`--country "cinder desert"`), and that
@@ -86,9 +95,10 @@ there: fell a broadleaf on Maui and it's a kamani or an ʻōhiʻa that comes
 down, not an oak. The map and the far view take the country's colours too.
 Every piece of ground knows which country it's in, so where two places of
 different kinds overlap, each keeps its own colours right up to the other.
-A walk that starts on top of its mountain (a summit
-you drive to) stands the mountain over the forest round it, where otherwise
-the start of the walk is level with it.
+A walk that starts on top of its mountain (a summit you drive to) stands the
+mountain over the forest round it, where otherwise the start of the walk is
+level with it. The weather that comes over you as you walk onto one, and the
+sound of its sea, are [the country feature](../country/README.md)'s.
 
 **Where it goes.** Where it really is. The game world is the real world at
 the hikes' own scale, 1 : 5, so hikes lie as far apart, and in the same
@@ -118,6 +128,12 @@ else a seed grows, a hike is part of the world description: a world built in
 near one keeps it there, so once placed it stays put. Importing it again
 (`--force`) leaves it where it is, and `npm test` checks that hikes leave the
 rest of the world alone.
+
+It makes no odds which [land](../world/README.md#lands) a world is grown on.
+A hike is set into whichever it is, standing at the level of that land's
+forest round it, and what the land has of its own high up (a treeline, snow
+on the tops) stops at the hike's edge: a real mountain is wooded as it really
+is.
 
 **Where it's kept.** In the code, not on the save server. The save server
 only ever holds what people *change* in a world, and a hike is part of what
@@ -162,7 +178,11 @@ index.js              plugs it into the game: the list (K), the way to the view,
 farView.js            the land past the loaded chunks, seen from up high
 farGrid.js            that land, sampled coarsely (pure)
 farWorker.js          Web Worker wrapper around farGrid
-landmarks.js          the cairn and the signpost
+waymarks.js           the cairn and the signpost
 hikesPanel.js         the list of hikes (K), and the way to each
 hikes.css             its styles
 ```
+
+The hikes themselves, and how the world grows them, are in
+[`src/world/`](../world/README.md#real-places); the importer is
+`tools/hike.mjs` and `tools/hike/`.

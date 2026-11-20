@@ -52,6 +52,7 @@ npm run dev        # http://localhost:5173 — the game
 npm run api        # http://127.0.0.1:8787 — the save server (optional)
 npm run build      # static site in dist/
 npm test           # the rules, in Node (see "Checking it still works")
+npm run hike -- photo.heic   # put a hike you've done into the world (see src/hikes/README.md)
 ```
 
 The game is a static site and runs on its own; `npm run api` adds the save
@@ -183,14 +184,19 @@ place in that order, not at the end:
 | `player/character.js` | something the hiker wears on the cap | `character.addWorn(object, { band })` |
 | `player/player.js` | walking the hiker somewhere | `player.steer = { x, z, run }` |
 | `player/player.js` | something that carries you (how fast, how deep, whether it flies) | `player.carrier = { walk, run, swim, depth, fly, … }` |
+| `render/origin.js` | a uniform that says where something is | `game.origin.place(uniform)` |
 | `save/domains.js` | something that is saved | `game.save.register({ id, collect, restore, … })` |
 | `save/worldSave.js` | a word to the others here, never stored | `game.save.say(ch, body, to)`, `game.save.on('message', fn)` |
 | `ui/hud.js` | a button on the HUD | `game.hud.button(id, fn)` |
 | `ui/hud.js` | what a key would do here, whatever tool is in hand | `hud.cue({ html, progress })` |
+| `ui/hud.js` | somewhere the HUD points you to | `game.hud.guide(() => target)` |
 | `wildlife/species.js` | a species | `defineSpecies(kind, def)` |
 | `wildlife/wildlife.js` | a new kind of creature altogether | `defineAnimalClass(name, make)` |
+| `world/country.js` | a kind of country (its ground, plants, sky, animals, what its trees are called) | an entry in `COUNTRY` |
 | `world/cuts.js` | a hole in the ground, for something to stand in for it | `setCuts([{ ax, az, bx, bz, fa, fb, w, h }])` |
+| `world/flora.js` | a plant | an entry in `FLORA`, a model, and where it grows (`chunkGen.js`) |
 | `world/grass.js` | somewhere grass doesn't grow | `game.grass.addClearing(fn)` |
+| `world/hikes.js` | a real place, from a photo | `npm run hike -- photo.heic` writes it there |
 | `world/sky.js` | how much daylight reaches the eye (dims it, the eye adjusts) | `game.sky.open = 0..1` |
 | `world/solids.js` | something solid to bump into and stand on | `game.solids.set(owner, [capsule])` (`surface: 'boards'` for its footsteps) |
 | `world/spaces.js` | somewhere under the ground to be in: its floor, walls and roof | `game.spaces.add(space)`, `spaces.onDemand(fn)` |
@@ -205,6 +211,8 @@ Each of those files opens with what the thing is and what it is handed.
   `drainage.js`, the order of `world/flora.js`) moves every saved cabin
   relative to its hillside — so a change to how the forest grows is a new
   [land](src/world/README.md#lands), and the old ones keep growing as they did.
+  Real places are part of what is grown too, but only where each one is, and
+  on whichever land ([real places](src/world/README.md#real-places)).
 - *A save is spelled once, for good.* Each system says how its share of a
   save is cut into elements (`t:120:-40`, `l:x:0:0:4:0`), next to the class
   that owns it. Worlds on the server are spelled that way now: add new kinds,
@@ -217,6 +225,12 @@ Each of those files opens with what the thing is and what it is handed.
   events (`chunks.on('vegetation', …)`, `player.on('footstep', …)`,
   `forest.on('crash', …)`) rather than holding one `onSomething` slot that the
   last caller wins.
+- *Nothing big goes to the graphics card.* The game thinks in world
+  coordinates everywhere, and the world is thousands of kilometres across;
+  the card works in 32-bit floats. Each frame is drawn from an origin near
+  the camera, and what that asks of anything that fills a buffer, sets a
+  uniform or draws a pattern is in [the look](src/render/README.md) and at
+  the top of `render/origin.js`.
 - *Layers point one way.* `core` knows nothing; `render` knows `core`;
   `world` knows those; the features know the world and, where they must,
   each other — and nothing reaches back down.
@@ -343,6 +357,9 @@ src/
   <a feature>/            one folder each
     README.md             what it is and how it works, and what each file in it is
     index.js              what plugs it into the game, and which features it comes after
+tools/
+  hike.mjs                npm run hike: a photo → a hike in the world
+  hike/                   reading photos (EXIF), elevation tiles, OpenStreetMap; building one
 worker/
   index.js                the front door: mint an id, route to the world
   world.js                a world's Durable Object — the only writer, and who is who
