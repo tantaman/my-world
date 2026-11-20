@@ -30,9 +30,11 @@ export function installRender(game) {
   const soft = settings.get('softness', 'number');
   const px = settings.get('pixelSize', 'number');
   const outline = settings.get('outline', 'number');
+  const pixelArt = settings.get('pixelArt', 'boolean');
   if (soft !== undefined && !urlHas('soft')) pipeline.softness = soft;
   if (px !== undefined && !urlHas('px')) pipeline.pixelSize = px;
   if (outline !== undefined) pipeline.outline = outline;
+  if (pixelArt !== undefined && !urlHas('pixels')) pipeline.enabled = pixelArt;
 
   function resize() {
     const dpr = renderer.getPixelRatio();
@@ -58,6 +60,7 @@ export function installRender(game) {
       pipeline.lowW = 0;
       resize();
       say(pipeline.enabled ? 'pixel art on' : 'pixel art off');
+      settings.set('pixelArt', pipeline.enabled);
     },
   });
   commands.add({

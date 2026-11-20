@@ -38,7 +38,8 @@ if (!existsSync(new URL('../dist/index.html', import.meta.url))) {
   process.exit(2);
 }
 
-const QUERY = 'seed=20261119&time=13&animals=0&mute&q=low&view=2&lines=120';
+// pixels=1&lines=120: draw at low resolution, which SwiftShader needs to keep up
+const QUERY = 'seed=20261119&time=13&animals=0&mute&q=low&view=2&pixels=1&lines=120';
 const report = { steps: {} };
 const problems = [];
 
@@ -766,7 +767,7 @@ try {
     await key('KeyP');
     const after = await page.evaluate(() => ({ soft: world.pipeline.softness, on: world.pipeline.enabled }));
     assert.ok(after.soft > before.soft, '= softens the pixels');
-    assert.equal(after.on, !before.on, 'P turns the pixel art off');
+    assert.equal(after.on, !before.on, 'P toggles the pixel art');
     await key('KeyP');
     await key('Minus');
     await page.keyboard.down('Period');

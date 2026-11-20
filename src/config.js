@@ -29,7 +29,9 @@ export const CONFIG = {
   grassTile: 16,
   grassDensity: num('grassDensity', low ? 4.5 : 7), // max blades per m²
 
-  // Pixel look
+  // Pixel look. Off by default: the scene is drawn at full resolution.
+  // ?pixels=1 starts with it on (P toggles it in the game).
+  pixelArt: num('pixels', 0) > 0,
   // Target height (in "art pixels") of the low-resolution render.
   pixelTargetHeight: num('lines', 300),
   // Explicit pixel size (screen px per art pixel). 0 = derive from pixelTargetHeight.

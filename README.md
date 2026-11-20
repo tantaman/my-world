@@ -3,7 +3,7 @@
 An open-world forest you can wander through as a little explorer, seen from
 behind in third person. Streams run down its valleys, join and grow into
 rivers, and gather in ponds and lakes in the hollows. It's built with
-three.js. The art is pixelated but lit and shaded like a real scene, and the
+three.js, and lit and shaded like a real scene. Press **P** for pixel art: the
 pixels are softened just enough that you can't quite tell whether it's pixel
 art trying to look real or a painting made of pixels.
 
@@ -343,6 +343,10 @@ cabin isn't gone for good.
 
 Everything is generated in code. There are no textures or model files.
 
+By default the scene is drawn at full screen resolution and passes through the
+composite below. With pixel art on (**P**, or `?pixels=1`), it is drawn at low
+resolution and blown up with the soft-pixel filter:
+
 1. **Low-resolution HDR render.** The scene is drawn into a target about 300
    "art pixels" tall, with real-time sun shadows, sky/ground ambient light and
    a depth buffer.
@@ -422,6 +426,7 @@ Sound pauses when the tab is hidden. Add `?mute` to the URL to start silent.
 
 | param | default | |
 |---|---|---|
+| `pixels` | `0` | `1` starts with pixel art on |
 | `soft` | `0.55` | pixel softness, 0–1 |
 | `px` | auto | screen pixels per art pixel |
 | `lines` | `300` | target art-pixel height when `px` is auto |
