@@ -10,7 +10,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "serve": "npm run build && wrangler dev",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "test": "node --test \"test/*.test.js\"",
+    "smoke": "npm run build && node test/smoke.mjs"
   },
   "dependencies": {
     "three": "^0.187.0"
