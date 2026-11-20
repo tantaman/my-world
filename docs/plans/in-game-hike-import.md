@@ -108,8 +108,8 @@ known to `Lands` as cards at `restore()` covers the rest.
 ### 3. Placement that can't disturb anything
 
 A hike goes where it really is (`tools/hike/place.js`, now shared by the
-CLI and the game): the real world at 1 : 5 about a middle out in the
-Pacific, placed exactly from any hike it overlaps and sharing its heights.
+CLI and the game): the real world at 1 : 5 about a middle in the Hoh rain
+forest, placed exactly from any hike it overlaps and sharing its heights.
 The game knows where people have built in this world, since elements are
 filed by region, so before saving one it checks that
 - **no region under it holds any element at all** (other than its own

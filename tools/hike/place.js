@@ -2,8 +2,11 @@
 //
 // The game world is the real world at the hikes' own scale (1:5), so hikes
 // lie as far apart, and in the same directions, as they do in real life.
-// Its middle, where everyone starts and where the forest is made up, is out
-// in the Pacific off the Olympic coast, so no real hike can land on it.
+// Its middle, where everyone starts, is a real place on land: the Hoh rain
+// forest, on the wet west side of the Olympic Mountains, which is the kind of
+// country the made-up forest is (src/world/country.js). The forest there is
+// the game's own, so a hike is kept a few kilometres clear of it
+// (CLEAR_OF_MIDDLE).
 //
 // Hikes far apart are placed by an azimuthal equidistant projection about the
 // middle: true distance and direction from the middle, and between two hikes
@@ -25,8 +28,11 @@
 
 import { localFrame } from './geo.js';
 
-// The real place at the middle of the game world.
-export const ORIGIN = { lat: 48.0, lon: -125.6 };
+// The real place at the middle of the game world: the Hoh rain forest, a
+// little down the valley from the visitor centre. (From there, Mount Storm
+// King's land stays out of the few kilometres round the start, which are the
+// game's own: its first railway squares are pinned, test/railway.test.js.)
+export const ORIGIN = { lat: 47.85, lon: -123.95 };
 // Game metres kept clear between the middle of the world and a hike's edge.
 const CLEAR_OF_MIDDLE = 2000;
 // How much wider than life the map is, sideways, before it's worth saying.
@@ -92,7 +98,7 @@ export function placeHike({ photo, scale, radius, fade }, existing = []) {
   at = at.map(round);
 
   const fromMiddle = Math.hypot(at[0], at[1]);
-  if (fromMiddle - outer < CLEAR_OF_MIDDLE) throw new Error('that is where everyone starts, in the middle of the world (out in the Pacific): pass --at to put it somewhere else');
+  if (fromMiddle - outer < CLEAR_OF_MIDDLE) throw new Error('that is where everyone starts, in the middle of the world (the Hoh rain forest, whose forest is the game\'s own): pass --at to put it somewhere else');
   const wide = stretch(photo.lat, photo.lon);
   if (wide > STRETCH_WORTH_SAYING) {
     notes.push(`it's ${Math.round(fromMiddle / scale / 1000)} km out, where a flat map of a round world is ${Math.round((wide - 1) * 100)}% wider than life: the hike itself is true, but others near it will lie that much further off to its sides`);
