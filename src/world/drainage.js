@@ -409,11 +409,12 @@ export class Drainage {
     const p3x = nb ? nb.gx : 2 * p2x - p1x;
     const p3z = nb ? nb.gz : 2 * p2z - p1z;
     const len = Math.hypot(p2x - p1x, p2z - p1z);
-    // a bend or two of its own, flattening out towards the ends so the
-    // channel runs smoothly on through each node
+    // a bend or two of its own (at most BEND m out of line), flattening out
+    // towards the ends so the channel runs smoothly on through each node
     const rng = mulberry32(hash2i(a.i, a.j, (this.seed ^ 0xbe4d) >>> 0));
-    const a1 = (rng() * 2 - 1) * 0.22;
-    const a2 = (rng() * 2 - 1) * 0.12;
+    const bend = Math.min(1, BEND / (0.34 * len));
+    const a1 = (rng() * 2 - 1) * 0.22 * bend;
+    const a2 = (rng() * 2 - 1) * 0.12 * bend;
     const ph = rng() * TAU;
     const nx = -(p2z - p1z) / len;
     const nz = (p2x - p1x) / len;
@@ -506,12 +507,16 @@ export class Drainage {
     const z1 = z0 + C;
     const segs = [];
     const basins = [];
-    const R = NET.flood + 2;
+    // A channel runs to a neighbour, bends at most BEND m out of line, and
+    // its valley reaches at most ~100 m past that: from three cells away it
+    // can't reach this one. A sink's spills a further flood + 1 cells.
+    const NEAR = 3;
+    const R = NEAR + NET.flood + 1;
     for (let j = cj - R; j <= cj + R; j++) {
       for (let i = ci - R; i <= ci + R; i++) {
         const n = this.node(i, j);
         const sink = !this.down(n);
-        const far = Math.max(Math.abs(i - ci), Math.abs(j - cj)) > 2;
+        const far = Math.max(Math.abs(i - ci), Math.abs(j - cj)) > NEAR;
         if (far && !sink) continue;
         if (sink && !far) {
           const b = this.basin(n);
@@ -533,6 +538,9 @@ export class Drainage {
 // How far above the straight line between its ends a channel's level may
 // keep up with the land (m).
 const SLACK = 1.5;
+// The furthest (m) a channel's own bends take it from the curve through its
+// nodes.
+const BEND = 30;
 
 export function basinRadius(b, th) {
   const a = b.amp;

@@ -1,11 +1,11 @@
 # my-world
 
 An open-world forest you can wander through as a little explorer, seen from
-behind in third person. Streams run through it, the odd river winds along its
-valleys, and here and there a pond or a lake lies in a hollow. It's built with three.js. The art is pixelated but
-lit and shaded like a real scene, and the pixels are softened just enough
-that you can't quite tell whether it's pixel art trying to look real or a
-painting made of pixels.
+behind in third person. Streams run down its valleys, join and grow into
+rivers, and gather in ponds and lakes in the hollows. It's built with
+three.js. The art is pixelated but lit and shaded like a real scene, and the
+pixels are softened just enough that you can't quite tell whether it's pixel
+art trying to look real or a painting made of pixels.
 
 You can also **build**: fell trees, buck them into logs, hew timbers, clear
 and grade the ground, set stone footings, and raise a notched log cabin with
@@ -227,6 +227,10 @@ For local work, `npm run api` in one terminal and `npm run dev` in another;
 > Worlds saved under the earlier layout — one row per world in D1 — are not
 > carried over. Nothing was deleted; if you made one, its rows are still in
 > that D1 database.
+>
+> When water learned to run downhill, every seed grew different valleys. A
+> world saved before then opens on the new land, so what was built or dug in
+> it may now float above the ground or sit buried in it.
 
 ### The save API
 
@@ -318,9 +322,15 @@ interact, so it fades in after your first click, key press or tap.
   chipmunk's chips, a bear blowing, a rattlesnake's buzz, crows, a red-tail's
   scream, a flock bursting up in a whirr of wings, bumblebees about your
   knees, and hooves when something big bolts past.
-- **Water** babbles: a broad rush under a few narrow resonances that hop from
-  pitch to pitch, rising as they go, like bubbles. It comes from where the
-  running water near you is, and roars more where it tumbles down a cascade.
+- **Water** babbles. It's heard from where it actually runs, from up to three
+  places at once, so a stream on your left and a river on your right are
+  heard on your left and your right. Each is made of bubbles: short tones
+  that ring at a pitch set by the bubble's size and rise as it closes, the
+  way a brook really sounds. Small, high ones on a stream, deeper ones on a
+  river, and many more of them on white water, over a rush that hisses on a
+  cascade and a low roar under a river. Far-off water loses its high end
+  first, and so does water with a bank between you and it. Stand in it and
+  you hear it gurgle round your legs, more the faster it's going past them.
   Still water laps at the shore in slow swells, something small plops in now
   and then, and from dusk the frogs start up.
 - **Footsteps** follow the stride of the walk and run animation. They
@@ -375,36 +385,53 @@ Example: `/?soft=0.3&px=5&time=7.5`
   These form a natural network of long trails and loops. Side trails fade in
   and out like deer paths. The ground along them is slightly sunken and
   smoothed, and trees keep their distance.
-- **Water** (`src/world/water.js`). Streams and rivers follow the
-  zero-isolines of warped noise, like the footpaths, so they wind and
-  meander and never dead-end; a slow mask decides which stretches carry water
-  at all, so they rise from a spring and fade out again. Lakes and ponds sit
-  on a sparse grid: each rolls downhill into a hollow and fills it to just
-  under the lowest point of its rim.
-  - **Levels.** A water surface has to be flat across and can't tilt much
-    along, but these hills run at 20% grades. So the level of running water
-    is read at the nearest point on its centreline, follows a smoothed version
-    of the landform (rivers smoother than streams) without ever standing above
-    the ground beside it, and is quantised into steps: still pools joined by
-    short ramps. On a stream those are little cascades with white water; on a
-    river, riffles. Where the land is higher than the water, the water cuts a
-    valley through it, wider the deeper it cuts.
+- **Water** runs downhill and gathers where the land holds it
+  (`src/world/drainage.js`, `water.js`).
+  - **Where it runs.** The land is sampled at nodes about 96 m apart,
+    jittered so the grid doesn't show. Each node drains to the neighbour that
+    falls away most steeply. One with no lower neighbour is the bottom of a
+    hollow: water gathers there in a pond or a lake, rises to the lowest point
+    of the rim, and spills over it on down to a lower hollow, so chains of
+    lakes are strung along the rivers. (A hollow too deep or too wide to spill
+    keeps its water.) A channel carries everything that drains through it, so
+    streams start small high up, join, and grow into rivers on their way down.
+    One shows once enough land drains through it, fading in at its spring,
+    and every one ends in a pond, a lake or more water. The channels are
+    smooth curves through the nodes, with a bend or two of their own.
+  - **Levels.** A channel's water level only ever falls along it. Each node
+    stands its water just under the land, and no higher than anything
+    upstream of it, so where the land rises in the way, or a lake spills over
+    a rise, the water keeps its level and cuts a valley through, wider the
+    deeper it cuts. The level is read at the nearest point on the centreline,
+    so it's flat from bank to bank, and quantised into steps: still pools
+    joined by short ramps, counted up from where the channel ends so it
+    arrives at exactly the level of what it runs into. On a stream those are
+    little cascades, with white water at the lip and churning in the pool
+    below; on a river, riffles. A channel widens into pools and narrows
+    between them. A pond or lake fills its hollow to just under the lowest
+    point of its rim, with a beach that rises gently to meet the land.
   - **The water itself** is meshed per chunk on the main thread from the
     heights and the water grids the workers produce, so it follows your
     digging. It's see-through, writes depth (so the fog and outlines treat it
     as a surface), reflects the sky with a dark band where the trees across the
     water would be (narrow water sees its banks, a stream in the woods sees
-    leaves), glints in the sun, ruffles in the wind, runs with the current, and
-    froths on cascades, along the shore and round your legs. Below it the bed
-    turns to silt and stones that darken, reds first, with depth.
+    leaves), glints in the sun and ruffles in the wind. Running water is drawn
+    out into streaks along the current and carries flecks of foam and bubbles
+    down with it, so you can see which way it goes and how fast. It froths on
+    cascades, along the shore and round your legs, and opens into a wake
+    behind you. Below it the bed turns to silt, pebbles and cobbles under a
+    moving net of light, darkening, reds first, with depth.
   - **By the water** trees and logs keep back from the bank, ferns come right
     down to it, boulders stand in streams, and the grass gives way to a damp,
     sandy edge. Reeds and bulrushes grow in the shallows of still water, and
     lily pads, a few in flower, float further out.
-  - **In it** you wade, slower the deeper it gets; out of your depth you swim,
-    with your head and shoulders out (no running or jumping). The camera stays
-    above the surface, and footpaths cross streams and rivers at shallow fords.
-    Animals ford a shallow stream too, but go round anything deeper.
+  - **In it** you wade, slower the deeper it gets, and the current leans on
+    you the deeper you're in it; out of your depth you swim, with your head
+    and shoulders out (no running or jumping), and a river carries you along.
+    Each step throws up a splash, running sends spray off your shins, and
+    landing in it sends up a sheet. The camera stays above the surface, and
+    footpaths cross streams and rivers at shallow fords. Animals ford a
+    shallow stream too, but go round anything deeper.
 - **Ecology.** A forest-density field opens into meadows full of wildflowers.
   A species field shifts the woods between conifers and broadleaf trees, with
   birches along the edges. Ferns grow where it's damp and shaded, and you'll
@@ -622,7 +649,8 @@ adds what it does each frame — and `src/main.js` is little more than the list:
 
 ```js
 const FEATURES = [installRender, installHud, installWorld, installPlayer, installAudio,
-                  installBuild, installFires, installMap, installSave, installWildlife, installDebug];
+                  installBuild, installFires, installMap, installSave, installWildlife,
+                  installSplashes, installDebug];
 ```
 
 A feature lives in a folder of its own, and its `index.js` is the only file in
@@ -771,8 +799,9 @@ code changed something it shouldn't have; only re-record
 
 `npm run smoke` plays: it fells a tree, bucks and hews it, picks up a stone,
 digs, raises and roofs a cabin, lights a campfire in it (and finds the roof
-won't go over that), reloads to see it was all kept, opens the map
-and leaves a mark, makes some noise and calls up one of every animal. It
+won't go over that), reloads to see it was all kept, opens the map and leaves
+a mark, makes some noise, wades into a stream to be carried by it and runs up
+it splashing, and calls up one of every animal. It
 drives the keys and the crosshair and reads results through `window.world`,
 so it doesn't care how the insides are arranged. The last two need
 [Playwright](https://playwright.dev) (`npm i -D playwright && npx playwright
@@ -806,7 +835,8 @@ src/
   world/
     index.js              ← feature: the land, the sky, the hour
     worldgen.js           pure world description: height, paths, forest, species
-    water.js              streams, rivers, ponds and lakes, as part of that description
+    drainage.js           where water runs and gathers: the drainage network
+    water.js              streams, rivers, ponds and lakes on the ground, from that network
     flora.js              what grows, in one table
     chunkGen.js           pure chunk generation (terrain buffers, vegetation lists)
     chunkWorker.js        Web Worker wrapper around chunkGen
@@ -876,6 +906,9 @@ src/
     signIn.js             the door into a shared world: who are you?
     sharePanel.js         the save panel (L): link, name, who's here, sign out
     save.css              save panel and door styles
+  splashes/
+    index.js              ← feature: water thrown up as you go through it
+    splashes.js           the drops: thrown, falling, gone
   wildlife/
     index.js              ← feature
     wildlife.js           who's about: arrivals, departures, what animals can sense
@@ -896,7 +929,7 @@ worker/
   world.js                a world's Durable Object — the only writer, and who is who
   members.js              passwords kept as hashes, sign-ins as cookies
 test/
-  *.test.js               npm test: world generation, saving, building, the game loop
+  *.test.js               npm test: world generation, water, saving, building, the game loop
   golden/                 recorded answers the code has to keep giving
   smoke.mjs               npm run smoke: a play-through in a headless browser
   together.mjs            npm run together: two visitors, one world
