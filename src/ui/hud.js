@@ -30,6 +30,10 @@ export class Hud {
     this.progressBar = this.progress ? this.progress.firstElementChild : null;
     this.slots = [];
     this._prompt = null;
+    // What the tool in hand has to say, and something at hand that a key
+    // would do (cue), which is said in its place while there is one.
+    this._tool = { html: '', bad: false, progress: null };
+    this._cue = null;
     this._inv = '';
     this.soundBtn = document.getElementById('sound-btn');
     this.saveBtn = document.getElementById('save-btn');
@@ -108,11 +112,18 @@ export class Hud {
     this.help.classList.toggle('open');
   }
 
-  flash(msg) {
+  // Is a word on the screen right now?
+  get showing() {
+    return this.toast.classList.contains('show');
+  }
+
+  // A word on the screen for a moment. ms: how long it stays (longer for a
+  // sentence worth reading).
+  flash(msg, ms = 1400) {
     this.toast.textContent = msg;
     this.toast.classList.add('show');
     clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => this.toast.classList.remove('show'), 1400);
+    this._toastTimer = setTimeout(() => this.toast.classList.remove('show'), ms);
   }
 
   update(pos, camYaw, hours) {
@@ -193,8 +204,25 @@ export class Hud {
     this.slots.forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
   }
 
+  // What the tool in hand would do (the builder says this every frame).
   setPrompt(html, bad = false) {
+    this._tool.html = html;
+    this._tool.bad = !!bad;
+    this._showPrompt();
+  }
+
+  // Something at hand that a key would do, whatever tool is in hand: calm an
+  // animal, climb on. Said in place of the tool's prompt while it is set.
+  //   { html, bad?, progress? (0..1, for press-and-hold) }, or null
+  cue(c) {
+    this._cue = c && c.html ? c : null;
+    this._showPrompt();
+    this._showProgress();
+  }
+
+  _showPrompt() {
     if (!this.prompt) return;
+    const { html, bad } = this._cue ? { html: this._cue.html, bad: !!this._cue.bad } : this._tool;
     const key = `${bad ? 1 : 0}${html}`;
     if (key === this._prompt) return;
     this._prompt = key;
@@ -211,7 +239,13 @@ export class Hud {
   }
 
   setProgress(p) {
+    this._tool.progress = p;
+    this._showProgress();
+  }
+
+  _showProgress() {
     if (!this.progress) return;
+    const p = this._cue ? (this._cue.progress ?? null) : this._tool.progress;
     const on = p !== null && p > 0;
     this.progress.classList.toggle('show', on);
     if (on) this.progressBar.style.width = `${Math.round(Math.min(1, p) * 100)}%`;

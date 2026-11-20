@@ -27,6 +27,8 @@ function panel(len, c0, c1, sweep, thick) {
 
 // Plumage: { back, wing, wingUnder, head, breast, belly, tail, beak, legs,
 //   cap?, cheek?, bib?, crest?, bar? (wing bar colour), eye? }
+// A bird kept elsewhere (an eagle, src/mounts/) can be handed to buildBird
+// as a spec of its own; `like` says whose shape it has (beak, tail, wings).
 export const BIRDS = {
   robin: { len: 0.24, span: 0.36, plumage: { back: 0x4f4a44, wing: 0x45403b, wingUnder: 0x8a7a6a, head: 0x2a2725, breast: 0xc0602a, belly: 0xe2d6c8, tail: 0x2e2b28, beak: 0xd8a83a, legs: 0x5a4a3a } },
   jay: { len: 0.28, span: 0.4, plumage: { back: 0x5a7fb8, wing: 0x3f6ab8, wingUnder: 0xb8c0cc, head: 0x6688c0, breast: 0xd8dade, belly: 0xeeeeee, tail: 0x3a64b0, beak: 0x1a1a1a, legs: 0x2a2a2a, crest: 0x6a8ec4, bib: 0x1c1c22, bar: 0xf2f2f2 } },
@@ -40,8 +42,8 @@ export const BIRDS = {
   owl: { len: 0.5, span: 1.2, plumage: { back: 0x6a5440, wing: 0x6e5844, wingUnder: 0xc8b494, head: 0x7a6248, breast: 0xb09a7a, belly: 0xc4b08e, tail: 0x5e4a38, beak: 0x2a2a2a, legs: 0xb8a888, eye: 0xe8b820, tufts: 0x4a3828, cheek: 0xc89a60 } },
 };
 
-export function buildBird(kind, seed) {
-  const spec = BIRDS[kind];
+export function buildBird(kind, seed, spec = BIRDS[kind]) {
+  if (spec.like) kind = spec.like;
   const P = {};
   for (const k in spec.plumage) P[k] = lin(spec.plumage[k]);
   const r = new RigBuilder(seed);

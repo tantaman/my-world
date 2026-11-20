@@ -64,6 +64,12 @@ const POSES = {
     [0.5, { sh: -1.15, el: -0.25, tool: 0, sp: 0.75, inw: 0.22, drop: 0.26 }],
     [1, { sh: -0.2, el: -0.3, tool: 0, sp: 0.1, inw: 0.1, drop: 0 }],
   ],
+  // one hand held out, slow and low, to something wary of you
+  reach: [
+    [0, { sh: -1.15, el: -0.2, tool: 0, sp: 0.1, inw: 0.2, drop: 0.03 }],
+    [0.5, { sh: -1.25, el: -0.15, tool: 0, sp: 0.14, inw: 0.18, drop: 0.04 }],
+    [1, { sh: -1.15, el: -0.2, tool: 0, sp: 0.1, inw: 0.2, drop: 0.03 }],
+  ],
 };
 const _pose = { sh: 0, el: 0, tool: 0, sp: 0, inw: 0, drop: 0, tw: 0, roll: 0, cock: 0 };
 
@@ -88,6 +94,9 @@ function samplePose(keys, p, out) {
 
 // ── Body measurements (metres) ──────────────────────────────────────────────
 const HIPS_Y = 0.94; // pelvis height standing
+// Sitting astride something (Character.seat), the hips stay this far above
+// the root: whatever carries the hiker puts the root this far under the seat.
+export const SEAT_HIPS = HIPS_Y;
 const HIP_X = 0.095; // hip joints either side of the pelvis
 const HIP_Y = -0.04;
 const NECK = 0.145; // centre of the head above the base of the neck
@@ -136,6 +145,8 @@ const M = (hex, rough = 0.85, extra) => new THREE.MeshStandardMaterial({ color: 
 export class Character {
   constructor() {
     this.root = new THREE.Group();
+    // yaw last, so the body can be pitched about its own axis (on a horse's back)
+    this.root.rotation.order = 'YXZ';
     this.phase = 0; // gait cycles; the left heel strikes on whole numbers
     this.moveBlend = 0;
     this.runBlend = 0;
@@ -165,6 +176,9 @@ export class Character {
     this.raised = null; // what the left hand holds up to the face, by name
     this.lift = 0; // blend into holding it there
     this._lastRaised = null;
+    this.seated = null; // what the hiker sits astride (seat())
+    this._seat = null; // ...or last sat on, while getting down
+    this.sit = 0; // blend into sitting
 
     // Per-foot state: target ankle position (root space), foot pitch, toe-out,
     // whether it's carrying weight, and the smoothed ground height under it.
@@ -416,7 +430,20 @@ export class Character {
     this.raised = name && this.raisable[name] ? name : null;
   }
 
-  // Start a work animation: 'chop' | 'chopLow' | 'fell' | 'dig' | 'bend'.
+  // Sit astride something (a mount), or with null, get down. The hips stay
+  // SEAT_HIPS above the root; whatever carries the hiker moves the root, and
+  // should hand update() no speed of its own, since the legs aren't walking.
+  //   spread  half the width of what is between the knees (m)
+  //   hang    how far below the hips the feet hang (m)
+  //   fwd     how far ahead of the hips the feet are (m)
+  //   lean    how far forward the body leans (radians)
+  //   reins   0..1 how much the hands are held out in front
+  seat(s) {
+    this.seated = s || null;
+    if (s) this._seat = s;
+  }
+
+  // Start a work animation: 'chop' | 'chopLow' | 'fell' | 'dig' | 'bend' | 'reach'.
   play(kind, dur, loop = false) {
     if (this.action && this.action.kind === kind && this.action.loop && loop) {
       this.action.dur = dur;
@@ -501,11 +528,11 @@ export class Character {
     hy += twice * (walkW * 0.022 - runW * 0.04);
     const shift = Math.sin(this.time * 0.55) * 0.6 + Math.sin(this.time * 0.23 + 1) * 0.4; // idle weight shift
     let hx = side1 * (walkW * 0.028 + runW * 0.012) + idle * shift * 0.022;
-    const hRoll = side1 * (walkW * 0.07 + runW * 0.035) + idle * shift * 0.04;
-    const hYaw = -swingL * (walkW * (0.05 + 0.02 * v) + runW * 0.13);
+    let hRoll = side1 * (walkW * 0.07 + runW * 0.035) + idle * shift * 0.04;
+    let hYaw = -swingL * (walkW * (0.05 + 0.02 * v) + runW * 0.13);
     let hz = 0;
     const accLean = clamp(this.acc * 0.022, -0.16, 0.22) * (1 - ab);
-    const hPitch = runW * 0.08 + accLean * 0.3;
+    let hPitch = runW * 0.08 + accLean * 0.3;
     hy += this.land;
 
     // ── Feet ───────────────────────────────────────────────────────────────
@@ -620,7 +647,8 @@ export class Character {
       const pose = samplePose(POSES[a ? a.kind : this._lastKind || 'chop'], a ? Math.min(1, a.t / a.dur) : 0, _pose);
       if (a) this._lastKind = a.kind;
       const w = this.work;
-      const two = this.tool !== null || (a && a.kind === 'bend');
+      const kind = a ? a.kind : this._lastKind;
+      const two = kind === 'bend' || (this.tool !== null && kind !== 'reach');
       const blend = (cur, val) => cur + (val - cur) * w;
       this.armR.shoulder.rotation.x = blend(this.armR.shoulder.rotation.x, pose.sh);
       this.armR.elbow.rotation.x = blend(this.armR.elbow.rotation.x, pose.el);
@@ -639,6 +667,41 @@ export class Character {
       // Crouch into it, and sit the hips back to balance a forward bend.
       hy -= pose.drop * w;
       hz -= Math.max(0, pose.sp) * 0.12 * w;
+    }
+
+    // ── Sitting astride something ──────────────────────────────────────────
+    // The legs straddle its back, knees out and feet hanging; the body sits
+    // up, leaning a little into the ride, and the hands are held out in front.
+    this.sit = lerp(this.sit, this.seated ? 1 : 0, 1 - Math.exp(-dt * (this.seated ? 10 : 6)));
+    const sit = this._seat && this.sit > 0.001 ? ease(this.sit) : 0;
+    if (sit) {
+      const S = this._seat;
+      const lean = S.lean ?? 0.1;
+      hx *= 1 - sit;
+      hz *= 1 - sit;
+      hy = lerp(hy, HIPS_Y, sit);
+      hPitch *= 1 - sit;
+      hYaw *= 1 - sit;
+      hRoll *= 1 - sit;
+      for (const F of [this.footL, this.footR]) {
+        F.x = lerp(F.x, F.side * (S.spread + 0.05), sit);
+        F.y = lerp(F.y, HIPS_Y - S.hang, sit);
+        F.z = lerp(F.z, S.fwd ?? 0.1, sit);
+        F.p = lerp(F.p, 0.35, sit);
+        F.out = lerp(F.out, F.side * 0.22, sit);
+        F.load *= 1 - sit;
+      }
+      this.spine.rotation.x = lerp(this.spine.rotation.x, lean, sit);
+      this.spine.rotation.y *= 1 - sit;
+      this.spine.rotation.z *= 1 - sit;
+      this.head.rotation.x = lerp(this.head.rotation.x, -lean * 0.8, sit);
+      const reins = (S.reins ?? 1) * sit;
+      for (const [A, s] of [[this.armL, 1], [this.armR, -1]]) {
+        A.shoulder.rotation.x = lerp(A.shoulder.rotation.x, -0.5 - lean, reins);
+        A.shoulder.rotation.z = lerp(A.shoulder.rotation.z, -s * 0.16, reins);
+        A.elbow.rotation.x = lerp(A.elbow.rotation.x, -1.1, reins);
+      }
+      this.hand.rotation.x = lerp(this.hand.rotation.x, 0, reins);
     }
 
     // ── Something held up to the face, in the left hand ────────────────────
@@ -665,7 +728,7 @@ export class Character {
     }
 
     // ── Meet the ground ────────────────────────────────────────────────────
-    if (this.groundAt && ab < 0.999) this.#feelGround(dt, 1 - ab);
+    if (this.groundAt && ab < 0.999 && sit < 0.999) this.#feelGround(dt, (1 - ab) * (1 - sit));
 
     // The body banks into turns about the feet; keep the feet on the ground.
     const bank = this.root.rotation.z;

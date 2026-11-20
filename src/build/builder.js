@@ -53,6 +53,10 @@
 //   regrow(x, z, pad)                      the turf changed here
 //   flash(message)                         a word on the HUD
 //
+// While something else has the hiker's hands (builder.idleWhile(fn): riding,
+// say) the bench stands idle: no aiming, no work, no prompt, and the tool is
+// put away until it is over.
+//
 // Emits:
 //   'change'   ()        something about the world, or what you carry, changed
 //   'tools'    (tools)   the set of tools changed
@@ -101,6 +105,13 @@ export class Builder extends Emitter {
     this.ground = null;
     this.piece = null;
     this.aimPoint = null;
+    this._idleWhen = [];
+    this.idle = false;
+  }
+
+  // While fn() is true, the hiker's hands are taken and the bench stands idle.
+  idleWhile(fn) {
+    this._idleWhen.push(fn);
   }
 
   // ── Tools ─────────────────────────────────────────────────────────────────
@@ -124,7 +135,7 @@ export class Builder extends Emitter {
     if (!tool) return;
     if (this.current && this.current !== tool && this.current.put) this.current.put(this);
     this.current = tool;
-    this.player.character.setTool(tool.held ? tool.held.name : null);
+    this.player.character.setTool(tool.held && !this.idle ? tool.held.name : null);
     this.emit('select', tool);
     if (!quiet) this.flash(tool.label);
   }
@@ -154,6 +165,13 @@ export class Builder extends Emitter {
   update(dt) {
     const tool = this.current;
     if (!tool) return;
+    if (this._idle(tool)) {
+      this.forest.update(dt);
+      this.chips.update(dt);
+      for (const t of this.tools) if (t.update) t.update(this, dt);
+      this._changed();
+      return;
+    }
     if (this.input.wasPressed('Escape') && tool.put) tool.put(this);
 
     this._aim();
@@ -165,7 +183,34 @@ export class Builder extends Emitter {
     for (const t of this.tools) if (t.update) t.update(this, dt);
     this._preview(dt);
     this._hud();
+    this._changed();
+  }
 
+  // Are the hiker's hands taken? Going idle puts down whatever was half done
+  // and the tool with it; coming back picks the tool up again.
+  _idle(tool) {
+    const idle = this._idleWhen.some((fn) => fn());
+    if (idle === this.idle) return idle;
+    this.idle = idle;
+    const ch = this.player.character;
+    if (idle) {
+      if (tool.put) tool.put(this);
+      this.act = null;
+      this.hold = null;
+      this.tgt = null;
+      this.player.busy = 0;
+      this.player.faceTo = null;
+      if (ch.action && ch.action.loop) ch.stop();
+      ch.setTool(null);
+      this.previews.hideAll();
+      this.stake.show(false);
+      this.hud.setPrompt('');
+      this.hud.setProgress(null);
+    } else ch.setTool(tool.held ? tool.held.name : null);
+    return idle;
+  }
+
+  _changed() {
     if (this.terrain.dirty || this.forest.dirty || this.buildings.dirty || this.stock.dirty || this.stake.dirty) {
       this.terrain.dirty = this.forest.dirty = this.buildings.dirty = this.stock.dirty = this.stake.dirty = false;
       this.emit('change');
