@@ -48,7 +48,9 @@ street along the lie of the land, and puts a building wherever the ground
 beside the street is level enough to stand one on a foundation. None is
 within a few hundred metres of where you first arrive, on top of an old
 place, or in the mouth of a cave, and the nearest is usually a run of a
-kilometre or less.
+kilometre or less. Nor is one grown on, or near enough to change, a real
+place brought in from a photo (see [Hikes](../hikes/README.md)): what is
+there is what is really there.
 
 **Nothing about the land changes for them**, any more than for the old
 places (see [What a save actually holds](../save/README.md#what-a-save-actually-holds)):

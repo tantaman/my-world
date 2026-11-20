@@ -15,6 +15,8 @@ import { KINDS, KIND_IDS, BUILDINGS } from '../src/towns/kinds.js';
 import { buildLot, buildStreet } from '../src/towns/buildings.js';
 import { Townsfolk, lookOf, buildPerson } from '../src/towns/people.js';
 import { layoutCave, cellOf } from '../src/caves/sites.js';
+import { HIKES } from '../src/world/hikes.js';
+import { Landforms, reachOf } from '../src/world/landforms.js';
 import { mulberry32 } from '../src/noise.js';
 import { matchesGolden } from './helpers/golden.js';
 
@@ -151,6 +153,23 @@ for (const land of LANDS) test(`finding them leaves the forest as the seed grows
   for (const k of VEG_KINDS) assert.deepEqual(after.lists[k], before.lists[k], k);
   assert.deepEqual(generateTerrain(fresh, 3, -4, 2, 64).heights, ground);
   assert.equal(fresh.pads.length, 0, 'no pad is levelled for them');
+});
+
+test('no town is grown where a real place reaches, and everywhere else they are as they were', () => {
+  // told from the hikes' cards alone: their land is never fetched here
+  const landforms = new Landforms(HIKES);
+  const keepOff = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);
+  const found = new Towns(gen, { keepOff });
+  const plain = new Towns(gen);
+  const cell = (x) => Math.floor(x / CELL);
+  for (const card of HIKES) {
+    const [ci, cj] = card.at.map(cell);
+    for (const [i, j] of [[0, 0], [1, 0], [0, -1], [-1, 1]]) assert.equal(found.cell(ci + i, cj + j), null, `none on ${card.id}`);
+    // a little beyond its reach, the forest's own
+    const fi = cell(card.at[0] + reachOf(card) + 2 * CELL);
+    if (!keepOff(fi * CELL - 110, cj * CELL - 110, (fi + 1) * CELL + 110, (cj + 1) * CELL + 110)) assert.deepEqual(found.cell(fi, cj), plain.cell(fi, cj));
+  }
+  assert.deepEqual(found.within(-1500, -1500, 1500, 1500), plain.within(-1500, -1500, 1500, 1500), 'the towns near the start are where they were');
 });
 
 test("a town's id finds it again, and nothing else", () => {
