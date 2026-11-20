@@ -341,13 +341,18 @@ Over the socket, both ways:
 → { "t": "ops", "id": 7, "ops": [ … ], "visitor": { … } }
 ← { "t": "ack", "for": 7, "gen": 92, "took": 46 }
 ← { "t": "ops", "gen": 93, "ops": [ … ] }        someone else's change
-→ { "t": "at", "x": 12.5, "z": -40, "yaw": 1.2 } where you are standing
-← { "t": "at", "id": "p3", "name": "sam", … }     …and someone else, by name
+→ { "t": "at", "x": 12.5, "z": -40, "yaw": 1.2, "ms": 81234 }   where you are standing, and when by your clock
+← { "t": "at", "id": "p3", "name": "sam", … }                   …and someone else, by name
 → { "t": "say", "ch": "voice", "body": { "mode": "radio" } }        to everyone here
 → { "t": "say", "ch": "rtc", "to": "p3", "body": { … } }            or to one of them
 ← { "t": "say", "ch": "voice", "from": "p2", "name": "ana", "body": { … } }
 ← { "t": "welcome", "you": "p2", "gen": 93, "here": [ … ], "missed": [ … ] }
 ```
+
+`at` goes out every 150 ms. Its `ms` is the sender's own clock, so everyone
+else can draw them a moment behind, between two things they said, at the
+pace they really went (`src/player/track.js`), the way Source draws other
+players. The clocks never have to agree; only the gaps between them count.
 
 `say` is anything people here tell each other that is nobody's to keep: on a
 channel of its own (`voice`: who is talking, and how; `rtc`: setting up a
@@ -1164,7 +1169,8 @@ src/
     character.js          procedural hiker model, IK gait, work poses, things raised to the face
     head.js               the hiker's face and beard, sunglasses and snapback
     input.js              keyboard, mouse, touch
-    peers.js              everyone else, drawn and eased between messages
+    peers.js              everyone else, drawn a moment behind, between what they said
+    track.js              where to draw someone, from where and when they said they were
   voice/
     index.js              ← feature: talking aloud (C) and on the radio (X)
     talk.js               push to talk: whether you are talking, and how

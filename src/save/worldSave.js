@@ -303,7 +303,7 @@ export class WorldSave extends Emitter {
     if (this.connected && now - this.toldAt > AT_EVERY) {
       this.toldAt = now;
       const p = this.attached.where();
-      this.live.at(round(p.x), round(p.z), round(p.yaw, 100));
+      this.live.at(round(p.x), round(p.z), round(p.yaw, 100), Math.round(now));
     }
 
     // Finding changes means looking over the whole world, which on a world
