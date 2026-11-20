@@ -16,7 +16,13 @@ import { buildHead } from './head.js';
 // Work poses as keyframes over one swing (p = 0..1). Angles in radians:
 //   sh = shoulder pitch (negative raises the arm forward), el = elbow,
 //   tool = wrist (how the tool sits relative to the forearm),
-//   sp = spine lean, inw = arms brought together, drop = crouch.
+//   sp = spine lean, inw = arms brought together, drop = crouch,
+//   and, left out where they stay 0:
+//   tw = shoulders turned (positive to the left),
+//   roll = the tool turned about its handle (positive brings what faces
+//     forward round to the left), cock = the wrist cocked within that turned
+//     tool's swing (negative lets the head trail to the right).
+const ROLL_LEVEL = Math.PI / 2; // a quarter turn on the handle: the axe's bit faces left, for a level swing
 const POSES = {
   chop: [
     [0, { sh: -0.5, el: -0.6, tool: -0.2, sp: 0.05, inw: 0.3, drop: 0 }],
@@ -34,6 +40,16 @@ const POSES = {
     [0.75, { sh: -1.36, el: -0.08, tool: -0.22, sp: 0.62, inw: 0.42, drop: 0.16 }],
     [1, { sh: -0.6, el: -0.6, tool: -0.2, sp: 0.15, inw: 0.3, drop: 0.04 }],
   ],
+  // Felling a standing tree: a level swing from the right, the shoulders
+  // winding up and turning through, with the axe turned on its handle so the
+  // bit leads into the trunk at about waist height.
+  fell: [
+    [0, { sh: -0.9, el: -0.6, tool: -0.1, sp: 0.08, inw: 0.34, roll: ROLL_LEVEL }],
+    [0.45, { sh: -1.3, el: -0.6, tool: 0.0, sp: 0.04, inw: 0.4, tw: -1.25, roll: ROLL_LEVEL, cock: -1.1, drop: 0.02 }],
+    [0.6, { sh: -1.3, el: -0.08, tool: -0.02, sp: 0.12, inw: 0.3, tw: -0.12, roll: ROLL_LEVEL, cock: 0.0, drop: 0.07 }],
+    [0.75, { sh: -1.28, el: -0.1, tool: -0.02, sp: 0.13, inw: 0.3, tw: -0.08, roll: ROLL_LEVEL, cock: 0.0, drop: 0.07 }],
+    [1, { sh: -0.9, el: -0.6, tool: -0.1, sp: 0.08, inw: 0.34, roll: ROLL_LEVEL }],
+  ],
   dig: [
     [0, { sh: -0.95, el: -0.5, tool: 0.6, sp: 0.25, inw: 0.38, drop: 0.04 }],
     [0.35, { sh: -1.05, el: -0.2, tool: 0.25, sp: 0.5, inw: 0.4, drop: 0.14 }],
@@ -47,7 +63,7 @@ const POSES = {
     [1, { sh: -0.2, el: -0.3, tool: 0, sp: 0.1, inw: 0.1, drop: 0 }],
   ],
 };
-const _pose = { sh: 0, el: 0, tool: 0, sp: 0, inw: 0, drop: 0 };
+const _pose = { sh: 0, el: 0, tool: 0, sp: 0, inw: 0, drop: 0, tw: 0, roll: 0, cock: 0 };
 
 // The left arm holding something up to the mouth (Character.addRaised): the
 // shoulder's pitch (sh), twist (tw) and swing inward (inw), the elbow, and the
@@ -61,7 +77,10 @@ function samplePose(keys, p, out) {
   const [pa, a] = keys[i];
   const [pb, b] = keys[i + 1];
   const t = smoothstep(0, 1, (p - pa) / Math.max(1e-4, pb - pa));
-  for (const k in out) out[k] = a[k] + (b[k] - a[k]) * t;
+  for (const k in out) {
+    const ak = a[k] ?? 0;
+    out[k] = ak + ((b[k] ?? 0) - ak) * t;
+  }
   return out;
 }
 
@@ -316,6 +335,9 @@ export class Character {
     // What can be held is handed in from outside (addHeld): the hiker doesn't
     // know an axe from a fishing rod.
     this.hand = group(this.armR.elbow, 0, -0.27, 0);
+    // turn the tool on its handle (y) first, then cock it within that turn's
+    // swing (z), then bend the wrist (x)
+    this.hand.rotation.order = 'XZY';
     this.tools = {}; // name -> { object, rest, elbow }
     // The left hand can bring something up to the face, whatever the right
     // is doing (addRaised).
@@ -392,7 +414,7 @@ export class Character {
     this.raised = name && this.raisable[name] ? name : null;
   }
 
-  // Start a work animation: 'chop' | 'chopLow' | 'dig' | 'bend'.
+  // Start a work animation: 'chop' | 'chopLow' | 'fell' | 'dig' | 'bend'.
   play(kind, dur, loop = false) {
     if (this.action && this.action.kind === kind && this.action.loop && loop) {
       this.action.dur = dur;
@@ -580,7 +602,7 @@ export class Character {
     const held = this.tool ? this.tools[this.tool] : null;
     const toolRest = held ? held.rest : 0;
     if (held && held.elbow !== undefined) this.armR.elbow.rotation.x = held.elbow;
-    this.hand.rotation.x = toolRest;
+    this.hand.rotation.set(toolRest, 0, 0);
 
     // ── Work poses blend over the walk ─────────────────────────────────────
     const a = this.action;
@@ -606,9 +628,11 @@ export class Character {
         this.armL.elbow.rotation.x = blend(this.armL.elbow.rotation.x, pose.el - 0.2);
         this.armL.shoulder.rotation.z = blend(this.armL.shoulder.rotation.z, -pose.inw);
       }
-      this.hand.rotation.x = blend(toolRest, pose.tool);
+      this.hand.rotation.set(blend(toolRest, pose.tool), pose.roll * w, pose.cock * w);
       this.spine.rotation.x = blend(this.spine.rotation.x, pose.sp);
-      this.spine.rotation.y *= 1 - w;
+      this.spine.rotation.y = blend(this.spine.rotation.y, pose.tw);
+      // keep the eyes on the work while the shoulders turn
+      this.head.rotation.y = blend(this.head.rotation.y, -pose.tw * 0.85);
       this.head.rotation.x = -this.spine.rotation.x * 0.5;
       // Crouch into it, and sit the hips back to balance a forward bend.
       hy -= pose.drop * w;
