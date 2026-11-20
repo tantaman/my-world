@@ -14,7 +14,9 @@
 // element; the only thing that can be lost is the older of two writes to the
 // very same thing, which is the right answer anyway.
 //
-// It also relays where everyone is standing, which is never stored.
+// It also relays where everyone is standing, and anything else people here
+// say to each other (`say`: setting up a call, who is talking), none of which
+// is ever stored.
 //
 // And it knows who is who. Everything but `meta` needs a sign-in (see
 // members.js): the first time, someone picks a name and a password; after
@@ -38,10 +40,13 @@ const MAX_TRIES = 8; // wrong passwords in a row before a name is rested
 const REST = 5 * 60 * 1000; // ms a name is rested for after that
 const KEEP_SIGN_INS = 20; // per person: browsers they are signed in on
 const MAX_SIGN_IN = 4096; // bytes: a name and a password, as JSON
+const MAX_SAY = 16384; // bytes: one thing said, as JSON (a call's offer is a few kB)
+const CHANNEL_RE = /^[a-z][a-z0-9-]{0,23}$/; // what a channel is called
 
 import { encodeFrame } from '../src/save/frame.js';
 import { cleanName, nameKey, nameProblem, passwordProblem, NOT_SIGNED_IN } from '../src/save/who.js';
 import { hashPassword, checkPassword, newToken, tokenId, readCookie, sessionCookie, clearCookie, SESSION_LIFE } from './members.js';
+import { iceServers } from './ice.js';
 
 export class World {
   constructor(ctx, env) {
@@ -101,6 +106,8 @@ export class World {
     if (!you) return json(401, { error: 'say who you are to come in', world: world.name });
     if (what === 'open') return frameResponse(await this.#frame(world, you), world);
     if (what === 'ops') return this.#take(request, world, you);
+    // how to reach each other, to talk (see ice.js)
+    if (what === 'voice') return json(200, { iceServers: await iceServers(this.env) });
     if (what === 'history') return json(200, { id: world.id, copies: this.#rows('SELECT gen, bytes, created_at FROM copies ORDER BY gen DESC') });
     if (what.startsWith('copy/')) {
       const gen = Number(what.slice(5));
@@ -374,7 +381,7 @@ export class World {
     }
     // Hibernation: the socket survives this object going to sleep.
     this.ctx.acceptWebSocket(server);
-    const id = `p${this.nextPeer++}`;
+    const id = this.#newPeerId();
     // the same colour for the same person, whichever browser they come in on
     server.serializeAttachment({ id, member: you.id, name: you.name, colour: PEER_COLOURS[(you.id - 1) % PEER_COLOURS.length] });
     const since = int(url.searchParams.get('since'));
@@ -401,6 +408,18 @@ export class World {
       this.#tell({ t: 'at', id: me.id, x: me.x, z: me.z, yaw: me.yaw, name: me.name, colour: me.colour }, ws);
       return;
     }
+    if (msg.t === 'say') {
+      // Something said to everyone else here, or to one of them: passed on,
+      // never stored, under the name it was said in. Voice sets its calls up
+      // this way, and says who is talking (src/voice/).
+      const said = sayable(msg);
+      if (!said) return;
+      const out = { t: 'say', ch: said.ch, from: me.id, name: me.name, body: said.body };
+      if (said.to === null) return this.#tell(out, ws);
+      const them = this.#socketOf(said.to);
+      if (them && them !== ws) send(them, JSON.stringify(out));
+      return;
+    }
     if (msg.t === 'ops') {
       const world = this.#world();
       if (!world) return;
@@ -415,7 +434,8 @@ export class World {
   }
 
   webSocketClose(ws) {
-    const me = this.live.get(ws);
+    // (read from the attachment if it hasn't spoken since this object woke)
+    const me = this.#peer(ws);
     this.live.delete(ws);
     if (me) this.#tell({ t: 'gone', id: me.id }, ws);
   }
@@ -435,6 +455,24 @@ export class World {
       this.live.set(ws, (me = { id: kept.id || `p${this.nextPeer++}`, member: kept.member, name: kept.name || '', colour: kept.colour || PEER_COLOURS[0], x: 0, z: 0, yaw: 0 }));
     }
     return me;
+  }
+
+  // Ids are only for while someone is here, but they outlive this object
+  // going to sleep, in each socket's attachment: a new one must not take an
+  // id that a socket from before the nap still answers to.
+  #newPeerId() {
+    let n = this.nextPeer;
+    for (const ws of this.ctx.getWebSockets()) {
+      const k = Number(String((ws.deserializeAttachment() || {}).id || '').slice(1));
+      if (Number.isInteger(k) && k >= n) n = k + 1;
+    }
+    this.nextPeer = n + 1;
+    return `p${n}`;
+  }
+
+  #socketOf(id) {
+    for (const ws of this.ctx.getWebSockets()) if (this.#peer(ws)?.id === id) return ws;
+    return null;
   }
 
   #here(except) {
@@ -465,14 +503,7 @@ export class World {
 
   #tell(message, except) {
     const text = JSON.stringify(message);
-    for (const ws of this.ctx.getWebSockets()) {
-      if (ws === except) continue;
-      try {
-        ws.send(text);
-      } catch {
-        /* on its way out; close will tidy up */
-      }
-    }
+    for (const ws of this.ctx.getWebSockets()) if (ws !== except) send(ws, text);
   }
 
   // ── SQLite ────────────────────────────────────────────────────────────────
@@ -500,6 +531,29 @@ function badOp(op) {
   }
   if (text.length > MAX_VALUE) return 'a single thing cannot be that big';
   return null;
+}
+
+// What someone said, if it can be passed on: { ch, to, body }, or null.
+export function sayable(msg) {
+  if (typeof msg.ch !== 'string' || !CHANNEL_RE.test(msg.ch)) return null;
+  const to = msg.to === undefined || msg.to === null ? null : msg.to;
+  if (to !== null && (typeof to !== 'string' || !to.length || to.length > 16)) return null;
+  let text;
+  try {
+    text = JSON.stringify(msg.body ?? null);
+  } catch {
+    return null;
+  }
+  if (text.length > MAX_SAY) return null;
+  return { ch: msg.ch, to, body: msg.body ?? null };
+}
+
+function send(ws, text) {
+  try {
+    ws.send(text);
+  } catch {
+    /* on its way out; close will tidy up */
+  }
 }
 
 const int = (raw) => (raw === null || raw === '' || !Number.isInteger(Number(raw)) ? null : Number(raw));

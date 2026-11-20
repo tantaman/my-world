@@ -19,7 +19,7 @@ npm run together     # two visitors in one world; needs `npm run serve` running
 
 Run `npm test` after any change. Run `npm run smoke` after touching anything
 a player does (tools, movement, HUD, saving, sound, wildlife). Run
-`npm run together` after touching `src/save/` or `worker/`.
+`npm run together` after touching `src/save/`, `src/voice/` or `worker/`.
 
 ## How to add things
 

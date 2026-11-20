@@ -1,0 +1,35 @@
+/* Who is talking (bottom left, over the coordinates), and on a touch screen
+   the buttons to hold to talk (beside the use / alt buttons). */
+
+#voice {
+  position: absolute; left: calc(16px + var(--inset-l)); bottom: calc(54px + var(--inset-b));
+  display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; letter-spacing: 0.04em;
+}
+#voice .talker {
+  display: flex; align-items: center; gap: 7px; padding: 3px 8px 3px 6px; background: var(--panel); border: 1px solid var(--line);
+  max-width: calc(100vw - 32px); white-space: nowrap;
+}
+#voice .talker i { display: block; width: 26px; height: 5px; background: var(--line); flex: none; }
+#voice .talker i b { display: block; height: 100%; width: 100%; background: var(--ink); transform-origin: left; transform: scaleX(0.06); }
+#voice .talker .who { color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+#voice .talker .how { color: var(--ink-dim); }
+#voice .talker.radio { border-color: rgba(217, 180, 90, 0.55); }
+#voice .talker.radio i b { background: var(--accent); }
+#voice .talker.radio .how { color: var(--accent); }
+#voice .talker.you .who { color: var(--ink-dim); }
+
+#voice-act[hidden] { display: none; }
+#voice-act {
+  position: absolute; right: calc(90px + var(--inset-r)); bottom: calc(96px + var(--inset-b));
+  display: flex; flex-direction: column; gap: 10px; pointer-events: auto;
+}
+#voice-act button {
+  font: inherit; font-size: 11px; width: 52px; height: 52px; border-radius: 50%; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); touch-action: none; user-select: none; -webkit-user-select: none;
+}
+#voice-act button[data-voice='radio'] { color: var(--accent); }
+#voice-act button.on { border-color: var(--accent); background: rgba(217, 180, 90, 0.25); }
+
+@media (max-width: 620px) {
+  #voice { bottom: auto; top: calc(52px + var(--inset-t)); }
+}

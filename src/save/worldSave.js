@@ -49,7 +49,9 @@ const SIGN_IN_TRIES = 2;
 const SIGNED_OUT = 'this browser is no longer signed in to this world';
 
 // Emits:
-//   'status'  (save)   the status, the name or who is here changed
+//   'status'   (save)   the status, the name or who is here changed
+//   'message'  ({ ch, from, name, body })   someone here said something on a
+//              channel (see say())
 export class WorldSave extends Emitter {
   // who: asks for a name and a password when the server wants them —
   //      { ask({ world, problem, name, back }) -> { name, password, back }, close() }
@@ -119,6 +121,19 @@ export class WorldSave extends Emitter {
 
   get here() {
     return this.peers ? this.peers.count : 0;
+  }
+
+  // Who you are on the wire right now (the id others know you by while you
+  // are here, not your name), or null with no socket.
+  get me() {
+    return this.connected ? this.live.me : null;
+  }
+
+  // Tell the others here something that is nobody's to keep: on a channel of
+  // your own (`ch`), to everyone, or to one of them by id. They hear it as a
+  // 'message'. -> whether it went (there is nobody to tell without a socket).
+  say(ch, body, to = null) {
+    return !!this.live && this.live.say(ch, body, to);
   }
 
   // ── Opening ───────────────────────────────────────────────────────────────
@@ -432,6 +447,7 @@ export class WorldSave extends Emitter {
         ops: (ops, gen) => this._heard(ops, gen),
         at: (m) => this.peers && this.peers.at(m),
         gone: (id) => this.peers && this.peers.remove(id),
+        say: (m) => this.emit('message', { ch: m.ch, from: m.from, name: m.name || '', body: m.body }),
         here: (list) => {
           if (!this.peers) return;
           this.peers.clear();

@@ -12,7 +12,8 @@
 //   GET    /api/worlds/:id                   open            -> a world frame       ┐
 //   POST   /api/worlds/:id/ops               changes, in bulk or when offline       │ signed
 //   GET    /api/worlds/:id/live              the WebSocket everyone builds over     │ in
-//   GET    /api/worlds/:id/history           the whole copies still kept            │ only
+//   GET    /api/worlds/:id/voice             how to reach each other, to talk       │ only
+//   GET    /api/worlds/:id/history           the whole copies still kept            │
 //   GET    /api/worlds/:id/revisions/:gen    one of them, as a frame                ┘
 //
 // Who is signed in is the world's business too (members.js); this only
@@ -49,7 +50,7 @@ async function route(request, env, url) {
     return create(request, env, url);
   }
 
-  const m = path.match(/^\/api\/worlds\/([^/]+)(?:\/(live|ops|meta|history|members|session|revisions\/\d+))?$/);
+  const m = path.match(/^\/api\/worlds\/([^/]+)(?:\/(live|ops|meta|voice|history|members|session|revisions\/\d+))?$/);
   if (!m) return fail(404, 'no such endpoint');
   const id = decodeURIComponent(m[1]).toLowerCase();
   if (!ID_RE.test(id)) return fail(400, 'that is not a world id');
@@ -69,7 +70,7 @@ async function route(request, env, url) {
   }
   if (method !== 'GET') return notAllowed('GET');
   if (tail === 'live') return send(env, id, 'live', request, url);
-  if (tail === 'meta' || tail === 'history') return send(env, id, tail, request, url);
+  if (tail === 'meta' || tail === 'voice' || tail === 'history') return send(env, id, tail, request, url);
   return send(env, id, `copy/${tail.slice('revisions/'.length)}`, request, url);
 }
 

@@ -10,7 +10,8 @@
 // campfire one lights, the other puts out); a reload must bring it all back;
 // something a *newer* game saved, which this one has never heard of, must
 // survive being walked past; and the second, signing in from another
-// browser, must come back as himself — where *he* left off.
+// browser, must come back as himself — where *he* left off. And they talk:
+// over the radio from anywhere, aloud only from close by.
 
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
@@ -27,11 +28,14 @@ const base = (process.argv[2] || 'http://127.0.0.1:8787').replace(/\/$/, '');
 const QUERY = 'seed=20261119&time=13&animals=0&mute&q=low&view=1&lines=90';
 const problems = [];
 
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+// A microphone that beeps, and sound that may start without a click.
+const browser = await chromium.launch({
+  args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
+});
 
 // A visitor: their own browser profile, so nothing is shared but the server.
 async function visitor(name) {
-  const context = await browser.newContext({ viewport: { width: 800, height: 500 } });
+  const context = await browser.newContext({ viewport: { width: 800, height: 500 }, permissions: ['microphone'] });
   const page = await context.newPage();
   page.on('console', (m) => {
     // A socket being closed under a page that is going away is not a problem,
@@ -241,6 +245,38 @@ try {
       return world.fires.state(f).state === 'laid' && f.ash === 2;
     }, null, 'ana sees it put out, with wood left to light again');
     assert.deepEqual(await ana.seen(), await ben.seen());
+  });
+
+  await step('ana and ben talk: on the radio from anywhere, aloud only close by', async () => {
+    for (const v of [ana, ben]) {
+      await v.page.evaluate(() => world.sound.setEnabled(true)); // the play-through is muted
+      await v.until(() => world.sound.running, null, `${v.name} can hear`);
+    }
+    await ben.until(() => world.voice.list().some((p) => p.name === 'ana' && p.line === 'connected'), null, 'a line between them');
+    const hears = (fn, what) => ben.until((src) => world.voice.list().some((p) => p.name === 'ana' && new Function('p', `return (${src})(p)`)(p)), fn.toString(), what);
+
+    await ana.page.bringToFront();
+    await ana.page.keyboard.down('KeyX');
+    await hears((p) => p.mode === 'radio' && p.heard.radio > 0.5 && p.level > 0.05, 'ben hears ana on the radio');
+    assert.equal(await ana.page.evaluate(() => world.player.character.raised), 'radio', 'ana has the radio up');
+    assert.equal(await ben.page.evaluate(() => world.peers.get(world.voice.list()[0].id).character.raised), 'radio', 'and ben sees her with it up');
+    assert.match(await ben.page.evaluate(() => document.getElementById('voice').textContent), /ana.*radio/, 'and who is on the air');
+    await ana.page.keyboard.up('KeyX');
+    await hears((p) => p.mode === '' && p.heard.radio < 0.05, 'and the radio goes quiet when she lets go');
+
+    const anaWas = await ana.at();
+    const aloudFrom = async (d, what, fn) => {
+      const b = await ben.at();
+      await ana.page.evaluate(([x, z]) => world.teleport(x, z, 0), [b.x + d, b.z]);
+      await ana.page.keyboard.down('KeyC');
+      await hears(fn, what);
+      await ana.page.keyboard.up('KeyC');
+      await hears((p) => p.mode === '', 'and stops');
+    };
+    await aloudFrom(4, 'ben hears ana talking beside him', (p) => p.mode === 'aloud' && p.heard.aloud > 0.5 && p.heard.radio < 0.05);
+    await aloudFrom(120, 'but not from the far side of the hill', (p) => p.mode === 'aloud' && p.heard.aloud < 0.01);
+    await ana.page.evaluate(([x, z]) => world.teleport(x, z, 0), [anaWas.x, anaWas.z]);
+    for (const v of [ana, ben]) await v.page.evaluate(() => world.sound.setEnabled(false));
   });
 
   await step('a change to something already saved goes out too', async () => {

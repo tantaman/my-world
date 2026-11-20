@@ -48,6 +48,8 @@ See [Building together](#building-together) to set the server up, or skip it
 | **R** | back to the starting path |
 | **M** | map: pan, zoom, and mark places (also the *map* button, bottom right) |
 | **L** | save this world, and get a link others can build in with you |
+| **hold C** | talk to whoever is near (in a shared world) |
+| **hold X** | talk on the radio, to everyone in the world |
 | **1 – 8** | tools: hands, axe, shovel, footing, log wall, timber, roof, campfire |
 | **click** (while looking) | use the tool, hold to keep working |
 | **right-click** | the tool's second action, or take a piece down |
@@ -66,7 +68,8 @@ See [Building together](#building-together) to set the server up, or skip it
 On a phone or tablet, drag with your left thumb to walk (push it all the way
 to run), drag with your right thumb to look, and tap on the right to jump.
 Tap a tool in the bar at the bottom. The **use**, **alt** and **stake**
-buttons on the right stand in for the mouse buttons and **G**.
+buttons on the right stand in for the mouse buttons and **G**, and in a shared
+world, hold **talk** or **radio** beside them to talk.
 
 Your position, the time of day, your look settings and whether sound is on
 are remembered between visits. Add `?reset` to the URL to start fresh (your
@@ -127,6 +130,43 @@ What is the world's is shared: the ground, the felled trees, what is built,
 the fires, the marks, the name. What is yours stays yours — your materials, your grade
 stake, the hour you set, where you last stood. Where you are standing is
 passed on so people can see you, and never stored.
+
+### Talking
+
+People in the same world can talk to each other, two ways. Both are push to
+talk: nothing you say leaves the room unless you are holding a key.
+
+- **Aloud — hold C.** Your own voice, heard from where you are standing by
+  whoever is near enough. It's placed in 3D like every other sound, as loud as
+  a voice gets within a couple of metres, quieter and duller across a
+  clearing, and gone by about 40 m.
+- **On the radio — hold X.** Everyone carries a little yellow walkie-talkie
+  clipped to their pack strap. Hold X and you unclip it and talk into it, and
+  everyone in the world hears you wherever they are, thin and crackly, with a
+  click and a hiss when you key up and a burst of static when you let go.
+  Everyone's radio is always on, so you hear all the chatter. Whoever is
+  standing beside you hears your own voice as well.
+
+Whoever is talking has three little bars jumping over their head, in their
+colour, and is listed in the bottom-left corner, with how far off they are or
+*radio*. You're listed there too while you talk, with a level so you can see
+the microphone hears you.
+
+The browser asks for the microphone the first time you talk, not before, and
+it's let go of again after a minute without talking. Voice goes straight from
+browser to browser (WebRTC, one connection to each person). The save server
+only passes on the few small messages that set those connections up, and who
+is talking. Nothing is recorded or kept. Voices come through the game's sound,
+so **N** silences them too. They have buses of their own, so
+`world.sound.volume('radio', 0.5)` turns the chatter down. Headphones help:
+browsers don't always cancel the echo of sound a page plays itself.
+
+From the console, `world.voice.list()` shows everyone here, how they're
+talking, how loud, and how the line to each of them is.
+
+Most home connections can reach each other directly. Where two people
+can't (some offices, some phone networks), their voices need relaying through
+a TURN server. See [Setting up the server](#setting-up-the-server).
 
 ### Who you are
 
@@ -224,6 +264,20 @@ npm run deploy
 For local work, `npm run api` in one terminal and `npm run dev` in another;
 `npm run serve` runs the built site and the API together, the way they deploy.
 
+**For talking**, browsers find a way to each other with Cloudflare's free
+STUN server, which is enough for most. For people behind stricter networks,
+make a TURN key in the Cloudflare dashboard (Realtime → TURN) and give it to
+the Worker:
+
+```bash
+npx wrangler secret put TURN_KEY_API_TOKEN     # the key's API token
+# and TURN_KEY_ID, the key's id, as a variable ("vars" in wrangler.jsonc)
+```
+
+Each person then gets TURN credentials that last 12 hours
+(`worker/ice.js`). TURN relays the audio still encrypted end to end, and
+costs bandwidth, which is why it is opt-in.
+
 > Worlds saved under the earlier layout — one row per world in D1 — are not
 > carried over. Nothing was deleted; if you made one, its rows are still in
 > that D1 database.
@@ -244,6 +298,7 @@ For local work, `npm run api` in one terminal and `npm run dev` in another;
 | `GET /api/worlds/:id` | the whole world, as a frame, with your own state in it |
 | `POST /api/worlds/:id/ops` | changes, in bulk or when the socket is down |
 | `GET /api/worlds/:id/live` | the WebSocket everyone builds over |
+| `GET /api/worlds/:id/voice` | how to reach each other to talk: `{ iceServers }` |
 | `GET /api/worlds/:id/history` | the whole copies still kept |
 | `GET /api/worlds/:id/revisions/:gen` | one of them, as a frame |
 
@@ -265,8 +320,16 @@ Over the socket, both ways:
 ← { "t": "ops", "gen": 93, "ops": [ … ] }        someone else's change
 → { "t": "at", "x": 12.5, "z": -40, "yaw": 1.2 } where you are standing
 ← { "t": "at", "id": "p3", "name": "sam", … }     …and someone else, by name
+→ { "t": "say", "ch": "voice", "body": { "mode": "radio" } }        to everyone here
+→ { "t": "say", "ch": "rtc", "to": "p3", "body": { … } }            or to one of them
+← { "t": "say", "ch": "voice", "from": "p2", "name": "ana", "body": { … } }
 ← { "t": "welcome", "you": "p2", "gen": 93, "here": [ … ], "missed": [ … ] }
 ```
+
+`say` is anything people here tell each other that is nobody's to keep: on a
+channel of its own (`voice`: who is talking, and how; `rtc`: setting up a
+call), at most 16 kB, stamped with who said it, and never stored. A feature
+uses it through `game.save.say(ch, body, to)` and `game.save.on('message')`.
 
 A client that blinked sends `?since=<gen>` and is given what it missed; one
 that has been away too long is told to open the world again instead. A whole
@@ -333,6 +396,9 @@ interact, so it fades in after your first click, key press or tap.
   you hear it gurgle round your legs, more the faster it's going past them.
   Still water laps at the shore in slow swells, something small plops in now
   and then, and from dusk the frogs start up.
+- **Voices** of the people you share a world with: from where they stand
+  when they talk aloud, and through your radio when they're on it. See
+  [Talking](#talking).
 - **Footsteps** follow the stride of the walk and run animation. They
   change with the ground under you: packed earth and grit on paths, a swish
   in grass, crackling leaf litter in the woods, a slosh and a splash and
@@ -649,8 +715,8 @@ adds what it does each frame — and `src/main.js` is little more than the list:
 
 ```js
 const FEATURES = [installRender, installHud, installWorld, installPlayer, installAudio,
-                  installBuild, installFires, installMap, installSave, installWildlife,
-                  installSplashes, installDebug];
+                  installBuild, installFires, installMap, installSave, installVoice,
+                  installWildlife, installSplashes, installDebug];
 ```
 
 A feature lives in a folder of its own, and its `index.js` is the only file in
@@ -693,6 +759,8 @@ a place to go, so that adding one doesn't mean editing the others:
 | a new kind of creature altogether | `defineAnimalClass(name, make)` | `wildlife/wildlife.js` |
 | a remembered preference | `game.settings.get / set` | `game/settings.js` |
 | a button on the HUD | `game.hud.button(id, fn)` | `ui/hud.js` |
+| a word to the others here, never stored | `game.save.say(ch, body, to)`, `game.save.on('message', fn)` | `save/worldSave.js` |
+| something the hiker holds up to the face | `character.addRaised(name, object, { stowed })`, `raise(name)` | `player/character.js` |
 
 Each of those files opens with what the thing is and what it is handed.
 
@@ -786,9 +854,10 @@ npm run together     # two visitors in one world (run `npm run serve` first)
 ```
 
 `npm run together` puts a world on the server as one visitor, then has a
-second pick a name at the door, build alongside, and come back from a third
-browser by signing in — and checks that each finds their own things, not the
-other's.
+second pick a name at the door, build alongside, talk to the first (on the
+radio from anywhere, aloud only from close by, with a fake microphone), and
+come back from a third browser by signing in — and checks that each finds
+their own things, not the other's.
 
 `npm test` pins the things other people's worlds depend on — that a seed
 grows the same land (`test/golden/`), that a save is spelled as it always was,
@@ -851,10 +920,20 @@ src/
   player/
     index.js              ← feature: controls, the hiker, where you arrive
     player.js             movement, collision, wading and swimming, third-person camera
-    character.js          procedural hiker model, IK gait, work poses
+    character.js          procedural hiker model, IK gait, work poses, things raised to the face
     head.js               the hiker's face and beard, sunglasses and snapback
     input.js              keyboard, mouse, touch
     peers.js              everyone else, drawn and eased between messages
+  voice/
+    index.js              ← feature: talking aloud (C) and on the radio (X)
+    talk.js               push to talk: whether you are talking, and how
+    mic.js                the microphone: asked for when you first talk, let go of after
+    mesh.js               a WebRTC line to each person here, set up over the socket
+    voices.js             what you hear of them: placed where they stand, or on the radio
+    radio.js              what a voice sounds like through a walkie-talkie; squelch and static
+    walkie.js             the radio itself, on the strap and in the hand
+    bars.js               bars over the head of whoever is talking
+    onScreen.js           who is talking, in the corner; the touch buttons
   audio/
     index.js              ← feature: footsteps, the sound key, what the forest is told
     soundscape.js         the engine: audio context, mixer buses, the kit, layers
@@ -929,6 +1008,7 @@ worker/
   index.js                the front door: mint an id, route to the world
   world.js                a world's Durable Object — the only writer, and who is who
   members.js              passwords kept as hashes, sign-ins as cookies
+  ice.js                  how browsers reach each other to talk: STUN, and TURN if set up
 test/
   *.test.js               npm test: world generation, water, saving, building, the game loop
   golden/                 recorded answers the code has to keep giving

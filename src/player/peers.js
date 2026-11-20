@@ -26,6 +26,11 @@ export class Peers extends Emitter {
     return this.all.size;
   }
 
+  // Someone by id: { id, name, colour, character, pos, ... }, or null.
+  get(id) {
+    return this.all.get(id) || null;
+  }
+
   list() {
     return [...this.all.values()].map((p) => ({ id: p.id, name: p.name, colour: p.colour, x: p.pos.x, z: p.pos.z }));
   }

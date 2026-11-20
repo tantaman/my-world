@@ -48,6 +48,13 @@ const POSES = {
   ],
 };
 const _pose = { sh: 0, el: 0, tool: 0, sp: 0, inw: 0, drop: 0 };
+
+// The left arm holding something up to the mouth (Character.addRaised): the
+// shoulder's pitch (sh), twist (tw) and swing inward (inw), the elbow, and the
+// wrist (bent, and rolled so what is held stands upright). In the chest's frame, which the head rides on too, so the hand stays
+// at the mouth however the body leans.
+const RAISED = { sh: -0.9, tw: -0.91, inw: 0.07, el: -2.13, wrist: -0.13, roll: 0.8 };
+const IN_HAND = 0.35; // how far up the arm is when the hand has hold of it
 function samplePose(keys, p, out) {
   let i = 0;
   while (i < keys.length - 2 && p > keys[i + 1][0]) i++;
@@ -134,6 +141,9 @@ export class Character {
     this.tool = null;
     this.action = null; // { kind, t, dur, loop }
     this.work = 0; // blend into the work pose
+    this.raised = null; // what the left hand holds up to the face, by name
+    this.lift = 0; // blend into holding it there
+    this._lastRaised = null;
 
     // Per-foot state: target ankle position (root space), foot pitch, toe-out,
     // whether it's carrying weight, and the smoothed ground height under it.
@@ -307,6 +317,10 @@ export class Character {
     // know an axe from a fishing rod.
     this.hand = group(this.armR.elbow, 0, -0.27, 0);
     this.tools = {}; // name -> { object, rest, elbow }
+    // The left hand can bring something up to the face, whatever the right
+    // is doing (addRaised).
+    this.handL = group(this.armL.elbow, 0, -0.27, 0);
+    this.raisable = {}; // name -> { object, stowed }
 
     // legs
     const leg = (side) => {
@@ -356,6 +370,26 @@ export class Character {
   setTool(name) {
     this.tool = this.tools[name] ? name : null;
     for (const k in this.tools) this.tools[k].object.visible = k === this.tool;
+  }
+
+  // Something the hiker can raise to the face in the left hand, whatever the
+  // right is doing: a radio to talk into.
+  //   object  a three.js object, gripped at its origin, its top along -y
+  //           (which points up past the hand once it is raised)
+  //   stowed  where it rides when it is down, if anywhere: an object placed
+  //           in the chest's frame (clipped to a strap, say), shown whenever
+  //           the hand isn't holding it
+  addRaised(name, object, { stowed = null } = {}) {
+    if (this.raisable[name]) return;
+    object.visible = false;
+    this.handL.add(object);
+    if (stowed) this.chest.add(stowed);
+    this.raisable[name] = { object, stowed };
+  }
+
+  // Bring it up to the face, or with null, put it away again.
+  raise(name) {
+    this.raised = name && this.raisable[name] ? name : null;
   }
 
   // Start a work animation: 'chop' | 'chopLow' | 'dig' | 'bend'.
@@ -579,6 +613,29 @@ export class Character {
       // Crouch into it, and sit the hips back to balance a forward bend.
       hy -= pose.drop * w;
       hz -= Math.max(0, pose.sp) * 0.12 * w;
+    }
+
+    // ── Something held up to the face, in the left hand ────────────────────
+    const raising = this.raised !== null;
+    this.lift = lerp(this.lift, raising ? 1 : 0, 1 - Math.exp(-dt * (raising ? 9 : 5)));
+    if (raising) this._lastRaised = this.raised;
+    const r = this._lastRaised ? this.raisable[this._lastRaised] : null;
+    if (r) {
+      // the hand takes it off the strap on the way up
+      const inHand = this.lift > IN_HAND;
+      r.object.visible = inHand;
+      if (r.stowed) r.stowed.visible = !inHand;
+    }
+    if (this.lift > 0.001) {
+      const w = ease(this.lift);
+      const L = this.armL;
+      L.shoulder.rotation.x += (RAISED.sh - L.shoulder.rotation.x) * w;
+      L.shoulder.rotation.y += (RAISED.tw - L.shoulder.rotation.y) * w;
+      L.shoulder.rotation.z += (RAISED.inw - L.shoulder.rotation.z) * w;
+      L.elbow.rotation.x += (RAISED.el - L.elbow.rotation.x) * w;
+      this.handL.rotation.set(RAISED.wrist * w, 0, RAISED.roll * w);
+      // and the head tips toward it a little
+      this.head.rotation.z += 0.12 * w;
     }
 
     // ── Meet the ground ────────────────────────────────────────────────────
