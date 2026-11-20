@@ -54,9 +54,14 @@ starts with the contract.
 What goes with a feature lives with it, so that two branches adding features
 don't edit the same lines:
 
+- Its docs are `src/<name>/README.md`: what it is for someone playing, its
+  keys, and a line for each file. The main README doesn't list features and
+  its opening is not kept up to date with them: don't add one to it.
 - Its part of the play-through is `test/smoke/NN-<name>.mjs` (the top of
   `test/smoke.mjs` says what a part is handed). Don't add steps to another
   feature's part.
+- A new row in the README's "what features plug into" table goes in its
+  place by file, not at the end.
 - Don't keep lists of features, steps or timings in comments or prose that
   each new feature would have to extend.
 
