@@ -31,7 +31,7 @@
 //                     the sky does. Unsaid, it's forest like the rest
 //   --at x,z          where in the game world (game metres; default: where it
 //                     really is, at the same scale, from the middle of the world
-//                     out in the Pacific off the Olympic coast: see hike/place.js)
+//                     in the Hoh rain forest: see hike/place.js)
 //   --lat, --lon, --bearing, --hour   if the photo doesn't say
 //   --force           re-import a hike that's already there (it stays put)
 //   --preview file    where to write a picture of what was imported

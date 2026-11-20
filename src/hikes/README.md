@@ -18,7 +18,7 @@ it:
 ```
 photo: 48.05540, -123.77340, looking 280°, at 16:21
 Mount Storm King → src/world/hikes/mount-storm-king.js (223 kB, fetched when it's needed)
-  at 27149.5, -1553.7 in the world, 136 km from the middle as the crow flies: the real land for 800 m round the photo, at 1 : 5
+  at 2625.1, -4570.8 in the world, 26 km from the middle as the crow flies: the real land for 800 m round the photo, at 1 : 5
   the walk: Mt. Storm King Trail, 567 m, climbing 125 m
   water: Lake Crescent, Falls Creek, Smith Creek, Barnes Creek, 78 unnamed streams
 ```
@@ -121,12 +121,15 @@ sound of its sea, are [the country feature](../country/README.md)'s.
 
 **Where it goes.** Where it really is. The game world is the real world at
 the hikes' own scale, 1 : 5, so hikes lie as far apart, and in the same
-directions, as they do in fact: Mount Storm King is 27 km east of the middle
-of the world, and a hike 170 km east of it would be 34 km further on. The
-middle, where everyone starts and the forest is made up, is out in the
-Pacific, 70 km off the Olympic coast, so no real hike can land on it
-(`tools/hike/place.js`). Between hikes it's forest; the list (**J**) is the
-quick way across.
+directions, as they do in fact. The middle of the world, where everyone
+starts, is the Hoh rain forest, on the wet west side of the Olympic
+Mountains: the kind of country the forest is. Mount Storm King, 26 km
+north-north-east of the Hoh, is 5 km north-north-east of where you start;
+Angels Landing, 1,480 km away in fact, is 296 km to the south-east; and the
+hikes on Maui, 4,200 km away, are 835 km off to the south-west. The forest
+round the middle is the game's own, not the real Hoh, so a hike is kept a
+few kilometres clear of it (`tools/hike/place.js`). Between hikes it's
+forest; the list (**J**) is the quick way across.
 
 Hikes close enough to overlap are the same land, and join: the second is
 placed from the first by the real distance between their photos, and stands
