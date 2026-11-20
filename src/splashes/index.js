@@ -12,6 +12,8 @@ const SPRAY = 22;
 const RUN_SPRAY = 2.6; // m/s
 const _w = waterSample();
 
+// The features this uses, so it is installed after them (game/features.js).
+export const after = ['render', 'world', 'player'];
 export function installSplashes(game) {
   const { scene, player, chunks } = game;
   const splashes = new Splashes(scene);

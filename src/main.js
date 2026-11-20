@@ -1,35 +1,22 @@
 // Where the game is put together.
 //
-// Everything is a feature (see src/game/game.js). To add one, write its
-// install function in a folder of its own and add it to FEATURES below, after
-// whatever it needs. Nothing else in this file should have to change.
+// Everything is a feature (see src/game/game.js), and features are found, not
+// listed: every folder beside this file whose index.js exports an install
+// function is one, and it says there what it has to come after (see
+// src/game/features.js). Nothing in this file should have to change to add one.
 
 import { CONFIG } from './config.js';
 import { storage, KEYS } from './core/storage.js';
 import { Game } from './game/game.js';
+import { featuresIn, inOrder } from './game/features.js';
 import { Settings } from './game/settings.js';
+import { installDebug } from './game/debug.js';
 import { WorldSave } from './save/worldSave.js';
 import { SignIn } from './save/signIn.js';
 import { landOf, NEWEST_LAND } from './world/lands.js';
-import { installRender } from './render/index.js';
-import { installHud } from './ui/index.js';
-import { installWorld } from './world/index.js';
-import { installPlayer } from './player/index.js';
-import { installAudio } from './audio/index.js';
-import { installBuild } from './build/index.js';
-import { installFires } from './fires/index.js';
-import { installBlueprints } from './blueprints/index.js';
-import { installMap } from './map/index.js';
-import { installLandmarks } from './landmarks/index.js';
-import { installSave } from './save/index.js';
-import { installVoice } from './voice/index.js';
-import { installWildlife } from './wildlife/index.js';
-import { installSplashes } from './splashes/index.js';
-import { installMounts } from './mounts/index.js';
-import { installDebug } from './game/debug.js';
 
 // In order: each can use what the ones before it provide.
-const FEATURES = [installRender, installHud, installWorld, installPlayer, installAudio, installBuild, installFires, installBlueprints, installMap, installLandmarks, installSave, installVoice, installWildlife, installSplashes, installMounts, installDebug];
+const FEATURES = inOrder(featuresIn(import.meta.glob('./*/index.js', { eager: true })));
 
 const loader = {
   bar: document.getElementById('load-bar'),
@@ -66,14 +53,17 @@ save.begin({ seed: CONFIG.seed, land: CONFIG.land, fresh: CONFIG.reset, clear: C
 const game = new Game({ config: CONFIG, storage });
 game.provide('save', save);
 game.provide('settings', new Settings(storage, KEYS.settings, { fresh: CONFIG.reset }));
-for (const feature of FEATURES) game.use(feature);
+for (const feature of FEATURES) game.use(feature.install);
+game.use(installDebug); // the game's own, last: the stats line, and the console's helpers
 
 // Everything that saves has registered by now; hand back what was kept. This
 // happens before the first chunk streams in, so your changes to the world are
 // applied as it loads.
 save.restore();
 
-// Handy from the dev console: world.teleport(120, -40), world.wildlife.spawn('fox')
+// Handy from the dev console: world.teleport(120, -40), world.wildlife.spawn('fox'),
+// and world.features for what was installed, in order.
+game.api.features = FEATURES.map((feature) => feature.name);
 window.world = game.api;
 
 // ── Opening ──────────────────────────────────────────────────────────────────

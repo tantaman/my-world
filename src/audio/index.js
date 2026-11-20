@@ -10,6 +10,8 @@ const WATER_REACH = 45; // metres
 // water to muffle it completely.
 const BANK_HIDES = 1.5;
 
+// The features this uses, so it is installed after them (game/features.js).
+export const after = ['render', 'ui', 'world', 'player'];
 export function installAudio(game) {
   const { chunks, gen, sky, player, camera, hud, commands, settings } = game;
 

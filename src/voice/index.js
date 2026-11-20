@@ -33,6 +33,8 @@ const NO_MIC = {
   insecure: 'talking needs the site on https',
 };
 
+// The features this uses, so it is installed after them (game/features.js).
+export const after = ['render', 'ui', 'player', 'audio', 'save'];
 export function installVoice(game) {
   const { save, peers, player, sound, hud, commands, input, scene } = game;
 

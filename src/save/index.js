@@ -10,6 +10,8 @@ import { Peers } from '../player/peers.js';
 import { SharePanel } from './sharePanel.js';
 import { standHeight } from '../player/player.js';
 
+// The features this uses, so it is installed after them (game/features.js).
+export const after = ['render', 'ui', 'world', 'player'];
 export function installSave(game) {
   const { scene, chunks, player, input, hud, commands, save } = game;
 

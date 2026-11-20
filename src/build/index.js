@@ -30,6 +30,8 @@ import { roof } from './tools/roof.js';
 // The tool bar, in order: keys 1 to 9.
 const TOOLS = [hands, axe, shovel, footing, wallTool('log', { label: 'log wall', short: 'log' }), wallTool('timber', { label: 'timber', short: 'hewn' }), roof];
 
+// The features this uses, so it is installed after them (game/features.js).
+export const after = ['render', 'ui', 'world', 'player', 'audio'];
 export function installBuild(game) {
   const { scene, camera, gen, chunks, grass, solids, player, input, hud, sound, commands, save } = game;
 

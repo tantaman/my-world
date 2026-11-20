@@ -41,6 +41,9 @@ const RESURVEY = 0.5; // s between looks at the ground under a staked-out site
 
 const translucent = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, toneMapped: false });
 
+// The features this uses, so it is installed after them (game/features.js);
+// and fires, so that the plan tool comes after the campfire on the tool bar.
+export const after = ['render', 'ui', 'world', 'player', 'build', 'fires'];
 export function installBlueprints(game) {
   const { scene, builder, player, hud, commands, save, chunks } = game;
   const { buildings } = builder;

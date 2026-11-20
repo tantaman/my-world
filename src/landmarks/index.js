@@ -40,6 +40,8 @@ const SCALED = { rock: true, log: true };
 const _o = new THREE.Vector3();
 const _d = new THREE.Vector3();
 
+// The features this uses, so it is installed after them (game/features.js).
+export const after = ['render', 'ui', 'world', 'player', 'build', 'map'];
 export function installLandmarks(game) {
   const { scene, gen, chunks, grass, solids, player, builder, map, hud, save } = game;
   const sites = new Sites(gen, { start: player.start });

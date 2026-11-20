@@ -12,25 +12,32 @@ npm run dev          # the game, http://localhost:5173
 npm run api          # the save server (wrangler dev), http://127.0.0.1:8787
 npm run build        # static site in dist/
 npm test             # unit and golden tests, in Node, ~1 s
-npm run smoke        # builds, then a play-through in headless Chromium, ~4½ min
+npm run smoke        # builds, then a play-through in headless Chromium, a few minutes
 npm run serve        # built site + save server together on :8787
 npm run together     # two visitors in one world; needs `npm run serve` running
 ```
 
 Run `npm test` after any change. Run `npm run smoke` after touching anything
-a player does (tools, movement, HUD, saving, sound, wildlife). Run
+a player does (tools, movement, HUD, saving, sound, wildlife);
+`node test/smoke.mjs build fires` plays only the parts named. Run
 `npm run together` after touching `src/save/`, `src/voice/` or `worker/`.
 
 ## How to add things
 
 A feature is a folder under `src/` whose `index.js` exports
-`install<Name>(game)`, added to `FEATURES` in `src/main.js`. Put new
-behaviour in a new feature, or in the feature that already owns it — not in
-`main.js`, `game/game.js`, `build/builder.js`, `audio/soundscape.js` or
-`save/worldSave.js`. Those are hosts; they should not learn about what plugs
-into them. The table in the README lists what to call for a tool, a key, a
-sound, something saved, an animal, and so on, and each of those files starts
-with the contract.
+`install<Name>(game)` and `after`, the folders of the features it uses.
+`main.js` finds it: there is no list to add it to (`src/game/features.js`
+has the rules, and `npm test` checks `after` against what is taken from
+`game`). Where a feature installs is also where its tool sits on the bar and
+its keys on the help panel, so name a feature in `after` to follow it there
+too.
+
+Put new behaviour in a new feature, or in the feature that already owns it —
+not in `main.js`, `game/game.js`, `build/builder.js`, `audio/soundscape.js`
+or `save/worldSave.js`. Those are hosts; they should not learn about what
+plugs into them. The table in the README lists what to call for a tool, a
+key, a sound, something saved, an animal, and so on, and each of those files
+starts with the contract.
 
 - Only `index.js` files hold `game`. Other modules take what they need as
   arguments, so they can be tested alone.
@@ -43,6 +50,20 @@ with the contract.
 - To be heard, extend `Emitter` and `emit`; do not add `onSomething` slots.
 - Import direction: `core` ← `render` ← `world` ← features. `world/` does
   not import from feature folders.
+
+What goes with a feature lives with it, so that two branches adding features
+don't edit the same lines:
+
+- Its docs are `src/<name>/README.md`: what it is for someone playing, its
+  keys, and a line for each file. The main README doesn't list features and
+  its opening is not kept up to date with them: don't add one to it.
+- Its part of the play-through is `test/smoke/NN-<name>.mjs` (the top of
+  `test/smoke.mjs` says what a part is handed). Don't add steps to another
+  feature's part.
+- A new row in the README's "what features plug into" table goes in its
+  place by file, not at the end.
+- Don't keep lists of features, steps or timings in comments or prose that
+  each new feature would have to extend.
 
 ## What must not drift
 
