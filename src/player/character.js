@@ -22,7 +22,9 @@ import { buildHead } from './head.js';
 //   roll = the tool turned about its handle (positive brings what faces
 //     forward round to the left), cock = the wrist cocked within that turned
 //     tool's swing (negative lets the head trail to the right).
-const ROLL_LEVEL = Math.PI / 2; // a quarter turn on the handle: the axe's bit faces left, for a level swing
+// A quarter turn on the handle that brings a tool's edge (which faces the back
+// of the hand, see build/geometry.js) round to the left, for a level swing.
+const ROLL_LEVEL = -Math.PI / 2;
 const POSES = {
   chop: [
     [0, { sh: -0.5, el: -0.6, tool: -0.2, sp: 0.05, inw: 0.3, drop: 0 }],
