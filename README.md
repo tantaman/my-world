@@ -1115,16 +1115,14 @@ of building and the game loop. If one of the golden files stops matching, the
 code changed something it shouldn't have; only re-record
 (`UPDATE_GOLDEN=1 npm test`) when the change is meant.
 
-`npm run smoke` plays: it fells a tree, bucks and hews it, picks up a stone,
-digs, raises and roofs a cabin, lights a campfire in it (and finds the roof
-won't go over that), reloads to see it was all kept, stakes out a blueprint
-among trees and lets the hiker clear it, level the ground and build it, lets
-it gather everything for a small one from nothing, opens the map and leaves a
-mark, picks an old place off the map and goes there, walks into an old cabin,
-makes some noise, wades into a stream to be carried by it and runs up it
-splashing, calls up one of every animal, and goes looking for the wild horse
-on the word it's given, wins it over, rides it, whistles it back from afar,
-swims a lake on the turtle and flies the eagle. It
+`npm run smoke` plays the game in a headless browser, a part at a time. The
+parts are the files in `test/smoke/`, played in the order of their names,
+each named for what it plays (`10-build.mjs`, `20-fires.mjs`,
+`80-mounts.mjs`), in one world from start to finish: it gathers and builds a
+cabin by hand, and everything after goes on from there. A feature's part is
+a file of its own, so adding to the play-through doesn't mean editing anyone
+else's; the top of `test/smoke.mjs` says what a part is handed and how to
+pick its number. `node test/smoke.mjs build fires` plays only those. It
 drives the keys and the crosshair and reads results through `window.world`,
 so it doesn't care how the insides are arranged. The last two need
 [Playwright](https://playwright.dev) (`npm i -D playwright && npx playwright
@@ -1296,6 +1294,7 @@ test/
   *.test.js               npm test: world generation, water, saving, building, the game loop
   golden/                 recorded answers the code has to keep giving
   smoke.mjs               npm run smoke: a play-through in a headless browser
+  smoke/                  the parts it plays, a file for each feature
   together.mjs            npm run together: two visitors, one world
 ```
 
