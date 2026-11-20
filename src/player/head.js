@@ -114,6 +114,9 @@ function wrapRound(geo, r) {
 // Flat geometry has big triangles; cut them small enough to bend smoothly.
 const fine = (geo) => new TessellateModifier(0.005, 8).modify(geo);
 
+// The face, the beard, the sunglasses and the cap, built onto `head`.
+// -> { brow, crown }: where something worn on the cap goes (Character.addWorn),
+// and the crown's size there, for a strap round it.
 export function buildHead(head, skin) {
   const cast = (m) => {
     m.castShadow = true;
@@ -287,4 +290,12 @@ export function buildHead(head, skin) {
   button.scale.y = 0.5;
   crownAt(0, 0, 1, button.position);
   hat.add(button);
+
+  // Where something strapped round the cap sits (a headlamp): the middle of
+  // the front panel, facing out of it, a little above the patch.
+  const brow = new THREE.Group();
+  crownAt(0, 1, ph + 0.22, brow.position);
+  brow.rotation.x = patch.rotation.x;
+  hat.add(brow);
+  return { brow, crown: { rx: CROWN_RX, rz: CROWN_RZ, z: CROWN_Z, y: crownAt(1, 0, ph + 0.22, new THREE.Vector3()).y } };
 }

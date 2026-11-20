@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { NOISE_GLSL, GROUND_GLSL } from '../render/glsl.js';
 import { SHARED } from '../render/uniforms.js';
+import { CUTS, CUT_GLSL, SHRINK, RIM } from './cuts.js';
 
 // ── Terrain ────────────────────────────────────────────────────────────────
 // The ground colour is computed per pixel from world position: meadow grass,
@@ -10,11 +11,14 @@ import { SHARED } from '../render/uniforms.js';
 // hand-placed pixel texture.
 // Under water it turns to silt, pebbles and cobbles, darkening (reds first)
 // with depth, with the light netted over it by the ripples, and a damp band
-// and a little beach along the shore.
+// and a little beach along the shore. Where the ground is cut away for
+// something else to stand in for it (a cave's mouth: world/cuts.js), it isn't
+// drawn, and round the hole it is bare rock.
 export function createTerrainMaterial() {
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = SHARED.uTime;
+    Object.assign(shader.uniforms, CUTS);
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -66,6 +70,7 @@ export function createTerrainMaterial() {
           vec3 snow = vec3(0.6, 0.62, 0.66) * (0.93 + 0.1 * n2);
           return mix(col, snow, lie);
         }
+        ${CUT_GLSL}
         // Round stones, one at most to a cell: how far into the nearest one p
         // is (0 at its middle, 1 at its edge), and a number of its own.
         float pebble(vec2 p, float size, out float id) {
@@ -98,10 +103,24 @@ export function createTerrainMaterial() {
         }`,
       )
       .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+        float cutF = groundCut(vWorldPos);
+        if (cutF < -${SHRINK.toFixed(3)}) discard;`,
+      )
+      .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
         diffuseColor.rgb = groundColor(vWorldPos.xz, vGround.x, vGround.y, 1.0 - vWorldNormal.y);
         diffuseColor.rgb = highGround(diffuseColor.rgb, vWorldPos.xz, vHigh, 1.0 - vWorldNormal.y);
+        if (cutF < ${RIM.toFixed(3)} + 1.0) {
+          // broken rock round a hole in the ground, ragged at its edge
+          float rn = vnoise(vWorldPos.xz * 1.3 + vWorldPos.y) * 0.65 + vnoise(vWorldPos.xz * 4.7) * 0.35;
+          float rim = cutRim(cutF + (rn - 0.5) * 2.2);
+          vec3 stone = vec3(0.15, 0.14, 0.125) * (0.65 + 0.6 * vnoise(vWorldPos.xz * 3.1 - vWorldPos.y * 2.0));
+          stone = mix(stone, vec3(0.06, 0.1, 0.03), smoothstep(0.55, 0.8, vnoise(vWorldPos.xz * 0.9)) * 0.6);
+          diffuseColor.rgb = mix(diffuseColor.rgb, stone, rim);
+        }
         if (vWater.y > 0.01) {
           vec2 wp = vWorldPos.xz;
           float wd = vWater.x - vWorldPos.y; // depth under the water surface
@@ -137,7 +156,24 @@ export function createTerrainMaterial() {
         }`,
       );
   };
-  mat.customProgramCacheKey = () => 'terrain-v4';
+  mat.customProgramCacheKey = () => 'terrain-v5';
+  return mat;
+}
+
+// The terrain as the sun sees it, for shadows: with the cuts cut out of it
+// too, or the ground that isn't there would still shade the cave mouth.
+export function createTerrainDepthMaterial() {
+  const mat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  mat.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, CUTS);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWorldPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vWorldPos;\n${CUT_GLSL}`)
+      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (inCut(vWorldPos)) discard;');
+  };
+  mat.customProgramCacheKey = () => 'terrain-depth-v1';
   return mat;
 }
 
@@ -205,7 +241,8 @@ export function createVegetationMaterial({ sway = true } = {}) {
 
 // ── Grass ──────────────────────────────────────────────────────────────────
 // Real blades near the player. They bend in the wind, part around your feet
-// and shrink into the ground at the edge of the grass radius.
+// and shrink into the ground at the edge of the grass radius, and into
+// nothing where the ground is cut away (world/cuts.js).
 export function createGrassMaterial() {
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -218,6 +255,7 @@ export function createGrassMaterial() {
     shader.uniforms.uWind = SHARED.uWind;
     shader.uniforms.uPlayer = SHARED.uPlayer;
     shader.uniforms.uGrassRadius = SHARED.uGrassRadius;
+    Object.assign(shader.uniforms, CUTS);
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -229,7 +267,8 @@ export function createGrassMaterial() {
         uniform float uTime;
         uniform float uWind;
         uniform vec3 uPlayer;
-        uniform float uGrassRadius;`,
+        uniform float uGrassRadius;
+        ${CUT_GLSL}`,
       )
       .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0.0, 1.0, 0.0);')
       .replace(
@@ -243,6 +282,7 @@ export function createGrassMaterial() {
           vRootW = wroot.xz;
           float dist = distance(wroot.xz, uPlayer.xz);
           float fade = 1.0 - smoothstep(uGrassRadius * 0.6, uGrassRadius, dist);
+          if (groundCut(wroot + vec3(0.0, 0.05, 0.0)) < ${(RIM * 0.6).toFixed(3)}) fade = 0.0; // bare rock round a hole
           transformed = root + (transformed - root) * fade;
 
           vec2 wdir = normalize(vec2(1.0, 0.45));
@@ -280,6 +320,6 @@ export function createGrassMaterial() {
         normal = normalize(vNormal);`,
       );
   };
-  mat.customProgramCacheKey = () => 'grass-v2';
+  mat.customProgramCacheKey = () => 'grass-v4';
   return mat;
 }

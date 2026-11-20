@@ -320,7 +320,8 @@ export class Character {
     neckM.position.y = 0.055;
     this.neck.add(neckM);
     this.head = group(this.neck, 0, NECK, 0);
-    buildHead(this.head, skin);
+    // what is worn on the head goes on the cap (addWorn)
+    this.cap = buildHead(this.head, skin);
 
     // arms
     const arm = (side) => {
@@ -408,6 +409,15 @@ export class Character {
   setTool(name) {
     this.tool = this.tools[name] ? name : null;
     for (const k in this.tools) this.tools[k].object.visible = k === this.tool;
+  }
+
+  // Something the hiker wears on the front of the cap (a headlamp), placed in
+  // that spot's frame: +z out of the front panel, y up it. `band`, if given,
+  // is put round the crown at the same height, in the cap's frame (a strap):
+  // see head.js for its size (character.cap.crown).
+  addWorn(object, { band = null } = {}) {
+    this.cap.brow.add(object);
+    if (band) this.cap.brow.parent.add(band);
   }
 
   // Something the hiker can raise to the face in the left hand, whatever the

@@ -8,6 +8,7 @@
 //   build   my-world:build:<seed>   { v: 1, inv, datum, terrain, forest, buildings, … }
 //   marks   my-world:marks:<seed>   { v: 1, marks, tracked }      (survives ?clearbuild)
 //   state   my-world:state          { seed, x, z, yaw, camYaw, camPitch, hours }
+//                                   (and y, while you are in a cave)
 //
 // A world grown on a land past the first (world/lands.js) is another world:
 // its seed is written <seed>:land<n> in those keys, and state carries `land`.
@@ -25,8 +26,9 @@ const STATE = {
   pack: (parts, seed, land) => ({ seed, ...(land > 1 && { land }), ...(parts.player || {}), hours: parts.hours }),
   unpack(raw, seed, land) {
     if (!raw || raw.seed !== seed || (raw.land || 1) !== land) return null;
-    const { x, z, yaw, camYaw, camPitch } = raw;
-    return { player: { x, z, yaw, camYaw, camPitch }, hours: raw.hours };
+    const { x, z, y, yaw, camYaw, camPitch } = raw;
+    // y only while you were under the ground (in a cave)
+    return { player: { x, z, ...(y !== undefined ? { y } : {}), yaw, camYaw, camPitch }, hours: raw.hours };
   },
 };
 

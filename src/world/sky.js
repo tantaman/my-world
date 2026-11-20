@@ -1,4 +1,13 @@
 // Sky dome, sun/moon, ambient light and time-of-day palettes.
+//
+// `open` is how much of the sky reaches the eye: 1 out in the forest, less
+// in the mouth of a cave, next to nothing deep inside one. Whoever knows
+// (the caves) sets it every frame. It dims the sky's light and the sun's on
+// everything — what lights a cave is whatever you bring into it, and the
+// rock of the cave itself takes back what daylight reaches it (caves/look.js)
+// — and lets the eye adjust,
+// so that inside, the dark is something you can see by your lamp, and the
+// mouth, looked back at, is a blaze of daylight.
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
@@ -43,6 +52,9 @@ function sampleKeys(elev) {
   };
 }
 
+// How bright the picture is made deep in a cave, whatever the hour outside.
+const DARK_EXPOSURE = 2.1;
+
 const _right = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _center = new THREE.Vector3();
@@ -52,6 +64,7 @@ export class Sky {
     this.scene = scene;
     this.hours = CONFIG.timeOfDay;
     this.exposure = 1;
+    this.open = 1;
     this.sunDir = new THREE.Vector3();
     this.lightDir = new THREE.Vector3(0, 1, 0);
 
@@ -150,7 +163,7 @@ export class Sky {
     SKY.uHorizon.value.setRGB(...k.hor);
     SKY.uSunColor.value.setRGB(...k.sun);
     SKY.uNight.value = night;
-    this.exposure = k.exp;
+    this.exposure = lerp(DARK_EXPOSURE, k.exp, this.open);
 
     // At night the "sun" light becomes moonlight from the opposite side.
     const lightDir = this.lightDir;
@@ -161,10 +174,10 @@ export class Sky {
 
     this.sun.color.setRGB(...k.light);
     const fadeAtHorizon = night > 0.5 ? 1 : smoothstep(-3, 2, elevDeg);
-    this.sun.intensity = k.li * Math.max(fadeAtHorizon, night > 0.5 ? 1 : 0);
+    this.sun.intensity = k.li * Math.max(fadeAtHorizon, night > 0.5 ? 1 : 0) * this.open;
     this.hemi.color.setRGB(...k.amb);
     this.hemi.groundColor.setRGB(...k.gnd);
-    this.hemi.intensity = k.ai;
+    this.hemi.intensity = k.ai * this.open;
 
     // Shadow camera follows the player, snapped to shadow texels to avoid shimmer.
     const S = CONFIG.shadowExtent;

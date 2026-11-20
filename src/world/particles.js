@@ -1,5 +1,6 @@
 // Drifting pollen / dust motes by day, fireflies by night. One-pixel points
 // in the low-res render, which is exactly what you'd hand-place in pixel art.
+// They belong to the open air, and thin out where the sky doesn't reach (a cave).
 
 import * as THREE from 'three';
 import { SHARED, SKY } from '../render/uniforms.js';
@@ -22,6 +23,7 @@ export function createParticles(count = 900) {
       uCenter: { value: new THREE.Vector3() },
       uGround: { value: 0 },
       uBox: { value: new THREE.Vector3(46, 9, 46) },
+      uOpen: { value: 1 },
       uNight: SKY.uNight,
       uSunColor: SKY.uSunColor,
     },
@@ -52,12 +54,13 @@ export function createParticles(count = 900) {
     fragmentShader: /* glsl */ `
       uniform float uNight;
       uniform vec3 uSunColor;
+      uniform float uOpen;
       varying float vAlpha;
       varying float vSeed;
       void main() {
         vec3 day = mix(vec3(1.0, 0.95, 0.75), uSunColor, 0.4) * 0.9;
         vec3 night = vec3(0.75, 1.0, 0.25) * 4.0;
-        float a = vAlpha * mix(0.45, 1.0, uNight) * mix(step(0.55, vSeed), 1.0, uNight);
+        float a = vAlpha * mix(0.45, 1.0, uNight) * mix(step(0.55, vSeed), 1.0, uNight) * step(vSeed, uOpen * 1.2 - 0.2);
         if (a < 0.02) discard;
         gl_FragColor = vec4(mix(day, night, uNight), a);
       }`,
@@ -69,9 +72,11 @@ export function createParticles(count = 900) {
   points.frustumCulled = false;
   return {
     object: points,
-    update(center, groundY) {
+    // open: how much of the sky reaches here (Sky.open)
+    update(center, groundY, open = 1) {
       mat.uniforms.uCenter.value.copy(center);
       mat.uniforms.uGround.value = groundY - 1;
+      mat.uniforms.uOpen.value = open;
     },
   };
 }

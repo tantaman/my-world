@@ -313,11 +313,13 @@ defineAnimalClass('herd', ({ sp, spot, env, toward, player }) => {
 // ── The manager ────────────────────────────────────────────────────────────
 export class Wildlife {
   // solids: built things animals have to go round (src/world/solids.js)
-  constructor({ scene, gen, chunks, solids = null, player, peers, sound, camera, hud }) {
+  // spaces: caves, which they keep out of (src/world/spaces.js)
+  constructor({ scene, gen, chunks, solids = null, spaces = null, player, peers, sound, camera, hud }) {
     this.scene = scene;
     this.gen = gen;
     this.chunks = chunks;
     this.solids = solids;
+    this.spaces = spaces;
     this.player = player;
     this.peers = peers;
     this.sound = sound;
@@ -375,9 +377,10 @@ export class Wildlife {
       offscreenPoint: (x, z, minD, maxD) => wl.offscreenPoint(x, z, minD, maxD),
       call: (kind, x, y, z, opts) => wl.sound && wl.sound.call(kind, x, y, z, opts),
       remove: (mesh) => wl.group.remove(mesh),
-      // a trunk or boulder (or deep water) in the way at (x, z)?
+      // a trunk or boulder (or deep water, or the way into a cave) in the way at (x, z)?
       blocked(x, z, r) {
         if (deep(x, z)) return { x, z };
+        if (wl.spaces && wl.spaces.at(x, z, chunks.heightAt(x, z) + 0.05)) return { x, z };
         let hit = null;
         chunks.forEachCollider(x, z, (cx, cz, cr) => {
           if (!hit && Math.hypot(cx - x, cz - z) < cr + r) hit = { x: cx, z: cz };

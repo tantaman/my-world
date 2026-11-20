@@ -112,7 +112,7 @@ export function installRender(game) {
     update() {
       renderer.info.reset();
       // Something (the map) may be covering the whole view.
-      if (!game.covered) pipeline.render(scene, camera, game.sky ? game.sky.exposure : 1);
+      if (!game.covered) pipeline.render(scene, camera, game.sky ? game.sky.exposure : 1, game.sky ? game.sky.open : 1);
     },
   });
 }

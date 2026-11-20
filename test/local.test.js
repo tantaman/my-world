@@ -126,3 +126,17 @@ test('changes are written after a lull, and not at all once the server keeps the
   store.flush();
   assert.deepEqual(storage.get(KEYS.build(SEED)).inv, { log: 5 });
 });
+
+test('in a cave, how high you stood is kept too, and only then', () => {
+  const inCave = { ...PLAYER, y: -14.62 };
+  const storage = memoryStorage();
+  const { domains } = world({ player: inCave, hours: HOURS });
+  new LocalStore({ domains, storage, seed: SEED }).flush();
+  assert.deepEqual(storage.get(KEYS.state), { seed: SEED, ...inCave, hours: HOURS });
+  assert.deepEqual(new LocalStore({ domains, storage, seed: SEED }).read().player, inCave);
+  // out under the sky it's left out, as it always was
+  const out = memoryStorage();
+  new LocalStore({ domains: world({ player: PLAYER, hours: HOURS }).domains, storage: out, seed: SEED }).flush();
+  assert.equal('y' in out.get(KEYS.state), false);
+  assert.equal('y' in new LocalStore({ domains, storage: out, seed: SEED }).read().player, false);
+});
