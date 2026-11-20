@@ -11,7 +11,8 @@
 //   6 timber   the same with hewn timbers
 //   7 roof     raise a gable roof over a finished rectangular room
 //
-// Everything you change is saved in localStorage per world seed.
+// Everything you change is saved: in this browser per world seed, or on the
+// save server when the world has an address of its own (see src/save/).
 
 import * as THREE from 'three';
 import { Solids } from './solids.js';
@@ -45,7 +46,10 @@ const _ndc = new THREE.Vector2(0, 0);
 const _ray = new THREE.Raycaster();
 
 export class Builder {
-  constructor({ scene, camera, gen, chunks, grass, player, input, hud, sound }) {
+  // storeKey: where to keep the local copy, or null to keep none because the
+  //   save server owns this world. Defaults to one key per seed.
+  // snapshot: the world to open with. Omit it to read the local copy.
+  constructor({ scene, camera, gen, chunks, grass, player, input, hud, sound, storeKey, snapshot }) {
     this.scene = scene;
     this.camera = camera;
     this.gen = gen;
@@ -90,10 +94,13 @@ export class Builder {
     this.grassTimer = 0;
     this.saveAt = 0;
     this.tgt = null;
+    this.storeKey = storeKey === undefined ? STORE_KEY(gen.seed) : storeKey;
+    this.onChange = null; // called when something about the world really changed
 
     this._makePreviews();
     this.particles = new Particles(scene, chunks);
-    this.load();
+    if (snapshot === undefined) this.load();
+    else this.restore(snapshot);
     this.hud.buildTools(TOOLS, (i) => this.select(TOOLS[i].id));
     this.hud.onStake = () => this._toggleStake();
     this.select(this.tool, true);
@@ -156,6 +163,7 @@ export class Builder {
     if (this.terrain.dirty || this.forest.dirty || this.buildings.dirty || this.invDirty) {
       this.terrain.dirty = this.forest.dirty = this.buildings.dirty = this.invDirty = false;
       if (!this.saveAt) this.saveAt = performance.now() + 1500;
+      if (this.onChange) this.onChange();
     }
     if (this.saveAt && performance.now() > this.saveAt) this.save();
   }
@@ -993,18 +1001,34 @@ export class Builder {
   }
 
   // ── Persistence ───────────────────────────────────────────────────────────
+  // Everything you changed about the world, as plain JSON. This is what both
+  // the local copy and the save server hold.
+  snapshot() {
+    return {
+      v: 1,
+      inv: this.inv,
+      datum: this.datum,
+      terrain: this.terrain.serialize(),
+      forest: this.forest.serialize(),
+      buildings: this.buildings.serialize(),
+    };
+  }
+
+  restore(data) {
+    if (!data || data.v !== 1) return;
+    Object.assign(this.inv, data.inv || {});
+    this.terrain.load(data.terrain);
+    this.forest.load(data.forest);
+    this.buildings.load(data.buildings);
+    if (data.datum) this._setStake(data.datum.x, data.datum.y, data.datum.z);
+    this.invDirty = false;
+  }
+
   save() {
     this.saveAt = 0;
+    if (!this.storeKey) return; // the save server keeps this world instead
     try {
-      const data = {
-        v: 1,
-        inv: this.inv,
-        datum: this.datum,
-        terrain: this.terrain.serialize(),
-        forest: this.forest.serialize(),
-        buildings: this.buildings.serialize(),
-      };
-      localStorage.setItem(STORE_KEY(this.gen.seed), JSON.stringify(data));
+      localStorage.setItem(this.storeKey, JSON.stringify(this.snapshot()));
     } catch {
       /* storage full or unavailable */
     }
@@ -1014,7 +1038,7 @@ export class Builder {
     const params = new URLSearchParams(location.search);
     if (params.has('clearbuild')) {
       try {
-        localStorage.removeItem(STORE_KEY(this.gen.seed));
+        localStorage.removeItem(this.storeKey);
       } catch {
         /* ignore */
       }
@@ -1022,17 +1046,11 @@ export class Builder {
     }
     let data = null;
     try {
-      data = JSON.parse(localStorage.getItem(STORE_KEY(this.gen.seed)) || 'null');
+      data = JSON.parse(localStorage.getItem(this.storeKey) || 'null');
     } catch {
       data = null;
     }
-    if (!data || data.v !== 1) return;
-    Object.assign(this.inv, data.inv || {});
-    this.terrain.load(data.terrain);
-    this.forest.load(data.forest);
-    this.buildings.load(data.buildings);
-    if (data.datum) this._setStake(data.datum.x, data.datum.y, data.datum.z);
-    this.invDirty = false;
+    this.restore(data);
   }
 }
 

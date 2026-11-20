@@ -50,6 +50,14 @@ export class Hud {
         this.soundBtn.blur();
       });
     }
+    this.saveBtn = document.getElementById('save-btn');
+    this.onSaveToggle = null;
+    if (this.saveBtn) {
+      this.saveBtn.addEventListener('click', () => {
+        if (this.onSaveToggle) this.onSaveToggle();
+        this.saveBtn.blur();
+      });
+    }
     this.mapBtn = document.getElementById('map-btn');
     this.onMapToggle = null;
     if (this.mapBtn) {
@@ -58,6 +66,14 @@ export class Hud {
         this.mapBtn.blur();
       });
     }
+  }
+
+  // The save button says where the world stands: save / saving… / saved /
+  // offline / clash. `state` tints it (see #corner in index.html).
+  setSave(label, state) {
+    if (!this.saveBtn) return;
+    if (this.saveBtn.textContent !== label) this.saveBtn.textContent = label;
+    if (this.saveBtn.dataset.state !== state) this.saveBtn.dataset.state = state;
   }
 
   setSound(on) {

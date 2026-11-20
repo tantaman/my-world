@@ -122,6 +122,10 @@
       }
       #corner button:hover { color: var(--ink); }
       #corner button[aria-pressed='false'] { opacity: 0.6; }
+      #corner button[data-state='saved'] { color: var(--accent); }
+      #corner button[data-state='saving'] { color: var(--ink); }
+      #corner button[data-state='offline'], #corner button[data-state='conflict'],
+      #corner button[data-state='full'], #corner button[data-state='gone'] { color: #f0b49a; border-color: #a2654d; }
       #corner button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; color: var(--ink); }
       @media (prefers-reduced-motion: reduce) { #loader, #hint, #toast, #help, #load-bar, #prompt { transition: none; animation: none; } }
       @media (hover: none) { .desk { display: none; } }
@@ -171,6 +175,7 @@
       <div id="track" aria-live="polite"></div>
       <div id="coords"></div>
       <div id="corner">
+        <button id="save-btn" type="button" aria-label="Save this world">save</button>
         <button id="map-btn" type="button" aria-label="Open the map">map</button>
         <button id="sound-btn" type="button" aria-pressed="true">sound on</button>
         <button id="help-btn" type="button" aria-label="Show controls">?</button>
@@ -184,6 +189,7 @@
         <div class="row"><kbd>scroll</kbd><span>zoom</span></div>
         <div class="row"><kbd>R</kbd><span>back to the start</span></div>
         <div class="row"><kbd>M</kbd><span>map · mark places</span></div>
+        <div class="row"><kbd>L</kbd><span>save this world · get a link</span></div>
         <hr />
         <h2>BUILD</h2>
         <div class="row"><kbd>1 – 7</kbd><span>pick a tool</span></div>

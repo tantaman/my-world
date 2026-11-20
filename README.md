@@ -17,9 +17,15 @@ ideas, and places to explore. See [Adding a structure](#adding-a-structure).
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173
-npm run build      # static site in dist/, can be hosted anywhere
+npm run dev        # http://localhost:5173 — the game
+npm run api        # http://127.0.0.1:8787 — the save server (optional)
+npm run build      # static site in dist/
 ```
+
+The game is a static site and runs on its own; `npm run api` adds the save
+server, which lets a world live at a URL. `npm run dev` proxies `/api` to it.
+See [Saving a world](#saving-a-world) to set the server up, or skip it — the
+forest doesn't mind.
 
 ## Controls
 
@@ -33,6 +39,7 @@ npm run build      # static site in dist/, can be hosted anywhere
 | **scroll** | zoom |
 | **R** | back to the starting path |
 | **M** | map: pan, zoom, and mark places (also the *map* button, bottom right) |
+| **L** | save this world and get a link to it (also the *save* button) |
 | **1 – 7** | tools: hands, axe, shovel, footing, log wall, timber, roof |
 | **click** (while looking) | use the tool, hold to keep working |
 | **right-click** | the tool's second action, or take a piece down |
@@ -55,7 +62,8 @@ buttons on the right stand in for the mouse buttons and **G**.
 
 Your position, the time of day, your look settings and whether sound is on
 are remembered between visits. Add `?reset` to the URL to start fresh (your
-map marks are kept).
+map marks are kept). To keep a world somewhere other than this browser, see
+[Saving a world](#saving-a-world).
 
 ## The map
 
@@ -86,6 +94,80 @@ pennant in its colour, so you can spot it as you walk up.
 Esc on a brand-new mark you haven't named throws it away. Marks are kept in
 `localStorage` per seed, and from the console `world.marks.list()` returns
 them (handy for copying out).
+
+## Saving a world
+
+Press **L** (or tap *save*) and the world gets an address of its own:
+
+```
+https://your-site/?w=kxbbsjfw52
+```
+
+Open that link from any browser, on any machine, and you walk back into the
+same world — the ground you moved, the trees you felled, what you built, the
+places you marked, where you were standing and the hour of the day.
+
+**Anyone with the link can walk in, and build.** That's the point of it, but
+it's worth knowing before you post one. The last 20 saves of each world are
+kept, so a flattened cabin can be fished back out (see
+[The save API](#the-save-api)).
+
+Once a world is saved it saves itself: a few seconds after you change
+something, and again when you leave the tab. The *save* button tells you where
+things stand — *saved*, *saving…*, *offline*, *clash* — and **L** opens the
+panel with the link, a name for the world, and a *save now* button.
+
+If two people build at once, the second save is refused rather than silently
+flattening the first. The panel then offers *keep mine* or *open theirs*. If
+the server can't be reached, the world keeps running and is held in this
+browser; the next save that gets through carries the work with it.
+
+### What a save actually holds
+
+The forest is procedural, grown from a seed, so a save doesn't store terrain
+or trees. It stores the seed and the **diff** — only what you changed. Digging
+out a 60 × 60 m building site (about 4,000 edited ground vertices) comes to
+61 kB of JSON, **8.6 kB** once gzipped. The cap is 1 MB compressed, which is a
+great deal of digging.
+
+Snapshots are gzipped in the browser with `CompressionStream` and stored as
+those exact bytes, so the server never parses a world or spends a cycle
+compressing one.
+
+### Setting up the server
+
+The save server is a [Cloudflare Worker](worker/index.js) over a
+[D1](https://developers.cloudflare.com/d1/) database — D1 is SQLite, so a
+world is a row and the whole thing is one file you can back up.
+
+```bash
+npm run db:create          # prints a database_id — paste it into wrangler.jsonc
+npm run db:migrate         # create the tables (add :local for development)
+npm run deploy             # build the site and put both on Cloudflare
+```
+
+For local work, `npm run db:local` sets up a SQLite file under `.wrangler/`,
+then `npm run api` in one terminal and `npm run dev` in another. `npm run
+serve` runs the built site and the API together, the way they're deployed.
+
+### The save API
+
+A world is bytes to the server; everything that understands a world happens in
+the browser.
+
+| | |
+|---|---|
+| `POST /api/worlds?seed=N&name=&codec=` | create → `{ id, rev }` |
+| `GET /api/worlds/:id` | the snapshot, as stored |
+| `PUT /api/worlds/:id?rev=N` | save, if nobody got there first |
+| `GET /api/worlds/:id/meta` | id, seed, name, rev, size — no snapshot |
+| `GET /api/worlds/:id/history` | the saves still kept |
+| `GET /api/worlds/:id/revisions/:rev` | one older save |
+
+Every save carries the `rev` it was based on; a stale one gets 409 and the
+current revision back. `?force=1` overrides that, which is what *keep mine*
+does. To put a world back the way it was on an earlier save, fetch that
+revision and `PUT` it with `?force=1`.
 
 ## How the look works
 
@@ -278,7 +360,7 @@ export const thinkingHut = {
 
 ```
 src/
-  main.js                 boot, loop, keys, save/restore
+  main.js                 boot, loop, keys, opening a saved world
   config.js               tunables (+ URL overrides)
   noise.js                seeded simplex noise, hashing, helpers
   audio/
@@ -319,5 +401,14 @@ src/
   structures/
     index.js              ← register structures here
     loader.js             places structures on their pads
+  save/
+    worldSave.js          when to save, clashes, the offline copy
+    snapshot.js           what a saved world is: seed + what you changed
+    remote.js             gzip in the browser, and the calls to the server
+    sharePanel.js         the save panel (L): link, name, clash
+    save.css              save panel styles
   ui/hud.js               coordinates, tracked mark, hints, help
+worker/
+  index.js                the save server (Cloudflare Worker)
+  migrations/             D1 schema
 ```
