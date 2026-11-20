@@ -40,7 +40,7 @@ test('elements put back together are the world that was taken apart', () => {
   assert.deepEqual(back.forest.stumps.length, 2);
   assert.equal(back.buildings.length, 2);
   assert.deepEqual([...back.marks].sort((a, b) => (a.id < b.id ? -1 : 1)), MARKS.marks);
-  assert.deepEqual(Object.keys(back).sort(), ['buildings', 'forest', 'marks', 'name', 'terrain'], 'only what is the world’s is in the elements');
+  assert.deepEqual(Object.keys(back).sort(), ['buildings', 'fires', 'forest', 'marks', 'name', 'terrain'], 'only what is the world’s is in the elements');
 });
 
 test('what is yours travels beside the world, spelled as it always was', () => {
@@ -81,9 +81,9 @@ test('only what changed goes out', () => {
 });
 
 test('what a newer game saved is left alone by an older one', () => {
-  const domains = makeDomains();
+  const domains = makeDomains({}, { except: ['fires'] }); // a game from before campfires
   const server = domains.toElements(state());
-  server.get('0,0').set('c:12:22', [3, 1]); // a campfire, say, from a version that has them
+  server.get('0,0').set('c:12:22', [3, 1, 0, 0]); // a campfire, from a version that has them
   server.set('9,9', new Map([['zz:1', 'who knows']]));
   const mine = domains.toElements(state());
   const owned = (key) => !!domains.owner(key);
@@ -100,7 +100,7 @@ test('a save that is not a save is tidied, not trusted', () => {
   assert.deepEqual(tidy, { terrain: [], forest: null, buildings: [], marks: [] });
   assert.deepEqual(domains.validate(null), {});
   // nothing in the elements at all
-  assert.deepEqual(domains.fromElements(new Map()), { name: '', terrain: [], forest: { removed: {}, stumps: [], felled: [] }, buildings: [], marks: [] });
+  assert.deepEqual(domains.fromElements(new Map()), { name: '', terrain: [], forest: { removed: {}, stumps: [], felled: [] }, buildings: [], fires: [], marks: [] });
   // a building's pieces with nowhere to stand don't make a building
   const orphan = new Map([['0,0', new Map([['l:x:20:10:14:0', ['10:20', 'log', []]]])]]);
   assert.deepEqual(domains.fromElements(orphan).buildings, []);
@@ -113,6 +113,7 @@ test("someone else's changes go to whoever owns them", () => {
     terrain: { adoptOps: (ops) => heard.push(['terrain', 'ops', ops.map((o) => o.k)]) },
     forest: { adopt: (data, ops) => heard.push(['forest', 'adopt', data.stumps.length, ops.length]) },
     buildings: note('buildings'),
+    fires: { adopt: (data, ops) => heard.push(['fires', 'adopt', data, ops.length]) },
     marks: note('marks'),
     name: note('name'),
   });
@@ -122,15 +123,17 @@ test("someone else's changes go to whoever owns them", () => {
     { r: '0,0', k: 't:10:21', v: [-1, 1] },
     { r: '1,0', k: 's:70.25:3', v: null },
     { r: LOOSE, k: 'name', v: 'Renamed' },
-    { r: '0,0', k: 'c:1:2', v: [1] }, // nobody's
+    { r: '0,0', k: 'c:1:2', v: [2.5, 1, 0, 0] }, // a fire laid ready
+    { r: '0,0', k: 'zz:1:2', v: [1] }, // nobody's
   ];
   applyOps(elements, ops);
   const moved = domains.adopt(ops, elements);
-  assert.deepEqual(moved.sort(), ['forest', 'name', 'terrain']);
+  assert.deepEqual(moved.sort(), ['fires', 'forest', 'name', 'terrain']);
   assert.deepEqual(heard, [
     ['terrain', 'ops', ['t:10:20', 't:10:21']],
     ['forest', 'adopt', 1, 1],
     ['name', 'restore', 'Renamed'],
+    ['fires', 'adopt', [[1, 2, 2.5, 1, 0, 0]], 1],
   ]);
 });
 

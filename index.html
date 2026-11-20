@@ -130,7 +130,19 @@
       #corner button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; color: var(--ink); }
       @media (prefers-reduced-motion: reduce) { #loader, #hint, #toast, #help, #load-bar, #prompt { transition: none; animation: none; } }
       @media (hover: none) { .desk { display: none; } }
+      /* No keyboard, no key numbers: it keeps the whole tool bar on a small phone. */
+      @media (hover: none) { #hotbar .slot kbd { display: none; } }
       @media (hover: hover) { .touch { display: none; } }
+      /* Along the bottom, the tool bar and the corner buttons share the width.
+         Where both don't fit, the tools go by their short names, and narrower
+         still, the corner buttons move up top. */
+      @media (max-width: 1040px) {
+        #hotbar .slot .long { display: none; }
+        #hotbar .slot .short { display: inline; }
+      }
+      @media (max-width: 900px) {
+        #corner { bottom: auto; top: calc(10px + var(--inset-t)); }
+      }
       @media (max-width: 620px) {
         #hotbar .slot .long { display: none; }
         #hotbar .slot .short { display: inline; }
