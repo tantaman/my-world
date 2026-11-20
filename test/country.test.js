@@ -28,6 +28,8 @@ test('every country says everything, in words the rest of the game knows', () =>
   for (const [name, c] of Object.entries(COUNTRY)) {
     for (const col of [c.ground.tint, c.ground.dirt, c.ground.rock, c.ground.sand, ...c.ground.bare]) assert.ok(col.length === 3 && col.every((v) => v >= 0 && v < 2), `${name}: a colour`);
     assert.ok(c.ground.barren >= 0 && c.ground.barren <= 1 && c.ground.shelf >= 0, name);
+    const L = c.ground.layers;
+    if (L) assert.ok(L.upper.length === 3 && L.upper.every((v) => v >= 0 && v < 2) && L.at > 0 && L.bed > 0 && L.varnish >= 0 && L.varnish <= 1, `${name}: its layers`);
     for (const [kind, share] of c.trees || []) {
       assert.ok(TREE_KINDS.includes(kind), `${name}: ${kind} is a tree`);
       assert.ok(TIMBER[kind], `${name}: ${kind} can be felled`);
@@ -42,6 +44,7 @@ test('every country says everything, in words the rest of the game knows', () =>
     assert.equal(COUNTRIES[c.id], c, `${name} is found by its id`);
   }
   assert.equal(COUNTRY.forest.id, 0, 'the forest is country 0: what a vertex that says nothing is');
+  assert.equal(COUNTRY.forest.ground.layers, null, "the forest's rock is plain");
   assert.ok(COUNTRIES.length <= MAX_COUNTRIES, 'and the shaders have room for them all');
   // a tree is called what it's called where it stands
   assert.deepEqual([treeName('broad').a, treeName('broad', COUNTRY.forest).a, treeName('broad', COUNTRY['cloud forest']).a, treeName('palm', COUNTRY['cloud forest']).a], ['an oak', 'an oak', 'an ʻōhiʻa', 'a coconut palm']);

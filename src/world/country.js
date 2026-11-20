@@ -18,6 +18,13 @@
 //              barren  0..1: how much of the ground is bare. In between, it
 //                      is bare in patches
 //              shelf   m in from the sea that is bare rock whatever else
+//              layers  for sandstone country: the beds a cliff is cut
+//                      through. { upper, at, bed, varnish }: the rock is
+//                      `rock` low down and `upper` above `at` (real m over
+//                      the sea), as a canyon's red walls turn white towards
+//                      the rim; laid in beds about `bed` real m thick, swept
+//                      the way the dunes that made them were; and streaked
+//                      dark down its faces (varnish, 0..1). null: plain rock
 //   trees    [[kind, share], ...]: what the trees are, in place of the
 //            forest's own pines, oaks and birches. null: the forest's own
 //   under    what stands where the forest would put a fern, or a bush:
@@ -54,6 +61,7 @@ const FOREST = {
     sand: [0.19, 0.16, 0.11],
     barren: 0,
     shelf: 0,
+    layers: null,
   },
   trees: null,
   under: null,
@@ -143,6 +151,29 @@ export const COUNTRY = {
     haze: 1.3,
     animals: ['flock', 'flit'],
     names: { broad: ['kamani', 'a kamani'] },
+  }),
+
+  // A desert canyon cut half a kilometre deep into sandstone: sheer red
+  // walls turning white towards the rim, red sand and slickrock between
+  // scrub, pines on the ledges and the tops, and a muddy river in the
+  // bottom. Clear dry air with fair-weather cloud over the rims.
+  'red rock canyon': kind({
+    ground: {
+      tint: [1.35, 0.95, 0.85],
+      dirt: [0.3, 0.115, 0.055],
+      rock: [0.36, 0.1, 0.04],
+      bare: [[0.34, 0.11, 0.045], [0.36, 0.17, 0.09]],
+      sand: [0.36, 0.2, 0.11],
+      barren: 0.55,
+      layers: { upper: [0.52, 0.42, 0.3], at: 1850, bed: 14, varnish: 0.55 },
+    },
+    trees: [['pine', 0.65], ['broad', 0.35]],
+    under: { fern: [], bush: [['bush', 0.85]] },
+    rocks: 0.4,
+    clouds: { deck: 2600, cover: 0.35, shade: 0.1 },
+    haze: 0.6,
+    animals: ['deer', 'cougar', 'bobcat', 'fox', 'rabbit', 'squirrel', 'chipmunk', 'mouse', 'snake', 'flock', 'flit', 'crows', 'hawk', 'butterflies'],
+    names: { pine: ['ponderosa pine', 'a ponderosa pine'] },
   }),
 };
 

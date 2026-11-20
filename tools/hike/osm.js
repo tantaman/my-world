@@ -70,13 +70,15 @@ export function incompleteWaters(osm) {
 const FOOT = new Set(['path', 'footway', 'track', 'steps', 'bridleway']);
 const coords = (osm, refs) => refs.map((r) => osm.nodes.get(r)).filter(Boolean);
 
-// [{ name, points: [[lat, lon], ...] }]
+// [{ name, points: [[lat, lon], ...], rope? }]: rope where the path has
+// chains or a fixed rope to hold on to
 export function trails(osm) {
   const out = [];
   for (const w of osm.ways.values()) {
     if (!FOOT.has(w.tags.highway)) continue;
     const points = coords(osm, w.refs);
-    if (points.length > 1) out.push({ name: w.tags.name || '', points });
+    const rope = w.tags.safety_rope === 'yes';
+    if (points.length > 1) out.push({ name: w.tags.name || '', points, ...(rope ? { rope } : {}) });
   }
   return out;
 }

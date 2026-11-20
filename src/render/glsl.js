@@ -140,7 +140,9 @@ float wfbm4(vec2 wp, float f, vec2 off) {
 // bare (x) and how sandy (y) it is here, and how far it is that country's
 // ground at all (z); which is that country's id. The colours are every
 // country's, by id, in the LAND uniforms (uniforms.js). In the forest land
-// is zero, and none of them shows.
+// is zero, and none of them shows. y is the height (game m), for a sandstone
+// country's beds (its layers), which go by real height: uRealY says how the
+// real place you're on stands in the game.
 export const GROUND_GLSL = /* glsl */ `
 uniform vec3 uTint[${MAX_COUNTRIES}];
 uniform vec3 uDirt[${MAX_COUNTRIES}];
@@ -148,12 +150,23 @@ uniform vec3 uRock[${MAX_COUNTRIES}];
 uniform vec3 uBareA[${MAX_COUNTRIES}];
 uniform vec3 uBareB[${MAX_COUNTRIES}];
 uniform vec3 uSand[${MAX_COUNTRIES}];
-vec3 groundColor(vec2 wp, float pathM, float forestM, float slope, vec3 land, float which) {
+uniform vec3 uUpper[${MAX_COUNTRIES}];
+uniform vec4 uLayers[${MAX_COUNTRIES}];
+uniform vec2 uRealY;
+vec3 groundColor(vec2 wp, float y, float pathM, float forestM, float slope, vec3 land, float which) {
   int c = clamp(int(which + 0.5), 0, ${MAX_COUNTRIES} - 1);
   float n1 = wnoise(wp, 0.33);
   float n2 = wnoise(wp, 1.6, vec2(13.0));
   float n3 = wfbm4(wp, 0.045, vec2(-7.0));
   float n4 = wnoise(wp, 4.1, vec2(-3.0));
+
+  // a sandstone country's layers: how far this is its own (0 anywhere else),
+  // the real height, and how far up into the pale upper beds, which come in
+  // raggedly over a hundred metres or so
+  vec4 lay = uLayers[c];
+  float layered = lay.w * land.z;
+  float yr = (y - uRealY.x) / uRealY.y;
+  float up = layered > 0.0 ? smoothstep(lay.x - 50.0, lay.x + 50.0, yr + (n3 - 0.5) * 110.0) : 0.0;
 
   // meadow grass: green with drifts of dry, golden grass
   vec3 grassA = vec3(0.090, 0.170, 0.032);
@@ -196,10 +209,25 @@ vec3 groundColor(vec2 wp, float pathM, float forestM, float slope, vec3 land, fl
   float first = smoothstep(0.7, 1.0, land.x) * (1.0 - 0.8 * smoothstep(0.38, 0.68, n3 + (n1 - 0.5) * 0.3));
   vec3 bare = mix(uBareB[c], uBareA[c], first) * (0.72 + 0.4 * n4 + 0.16 * n2);
   bare = mix(bare, bare * 1.5 + 0.02, peb * 0.6);
+  // (up in the pale beds, the slickrock is pale too)
+  bare = mix(bare, uUpper[c] * (0.78 + 0.3 * n4), up * 0.85 * layered);
   col = mix(col, bare, bareM);
 
   // rock on steep slopes
   vec3 rock = mix(vec3(0.16, 0.155, 0.145), uRock[c], land.z) * (0.75 + 0.5 * n2);
+  if (layered > 0.0) {
+    // sandstone: in beds, each a shade of its own with a darker line where
+    // one was laid on the last, swept and tilted the way the dunes that made
+    // them lay; and streaked dark down the faces where water runs off the
+    // rim (on a cliff, a pattern across the ground is one down the face)
+    float b = yr / lay.y + (n3 - 0.5) * 2.6 + (n1 - 0.5) * 0.6;
+    float tone = hash12(vec2(floor(b), 7.0));
+    float seam = smoothstep(0.8, 0.94, fract(b)) * (1.0 - smoothstep(0.94, 1.0, fract(b)));
+    vec3 stone = mix(uRock[c], uUpper[c], up) * (0.8 + 0.32 * tone - 0.25 * seam);
+    float streak = smoothstep(0.52, 0.8, wnoise(wp, 0.7, vec2(31.0)) * 0.65 + wnoise(wp, 2.6, vec2(-17.0)) * 0.35);
+    stone *= 1.0 - lay.z * streak * 0.65;
+    rock = mix(rock, stone * (0.86 + 0.24 * n2), layered);
+  }
   col = mix(col, rock, smoothstep(0.30, 0.45, slope + (n1 - 0.5) * 0.12));
 
   // a beach

@@ -20,6 +20,8 @@ const RIVER_SEEN = 0.45;
 //   species  broadleaf (-1) .. conifers (1)
 //   bare, sand, land, country   what a real place's ground is made of, and
 //            which country's it is (WorldGen.surface)
+//   real     how high it really is (m over the sea) on a real place, for the
+//            beds in a sandstone country's cliffs; NaN elsewhere
 export function sampleFar(gen, x0, z0, n, step) {
   const h = new Float32Array(n * n);
   const water = new Float32Array(n * n);
@@ -29,6 +31,7 @@ export function sampleFar(gen, x0, z0, n, step) {
   const sand = new Float32Array(n * n);
   const land = new Float32Array(n * n);
   const country = new Uint8Array(n * n);
+  const real = new Float32Array(n * n);
   const at = { bare: 0, sand: 0, land: 0, country: 0 };
   const w = gen.water;
   for (let j = 0; j < n; j++) {
@@ -55,7 +58,9 @@ export function sampleFar(gen, x0, z0, n, step) {
       sand[k] = at.sand;
       land[k] = at.land;
       country[k] = at.country;
+      real[k] = NaN;
+      for (const L of gen.landforms) if (L.weight(x, z) > 0) real[k] = (g - L.offset) / L.def.scale + (L.def.base || 0);
     }
   }
-  return { x0, z0, n, step, h, water, forest, species, bare, sand, land, country };
+  return { x0, z0, n, step, h, water, forest, species, bare, sand, land, country, real };
 }

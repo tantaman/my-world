@@ -26,6 +26,12 @@ export function deckHeight(land) {
   return deck === null ? NaN : land.offset + (deck - (land.def.base || 0)) * land.def.scale;
 }
 
+// The game height of a land's sea level: what its real heights are measured
+// up from, as the beds in a sandstone country's cliffs are (render/glsl.js).
+export function seaLevel(land) {
+  return land.offset - (land.def.base || 0) * land.def.scale;
+}
+
 // The weather at (x, z) with your eye at height y, by the land you're
 // nearest: { cover: how much cloud its layer has here (it thins out past the
 // land's edge), haze: how thick the air is (1: the forest's), overcast: how

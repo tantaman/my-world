@@ -9,14 +9,15 @@
 // real place you are on or nearest, and sets its weather over you as you
 // come onto it:
 // its layer of cloud (DECK in render/uniforms.js), how thick its air is, how
-// much sun gets through. And it adds the sound of its sea (surf.js). In the
+// much sun gets through; and where its sea level is, for the beds in its
+// cliffs (uRealY). And it adds the sound of its sea (surf.js). In the
 // forest, far from any, it has nothing to do.
 //
 // From the console: world.country.name, world.country.here
 
 import { LAND, DECK, MAX_COUNTRIES } from '../render/uniforms.js';
 import { COUNTRY, COUNTRIES } from '../world/country.js';
-import { nearestLandform, deckHeight, weatherAt } from './here.js';
+import { nearestLandform, deckHeight, seaLevel, weatherAt } from './here.js';
 import { surf } from './surf.js';
 
 const EASE = 1.6; // 1/s: how quickly the weather comes over you
@@ -41,6 +42,11 @@ export function installCountry(game) {
     LAND.uBareA.value[c.id].setRGB(...g.bare[0]);
     LAND.uBareB.value[c.id].setRGB(...g.bare[1]);
     LAND.uSand.value[c.id].setRGB(...g.sand);
+    const L = g.layers;
+    if (L) {
+      LAND.uUpper.value[c.id].setRGB(...L.upper);
+      LAND.uLayers.value[c.id].set(L.at, L.bed, L.varnish, 1);
+    }
   }
 
   game.addSystem({
@@ -57,6 +63,7 @@ export function installCountry(game) {
         if (land) {
           DECK.uDeck.value = deckHeight(land);
           DECK.uDeckMid.value.set(land.cx, land.cz);
+          LAND.uRealY.value.set(seaLevel(land), land.def.scale);
         }
       }
       // its weather, as far as you are onto it

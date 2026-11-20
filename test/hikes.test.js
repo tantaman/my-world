@@ -8,9 +8,12 @@ import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
 import { readPhoto } from '../tools/hike/exif.js';
 import { decodePng, encodePng } from '../tools/hike/png.js';
-import { localFrame, tileXY, terrarium } from '../tools/hike/geo.js';
+import { localFrame, tileXY, terrarium, toTerrarium } from '../tools/hike/geo.js';
+import { readTiff, writeTiff } from '../tools/hike/tiff.js';
+import { blockOf, blockTiles, missing, BLOCK } from '../tools/hike/usgs.js';
+import { makeChains } from '../src/hikes/waymarks.js';
 import { parseOsm, trails, waters, coastlines, roads, streams } from '../tools/hike/osm.js';
-import { buildHike, splitHike, simplify, signedDistance, coastDistance, walkFromRoad } from '../tools/hike/build.js';
+import { buildHike, splitHike, fineBox, simplify, signedDistance, coastDistance, walkFromRoad } from '../tools/hike/build.js';
 import { placeHike, project, ORIGIN } from '../tools/hike/place.js';
 import { Landform, packHeights, unpackHeights, packShore, unpackShore } from '../src/world/landform.js';
 import { growWorld, LANDS } from '../src/world/lands.js';
@@ -101,6 +104,36 @@ test('terrarium tiles and the tile grid', () => {
   near(lo, -122.99, 1e-9, 'back');
 });
 
+test('heights from 3DEP: a TIFF of floats, cut into tiles as Terrain Tiles are', () => {
+  // Terrarium both ways, to a 256th of a metre
+  for (const h of [0, 1764.3, -12.5, 4321.0078125]) {
+    const [r, g, b] = toTerrarium(h);
+    near(terrarium(r, g, b), h, 1 / 512, `${h} m`);
+  }
+  // a block of tiles at zoom 16, as the National Map sends it: where it's
+  // asked for, a height at every pixel, and nothing in one corner
+  const z = 16;
+  const { bx, by, url } = blockOf(z, 12218, 25330);
+  assert.deepEqual([bx, by], [12216, 25328], 'blocks start on multiples of BLOCK');
+  assert.match(url, /bboxSR=3857/);
+  const size = BLOCK * 256;
+  const span = (2 * Math.PI * 6378137) / 2 ** z;
+  const corner = [-Math.PI * 6378137 + bx * span, Math.PI * 6378137 - by * span];
+  const data = Float32Array.from({ length: size * size }, (_, k) => 1500 + (k % size) * 0.25 - Math.floor(k / size) * 0.5);
+  data[0] = -3.4e38; // 3DEP's nothing
+  const bytes = writeTiff(size, size, data, corner, [span / 256, span / 256]);
+  const back = readTiff(bytes);
+  assert.deepEqual([back.width, back.height], [size, size]);
+  assert.deepEqual(back.corner, corner);
+  const tiles = blockTiles(bytes, z, bx, by);
+  assert.equal(tiles.length, BLOCK * BLOCK);
+  const at = (t, x, y) => terrarium(...t.rgb.subarray((y * 256 + x) * 3, (y * 256 + x) * 3 + 3));
+  const second = tiles.find((t) => t.tx === bx + 1 && t.ty === by + 2);
+  near(at(second, 10, 20), 1500 + (256 + 10) * 0.25 - (512 + 20) * 0.5, 1 / 256, 'a height lands in its own tile, at its own pixel');
+  assert.ok(missing(at(tiles[0], 0, 0)), "where 3DEP has nothing, it says so, and Terrain Tiles fill in");
+  assert.throws(() => blockTiles(writeTiff(size, size, data, [corner[0] + span, corner[1]], [span / 256, span / 256]), z, bx, by), /isn't where/);
+});
+
 test('OpenStreetMap: trails, and lakes joined from their ways', () => {
   const xml = `<osm>
     <node id="1" lat="0" lon="0"/><node id="2" lat="0" lon="0.01"/><node id="3" lat="0.01" lon="0.01"/>
@@ -108,11 +141,12 @@ test('OpenStreetMap: trails, and lakes joined from their ways', () => {
     <way id="10"><nd ref="1"/><nd ref="2"/><nd ref="3"/></way>
     <way id="11"><nd ref="3"/><nd ref="4"/><nd ref="1"/></way>
     <way id="12"><nd ref="1"/><nd ref="5"/><tag k="highway" v="path"/><tag k="name" v="Up &amp; over"/></way>
+    <way id="13"><nd ref="5"/><nd ref="3"/><tag k="highway" v="path"/><tag k="safety_rope" v="yes"/></way>
     <relation id="20"><member type="way" ref="10" role="outer"/><member type="way" ref="11" role="outer"/>
       <tag k="type" v="multipolygon"/><tag k="natural" v="water"/><tag k="name" v="Mere"/></relation>
   </osm>`;
   const osm = parseOsm(xml);
-  assert.deepEqual(trails(osm).map((t) => [t.name, t.points.length]), [['Up & over', 2]]);
+  assert.deepEqual(trails(osm).map((t) => [t.name, t.points.length, !!t.rope]), [['Up & over', 2, false], ['', 2, true]], 'and which have chains to hold on to');
   const w = waters(osm);
   assert.equal(w.length, 1);
   assert.equal(w[0].name, 'Mere');
@@ -200,6 +234,12 @@ test('heights and shores pack small and come back as they went', () => {
   const h = Float32Array.from({ length: n * n }, (_, k) => 40 * Math.sin(k * 0.3) + (k % n) * 3.7 - 12);
   const back = unpackHeights(packHeights(h, n), n);
   for (let k = 0; k < h.length; k++) near(back[k], h[k], 0.051, `height ${k}`);
+  // and in rectangles, as a finer grid along a walk is
+  const [w, rows] = [17, 9];
+  const r = Float32Array.from({ length: w * rows }, (_, k) => 30 * Math.cos(k * 0.7) - (k % w) * 2.1);
+  const rb = unpackHeights(packHeights(r, w, rows), w, rows);
+  assert.equal(rb.length, w * rows);
+  for (let k = 0; k < r.length; k++) near(rb[k], r[k], 0.051, `rectangle ${k}`);
   const d = Float32Array.from({ length: 50 }, (_, k) => (k - 25) * 1.3);
   const shore = unpackShore(packShore(d));
   for (let k = 0; k < d.length; k++) near(shore[k], Math.max(-63.5, Math.min(63.5, d[k])), 0.26, `shore ${k}`);
@@ -752,6 +792,118 @@ test('hikes that overlap line up exactly, and stand on the same heights', () => 
   // and adding B didn't move A
   const alone = world([A]);
   near(gen.landforms[0].offset, alone.landforms[0].offset, 0, 'A stands where it stood');
+});
+
+// ── A fin ────────────────────────────────────────────────────────────────────
+// A sandstone fin running north, 20 m wide at the top and 200 m high, with a
+// trail along its crest from the road at its foot in the south to the photo at
+// its north end, chained the last 300 m. Coarse heights every 40 m lose it;
+// finer ones along the walk keep it.
+const FIN = { lat: 37, lon: -113, bearing: 0, hour: 9 };
+const finFrame = localFrame(FIN.lat, FIN.lon);
+const finLL = (e, n) => finFrame.toLatLon(e, n);
+const finGround = (lat, lon) => {
+  const [e, n] = finFrame.toEN(lat, lon);
+  return 1300 + Math.max(0, 200 - 20 * Math.max(0, Math.abs(e) - 10)) * (n > -900 ? 1 : Math.max(0, 1 - (-900 - n) / 300));
+};
+const FIN_TRAIL = Array.from({ length: 49 }, (_, k) => finLL(0, -1200 + k * 25));
+const finHike = (fine) =>
+  buildHike({
+    id: 'fin',
+    name: 'The Fin',
+    photo: FIN,
+    elevation: finGround,
+    trails: [
+      { name: 'Fin', points: FIN_TRAIL.slice(0, 37) },
+      { name: 'Fin', points: FIN_TRAIL.slice(36), rope: true },
+    ],
+    roads: [[finLL(-400, -1200), finLL(400, -1200)]],
+    at: [-9000, 6000],
+    radius: 2000,
+    fade: 500,
+    cell: 40,
+    fine,
+  }).def;
+const coarseFin = finHike(null);
+const fineFin = finHike({ cell: 5, margin: 150 });
+
+test('a finer grid along the walk keeps a narrow ridge narrow', () => {
+  const f = fineFin.ground.fine;
+  assert.ok(f && !coarseFin.ground.fine, 'asked for, there is one');
+  near(f.cell, 1, 1e-9, '5 m at 1 : 5');
+  // it covers the walk and the margin round it, and keeps inside the real land
+  const [x0, z0, x1, z1] = fineBox([[0, 240], [0, 0]], { cell: 5, margin: 150 }, 0.2, 400);
+  assert.deepEqual([f.x, f.z, f.x + (f.w - 1) * f.cell, f.z + (f.h - 1) * f.cell], [x0, z0, x1, z1]);
+  assert.ok(x0 <= -30 && x1 >= 30 && z0 <= -30 && z1 >= 240, 'the walk and 30 m round it');
+  // 3 m (game) aside from the crest, the fine land has fallen away; the coarse hasn't, much
+  const drop = (def) => {
+    const L = new Landform(def);
+    return L.raw(L.cx, L.cz + 100) - L.raw(L.cx + 3, L.cz + 100);
+  };
+  near(drop(fineFin), 20 * (15 - 10) * 0.2, 3, 'the fine fin falls away as the real one does');
+  assert.ok(drop(coarseFin) < drop(fineFin) / 2, `the coarse one is a hump (${drop(coarseFin).toFixed(1)} m)`);
+  // the climb is reckoned on the fine ground
+  near(fineFin.trail.climb, 200 * 0.2, 1, 'the walk climbs the fin');
+  // outside it the coarse grid is the ground; across its edge, no step
+  const L = new Landform(fineFin);
+  const C = new Landform(coarseFin);
+  near(L.raw(L.cx + 200, L.cz - 200), C.raw(C.cx + 200, C.cz - 200), 1e-6, 'outside it, the coarse land as it was');
+  let worst = 0;
+  let prev = L.raw(L.cx + x1 - 20, L.cz + 100);
+  for (let x = x1 - 20; x <= x1 + 10; x += 0.25) {
+    const h = L.raw(L.cx + x, L.cz + 100);
+    worst = Math.max(worst, Math.abs(h - prev));
+    prev = h;
+  }
+  assert.ok(worst < 0.3, `it gives way to the coarse grid smoothly (a step of ${worst.toFixed(2)} m)`);
+  // and it is part of the land, not the card
+  const { card, land } = splitHike(fineFin);
+  assert.equal(card.ground, undefined);
+  assert.deepEqual(JSON.parse(JSON.stringify(land.ground)), fineFin.ground);
+});
+
+test("a cliff on a real place is bare rock: no trees, no grass", () => {
+  const gen = world([fineFin]);
+  const L = gen.landforms[0];
+  const out = { bare: 0, sand: 0, land: 0, country: 0 };
+  // on the fin's flank, and on the flat at its foot
+  const flank = [L.cx + 3, L.cz + 100];
+  const foot = [L.cx + 40, L.cz + 100];
+  assert.ok(L.slope(...flank) > 2, 'the flank is a cliff');
+  gen.surface(...flank, out);
+  near(out.bare, 1, 1e-6, 'the cliff is bare');
+  assert.ok(gen.forest(...flank) < 0.01, 'and wooded not at all');
+  gen.surface(...foot, out);
+  near(out.bare, 0, 1e-6, 'the flat at its foot is the forest floor');
+});
+
+test('chains go where the map has them, on the side that falls away', () => {
+  assert.equal(coarseFin.ropes.length, 1, 'the chained stretch');
+  assert.equal(splitHike(coarseFin).card.ropes, undefined, 'is part of the land');
+  const r = coarseFin.ropes[0];
+  near(r[1], 60, 0.5, 'from where the chains begin');
+  near(r[r.length - 1], 0, 0.5, 'to the top');
+  assert.equal(finHike(null).ropes.length, 1);
+  // a ledge along a cliff that falls away to the east: posts and chain on the east side
+  const ledge = (x) => (x > 1.2 ? -(x - 1.2) * 20 : 0);
+  const mesh = makeChains([[100, 50, 100, 70, 104, 80]], (x) => ledge(x - 100));
+  mesh.geometry.computeBoundingBox();
+  const box = mesh.geometry.boundingBox;
+  assert.ok(mesh.position.x + box.min.x > 100.5, `all on the east side (from ${(mesh.position.x + box.min.x).toFixed(2)})`);
+  assert.ok(box.max.y > 0.8 && box.max.y < 1.1, 'and about waist high');
+  // the geometry is measured from the mesh, which stands near the first post
+  assert.ok(Math.abs(mesh.position.x - 101) <= 1 && Math.abs(mesh.position.z - 50) <= 1);
+  assert.equal(makeChains([], () => 0), null, 'no chains, nothing to put up');
+});
+
+test('the far view knows how high a real place really is', () => {
+  const gen = world([coarseFin]);
+  const L = gen.landforms[0];
+  // on the fin's crest, and 600 m east of it, past the land's edge
+  const g = sampleFar(gen, L.cx, L.cz + 100, 2, 600);
+  near(g.real[0], L.raw(L.cx, L.cz + 100) / L.def.scale + L.def.base, 5, 'on the land, its real height');
+  assert.ok(g.real[0] > 1400, 'up on the fin');
+  assert.ok(Number.isNaN(g.real[1]), 'past it, none');
 });
 
 // ── The hikes in the game ────────────────────────────────────────────────────

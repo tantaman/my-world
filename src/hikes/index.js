@@ -25,7 +25,7 @@ import { formatDistance } from '../core/format.js';
 import { hash2i } from '../noise.js';
 import { FarView, FAR_CLIP } from './farView.js';
 import { sampleFar } from './farGrid.js';
-import { makeCairn, makeSignpost } from './waymarks.js';
+import { makeCairn, makeSignpost, makeChains } from './waymarks.js';
 import { HikesPanel } from './hikesPanel.js';
 
 const FAR_MARGIN = 700; // m of the forest round a hike that its far view takes in
@@ -184,6 +184,16 @@ export function installHikes(game) {
   let worker = null;
   landforms.on('land', (def) => {
     if (worker) worker.postMessage({ type: 'hike', def });
+  });
+
+  // Chains along the stretches of trail that have them, put up once the land
+  // they stand on is here. (They stand where the ground was when they went
+  // up: dig under one and it's left hanging.)
+  landforms.on('land', (def) => {
+    if (!def.ropes) return;
+    const lines = def.ropes.map((r) => r.map((v, k) => v + def.at[k % 2]));
+    const chains = makeChains(lines, (x, z) => gen.height(x, z));
+    if (chains) scene.add(chains);
   });
   // The ground near it waits for its land: say why, rather than leave a gap.
   landforms.on('failed', (c) => hud.flash(`can't fetch ${c ? c.name : 'a hike'} yet · trying again (or reload the page)`));

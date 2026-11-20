@@ -40,3 +40,10 @@ export const tileMetresPerPixel = (lat, z) => (40075016.686 * Math.cos(lat * D))
 
 // Terrarium-encoded elevation (metres) from a pixel's red, green and blue.
 export const terrarium = (r, g, b) => r * 256 + g + b / 256 - 32768;
+
+// And back: [r, g, b] for an elevation, to the nearest 256th of a metre.
+export function toTerrarium(h) {
+  const v = Math.max(0, Math.min(65535.996, h + 32768));
+  const q = Math.round(v * 256);
+  return [q >> 16, (q >> 8) & 255, q & 255];
+}

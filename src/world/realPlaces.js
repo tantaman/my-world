@@ -179,6 +179,8 @@ export function withRealPlaces(Land) {
         // bare in patches, the size of a clearing, unless it's all bare or none is
         let bare = g.barren;
         if (bare > 0) bare += this.nMoist(x * 0.031 + 5, z * 0.031 - 3) * 1.3 * Math.min(bare, 1 - bare);
+        // and a cliff is bare rock, whatever the country: nothing grows on it
+        bare = Math.max(bare, L.rocky(x, z));
         // a beach where the map has one; else the rock the sea breaks on, and
         // above it, or a strand all along it
         let sand = L.beaches.length ? 1 - smoothstep(-0.5, 2.5, L.strand(x, z)) : 0;
