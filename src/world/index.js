@@ -9,8 +9,9 @@ import { ChunkManager } from './chunks.js';
 import { Grass } from './grass.js';
 import { Sky } from './sky.js';
 import { Solids } from './solids.js';
+import { Spaces } from './spaces.js';
 import { createParticles } from './particles.js';
-import { createTerrainMaterial, createVegetationMaterial, createGrassMaterial } from './materials.js';
+import { createTerrainMaterial, createTerrainDepthMaterial, createVegetationMaterial, createGrassMaterial } from './materials.js';
 import { SHARED } from '../render/uniforms.js';
 import { createWaterMaterial } from './waterSurface.js';
 import { makePine, makeBroadleaf, makeBirch, makeBush, makeFern, makeRock, makeLog } from './models.js';
@@ -28,6 +29,7 @@ export function installWorld(game) {
   const gen = growWorld(CONFIG.seed, STRUCTURES, CONFIG.land);
   const materials = {
     terrain: createTerrainMaterial(),
+    terrainShadow: createTerrainDepthMaterial(),
     vegetation: createVegetationMaterial(),
     grass: createGrassMaterial(),
     water: createWaterMaterial(),
@@ -57,6 +59,8 @@ export function installWorld(game) {
   game.provide('structures', STRUCTURES);
   // Built things you bump into and stand on. Whoever builds, writes to it.
   game.provide('solids', new Solids());
+  // Places under the ground you can be in (caves). Whoever makes one, adds it.
+  game.provide('spaces', new Spaces());
   // What the world streams in around: a point that whoever is being followed
   // keeps up to date (the player feature copies the hiker's position into it).
   game.provide('focus', new THREE.Vector3());
@@ -113,7 +117,7 @@ export function installWorld(game) {
       chunks.update(at.x, at.z, 5);
       grass.update(at.x, at.z, 3, dt);
       sky.update(at, camera.position);
-      particles.update(at, at.y);
+      particles.update(at, at.y, sky.open);
     },
   });
 }

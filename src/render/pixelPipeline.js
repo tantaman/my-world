@@ -126,6 +126,8 @@ void main() {
   gl_FragColor = vec4(col, 1.0);
 }`;
 
+const FOG_TINT = 0.82; // the fog's colour: the sky's behind it, a little dimmed
+
 export class PixelPipeline {
   constructor(renderer) {
     this.renderer = renderer;
@@ -157,7 +159,7 @@ export class PixelPipeline {
         uFogDensity: { value: 0.0021 },
         uFogHeight: { value: 0.03 },
         uFogFar: { value: 250 },
-        uFogTint: { value: 0.82 },
+        uFogTint: { value: FOG_TINT },
       },
       vertexShader: FS_VERT,
       fragmentShader: COMPOSITE_FRAG,
@@ -230,7 +232,9 @@ export class PixelPipeline {
     this.setSize(this.screenW, this.screenH);
   }
 
-  render(scene, camera, exposure) {
+  // fogLight: how much daylight the air holds (the sky's `open`): in a cave
+  // the far walls fade into the dark, not into a misty sky.
+  render(scene, camera, exposure, fogLight = 1) {
     const r = this.renderer;
     const u = this.composite.uniforms;
     u.tColor.value = this.rtScene.texture;
@@ -241,6 +245,7 @@ export class PixelPipeline {
     u.uCamWorld.value.copy(camera.matrixWorld);
     u.uCamPos.value.copy(camera.position);
     u.uExposure.value = exposure;
+    u.uFogTint.value = FOG_TINT * fogLight;
     u.uOutline.value = this.outline;
     u.uLevels.value = this.levels;
     u.uDither.value = this.dither;

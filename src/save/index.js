@@ -8,15 +8,16 @@
 
 import { Peers } from '../player/peers.js';
 import { SharePanel } from './sharePanel.js';
-import { standHeight } from '../player/player.js';
+import { standHeight, SWIM_DEPTH } from '../player/player.js';
 
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player'];
 export function installSave(game) {
-  const { scene, chunks, player, input, hud, commands, save } = game;
+  const { scene, chunks, spaces, player, input, hud, commands, save } = game;
 
-  // Everyone else in this world (someone swimming floats, just as you do).
-  const peers = new Peers(scene, (x, z) => standHeight(chunks, x, z));
+  // Everyone else in this world (someone swimming floats, just as you do, and
+  // someone in a cave walks on its floor).
+  const peers = new Peers(scene, (x, z, y) => standHeight(chunks, x, z, SWIM_DEPTH, y, spaces));
   game.provide('peers', peers);
 
   const share = new SharePanel({ save, peers, input, hud });

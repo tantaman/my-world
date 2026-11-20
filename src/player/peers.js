@@ -4,6 +4,10 @@
 // part of the world, it is just where somebody happens to be standing. Between
 // those messages each one is eased along, and the walk animation is driven off
 // how fast they turned out to be moving, so they walk rather than teleport.
+//
+// Only where they are in plan is sent, not how high. Where that matters —
+// over a cave, in it or on the hill above — they are kept on whichever they
+// were on, so someone who walks in through the mouth is seen on its floor.
 
 import * as THREE from 'three';
 import { Character } from './character.js';
@@ -15,10 +19,11 @@ const FADE = 25_000; // ms of silence before we assume someone is gone
 // Emits:
 //   'change'  (peers)   someone arrived or left
 export class Peers extends Emitter {
-  constructor(scene, heightAt) {
+  // ground(x, z, y): where someone at (x, z) with their feet about y stands
+  constructor(scene, ground) {
     super();
     this.scene = scene;
-    this.heightAt = heightAt;
+    this.ground = ground;
     this.all = new Map();
   }
 
@@ -81,7 +86,7 @@ export class Peers extends Emitter {
       const wasZ = p.pos.z;
       p.pos.x += (p.to.x - p.pos.x) * k;
       p.pos.z += (p.to.z - p.pos.z) * k;
-      p.pos.y = this.heightAt(p.pos.x, p.pos.z);
+      p.pos.y = this.ground(p.pos.x, p.pos.z, p.pos.y + 0.5);
       const moved = Math.hypot(p.pos.x - was, p.pos.z - wasZ) / Math.max(dt, 1e-4);
       p.speed += (moved - p.speed) * Math.min(1, dt * 8);
 
@@ -96,7 +101,8 @@ export class Peers extends Emitter {
 
   #make(id, colour, x, z) {
     const character = new Character();
-    character.groundAt = this.heightAt;
+    const pos = new THREE.Vector3(x, this.ground(x, z, Infinity), z);
+    character.groundAt = (gx, gz) => this.ground(gx, gz, pos.y + 0.3);
     this.scene.add(character.root);
     // A small bright pennant above the head, so you can find each other.
     const flag = new THREE.Mesh(
@@ -105,7 +111,6 @@ export class Peers extends Emitter {
     );
     flag.castShadow = false;
     this.scene.add(flag);
-    const pos = new THREE.Vector3(x, this.heightAt(x, z), z);
     return { id, name: '', colour: colour || '#d9b45a', character, flag, pos, to: pos.clone(), yaw: 0, yawTo: 0, speed: 0, heard: performance.now() };
   }
 }

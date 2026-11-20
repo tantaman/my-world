@@ -25,6 +25,11 @@
 // and any other name you ask for ('music') — each with its own level, so
 // kinds of sound can be turned up and down independently: sound.volume(bus, v).
 //
+// How shut in the listener is (setEnclosed: 0 out in the forest, 1 deep in a
+// cave) muffles the open air — the ambience and wildlife buses, and the
+// forest's reverb — and sends everything else (your footsteps, voices) into a
+// close, ringing echo off rock instead.
+//
 // Browsers only allow audio after the visitor interacts with the page, so
 // nothing is created until the first click / key / tap.
 
@@ -41,6 +46,11 @@ import { water, pondLife } from './layers/water.js';
 
 // What plays unless told otherwise, in the order it is built and updated.
 const LAYERS = [weather, crickets, birds, water, pondLife];
+// The buses that are the open air, and are muffled when you're shut in.
+const OPEN_AIR = new Set(['ambience', 'wildlife']);
+// Shut in: how far the open air is muffled (Hz, lowpass) and turned down,
+// and how much of the rest rings off the walls.
+const ENCLOSED = { muffle: 520, quiet: 0.3, echo: 0.55 };
 
 export class Soundscape {
   constructor({ layers = LAYERS } = {}) {
@@ -55,6 +65,7 @@ export class Soundscape {
     this.gust = 0.5;
     this.env = { night: 0, forest: 0.5, birdActivity: 0 };
     this.listener = null;
+    this.enclosed = 0;
     this._unlock = () => this.unlock();
     this._events = ['pointerdown', 'keydown', 'touchend', 'click'];
     if (typeof window !== 'undefined') {
@@ -129,11 +140,31 @@ export class Soundscape {
     this.master.gain.setTargetAtTime(this.enabled ? this.level : 0, t + 0.05, this.offline ? 0.05 : 1.5);
     this.master.connect(this.comp);
 
+    // The open air, through a filter that closes when you're shut in.
+    this.outside = ctx.createBiquadFilter();
+    this.outside.type = 'lowpass';
+    this.outside.frequency.value = 20000;
+    this.outside.Q.value = 0.5;
+    this.outsideGain = ctx.createGain();
+    this.outside.connect(this.outsideGain).connect(this.master);
+
     this.reverb = ctx.createConvolver();
     this.reverb.buffer = makeImpulse(ctx, 2.6, 2.4);
     const rv = ctx.createGain();
     rv.gain.value = 0.5;
-    this.reverb.connect(rv).connect(this.master);
+    this.reverb.connect(rv).connect(this.outside);
+
+    // ...and the echo of rock all round: shorter, denser, darker.
+    this.room = ctx.createConvolver();
+    this.room.buffer = makeImpulse(ctx, 1.9, 3.2);
+    this.roomSend = ctx.createGain();
+    this.roomSend.gain.value = 0;
+    const roomLp = ctx.createBiquadFilter();
+    roomLp.type = 'lowpass';
+    roomLp.frequency.value = 3200;
+    this.roomSend.connect(this.room).connect(roomLp).connect(this.master);
+    this.buses.clear();
+    this.setEnclosed(this.enclosed);
 
     this.white = makeNoise(ctx, 'white', 3);
     this.pink = makeNoise(ctx, 'pink', 5);
@@ -153,7 +184,11 @@ export class Soundscape {
       const level = this.levels[name] ?? 1;
       const dry = this.ctx.createGain();
       dry.gain.value = level;
-      dry.connect(this.master);
+      if (OPEN_AIR.has(name)) dry.connect(this.outside);
+      else {
+        dry.connect(this.master);
+        dry.connect(this.roomSend);
+      }
       const wet = this.ctx.createGain();
       wet.gain.value = level;
       wet.connect(this.reverb);
@@ -171,6 +206,17 @@ export class Soundscape {
     const t = this.ctx.currentTime;
     b.dry.gain.setTargetAtTime(level, t, 0.1);
     b.wet.gain.setTargetAtTime(level, t, 0.1);
+  }
+
+  // How shut in the listener is: 0 in the open .. 1 deep underground.
+  setEnclosed(v) {
+    this.enclosed = clamp(v, 0, 1);
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const e = this.enclosed;
+    this.outside.frequency.setTargetAtTime(20000 * Math.pow(ENCLOSED.muffle / 20000, e), t, 0.15);
+    this.outsideGain.gain.setTargetAtTime(1 - (1 - ENCLOSED.quiet) * e, t, 0.15);
+    this.roomSend.gain.setTargetAtTime(ENCLOSED.echo * e, t, 0.15);
   }
 
   // ── Layers ───────────────────────────────────────────────────────────────
@@ -344,7 +390,7 @@ export class Soundscape {
     playCall(this, kind, x, y, z, opts);
   }
 
-  // surface: 'dirt' | 'grass' | 'litter' | 'water' (see footsteps.js);
+  // surface: 'dirt' | 'grass' | 'litter' | 'water', or one a feature defined (see footsteps.js);
   // run: 0..1; kind: 'step' | 'jump' | 'land' | 'swim'; strength: how hard you
   // landed, or for a step or a stroke in water, how deep it is (m)
   footstep(surface, run = 0, kind = 'step', strength = 1) {

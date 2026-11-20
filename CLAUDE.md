@@ -79,7 +79,9 @@ don't edit the same lines:
   The old places in `landmarks/` are grown from the seed too, and never
   change the land or the plants: they stand on it as it is. Where they are
   is pinned in `test/golden/landmarks-*.json`, because the places people
-  have visited or are tracking are saved by id.
+  have visited or are tracking are saved by id. The caves in `caves/` are
+  the same: grown from the seed without changing the land, and pinned in
+  `test/golden/caves-*.json`.
 - **Element spelling is for good.** Keys and values in
   `test/golden/save-elements.json` are what is on the save server and in
   people's browsers. Add new element kinds; never change existing ones. The

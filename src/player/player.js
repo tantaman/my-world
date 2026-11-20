@@ -7,6 +7,9 @@
 // Something can carry you instead (player.carrier: a mount). Then it's its
 // speeds, its depth, its width and head room that count, and if it flies,
 // space climbs and shift stoops.
+//
+// Under the ground, in a cave (world/spaces.js), its floor is what you stand
+// on, its walls and roof keep you in, and the camera keeps to its air.
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
@@ -39,11 +42,19 @@ const FLAP = 0.45;
 const _dir = new THREE.Vector3();
 const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
 const _w = waterSample();
+const _in = { floor: 0, roof: Infinity };
+const _wall = { d: 0, nx: 0, nz: 0 };
+// In a cave the camera keeps this far (m) from the rock, looks for it this
+// finely along the way back from your head, and comes in as close as it has
+// to — right up to your head, if your back is to the wall.
+const CAVE_CAM = { clear: 0.25, steps: 16, nearest: 0.15 };
 
-// Where someone at (x, z) stands: on the ground, or afloat in deep water.
+// Where someone at (x, z) stands: on the ground, afloat in deep water, or on
+// the floor of a space they are in (feet about y; spaces: world/spaces.js).
 // world is the ChunkManager.
 // depth: how deep it has to be to float them (SWIM_DEPTH for someone on foot).
-export function standHeight(world, x, z, depth = SWIM_DEPTH) {
+export function standHeight(world, x, z, depth = SWIM_DEPTH, y = Infinity, spaces = null) {
+  if (spaces && spaces.at(x, z, y, _in)) return _in.floor;
   const g = world.heightAt(x, z);
   if (world.waterAt(x, z, _w) && _w.level - g > depth) return _w.level - depth;
   return g;
@@ -57,12 +68,16 @@ export function standHeight(world, x, z, depth = SWIM_DEPTH) {
 export class Player extends Emitter {
   // world: the ChunkManager (heightAt, waterAt, forEachCollider)
   // solids: built things you bump into and stand on (src/world/solids.js)
-  constructor({ scene, camera, world, input, solids = null }) {
+  // spaces: places under the ground you can be in (src/world/spaces.js)
+  constructor({ scene, camera, world, input, solids = null, spaces = null }) {
     super();
     this.camera = camera;
     this.world = world;
     this.input = input;
     this.solids = solids;
+    this.spaces = spaces;
+    // The space you're in (a cave), or null out under the sky.
+    this.space = null;
     this.character = new Character();
     // Feet find the ground under each of them (terrain, or a sill underfoot).
     this.character.groundAt = (x, z) => this.groundAt(x, z, this.pos.y + 0.02);
@@ -133,13 +148,14 @@ export class Player extends Emitter {
 
   // How far your feet are above the ground under them (m).
   get height() {
-    return this.pos.y - this.groundAt(this.pos.x, this.pos.z);
+    return this.pos.y - this.groundAt(this.pos.x, this.pos.z, this.pos.y + 0.05);
   }
 
-  // Ground height under (x, z) for feet at y: terrain or the top of something built.
+  // Ground height under (x, z) for feet at y: terrain, the floor of a cave,
+  // or the top of something built.
   // (Which solid that was, if any, is left in this.groundSolid.)
   groundAt(x, z, y = Infinity) {
-    let g = standHeight(this.world, x, z, this.carrier ? this.carrier.depth : SWIM_DEPTH);
+    let g = standHeight(this.world, x, z, this.carrier ? this.carrier.depth : SWIM_DEPTH, y, this.spaces);
     this.groundSolid = null;
     if (this.solids) {
       this.solids.forEachNear(x, z, 1, (s) => {
@@ -158,12 +174,16 @@ export class Player extends Emitter {
   // Appear where a world opens. Call once the ground there has streamed in.
   arrive() {
     const a = this.arrival;
-    this.spawn(a.x, a.z, a.yaw ?? 0, a.camYaw);
+    this.spawn(a.x, a.z, a.yaw ?? 0, a.camYaw, a.y);
     if (typeof a.camPitch === 'number') this.camPitch = a.camPitch;
   }
 
-  spawn(x, z, yaw, camYaw = yaw + Math.PI) {
-    this.pos.set(x, this.groundAt(x, z), z);
+  // Stand at (x, z), on the ground, or with y, on whatever floor is about
+  // that high there (a cave's, under the hill).
+  spawn(x, z, yaw, camYaw = yaw + Math.PI, y = Infinity) {
+    if (this.spaces) this.spaces.ensure(x, z);
+    this.pos.set(x, this.groundAt(x, z, Number.isFinite(y) ? y + 0.3 : Infinity), z);
+    this.space = this.spaces ? this.spaces.at(x, z, this.pos.y + 0.05) : null;
     this.vel.set(0, 0, 0);
     this.yaw = yaw;
     this.camYaw = camYaw;
@@ -221,8 +241,10 @@ export class Player extends Emitter {
       wz /= wl;
     }
     // water: wading drags at you; swimming is slow, and there's no running.
-    // Standing on something built over it (a dock, a boat) you're out of it.
-    const inWater = this.world.waterAt(this.pos.x, this.pos.z, _w) && _w.depth > 0 && !(this.underfoot && this.pos.y > _w.level);
+    // Standing on something built over it (a dock, a boat) you're out of it,
+    // and under the ground (in a cave) what is overhead is the land's.
+    this.space = this.spaces ? this.spaces.at(this.pos.x, this.pos.z, this.pos.y + 0.05) : null;
+    const inWater = !this.space && this.world.waterAt(this.pos.x, this.pos.z, _w) && _w.depth > 0 && !(this.underfoot && this.pos.y > _w.level);
     const depth = inWater ? _w.depth : 0;
     const float = c ? c.depth : SWIM_DEPTH;
     const F = c && c.fly;
@@ -280,14 +302,17 @@ export class Player extends Emitter {
     }
 
     // Integrate
+    const wasX = this.pos.x;
+    const wasZ = this.pos.z;
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
     this.pos.y += this.vel.y * dt;
 
-    // Collide with trunks / boulders (circle push-out), unless flying over them
+    // Collide with trunks / boulders (circle push-out), unless flying over
+    // them, or under the hill they stand on, in a cave
     const radius = c ? c.radius : PLAYER_RADIUS;
     const above = this.flying && this.pos.y - this.world.heightAt(this.pos.x, this.pos.z) > TRUNK_CLEAR;
-    if (!above) this.world.forEachCollider(this.pos.x, this.pos.z, (cx, cz, r) => {
+    if (!above && !this.space) this.world.forEachCollider(this.pos.x, this.pos.z, (cx, cz, r) => {
       const dx = this.pos.x - cx;
       const dz = this.pos.z - cz;
       const d = Math.hypot(dx, dz);
@@ -326,6 +351,9 @@ export class Player extends Emitter {
         }
       });
     }
+
+    // A cave's walls and roof.
+    if (this.space) this._keepInside(wasX, wasZ);
 
     // Ground
     const wasGrounded = this.grounded;
@@ -373,25 +401,98 @@ export class Player extends Emitter {
     this.updateCamera(dt, false);
   }
 
+  // Inside a space: push out of its walls, and bump your head on its roof
+  // (or what carries you: its width, its head room).
+  // Should a step ever take you clean through its rock, take it back rather
+  // than come up on the hill above.
+  _keepInside(wasX, wasZ) {
+    const was = this.space;
+    const sp = this.spaces.at(this.pos.x, this.pos.z, this.pos.y + 0.05, _in);
+    if (!sp) {
+      if (this.pos.y < this.world.heightAt(this.pos.x, this.pos.z) - 0.5 && was.inside(wasX, wasZ, this.pos.y + 0.05, _in)) {
+        this.pos.x = wasX;
+        this.pos.z = wasZ;
+        this.vel.x = 0;
+        this.vel.z = 0;
+      }
+      return;
+    }
+    this.space = sp;
+    const roof = _in.roof;
+    const floor = _in.floor;
+    const c = this.carrier;
+    const radius = c ? c.radius : PLAYER_RADIUS;
+    const head = c ? c.height : BODY_H;
+    sp.walls(this.pos.x, this.pos.z, _wall);
+    if (_wall.d < radius) {
+      const push = radius - _wall.d;
+      this.pos.x += _wall.nx * push;
+      this.pos.z += _wall.nz * push;
+      const vn = this.vel.x * _wall.nx + this.vel.z * _wall.nz;
+      if (vn < 0) {
+        this.vel.x -= vn * _wall.nx;
+        this.vel.z -= vn * _wall.nz;
+      }
+    }
+    // Too low to get under: no further that way, unless it's no lower than
+    // where you were (so you can always back out). On foot there's always
+    // room where you can walk; a horse, with you on it, needs more.
+    if (roof - floor < head) {
+      const before = was.inside(wasX, wasZ, this.pos.y + 0.05, _in) ? _in.roof - _in.floor : Infinity;
+      if (before > roof - floor) {
+        this.pos.x = wasX;
+        this.pos.z = wasZ;
+        this.vel.x = 0;
+        this.vel.z = 0;
+        return;
+      }
+    }
+    if (this.vel.y > 0 && this.pos.y + head > roof) {
+      this.pos.y = Math.max(floor, roof - head);
+      this.vel.y = 0;
+    }
+  }
+
+  // Is the camera's view clear t metres back from its target along dir: open
+  // air in a cave, or above the land?
+  _open(dir, t) {
+    const x = this.camTarget.x + dir.x * t;
+    const y = this.camTarget.y + dir.y * t;
+    const z = this.camTarget.z + dir.z * t;
+    if (this.spaces && this.spaces.air(x, y, z, CAVE_CAM.clear)) return true;
+    return y >= this.world.heightAt(x, z) + 0.35;
+  }
+
   updateCamera(dt, snap) {
     const kT = snap ? 1 : 1 - Math.exp(-dt * 10);
     this.camTarget.x = lerp(this.camTarget.x, this.pos.x, kT);
     this.camTarget.z = lerp(this.camTarget.z, this.pos.z, kT);
     this.camTarget.y = lerp(this.camTarget.y, this.pos.y + this.eye, snap ? 1 : 1 - Math.exp(-dt * 6));
 
-    // Pull in if the hillside is between us and the camera.
+    // Pull in if the hillside is between us and the camera (or in a cave,
+    // its rock: looked for more finely, and let come in closer).
     let dist = this.camDist + (this.carrier ? this.carrier.back : 0);
     const cp = Math.cos(this.camPitch);
     const dir = _dir.set(Math.sin(this.camYaw) * cp, Math.sin(this.camPitch), Math.cos(this.camYaw) * cp);
-    for (let i = 1; i <= 8; i++) {
-      const t = (i / 8) * dist;
-      const px = this.camTarget.x + dir.x * t;
-      const pz = this.camTarget.z + dir.z * t;
-      const py = this.camTarget.y + dir.y * t;
-      if (py < this.world.heightAt(px, pz) + 0.35) {
+    const under = !!this.space;
+    const steps = under ? CAVE_CAM.steps : 8;
+    for (let i = 1; i <= steps; i++) {
+      const t = (i / steps) * dist;
+      if (this._open(dir, t)) continue;
+      if (!under) {
         dist = Math.max(1.2, t * 0.9);
         break;
       }
+      // in a cave, find the rock face between the last clear look and this one
+      let lo = ((i - 1) / steps) * dist;
+      let hi = t;
+      for (let k = 0; k < 5; k++) {
+        const mid = (lo + hi) / 2;
+        if (this._open(dir, mid)) lo = mid;
+        else hi = mid;
+      }
+      dist = Math.max(CAVE_CAM.nearest, lo);
+      break;
     }
     // ...or a wall or roof.
     for (const blocked of this.cameraBlockers) {
@@ -400,13 +501,18 @@ export class Player extends Emitter {
     }
     const kd = snap ? 1 : 1 - Math.exp(-dt * (dist < this.camDistSmooth ? 14 : 3));
     this.camDistSmooth = lerp(this.camDistSmooth, dist, kd);
+    // in a cave, never lag behind into the rock
+    if (under && dist < this.camDistSmooth) this.camDistSmooth = dist;
 
     const cam = this.camera;
     cam.position.copy(this.camTarget).addScaledVector(dir, this.camDistSmooth);
-    let floor = this.world.heightAt(cam.position.x, cam.position.z) + 0.35;
-    // and keep it out of the water
-    if (this.world.waterAt(cam.position.x, cam.position.z, _w)) floor = Math.max(floor, _w.level + 0.3);
-    if (cam.position.y < floor) cam.position.y = floor;
+    // (in a cave the march above has already kept it in the open)
+    if (!under) {
+      let floor = this.world.heightAt(cam.position.x, cam.position.z) + 0.35;
+      // and keep it out of the water
+      if (this.world.waterAt(cam.position.x, cam.position.z, _w)) floor = Math.max(floor, _w.level + 0.3);
+      if (cam.position.y < floor) cam.position.y = floor;
+    }
     cam.lookAt(this.camTarget);
   }
 }

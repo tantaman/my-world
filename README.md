@@ -168,6 +168,7 @@ place in that order, not at the end:
 | `audio/footsteps.js` | a kind of ground underfoot | `defineSurface(name, { thump, step })` |
 | `audio/sfx.js` | a one-off sound | `defineSfx(kind, play)` |
 | `audio/soundscape.js` | a sound that plays all the time | `game.sound.addLayer({ build, update })` |
+| `audio/soundscape.js` | being shut in: the open air muffled, the rest echoing | `game.sound.setEnclosed(0..1)` |
 | `build/builder.js` | a tool | `game.builder.register(tool)` |
 | `build/builder.js` | hands too full for tools | `builder.idleWhile(fn)` |
 | `build/inventory.js` | a material to carry | `game.builder.stock.define({ id, label })` |
@@ -179,6 +180,7 @@ place in that order, not at the end:
 | `map/places.js` | a place on the map, to look up and track | `game.map.places.addSource({ within, get })` |
 | `player/character.js` | something the hiker holds up to the face | `character.addRaised(name, object, { stowed })`, `raise(name)` |
 | `player/character.js` | sitting astride what carries you | `character.seat({ spread, hang, lean })` |
+| `player/character.js` | something the hiker wears on the cap | `character.addWorn(object, { band })` |
 | `player/player.js` | walking the hiker somewhere | `player.steer = { x, z, run }` |
 | `player/player.js` | something that carries you (how fast, how deep, whether it flies) | `player.carrier = { walk, run, swim, depth, fly, … }` |
 | `save/domains.js` | something that is saved | `game.save.register({ id, collect, restore, … })` |
@@ -187,8 +189,11 @@ place in that order, not at the end:
 | `ui/hud.js` | what a key would do here, whatever tool is in hand | `hud.cue({ html, progress })` |
 | `wildlife/species.js` | a species | `defineSpecies(kind, def)` |
 | `wildlife/wildlife.js` | a new kind of creature altogether | `defineAnimalClass(name, make)` |
+| `world/cuts.js` | a hole in the ground, for something to stand in for it | `setCuts([{ ax, az, bx, bz, fa, fb, w, h }])` |
 | `world/grass.js` | somewhere grass doesn't grow | `game.grass.addClearing(fn)` |
+| `world/sky.js` | how much daylight reaches the eye (dims it, the eye adjusts) | `game.sky.open = 0..1` |
 | `world/solids.js` | something solid to bump into and stand on | `game.solids.set(owner, [capsule])` (`surface: 'boards'` for its footsteps) |
+| `world/spaces.js` | somewhere under the ground to be in: its floor, walls and roof | `game.spaces.add(space)`, `spaces.onDemand(fn)` |
 
 Each of those files opens with what the thing is and what it is handed.
 

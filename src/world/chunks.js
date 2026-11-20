@@ -392,6 +392,7 @@ export class ChunkManager extends Emitter {
 
     if (!ch.terrain) {
       ch.terrain = new THREE.Mesh(geo, this.materials.terrain);
+      if (this.materials.terrainShadow) ch.terrain.customDepthMaterial = this.materials.terrainShadow;
       ch.terrain.position.set(ch.x0, 0, ch.z0);
       ch.terrain.receiveShadow = true;
       ch.terrain.matrixAutoUpdate = false;

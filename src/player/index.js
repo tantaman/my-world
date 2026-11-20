@@ -10,10 +10,10 @@ const finite = (v, otherwise) => (Number.isFinite(v) ? v : otherwise);
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world'];
 export function installPlayer(game) {
-  const { scene, camera, chunks, gen, solids, hud, commands, save } = game;
+  const { scene, camera, chunks, gen, solids, spaces, hud, commands, save } = game;
 
   const input = new Input(game.renderer.domElement);
-  const player = new Player({ scene, camera, world: chunks, input, solids });
+  const player = new Player({ scene, camera, world: chunks, input, solids, spaces });
   game.provide('input', input);
   game.provide('player', player);
 
@@ -22,17 +22,25 @@ export function installPlayer(game) {
   input.bindButton(document.getElementById('act-alt'), 'alt');
 
   // Where the path starts, and where you appear when the world opens: there,
-  // unless a save remembers where you were standing.
+  // unless a save remembers where you were standing. Under the ground (in a
+  // cave) how high you were is kept too, or you'd come back on the hill above.
   player.start = gen.findSpawn(0, 0);
   player.arrival = player.start;
   save.register({
     id: 'player',
     scope: 'yours',
     local: 'state',
-    collect: () => ({ x: round(player.pos.x), z: round(player.pos.z), yaw: round(player.yaw, 1000), camYaw: round(player.camYaw, 1000), camPitch: round(player.camPitch, 1000) }),
+    collect: () => ({
+      x: round(player.pos.x),
+      z: round(player.pos.z),
+      ...(player.space ? { y: round(player.pos.y) } : {}),
+      yaw: round(player.yaw, 1000),
+      camYaw: round(player.camYaw, 1000),
+      camPitch: round(player.camPitch, 1000),
+    }),
     validate: (p) => {
       const at = p && typeof p === 'object' ? p : {};
-      return { x: finite(at.x, null), z: finite(at.z, null), yaw: finite(at.yaw, 0), camYaw: finite(at.camYaw, undefined), camPitch: finite(at.camPitch, undefined) };
+      return { x: finite(at.x, null), z: finite(at.z, null), y: finite(at.y, undefined), yaw: finite(at.yaw, 0), camYaw: finite(at.camYaw, undefined), camPitch: finite(at.camPitch, undefined) };
     },
     restore: (p) => {
       if (p && p.x !== null && p.z !== null) player.arrival = p;

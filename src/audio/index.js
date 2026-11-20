@@ -36,6 +36,7 @@ export function installAudio(game) {
     // something built underfoot says what it's made of (a dock: 'boards')
     if (player.underfoot && player.underfoot.surface) return player.underfoot.surface;
     if (player.wade > 0.04) return 'water';
+    if (player.space && player.space.surface) return player.space.surface; // a cave's floor
     const g = groundHere();
     if (g.snow > 0.5) return 'snow';
     // a trail, or the stony ground up above the trees

@@ -136,9 +136,12 @@ chunkWorker.js        Web Worker wrapper around chunkGen
 chunks.js             streaming, LOD, meshes, collision + height + water queries
 waterSurface.js       the water's mesh and shader
 solids.js             built things you bump into and stand on
+spaces.js             places under the ground you can be in (caves): floor, walls, roof
+cuts.js               holes in the ground, where something else stands in for it
 models.js             procedural trees, bushes, ferns, rocks, logs
 grass.js              grass blades, wildflowers, reeds and lilies near the player
 materials.js          terrain / vegetation / grass shader hooks
-sky.js                sky dome, clouds, stars, sun/moon, time-of-day palettes
+sky.js                sky dome, clouds, stars, sun/moon, time-of-day palettes; how much
+                      daylight reaches the eye (open)
 particles.js          pollen motes and fireflies
 ```

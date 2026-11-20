@@ -6,8 +6,8 @@ import { SKY } from '../render/uniforms.js';
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'save'];
 export function installWildlife(game) {
-  const { scene, camera, gen, chunks, solids, player, peers, sound, hud, sky } = game;
-  const wildlife = new Wildlife({ scene, gen, chunks, solids, player, peers, sound, camera, hud });
+  const { scene, camera, gen, chunks, solids, spaces, player, peers, sound, hud, sky } = game;
+  const wildlife = new Wildlife({ scene, gen, chunks, solids, spaces, player, peers, sound, camera, hud });
   game.provide('wildlife', wildlife);
   game.addSystem({
     name: 'wildlife',
