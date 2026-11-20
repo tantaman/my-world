@@ -5,10 +5,10 @@
 //
 // The photo says where it was taken (GPS), which way it looked and at what
 // hour. From that this fetches the real shape of the land for a few
-// kilometres around (AWS Terrain Tiles) and the trails and lakes on it
-// (OpenStreetMap), and writes the hike to src/world/hikes/, listed in
-// src/world/hikes.js. In the game, K takes you to its trailhead, and the
-// walk ends where you stood to take the photo.
+// kilometres around (AWS Terrain Tiles) and the trails and lakes on it, and
+// the shore of the sea if it's by it (OpenStreetMap), and writes the hike to
+// src/world/hikes/, listed in src/world/hikes.js. In the game, K takes you to
+// its trailhead, and the walk ends where you stood to take the photo.
 //
 // Options (real-world metres unless it says otherwise):
 //   --name "…"        what to call it (default: the nearest named peak, or the trail)
@@ -35,7 +35,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readPhoto } from './hike/exif.js';
 import { decodePng, encodePng } from './hike/png.js';
 import { localFrame, tileXY, terrarium, metresPerDegree } from './hike/geo.js';
-import { parseOsm, mergeOsm, trails, waters, peaks, incompleteWaters } from './hike/osm.js';
+import { parseOsm, mergeOsm, trails, waters, coastlines, roads, peaks, incompleteWaters } from './hike/osm.js';
 import { buildHike, splitHike, DEFAULTS } from './hike/build.js';
 import { placeHike } from './hike/place.js';
 
@@ -165,7 +165,8 @@ let osm = mergeOsm(await osmBox(oW, oS, oE, oN));
 for (const id of incompleteWaters(osm)) osm = mergeOsm([osm, parseOsm(await cached(`osm-relation-${id}.xml`, `https://api.openstreetmap.org/api/0.6/relation/${id}/full`, { text: true }))]);
 const ts = trails(osm);
 const ws = waters(osm);
-console.log(`${ts.length} paths, ${ws.length} lakes and ponds`);
+const coast = coastlines(osm);
+console.log(`${ts.length} paths, ${ws.length} lakes and ponds${coast.length ? ', and the coast' : ''}`);
 
 // ── Its name ─────────────────────────────────────────────────────────────────
 // What it's called: as you say, or the nearest named peak, or the trail the
@@ -216,7 +217,7 @@ else {
 }
 
 // ── Build it ─────────────────────────────────────────────────────────────────
-const { def, preview } = buildHike({ id, name, photo, elevation, trails: ts, waters: ws, at, datum, ...opt });
+const { def, preview } = buildHike({ id, name, photo, elevation, trails: ts, waters: ws, coast, roads: roads(osm), at, datum, ...opt });
 const { card, land } = splitHike(def);
 const module = `// The land of ${def.name}, as \`npm run hike\` imported it from a photo taken
 // there: fetched the first time it's needed (src/world/landforms.js). Its card is
@@ -243,9 +244,9 @@ console.log(`\n${def.name} → src/world/hikes/${id}.js (${Math.round(module.len
 console.log(`  at ${def.at[0]}, ${def.at[1]} in the world, ${Math.round(Math.hypot(...def.at) / def.scale / 1000)} km from the middle as the crow flies: the real land for ${Math.round(def.radius)} m round the photo, at 1 : ${Math.round(1 / def.scale)}`);
 if (placed && placed.near) console.log(`  it meets ${placed.near.name}: placed exactly from it, and standing on the same heights`);
 for (const note of placed ? placed.notes : []) console.log(`  note: ${note}`);
-if (def.trail) console.log(`  the walk: ${def.trail.name || 'a trail'}, ${def.trail.length} m, climbing ${def.trail.climb} m`);
+if (def.trail) console.log(`  the walk: ${def.trail.name || 'a trail'}, ${def.trail.length} m, ${def.trail.climb < 0 ? `going down ${-def.trail.climb}` : `climbing ${def.trail.climb}`} m`);
 else console.log("  the photo wasn't taken on a trail; you'll arrive where it was taken");
-console.log(`  lakes: ${def.lakes.map((l) => l.name || 'unnamed').join(', ') || 'none'}`);
+console.log(`  water: ${def.lakes.map((l) => l.name || 'an unnamed lake').join(', ') || 'none'}`);
 console.log(`  a picture of it: ${previewFile}`);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

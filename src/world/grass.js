@@ -33,7 +33,7 @@ const LILY_HEART = new THREE.Color(0.95, 0.75, 0.15);
 
 const _tip = new THREE.Color();
 const _c = new THREE.Color();
-const _g = { h: 0, path: 0, forest: 0, above: 0, snow: 0, wRegion: 0, wLevel: NO_WATER, wSpeed: 0 };
+const _g = { h: 0, path: 0, forest: 0, above: 0, snow: 0, wRegion: 0, wLevel: NO_WATER, wSpeed: 0, wFoam: 0 };
 
 // Depth of water over the ground in _g (> 0 under water), or −99 if none.
 const waterDepth = () => (_g.wRegion > 0.3 && _g.wLevel > NO_WATER * 0.5 ? _g.wLevel - _g.h : -99);
@@ -282,10 +282,11 @@ export class Grass {
       const wd = waterDepth();
       if (wd < -0.3 || wd > 1.5) continue;
       if (kept.length && bare(wx, wz)) continue;
-      const calm = 1 - smoothstep(0.2, 0.6, _g.wSpeed);
+      // still, and not broken: nothing roots in rapids, or in the sea's surf and chop
+      const calm = (1 - smoothstep(0.2, 0.6, _g.wSpeed)) * (1 - smoothstep(0.12, 0.28, _g.wFoam));
       gPath = -1;
       gForest = 0;
-      const reedP = smoothstep(0.05, 0.45, this.nReed(wx / 11, wz / 11)) * (1 - smoothstep(0.35, 0.6, wd)) * (0.25 + 0.75 * calm);
+      const reedP = smoothstep(0.05, 0.45, this.nReed(wx / 11, wz / 11)) * (1 - smoothstep(0.35, 0.6, wd)) * (0.25 + 0.75 * calm) * (1 - smoothstep(0.2, 0.28, _g.wFoam));
       if (r1 < reedP * 0.55) {
         const y0 = _g.h - 0.05;
         const blades = 3 + Math.floor(r2 * 5);

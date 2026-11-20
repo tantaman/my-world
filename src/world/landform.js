@@ -17,14 +17,17 @@
 //   radius, fade    real land out to radius, gone by radius + fade
 //   ground          { n, cell, heights }: an n × n grid of heights `cell`
 //                   apart, centred on `at`, packed by packHeights()
-//   lakes           [{ name, level, box: [i0, j0, w, h], shore }]: the water
-//                   level, and the signed distance to the shore (negative in
-//                   the water) over part of the same grid, packed by packShore()
+//   lakes           [{ name, level, box: [i0, j0, w, h], shore, sea? }]: the
+//                   water level, and the signed distance to the shore
+//                   (negative in the water) over part of the same grid, packed
+//                   by packShore(). The sea is one of them, marked `sea`: it
+//                   breaks along its shore and nothing grows in it
 //   paths           [[x, z, x, z, ...], ...]: the footpaths, relative to `at`
 //   view            { x, z, bearing, hour }: where the photo was taken from,
 //                   which way it looked (degrees clockwise from north) and when
 //   trailhead       { x, z, yaw }: where the walk to the view begins
-//   trees           { cover, species }: how thickly it is wooded (0..1) and
+//   trees           { cover, species }: how thickly it is wooded (0..1; at 0
+//                   nothing stands on it at all, as above the tree line) and
 //                   with what (-1 broadleaf .. 1 conifers), before slope and
 //                   clearings thin it out
 //   base            the real height (m) the heights are measured up from
@@ -52,6 +55,14 @@ const BEACH = 5; // m over which the shore meets the land behind it
 export const LAKE_REGION = 2.5; // m past the bank where water may still stand
 const SHORE_UNIT = 0.5; // m per step of a packed shore distance
 const SHORE_FAR = 60; // m, what a packed shore distance saturates at
+// The sea: how churned up it is (0..1, as a river's foam is) where it breaks
+// on the shore, and out past the breakers, and how far out they reach (m).
+const SURF = 0.85;
+const CHOP = 0.3;
+const SURF_REACH = 9;
+// What forest() says of land with no trees: low enough that the odd tree the
+// forest plants even in its barest meadows isn't planted either.
+const TREELESS = -0.05;
 
 // Where the forest gives way: steep ground is rock, and the view is kept open.
 const ROCK_SLOPE = [1.0, 1.7]; // rise over run: trees thin from, gone by
@@ -162,7 +173,7 @@ export class Landform {
     this.cell = g.cell;
     this.half = ((g.n - 1) / 2) * g.cell;
     this.h = unpackHeights(g.heights, g.n);
-    this.lakes = (def.lakes || []).map((l) => ({ name: l.name, level: l.level, box: l.box, d: unpackShore(l.shore) }));
+    this.lakes = (def.lakes || []).map((l) => ({ name: l.name, sea: !!l.sea, level: l.level, box: l.box, d: unpackShore(l.shore) }));
     this.view = def.view;
     this.trailhead = def.trailhead;
     this.trees = { cover: 0.85, species: 0.6, ...def.trees };
@@ -292,11 +303,12 @@ export class Landform {
   }
 
   // ── Lakes ──────────────────────────────────────────────────────────────────
-  // Signed metres to the nearest lake's shore (negative in the water), and
-  // that lake's level (relative, like raw()) in this.level. SHORE_FAR if
-  // there's no lake near.
+  // Signed metres to the nearest lake's shore (negative in the water), that
+  // lake's level (relative, like raw()) in this.level, and whether it is the
+  // sea in this.sea. SHORE_FAR if there's no lake near.
   shore(x, z) {
     let best = SHORE_FAR;
+    this.sea = false;
     const fx = (x - this.cx + this.half) / this.cell;
     const fz = (z - this.cz + this.half) / this.cell;
     for (const l of this.lakes) {
@@ -314,9 +326,16 @@ export class Landform {
       if (d < best) {
         best = d;
         this.level = l.level;
+        this.sea = l.sea;
       }
     }
     return best;
+  }
+
+  // How churned up the sea is u metres from its shore (negative in the
+  // water): white where it breaks, a chop further out.
+  surf(u) {
+    return CHOP + (SURF - CHOP) * smoothstep(-SURF_REACH, -1, u);
   }
 
   // The ground near a lake whose shore is u metres away (negative in the
@@ -340,6 +359,7 @@ export class Landform {
   // How thickly wooded (0..1): the land's own cover, thinning to bare rock on
   // steep ground.
   forest(x, z) {
+    if (this.trees.cover <= 0) return TREELESS;
     return this.trees.cover * (1 - smoothstep(ROCK_SLOPE[0], ROCK_SLOPE[1], this.slope(x, z)));
   }
 

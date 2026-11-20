@@ -6,7 +6,8 @@
 // so it knows nothing about the world or the player.
 //
 //   hikes   [{ id, name, trail, length, climb, lakes }]: length and climb in
-//           real metres, lakes a list of names
+//           real metres (a climb below zero is a walk down), lakes a list of
+//           names of the water on it
 //   onGo    (id, 'trailhead' | 'view') => void
 //   here    () => the id of the hike you're on, or null
 
@@ -46,7 +47,10 @@ export class HikesPanel {
   }
 
   _row(h) {
-    const facts = [h.trail, h.length ? formatDistance(h.length) : '', h.climb ? `${Math.round(h.climb)} m up` : '', ...h.lakes].filter(Boolean);
+    // a walk to a cove goes down, not up; a few metres either way is neither
+    const climb = Math.round(h.climb);
+    const rise = Math.abs(climb) < 5 ? '' : `${Math.abs(climb)} m ${climb > 0 ? 'up' : 'down'}`;
+    const facts = [h.trail, h.length ? formatDistance(h.length) : '', rise, ...h.lakes].filter(Boolean);
     return `
       <li data-hike="${esc(h.id)}">
         <div class="hikes-name">${esc(h.name)}<span class="hikes-here">you're here</span></div>

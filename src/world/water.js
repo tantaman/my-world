@@ -338,7 +338,8 @@ export class Water {
       if (u > LAKE_BLEND) continue;
       const level = L.level + L.offset;
       h = L.lakeBed(u, h, level);
-      this._offer(level, u < LAKE_REGION ? 1 : 0, u, 'lake', 0, 0, 0, OPEN.lake);
+      // (the sea is a lake that breaks on its shore)
+      this._offer(level, u < LAKE_REGION ? 1 : 0, u, 'lake', 0, 0, L.sea ? L.surf(u) : 0, OPEN.lake);
     }
     return h;
   }
