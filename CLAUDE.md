@@ -50,6 +50,10 @@ with the contract.
   from what a seed grows. `world/worldgen.js`, `chunkGen.js`, `water.js`,
   `drainage.js`, `noise.js` and the order of `world/flora.js` are pinned by
   `test/golden/`. If those tests fail, fix the code; do not re-record.
+  The old places in `landmarks/` are grown from the seed too, and never
+  change the land or the plants: they stand on it as it is. Where they are
+  is pinned in `test/golden/landmarks-*.json`, because the places people
+  have visited or are tracking are saved by id.
 - **Element spelling is for good.** Keys and values in
   `test/golden/save-elements.json` are what is on the save server and in
   people's browsers. Add new element kinds; never change existing ones. The

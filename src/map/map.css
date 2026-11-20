@@ -75,8 +75,11 @@
   background: var(--bg);
 }
 #map .side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 8px 14px; }
-#mark-list { list-style: none; margin: 0; padding: 0 6px 10px; overflow-y: auto; flex: 1; min-height: 0; }
-#mark-list li button {
+#mark-list, #place-list { list-style: none; margin: 0; padding: 0 6px 10px; overflow-y: auto; flex: 0 1 auto; min-height: 0; }
+#place-list { flex: 1 1 auto; }
+#place-list li button { color: var(--ink); }
+#place-list li button.visited .name { color: var(--ink-dim); }
+#mark-list li button, #place-list li button {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr) auto;
   align-items: center;
@@ -87,11 +90,11 @@
   padding: 6px 8px;
   color: var(--ink);
 }
-#mark-list li button:hover { border-color: var(--line); }
-#mark-list li button.selected { border-color: var(--accent); }
-#mark-list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#mark-list .dist { color: var(--ink-dim); font-size: 10.5px; }
-#mark-list .tracked { color: var(--accent); }
+#mark-list li button:hover, #place-list li button:hover { border-color: var(--line); }
+#mark-list li button.selected, #place-list li button.selected { border-color: var(--accent); }
+#mark-list .name, #place-list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#mark-list .dist, #place-list .dist { color: var(--ink-dim); font-size: 10.5px; }
+#mark-list .tracked, #place-list .tracked { color: var(--accent); }
 #map .empty { color: var(--ink-dim); line-height: 1.6; padding: 4px 14px; margin: 0; }
 
 /* editor */
@@ -125,6 +128,26 @@
 #mark-editor .actions { display: flex; gap: 6px; }
 #mark-editor .actions .done { margin-left: auto; color: var(--ink); border-color: var(--accent); }
 
+/* a place's card: what it is, where, and track it */
+#place-card {
+  position: absolute;
+  z-index: 2;
+  width: 236px;
+  padding: 11px 12px 12px;
+  background: rgba(12, 18, 13, 0.94);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#place-card[hidden] { display: none; }
+#place-card .kind { color: var(--accent); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; }
+#place-card .name { color: var(--ink); font-size: 13px; }
+#place-card .note { color: var(--ink-dim); line-height: 1.5; margin: 0; }
+#place-card .where { color: var(--ink-dim); font-size: 10.5px; letter-spacing: 0.06em; }
+#place-card .actions { display: flex; gap: 6px; margin-top: 3px; }
+#place-card .actions .done { margin-left: auto; color: var(--ink); border-color: var(--accent); }
+
 .map-marks-toggle { display: none; }
 
 @media (max-width: 760px) {
@@ -147,7 +170,7 @@
   }
   #map.side-open #map-side { display: flex; }
   #map h2 { display: none; }
-  #mark-editor {
+  #mark-editor, #place-card {
     left: 0 !important;
     right: 0;
     bottom: 0;

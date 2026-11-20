@@ -1,7 +1,8 @@
 // The map overlay (M): a top-down pixel map of the world you can pan and
-// zoom, with your position, the structures, and marks you leave on it.
+// zoom, with your position, the structures, the places other features put on
+// it (places.js: an old cabin, a dock), and marks you leave on it.
 //
-//  click / tap         add a mark there (or select one)
+//  click / tap         add a mark there (or select one, or a place)
 //  drag                pan · drag a pin to move it
 //  scroll / pinch      zoom
 //  + −  arrows  C      zoom, pan, back to where you are
@@ -10,7 +11,8 @@
 import './map.css';
 import { TILE, MIN_LEVEL, MAX_LEVEL } from './mapRender.js';
 import { MapTiles, tileKey } from './tiles.js';
-import { ICONS, COLORS, PIN, iconById, iconSvg, markLabel } from './marks.js';
+import { ICONS, COLORS, PIN, iconById, iconSvg, glyphSvg, markLabel } from './marks.js';
+import { Places } from './places.js';
 import { formatDistance } from '../core/format.js';
 
 // Each level halves the meters per map pixel; within a level a map pixel is
@@ -21,6 +23,12 @@ for (let level = MAX_LEVEL; level >= MIN_LEVEL; level--) for (const r of [3, 4, 
 const DEFAULT_STOP = STOPS.findIndex((s) => s.level === 1 && s.r === 4);
 const INK = '#15140f';
 const SCALE_STEPS = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+// A place's badge: 11×11 pixels, its glyph at (2, 2). Paler once you've been.
+const BADGE = 11;
+const BADGE_FILL = { fresh: '#e9dfc0', visited: '#a99a76' };
+const SHAPE_FILL = 'rgba(74, 56, 36, 0.92)';
+const SHAPES_FROM = 2.6; // device px per metre (per DPR) from which a place's shape is drawn
+const NEARBY = { r: 1500, n: 8 }; // places listed beside the map: within r m, at most n
 
 const TEMPLATE = /* html */ `
   <div class="map-frame" role="dialog" aria-label="Map" aria-modal="true" tabindex="-1">
@@ -49,17 +57,33 @@ const TEMPLATE = /* html */ `
           <button type="button" data-act="done" class="done">done</button>
         </div>
       </div>
+      <div id="place-card" hidden>
+        <div class="kind" id="place-kind"></div>
+        <div class="name" id="place-name"></div>
+        <p class="note" id="place-note"></p>
+        <div class="where" id="place-where"></div>
+        <div class="actions">
+          <button type="button" data-act="place-track" aria-pressed="false">track</button>
+          <button type="button" data-act="place-done" class="done">done</button>
+        </div>
+      </div>
     </div>
-    <aside id="map-side" aria-label="Marks">
+    <aside id="map-side" aria-label="Marks and places">
       <div class="side-head"><h3>MARKS</h3><button type="button" data-act="mark-here">+ mark where I am</button></div>
       <ul id="mark-list"></ul>
+      <div class="side-head"><h3>NEARBY</h3></div>
+      <ul id="place-list"></ul>
     </aside>
     <div class="map-foot"><b>click</b> to mark · <b>drag</b> to pan · <b>scroll</b> to zoom · <b>C</b> find me · <b>M</b> close</div>
   </div>`;
 
 export class MapView {
-  constructor({ seed, structures = [], marks, player, input }) {
+  constructor({ seed, structures = [], marks, player, input, places = new Places() }) {
     this.marks = marks;
+    this.places = places;
+    this.placeSel = null; // the place whose card is open
+    this._placesShown = []; // [{ place, r }] drawn last frame, for hits and labels
+    this._boxes = []; // labels placed this frame
     this.player = player;
     this.input = input;
     this.structures = structures;
@@ -93,6 +117,8 @@ export class MapView {
     this.ctx = this.canvas.getContext('2d');
     this.cursorEl = root.querySelector('#map-cursor');
     this.listEl = root.querySelector('#mark-list');
+    this.placeListEl = root.querySelector('#place-list');
+    this.card = root.querySelector('#place-card');
     this.editor = root.querySelector('#mark-editor');
     this.nameEl = root.querySelector('#mark-name');
     this.noteEl = root.querySelector('#mark-note');
@@ -171,6 +197,7 @@ export class MapView {
   close() {
     if (!this.isOpen) return;
     this.closeEditor();
+    this.closePlace();
     this.isOpen = false;
     this.pointers.clear();
     this.gesture = null;
@@ -372,12 +399,16 @@ export class MapView {
       }
     }
 
+    this._boxes = [];
     this._drawStructures();
+    this._drawPlaces();
     this._drawTrackLine();
     this._drawPlayer();
     this._drawMarks();
+    this._drawPlaceLabels();
     this._drawScaleBar();
     this._placeEditor();
+    this._placeCard();
   }
 
   // A coarser tile stretched over the gap while the right one renders.
@@ -435,6 +466,186 @@ export class MapView {
       ctx.setLineDash([]);
       if (st.name) this._label(st.name, sx, sy + r + 3 * d, 'rgba(238, 240, 226, 0.85)');
     }
+  }
+
+  // ── places ────────────────────────────────────────────────────────────────
+  _badge(place, selected) {
+    const key = `${place.glyph.join('')}|${place.visited ? 1 : 0}|${selected ? 1 : 0}`;
+    let c = this.sprites.get(key);
+    if (c) return c;
+    const p = this._pinUnit();
+    const n = BADGE;
+    c = document.createElement('canvas');
+    c.width = (n + 1) * p;
+    c.height = (n + 1) * p;
+    const g = c.getContext('2d');
+    const corner = (x, y) => (x === 0 || x === n - 1) && (y === 0 || y === n - 1);
+    g.fillStyle = 'rgba(10, 12, 8, 0.45)';
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (!corner(x, y)) g.fillRect((x + 1) * p, (y + 1) * p, p, p);
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        if (corner(x, y)) continue;
+        const edge = x === 0 || y === 0 || x === n - 1 || y === n - 1;
+        g.fillStyle = edge ? (selected ? '#fff6dc' : INK) : place.visited ? BADGE_FILL.visited : BADGE_FILL.fresh;
+        g.fillRect(x * p, y * p, p, p);
+      }
+    }
+    g.fillStyle = INK;
+    for (let y = 0; y < 7; y++) for (let x = 0; x < 7; x++) if (place.glyph[y][x] === '#') g.fillRect((x + 2) * p, (y + 2) * p, p, p);
+    this.sprites.set(key, c);
+    return c;
+  }
+
+  // Where a place's badge goes: on the spot, or, close enough in that its
+  // shape is drawn and would be hidden by it, just above the shape.
+  _badgeRect(place) {
+    const p = this._pinUnit();
+    let { sx, sy } = this.toScreen(place.x, place.z);
+    const size = BADGE * p;
+    if (place.shape && place.shape.length && this.scale >= SHAPES_FROM * this.dpr) {
+      let top = Infinity;
+      let bottom = -Infinity;
+      for (const poly of place.shape) {
+        for (const [x, z] of poly) {
+          const q = this.toScreen(x, z);
+          top = Math.min(top, q.sy);
+          bottom = Math.max(bottom, q.sy);
+        }
+      }
+      if (bottom - top > size * 0.6) sy = top - size / 2 - 3 * this.dpr;
+    }
+    const lifted = sy !== this.toScreen(place.x, place.z).sy;
+    return { x: Math.round(sx - size / 2), y: Math.round(sy - size / 2), w: size, h: size, sx, sy, lifted };
+  }
+
+  _drawPlaces() {
+    const { W, H } = this;
+    const pad = 40 * this.dpr;
+    const a = this.toWorld(-pad, -pad);
+    const b = this.toWorld(W + pad, H + pad);
+    const list = this.places.within(a.x, a.z, b.x, b.z);
+    const ctx = this.ctx;
+    // close up, what stands there: a roof, a tent, a deck
+    if (this.scale >= SHAPES_FROM * this.dpr) {
+      ctx.save();
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = Math.max(1, this.dpr);
+      ctx.strokeStyle = INK;
+      ctx.fillStyle = SHAPE_FILL;
+      for (const place of list) {
+        for (const poly of place.shape || []) {
+          ctx.beginPath();
+          poly.forEach(([x, z], i) => {
+            const q = this.toScreen(x, z);
+            if (i) ctx.lineTo(q.sx, q.sy);
+            else ctx.moveTo(q.sx, q.sy);
+          });
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+    const shown = [];
+    for (const place of list.sort((u, v) => u.z - v.z)) {
+      const r = this._badgeRect(place);
+      if (r.x > W || r.y > H || r.x + r.w < 0 || r.y + r.h < 0) continue;
+      const sel = place.id === this.placeSel;
+      if (place.id === this.marks.tracked) {
+        const ph = (this.t * 0.9) % 1;
+        ctx.strokeStyle = place.color;
+        ctx.globalAlpha = 0.9 * (1 - ph);
+        ctx.lineWidth = 2 * this.dpr;
+        ctx.beginPath();
+        ctx.arc(r.sx, r.sy, (8 + ph * 12) * this.dpr, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      ctx.drawImage(this._badge(place, sel), r.x, r.y);
+      shown.push({ place, r });
+    }
+    this._placesShown = shown;
+  }
+
+  // Names under the badges, after the marks' (which win any overlap): the
+  // selected and tracked first, then nearest the middle of the view.
+  _drawPlaceLabels() {
+    const ctx = this.ctx;
+    const d = this.dpr;
+    ctx.font = `${10.5 * d}px ui-monospace, 'SF Mono', Menlo, Consolas, monospace`;
+    ctx.textBaseline = 'top';
+    const rank = ({ place, r }) =>
+      place.id === this.placeSel ? -2 : place.id === this.marks.tracked ? -1 : Math.hypot(r.sx - this.W / 2, r.sy - this.H / 2);
+    const list = [...this._placesShown].sort((a, b) => rank(a) - rank(b));
+    for (const { place, r } of list) {
+      const text = place.name + (place.id === this.marks.tracked ? ' ◆' : '');
+      const w = ctx.measureText(text).width;
+      // under the badge, or over it when it's lifted over what stands there
+      const y = r.lifted ? r.y - 15 * d : r.y + r.h + 2 * d;
+      const box = { x0: r.sx - w / 2 - 2 * d, x1: r.sx + w / 2 + 2 * d, y0: y, y1: y + 13 * d };
+      if (this._boxes.some((q) => q.x0 < box.x1 && box.x0 < q.x1 && q.y0 < box.y1 && box.y0 < q.y1)) continue;
+      this._boxes.push(box);
+      this._label(text, r.sx, y, place.id === this.placeSel ? '#d9b45a' : place.visited ? '#c9bea0' : '#f2ead2', 'center');
+    }
+  }
+
+  _hitPlace(sx, sy) {
+    const slop = 3 * this.dpr;
+    for (let i = this._placesShown.length - 1; i >= 0; i--) {
+      const { place, r } = this._placesShown[i];
+      if (sx >= r.x - slop && sx <= r.x + r.w + slop && sy >= r.y - slop && sy <= r.y + r.h + slop) return place;
+    }
+    return null;
+  }
+
+  selectPlace(id) {
+    const place = this.places.get(id);
+    if (!place) return;
+    this.closeEditor();
+    this.placeSel = id;
+    this.card.hidden = false;
+    this._fillCard(place);
+    this._renderList();
+  }
+
+  closePlace() {
+    if (!this.placeSel) return;
+    this.placeSel = null;
+    this.card.hidden = true;
+    if (this.root.contains(document.activeElement)) this.frame.focus({ preventScroll: true });
+    this._renderList();
+  }
+
+  _fillCard(place = this.places.get(this.placeSel)) {
+    if (!place) return;
+    this.card.querySelector('#place-kind').textContent = place.kind + (place.visited ? ' · been here' : '');
+    this.card.querySelector('#place-name').textContent = place.name;
+    this.card.querySelector('#place-note').textContent = place.note || '';
+    const dist = Math.hypot(place.x - this.player.pos.x, place.z - this.player.pos.z);
+    this.card.querySelector('#place-where').textContent = `${Math.round(place.x)}, ${Math.round(place.z)} · ${formatDistance(dist)} from you`;
+    const tr = this.card.querySelector('[data-act="place-track"]');
+    const on = this.marks.tracked === place.id;
+    tr.setAttribute('aria-pressed', String(on));
+    tr.textContent = on ? 'tracking' : 'track';
+  }
+
+  _placeCard() {
+    if (!this.placeSel || this.card.hidden) return;
+    const place = this.places.get(this.placeSel);
+    if (!place) return this.closePlace();
+    const r = this._badgeRect(place);
+    const d = this.dpr;
+    const vw = this.W / d;
+    const vh = this.H / d;
+    const ew = this.card.offsetWidth;
+    const eh = this.card.offsetHeight;
+    let left = (r.x + r.w) / d + 12;
+    if (left + ew > vw - 8) left = r.x / d - ew - 12;
+    left = Math.max(8, Math.min(vw - ew - 8, left));
+    const top = Math.max(8, Math.min(vh - eh - 8, r.y / d - 10));
+    this.card.style.left = `${Math.round(left)}px`;
+    this.card.style.top = `${Math.round(top)}px`;
   }
 
   _drawTrackLine() {
@@ -576,7 +787,7 @@ export class MapView {
     const rank = ({ m, r }) =>
       m.id === this.selected ? -2 : m.id === tracked ? -1 : Math.hypot(r.sx - this.W / 2, r.sy - this.H / 2);
     shown.sort((a, b) => rank(a) - rank(b));
-    const boxes = [];
+    const boxes = this._boxes;
     for (const { m, r } of shown) {
       const text = markLabel(m) + (m.id === tracked ? ' ◆' : '');
       const x = r.x + r.w + 3 * d;
@@ -657,7 +868,8 @@ export class MapView {
     }
     if (this.pointers.size > 2) return;
     const hit = this._hitMark(pt.sx, pt.sy);
-    this.gesture = { kind: 'press', start: pt, last: pt, moved: false, mark: hit ? hit.id : null };
+    const place = hit ? null : this._hitPlace(pt.sx, pt.sy);
+    this.gesture = { kind: 'press', start: pt, last: pt, moved: false, mark: hit ? hit.id : null, place: place ? place.id : null };
   }
 
   _move(e) {
@@ -665,7 +877,7 @@ export class MapView {
     const w = this.toWorld(pt.sx, pt.sy);
     this.cursorEl.textContent = `${Math.round(w.x)}, ${Math.round(w.z)}`;
     if (!this.pointers.has(e.pointerId)) {
-      this.canvas.classList.toggle('on-pin', !!this._hitMark(pt.sx, pt.sy));
+      this.canvas.classList.toggle('on-pin', !!(this._hitMark(pt.sx, pt.sy) || this._hitPlace(pt.sx, pt.sy)));
       return;
     }
     this.pointers.set(e.pointerId, pt);
@@ -729,8 +941,16 @@ export class MapView {
       this.select(g.mark);
       return;
     }
+    if (g.place) {
+      this.selectPlace(g.place);
+      return;
+    }
     if (this.selected) {
       this.closeEditor();
+      return;
+    }
+    if (this.placeSel) {
+      this.closePlace();
       return;
     }
     const w = this.toWorld(g.start.sx, g.start.sy);
@@ -756,6 +976,7 @@ export class MapView {
     if (e.key === 'Escape') {
       e.preventDefault();
       if (this.selected) this.closeEditor(true);
+      else if (this.placeSel) this.closePlace();
       else this.close();
       return;
     }
@@ -803,6 +1024,14 @@ export class MapView {
     if (!b || !this.root.contains(b)) return;
     if (b.dataset.icon) return this._edit({ icon: b.dataset.icon }, true);
     if (b.dataset.color) return this._edit({ color: b.dataset.color }, true);
+    if (b.dataset.place) {
+      const place = this.places.get(b.dataset.place);
+      if (!place) return;
+      this.centerOn(place.x, place.z);
+      this.selectPlace(place.id);
+      if (matchMedia('(max-width: 760px)').matches) this._setSide(false);
+      return;
+    }
     if (b.dataset.mark) {
       const m = this.marks.get(b.dataset.mark);
       if (!m) return;
@@ -842,6 +1071,13 @@ export class MapView {
       }
       case 'done':
         return this.closeEditor();
+      case 'place-track': {
+        const id = this.placeSel;
+        this.marks.setTracked(this.marks.tracked === id ? null : id);
+        return this._fillCard();
+      }
+      case 'place-done':
+        return this.closePlace();
     }
   }
 
@@ -858,6 +1094,7 @@ export class MapView {
   }
 
   select(id, isNew = false) {
+    this.closePlace();
     this.selected = id;
     this.isNew = isNew;
     this.editor.hidden = false;
@@ -922,6 +1159,7 @@ export class MapView {
   }
 
   _renderList() {
+    this._renderPlaces();
     const pl = this.player.pos;
     const items = this.marks
       .list()
@@ -951,6 +1189,39 @@ export class MapView {
       }
       li.appendChild(b);
       this.listEl.appendChild(li);
+    }
+  }
+
+  // The places nearest you, as far as they're known yet.
+  _renderPlaces() {
+    const pl = this.player.pos;
+    const items = this.places.nearest(pl.x, pl.z, NEARBY.r, NEARBY.n);
+    this.placeListEl.textContent = '';
+    if (!items.length) {
+      const p = document.createElement('p');
+      p.className = 'empty';
+      p.textContent = 'Nothing out here that anyone left behind, as far as the map knows.';
+      this.placeListEl.appendChild(p);
+      return;
+    }
+    for (const { place, d } of items) {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.place = place.id;
+      if (place.id === this.placeSel) b.classList.add('selected');
+      if (place.visited) b.classList.add('visited');
+      b.innerHTML = `${glyphSvg(place.glyph)}<span class="name"></span><span class="dist"></span>`;
+      b.querySelector('.name').textContent = place.name;
+      b.title = place.kind;
+      const dist = b.querySelector('.dist');
+      dist.textContent = formatDistance(d);
+      if (place.id === this.marks.tracked) {
+        dist.classList.add('tracked');
+        dist.textContent = `◆ ${dist.textContent}`;
+      }
+      li.appendChild(b);
+      this.placeListEl.appendChild(li);
     }
   }
 }

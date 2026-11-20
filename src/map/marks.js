@@ -41,7 +41,11 @@ export const PIN = [
 
 // Small inline SVG of an icon, for buttons and lists.
 export function iconSvg(id, color = 'currentColor') {
-  const rows = iconById(id).rows;
+  return glyphSvg(iconById(id).rows, color);
+}
+
+// ...or of any 7×7 glyph (a place's).
+export function glyphSvg(rows, color = 'currentColor') {
   let rects = '';
   for (let y = 0; y < rows.length; y++) {
     for (let x = 0; x < rows[y].length; x++) if (rows[y][x] === '#') rects += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
@@ -58,6 +62,9 @@ export class MarkStore {
     this.marks = [];
     this.tracked = null;
     this.listeners = new Set();
+    // Somewhere that isn't a mark can be tracked too: a place another feature
+    // put on the map (places.js). id -> something shaped like a mark, or null.
+    this.findPlace = () => null;
   }
 
   list() {
@@ -100,12 +107,13 @@ export class MarkStore {
   }
 
   setTracked(id) {
-    this.tracked = id && this.get(id) ? id : null;
+    this.tracked = id && (this.get(id) || this.findPlace(id)) ? id : null;
     this._changed();
   }
 
+  // The mark, or the place, you're heading for.
   trackedMark() {
-    return this.tracked ? this.get(this.tracked) : null;
+    return this.tracked ? this.get(this.tracked) || this.findPlace(this.tracked) : null;
   }
 
   // Replace the marks with a saved list: yours when a world opens, or someone
@@ -113,7 +121,7 @@ export class MarkStore {
   // kept if it's still there.
   load(list) {
     this.marks = usable(list);
-    if (!this.marks.some((m) => m.id === this.tracked)) this.tracked = null;
+    if (this.tracked && !this.get(this.tracked) && !this.findPlace(this.tracked)) this.tracked = null;
     this._changed();
   }
 
