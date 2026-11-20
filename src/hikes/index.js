@@ -223,10 +223,19 @@ export function installHikes(game) {
     update({ dt }) {
       const at = game.focus;
       far.update(at);
+      // One far view at a time, the nearest hike's: hikes near each other
+      // would draw the same far land twice, and the two would fight. It
+      // changes over once the new one is drawn.
+      let nearest = null;
+      let nd = Infinity;
       for (const c of cards) {
         const d = Math.hypot(at.x - c.at[0], at.z - c.at[1]) - outer(c);
-        if (d < FAR_MAKE) makeFar(c);
-        else if (d > FAR_DROP) far.remove(c.id);
+        if (d < nd) [nearest, nd] = [c, d];
+      }
+      if (nearest && nd < FAR_MAKE) makeFar(nearest);
+      for (const c of cards) {
+        const stale = c !== nearest && (!nearest || far.has(nearest.id) || nd >= FAR_MAKE);
+        if (stale || nd > FAR_DROP) far.remove(c.id);
       }
 
       // As far as there's land drawn in every direction, the air is clear.

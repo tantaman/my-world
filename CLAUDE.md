@@ -88,8 +88,9 @@ don't edit the same lines:
   people's browsers. Add new element kinds; never change existing ones. The
   `localStorage` layouts in `test/local.test.js` likewise.
 - **Hikes are part of the world description too**, where each one is. Don't
-  move one (`at`) or edit its file by hand: re-import with `--force`, which
-  keeps it in place. `test/hikes.test.js` checks they leave the rest of the
+  move one (`at`), change its `datum`, or edit its files by hand: re-import
+  with `--force`, which keeps it in place. Hikes go where they really are
+  (`tools/hike/place.js`), and ones that overlap share a datum. `test/hikes.test.js` checks they leave the rest of the
   world exactly as it was. The drainage network reads the forest's own land
   (`forestHeight`, `forestNaturalHeight`), never a hike's, so a hike can't
   reroute water outside it. A hike's land is fetched when it's needed

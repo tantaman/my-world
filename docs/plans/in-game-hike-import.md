@@ -107,11 +107,15 @@ known to `Lands` as cards at `restore()` covers the rest.
 
 ### 3. Placement that can't disturb anything
 
-The game knows where people have built in this world: elements are filed by
-region. A hike imported in the game goes to the first spot (same rings as
-`freeSpot` in `tools/hike.mjs`, 3 km and out) where
-- it keeps clear of every other hike, in the code or in the world, and
-- **no region under it holds any element at all.**
+A hike goes where it really is (`tools/hike/place.js`, now shared by the
+CLI and the game): the real world at 1 : 5 about a middle out in the
+Pacific, placed exactly from any hike it overlaps and sharing its heights.
+The game knows where people have built in this world, since elements are
+filed by region, so before saving one it checks that
+- **no region under it holds any element at all** (other than its own
+  kind), and if one does, says so and doesn't add it: the place is taken
+  by what's been built there. (A real place is where it is; there's no
+  free spot to move it to.)
 
 So an import never moves anyone's ground, stumps or cabin. This wants one
 generic question asked of the save: `save.regionsWithChanges()` (the regions
@@ -184,8 +188,8 @@ Each step leaves the game working and the tests green.
 3. **The domain.** Encode and decode, completeness, the cached encoding,
    the new golden. Test: a hike → elements → a hike, byte for byte; a
    partial one is not handed back.
-4. **Placement.** `regionsWithChanges()`, the free-spot search over the
-   world's hikes and the code's. Test: never a region with anything in it.
+4. **Placement.** `regionsWithChanges()`, and `place.js` over the world's
+   hikes and the code's. Test: never onto a region with anything in it.
 5. **The import in the page.** The worker, the panel's flow, drag and drop,
    the errors, Overpass first.
 6. **Taking one out.**

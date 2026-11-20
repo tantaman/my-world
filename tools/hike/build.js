@@ -6,7 +6,7 @@
 // this can be tested without the network.
 
 import { localFrame } from './geo.js';
-import { packHeights, packShore } from '../../src/world/landform.js';
+import { Landform, packHeights, packShore } from '../../src/world/landform.js';
 
 export const DEFAULTS = {
   scale: 0.2, // game metres per real metre
@@ -31,8 +31,10 @@ const SIMPLIFY = 0.25;
 //   elevation  (lat, lon) -> metres above sea level
 //   trails     [{ name, points: [[lat, lon], ...] }]   (osm.js)
 //   waters     [{ name, rings: [[[lat, lon], ...]] }]
+//   datum      the heights to stand on, shared with a hike this one overlaps
+//              (place.js), or null to set its own
 // → { def, preview: { width, height, rgb } }
-export function buildHike({ id, name, photo, elevation, trails = [], waters = [], at = [0, 0], ...opt }) {
+export function buildHike({ id, name, photo, elevation, trails = [], waters = [], at = [0, 0], datum = null, ...opt }) {
   const o = { ...DEFAULTS, ...opt, trees: { ...DEFAULTS.trees, ...opt.trees } };
   const s = o.scale;
   const frame = localFrame(photo.lat, photo.lon);
@@ -159,6 +161,9 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
     radius: R,
     fade: o.fade * s,
     photo: { lat: round(photo.lat, 1e6), lon: round(photo.lon, 1e6) },
+    // the real height (m) its heights are measured from
+    base: round(base, 100),
+    datum,
     view,
     trailhead: { x: round(trailhead.x, 10), z: round(trailhead.z, 10), yaw: round(trailhead.yaw, 1000) },
     trail: route ? { name: route.name, length: Math.round(route.length), climb: Math.round(heightAt(0, 0) - heightAt(trailhead.x, trailhead.z)) } : null,
@@ -167,6 +172,13 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
     paths: lines.map((l) => l.pts.flatMap(([x, z]) => [round(x, 10), round(z, 10)])),
     ground: { n, cell, heights: packHeights(H, n) },
   };
+  // First in its part of the world: its own trailhead sets the heights, at
+  // the level of the forest round it (see WorldGen._settle).
+  if (!def.datum) {
+    const L = new Landform(def);
+    const anchor = L.raw(at[0] + def.trailhead.x, at[1] + def.trailhead.z);
+    def.datum = { at: [...at], outer: def.radius + def.fade, anchor: round(anchor, 1000), base: def.base };
+  }
   return { def, preview: preview(H, n, cell, lakeCells, lines, route) };
 }
 

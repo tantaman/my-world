@@ -19,7 +19,9 @@
 //   --cell 30         spacing of the heights
 //   --cover 0.85      how thickly wooded, 0..1
 //   --species 0.6     -1 broadleaf .. 1 conifers
-//   --at x,z          where in the game world (game metres; default: a free spot)
+//   --at x,z          where in the game world (game metres; default: where it
+//                     really is, at the same scale, from the middle of the world
+//                     out in the Pacific off the Olympic coast: see hike/place.js)
 //   --lat, --lon, --bearing, --hour   if the photo doesn't say
 //   --force           re-import a hike that's already there (it stays put)
 //   --preview file    where to write a picture of what was imported
@@ -35,6 +37,7 @@ import { decodePng, encodePng } from './hike/png.js';
 import { localFrame, tileXY, terrarium, metresPerDegree } from './hike/geo.js';
 import { parseOsm, mergeOsm, trails, waters, peaks, incompleteWaters } from './hike/osm.js';
 import { buildHike, splitHike, DEFAULTS } from './hike/build.js';
+import { placeHike } from './hike/place.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HIKES_DIR = path.join(ROOT, 'src/world/hikes');
@@ -42,11 +45,6 @@ const REGISTRY = path.join(ROOT, 'src/world/hikes.js');
 const CACHE = path.join(ROOT, 'node_modules/.cache/hike');
 const ZOOM = 13; // elevation tiles: about 13 m a pixel at 48° north
 const AGENT = 'my-world hike importer (a three.js game; occasional one-off imports)';
-// Where hikes go in the world: no nearer the middle than this (game m), so
-// the forest people have built in around where they start is left alone…
-const FIRST_RING = 3200;
-// …and this far apart, edge to edge.
-const APART = 400;
 
 // ── Arguments ────────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);
@@ -200,14 +198,25 @@ if (already && !flags.force) {
   console.error(`There is already a hike called ${id}. Pass --force to import it again (it stays where it is), or --id to keep both.`);
   process.exit(1);
 }
-const outer = (opt.radius + opt.fade) * opt.scale;
+// Where it really is, at the same scale; once placed, it stays put.
+const others = existing.filter((h) => h.id !== id).map(({ load, ...h }) => h);
 let at;
-if (flags.at) at = flags.at.split(',').map(Number);
-else if (already) at = already.at;
-else at = freeSpot(existing.filter((h) => h.id !== id), outer);
+let datum = null;
+let placed = null;
+if (already) ({ at, datum } = already);
+else if (flags.at) at = flags.at.split(',').map(Number);
+else {
+  try {
+    placed = placeHike({ photo, scale: opt.scale, radius: opt.radius * opt.scale, fade: opt.fade * opt.scale }, others);
+  } catch (err) {
+    console.error(`Can't put it there: ${err.message}.`);
+    process.exit(1);
+  }
+  ({ at, datum } = placed);
+}
 
 // ── Build it ─────────────────────────────────────────────────────────────────
-const { def, preview } = buildHike({ id, name, photo, elevation, trails: ts, waters: ws, at, ...opt });
+const { def, preview } = buildHike({ id, name, photo, elevation, trails: ts, waters: ws, at, datum, ...opt });
 const { card, land } = splitHike(def);
 const module = `// The land of ${def.name}, as \`npm run hike\` imported it from a photo taken
 // there: fetched the first time it's needed (src/world/landforms.js). Its card is
@@ -231,7 +240,9 @@ const previewFile = flags.preview || path.join(os.tmpdir(), `hike-${id}.png`);
 fs.writeFileSync(previewFile, encodePng(preview.width, preview.height, preview.rgb));
 
 console.log(`\n${def.name} → src/world/hikes/${id}.js (${Math.round(module.length / 1024)} kB, fetched when it's needed)`);
-console.log(`  at ${def.at[0]}, ${def.at[1]} in the world: the real land for ${Math.round(def.radius)} m round the photo, at 1 : ${Math.round(1 / def.scale)}`);
+console.log(`  at ${def.at[0]}, ${def.at[1]} in the world, ${Math.round(Math.hypot(...def.at) / def.scale / 1000)} km from the middle as the crow flies: the real land for ${Math.round(def.radius)} m round the photo, at 1 : ${Math.round(1 / def.scale)}`);
+if (placed && placed.near) console.log(`  it meets ${placed.near.name}: placed exactly from it, and standing on the same heights`);
+for (const note of placed ? placed.notes : []) console.log(`  note: ${note}`);
 if (def.trail) console.log(`  the walk: ${def.trail.name || 'a trail'}, ${def.trail.length} m, climbing ${def.trail.climb} m`);
 else console.log("  the photo wasn't taken on a trail; you'll arrive where it was taken");
 console.log(`  lakes: ${def.lakes.map((l) => l.name || 'unnamed').join(', ') || 'none'}`);
@@ -240,20 +251,6 @@ console.log(`  a picture of it: ${previewFile}`);
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function fmtHour(h) {
   return `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
-}
-
-// The first spot, going out ring by ring from the middle of the world, that
-// keeps clear of every other hike.
-function freeSpot(others, r) {
-  for (let d = Math.max(FIRST_RING, r + 2000); ; d += 400) {
-    const steps = Math.max(6, Math.floor((2 * Math.PI * d) / 800));
-    for (let s = 0; s < steps; s++) {
-      const a = (s / steps) * Math.PI * 2;
-      const x = Math.round(Math.sin(a) * d);
-      const z = Math.round(-Math.cos(a) * d);
-      if (others.every((h) => Math.hypot(h.at[0] - x, h.at[1] - z) > h.radius + h.fade + r + APART)) return [x, z];
-    }
-  }
 }
 
 function writeRegistry(cards) {

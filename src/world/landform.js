@@ -27,9 +27,15 @@
 //   trees           { cover, species }: how thickly it is wooded (0..1) and
 //                   with what (-1 broadleaf .. 1 conifers), before slope and
 //                   clearings thin it out
+//   base            the real height (m) the heights are measured up from
+//   datum           { at, outer, anchor, base }: what sets its heights in the
+//                   world. The first hike in a part of the world is its own
+//                   datum: its trailhead (`anchor`, a height of its own) stands
+//                   at the level of the forest round it (`at`, `outer`). A hike
+//                   that overlaps it shares that datum, so where the two meet
+//                   the same real mountain stands at the same height.
 //
-// Heights are relative to the land's lowest point; WorldGen settles it
-// (`offset`) so the trailhead stands at the level of the forest around it.
+// WorldGen settles it (`offset`) by its datum.
 
 import { smoothstep } from '../noise.js';
 
