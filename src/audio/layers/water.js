@@ -1,17 +1,41 @@
 // Water, and what lives by it.
 //
-// Running water babbles: a broad rush under a few narrow resonances that hop
-// from pitch to pitch, rising as they go, like bubbles. It comes from where
-// the running water near you is, and roars more where it tumbles down a
-// cascade. Still water laps at the shore in slow swells. Each sits at the
-// middle of the water you can hear (env.water, from ChunkManager.waterAround),
-// so it comes from the right side.
+// Running water is heard from where it actually runs: from up to three
+// sources (env.water.sources, from ChunkManager.waterAround), each placed in
+// 3D on the water, and as loud as there is water there, running fast, or
+// white. Each source is made of:
 //
-// And by still water, something small plops in now and then, and from dusk
-// the frogs start up.
+//   - Bubbles. The babble of a brook is thousands of small bubbles, each
+//     ringing for a moment at a pitch set by its size and rising as it
+//     closes. Here a few sine voices per source ring one bubble after
+//     another: small, high, quick ones on a stream; bigger, deeper ones on a
+//     river; and many more of them where the water is white.
+//   - A rush of noise under them, hissing on white water, with a low roar
+//     under a river or a cascade.
+//   - Air and earth: far-off water loses its high end first, and where a
+//     bank stands between you and the water (source.hidden, 0..1) it's
+//     muffled.
+//
+// Still water laps at the shore in slow swells (env.water.still, sx, sy, sz).
+// And standing in the water, you hear it gurgle round your legs, more the
+// faster it goes past them (env.wading).
+//
+// By still water, something small plops in now and then, and from dusk the
+// frogs start up.
 
 import { lerp, smoothstep } from '../../noise.js';
 import { rand } from '../../core/geom.js';
+
+// Bubble voices per source, and how far ahead (s) bubbles are scheduled.
+const VOICES = 4;
+const AHEAD = 0.12;
+// Bubbles each voice rings per second: on calm running water, on white water.
+const RATE = [4, 20];
+// Pitch range (Hz) of a stream's bubbles, and of a big river's.
+const STREAM_PITCH = [520, 2300];
+const RIVER_PITCH = [170, 760];
+// How fast the high end goes with distance (Hz of cutoff at 1 m, falling as 1/d).
+const AIR = 60000;
 
 export const water = {
   name: 'water',
@@ -19,16 +43,16 @@ export const water = {
   build(s, t) {
     const ctx = s.ctx;
     const { dry, wet } = s.bus('ambience');
-    const place = () => {
+    const place = (send = 0.35) => {
       const p = ctx.createPanner();
       p.panningModel = s.offline ? 'equalpower' : 'HRTF';
       // loudness is worked out from how near the water is; this only places it
       p.distanceModel = 'linear';
       p.rolloffFactor = 0;
       p.connect(dry);
-      const send = ctx.createGain();
-      send.gain.value = 0.35;
-      p.connect(send).connect(wet);
+      const g = ctx.createGain();
+      g.gain.value = send;
+      p.connect(g).connect(wet);
       return p;
     };
     const loop = (buf, at) => {
@@ -38,57 +62,91 @@ export const water = {
       src.start(at, rand(0, 2));
       return src;
     };
-    const run = place();
-    const runGain = ctx.createGain();
-    runGain.gain.value = 0;
-    runGain.connect(run);
-    const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 850;
-    bp.Q.value = 0.5;
-    const rush = ctx.createGain();
-    rush.gain.value = 0;
-    loop(s.pink, t).connect(bp).connect(rush).connect(runGain);
-    const babble = [];
-    for (let i = 0; i < 5; i++) {
-      const f = ctx.createBiquadFilter();
-      f.type = 'bandpass';
-      f.Q.value = 11;
-      f.frequency.value = rand(400, 1200);
+    const gain = (v = 0) => {
       const g = ctx.createGain();
-      g.gain.value = 0;
-      loop(s.white, t).connect(f).connect(g).connect(runGain);
-      babble.push({ f, g, next: t + rand(0, 0.2) });
-    }
+      g.gain.value = v;
+      return g;
+    };
+    const filter = (type, f, q = 0.7) => {
+      const b = ctx.createBiquadFilter();
+      b.type = type;
+      b.frequency.value = f;
+      b.Q.value = q;
+      return b;
+    };
+    // A place water is heard from: rush, roar and bubbles into one muffler.
+    const source = (voices, send) => {
+      const pan = place(send);
+      const level = gain();
+      const muffle = filter('lowpass', 9000, 0.5);
+      level.connect(muffle).connect(pan);
+      const hiss = filter('bandpass', 1200, 0.55);
+      const rush = gain();
+      loop(s.pink, t).connect(hiss).connect(rush).connect(level);
+      const low = filter('lowpass', 320, 0.6);
+      const roar = gain();
+      loop(s.brown, t).connect(low).connect(roar).connect(level);
+      const bubbles = [];
+      for (let i = 0; i < voices; i++) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        const g = gain();
+        osc.connect(g).connect(level);
+        osc.start(t);
+        bubbles.push({ osc, g, next: t + rand(0, 0.3) });
+      }
+      return { pan, level, muffle, hiss, rush, roar, bubbles };
+    };
+    this.sources = [0, 1, 2].map(() => source(VOICES, 0.35));
+    this.legs = source(3, 0.12);
     const still = place();
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 380;
-    const lap = ctx.createGain();
-    lap.gain.value = 0;
+    const lp = filter('lowpass', 380);
+    const lap = gain();
     loop(s.brown, t).connect(lp).connect(lap).connect(still);
-    Object.assign(this, { run, runGain, rush, babble, still, lap, lapNext: t });
+    Object.assign(this, { still, lap, lapNext: t });
   },
 
   update(s, t, dt, env) {
     const w = env.water;
     if (!w) return;
-    if (w.run > 0.005) s.moveTo(this.run, w.rx, w.ry, w.rz, t);
-    this.runGain.gain.setTargetAtTime(w.run * 0.75, t, 0.5);
-    this.rush.gain.setTargetAtTime(0.1 + 0.55 * w.foam, t, 0.5);
-    // each voice: a bubble, rising in pitch, then quiet a moment
-    const horizon = t + 0.1;
-    for (const b of this.babble) {
-      if (b.next > horizon || w.run < 0.005) continue;
-      const at = Math.max(t, b.next);
-      const dur = rand(0.035, 0.13);
-      const f0 = rand(380, 1250) * (1 + w.foam * 0.25);
-      b.f.frequency.setTargetAtTime(f0, at, 0.008);
-      b.f.frequency.setTargetAtTime(f0 * rand(1.15, 1.6), at + dur * 0.3, dur * 0.4);
-      b.g.gain.setTargetAtTime(rand(0.5, 1.6), at, 0.008);
-      b.g.gain.setTargetAtTime(0, at + dur * 0.7, 0.025);
-      b.next = at + dur + rand(0, 0.1) * (1 - w.foam * 0.7);
+    const l = s.listener || { x: 0, y: 0, z: 0 };
+    for (let i = 0; i < this.sources.length; i++) {
+      const v = this.sources[i];
+      const src = i < (w.count ?? 0) ? w.sources[i] : null;
+      if (!src) {
+        v.level.gain.setTargetAtTime(0, t, 0.6);
+        continue;
+      }
+      s.moveTo(v.pan, src.x, src.y, src.z, t);
+      const dist = Math.hypot(src.x - l.x, src.y - l.y, src.z - l.z);
+      const { loud, foam, big } = src;
+      v.level.gain.setTargetAtTime(loud * 0.8, t, 0.5);
+      // far off, and behind a bank, the high end goes first
+      const cut = Math.min(9000, AIR / Math.max(1, dist)) * (1 - 0.82 * (src.hidden ?? 0));
+      v.muffle.frequency.setTargetAtTime(Math.max(350, cut), t, 0.4);
+      v.hiss.frequency.setTargetAtTime(lerp(900, 2400, foam) * (1 - 0.45 * big), t, 0.5);
+      v.rush.gain.setTargetAtTime(0.06 + 0.5 * foam + 0.08 * big, t, 0.5);
+      v.roar.gain.setTargetAtTime(0.55 * big + 0.3 * foam * foam, t, 0.5);
+      const pitch = [lerp(STREAM_PITCH[0], RIVER_PITCH[0], big), lerp(STREAM_PITCH[1], RIVER_PITCH[1], big)];
+      bubble(v, t, lerp(RATE[0], RATE[1], foam), pitch, 1 - 0.45 * foam);
     }
+
+    // round your legs, as the water goes by them
+    const wd = env.wading;
+    const legs = this.legs;
+    const deep = wd && wd.depth > 0.04 ? smoothstep(0.04, 0.6, wd.depth) : 0;
+    const by = deep ? Math.min(2.5, wd.speed) : 0;
+    const k = deep * smoothstep(0.05, 1.2, by);
+    legs.level.gain.setTargetAtTime(k * 0.55, t, 0.15);
+    if (k > 0.001) {
+      s.moveTo(legs.pan, wd.x, wd.y, wd.z, t);
+      legs.muffle.frequency.setTargetAtTime(lerp(4000, 1400, smoothstep(0.6, 1.2, wd.depth)), t, 0.3);
+      legs.hiss.frequency.setTargetAtTime(lerp(500, 900, by / 2.5), t, 0.3);
+      legs.rush.gain.setTargetAtTime(0.25 + 0.2 * by, t, 0.2);
+      legs.roar.gain.setTargetAtTime(0.25 * deep, t, 0.3);
+      bubble(legs, t, lerp(3, 16, by / 2.5), [260, 1100], 0.8);
+    }
+
     // still water laps at the shore in slow swells
     if (w.still > 0.005) s.moveTo(this.still, w.sx, w.sy, w.sz, t);
     if (t >= this.lapNext) {
@@ -99,6 +157,28 @@ export const water = {
     }
   },
 };
+
+// Ring the next bubble on each of a source's voices that is due one: a sine
+// at a pitch between pitch[0] and pitch[1] (more of the high, small ones),
+// rising as the bubble closes, ringing for a few dozen cycles.
+function bubble(v, t, rate, pitch, amp) {
+  for (const b of v.bubbles) {
+    if (b.next > t + AHEAD) continue;
+    const at = Math.max(t + 0.005, b.next);
+    const f0 = pitch[0] * (pitch[1] / pitch[0]) ** Math.sqrt(Math.random());
+    const ring = rand(14, 34) / f0;
+    b.osc.frequency.setValueAtTime(f0, at);
+    b.osc.frequency.exponentialRampToValueAtTime(f0 * rand(1.25, 1.9), at + ring);
+    // bigger (deeper) bubbles are louder
+    const a = amp * rand(0.25, 0.7) * (0.6 + 0.6 * Math.sqrt(pitch[0] / f0));
+    b.g.gain.setValueAtTime(0, at);
+    b.g.gain.linearRampToValueAtTime(a, at + 0.003);
+    b.g.gain.exponentialRampToValueAtTime(0.0005, at + ring);
+    b.g.gain.setValueAtTime(0, at + ring + 0.002);
+    // the gaps between them are as uneven as rain
+    b.next = at + ring + 0.004 - Math.log(1 - Math.random() * 0.98) / rate;
+  }
+}
 
 export const pondLife = {
   name: 'pond life',

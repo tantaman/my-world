@@ -184,7 +184,8 @@ export class Soundscape {
 
   // ── Per frame ────────────────────────────────────────────────────────────
   // env: { hours, night, forest (0..1 at the player), height, wind, camera,
-  //        water (ChunkManager.waterAround) } — and anything else a layer a
+  //        water (ChunkManager.waterAround), wading (the water at your legs:
+  //        depth, speed past them, x, y, z) } — and anything else a layer a
   //        feature added wants to be told
   update(dt, env) {
     if (!this.live) return;
