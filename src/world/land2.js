@@ -151,7 +151,7 @@ export class Land2 extends WorldGen {
     if (a.x !== x || a.z !== z) {
       a.x = x;
       a.z = z;
-      a.h = this.broadHeight(x, z, 0);
+      a.h = this.forestHeight(x, z, 0);
     }
     return a.h;
   }

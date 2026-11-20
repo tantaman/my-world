@@ -10,7 +10,7 @@ let trunkRadius = {};
 self.onmessage = (e) => {
   const m = e.data;
   if (m.type === 'init') {
-    gen = growWorld(m.seed, m.structures, m.land);
+    gen = growWorld(m.seed, m.structures, m.land, m.hikes);
     size = m.chunkSize;
     trunkRadius = m.trunkRadius;
     return;

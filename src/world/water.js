@@ -24,9 +24,15 @@
 //
 // They keep away from structures: a basin isn't put near one, and running
 // water fades out before it reaches a structure's clearing.
+//
+// Real places set into the world (landform.js) bring their own lakes, and the
+// forest's own water keeps out of them: the drainage network is worked out
+// over the forest's land alone, so it is the same with or without them, and
+// its channels and basins give way where real land begins.
 
 import { createSimplex2, smoothstep } from '../noise.js';
 import { Drainage, NET, basinRadius, channelSize } from './drainage.js';
+import { LAKE_REGION } from './landform.js';
 
 // Level reported where there's no water at all.
 export const NO_WATER = -1e4;
@@ -55,6 +61,10 @@ const WIDTH_WAVE = 14;
 const PLUNGE = 1.6;
 const BASIN_REGION = 2.5;
 const OPEN = { lake: 1, pond: 0.8 };
+// Running water fades out over this many metres before real land.
+export const LAND_DRY = 80;
+// How far (m) past a real lake's shore it still shapes the ground.
+const LAKE_BLEND = 8;
 
 // Pools joined by ramps: the level, quantised into steps.
 function quantise(w, step, ramp) {
@@ -168,6 +178,7 @@ export class Water {
     const pz = P[bq * 2 + 1] + (P[bq * 2 + 3] - P[bq * 2 + 1]) * bt;
     cw *= 1 + WIDTH_VARY * this.nWidth(px / WIDTH_WAVE, pz / WIDTH_WAVE);
     cw *= smoothstep(4, 30, this.gen.padClearance(x, z));
+    if (this.gen.lands.length) cw *= smoothstep(0, LAND_DRY, this.gen.landClearance(x, z));
     hit.d = d;
     hit.cw = cw;
     // a stream fades in at its spring, valley and all
@@ -247,6 +258,12 @@ export class Water {
   }
 
   // ── Public ────────────────────────────────────────────────────────────────
+  // A pond or lake of the forest's that would reach real land isn't there. It
+  // still counts in the drainage network, so the water below it is the same.
+  _givesWay(b) {
+    return this.gen.lands.length > 0 && this.gen.landClearance(b.x, b.z) < b.maxR + b.blend + LAND_DRY;
+  }
+
   // Shapes ground of natural height h at (x, z) around any water there, and
   // describes that water (see clear()). pm is the footpath mask there.
   shape(x, z, h, pm) {
@@ -256,6 +273,7 @@ export class Water {
 
     let lake = 1e9;
     for (const b of near.basins) {
+      if (this._givesWay(b)) continue;
       const dx = x - b.x;
       const dz = z - b.z;
       if (dx * dx + dz * dz > (b.maxR + b.blend + 2) ** 2) continue;
@@ -306,6 +324,16 @@ export class Water {
       }
       this._offer(L.Wq, region, edge, kind, fx, fz, foam, mix(SMALL.open, BIG.open, L.size));
     }
+
+    // the lakes of real places
+    for (const L of this.gen.lands) {
+      if (L.weight(x, z) <= 0) continue;
+      const u = L.shore(x, z);
+      if (u > LAKE_BLEND) continue;
+      const level = L.level + L.offset;
+      h = L.lakeBed(u, h, level);
+      this._offer(level, u < LAKE_REGION ? 1 : 0, u, 'lake', 0, 0, 0, OPEN.lake);
+    }
     return h;
   }
 
@@ -316,6 +344,7 @@ export class Water {
     const C = NET.cell;
     const near = this.net.near(Math.floor(x / C), Math.floor(z / C));
     for (const b of near.basins) {
+      if (this._givesWay(b)) continue;
       const dx = x - b.x;
       const dz = z - b.z;
       if (dx * dx + dz * dz > (b.maxR + b.blend + 2) ** 2) continue;
@@ -325,6 +354,11 @@ export class Water {
     for (const s of near.segs) {
       if (!this._hit(s, x, z, hit, false) || hit.cw <= 0.05) continue;
       this._offer(NO_WATER, 0, hit.d - hit.cw, hit.river ? 'river' : 'stream', 0, 0, 0, 1);
+    }
+    for (const L of this.gen.lands) {
+      if (L.weight(x, z) <= 0) continue;
+      const u = L.shore(x, z);
+      if (u < LAKE_BLEND) this._offer(NO_WATER, 0, u, 'lake', 0, 0, 0, 1);
     }
   }
 }

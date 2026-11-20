@@ -38,7 +38,22 @@ export class Hud {
     this.soundBtn = document.getElementById('sound-btn');
     this.saveBtn = document.getElementById('save-btn');
     this.helpSource = null; // () => what renderHelp shows
+    this.guides = []; // see guide()
     this.button('help-btn', () => this.toggleHelp());
+  }
+
+  // Somewhere to head for, shown under the coordinates. More than one feature
+  // may have one (the map mark you're tracking, the view at the end of the
+  // hike you're on), so each adds a source: () => { id, label, color, x, z }
+  // or null. The first, in the order they were added, that has one is shown.
+  guide(source) {
+    this.guides.push(source);
+  }
+
+  updateGuide(pos, camYaw) {
+    let to = null;
+    for (const g of this.guides) if ((to = g())) break;
+    this.updateTrack(to, pos, camYaw);
   }
 
   // Say what one of the HUD's buttons does (the ones in index.html: save-btn,

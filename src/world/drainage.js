@@ -87,7 +87,12 @@ export function channelMargin(acc) {
 }
 
 export class Drainage {
-  // gen: the WorldGen (broadHeight, naturalHeight, padClearance).
+  // gen: the WorldGen (forestHeight, forestNaturalHeight, padClearance).
+  //
+  // The network is worked out over the forest's own land, as if no real
+  // place (landform.js) had been set into it: a hike can't reroute a river
+  // or raise a lake anywhere else. Water.shape() lets the forest's water give
+  // way on real land.
   constructor(gen, seed) {
     this.gen = gen;
     this.seed = seed;
@@ -103,7 +108,7 @@ export class Drainage {
 
   // The land water is routed over: the hills without the smallest bumps.
   elev(x, z) {
-    return this.gen.broadHeight(x, z, NET.routeWave);
+    return this.gen.forestHeight(x, z, NET.routeWave);
   }
 
   node(i, j) {
@@ -343,9 +348,9 @@ export class Drainage {
     let z = s.z;
     const reach = C * 0.3;
     for (let it = 0; it < 16; it++) {
-      const h0 = g.broadHeight(x, z, 30);
-      const hx = g.broadHeight(x + 2, z, 30) - h0;
-      const hz = g.broadHeight(x, z + 2, 30) - h0;
+      const h0 = g.forestHeight(x, z, 30);
+      const hx = g.forestHeight(x + 2, z, 30) - h0;
+      const hz = g.forestHeight(x, z + 2, 30) - h0;
       const gl = Math.hypot(hx, hz);
       if (gl < 0.005) break;
       x -= (hx / gl) * 3;
@@ -358,7 +363,7 @@ export class Drainage {
         z = s.z + (dz / dl) * reach;
       }
     }
-    if (g.padClearance(x, z) < maxR + 30) return null;
+    if (g.padClearance(x, z, false) < maxR + 30) return null;
     const depth = P.depth[0] + (P.depth[1] - P.depth[0]) * f;
     const b = { x, z, R0, amp, ph, depth, maxR, level: 0, blend: 0, kind: P === lake ? 'lake' : 'pond', node: s };
     // Fill it to just under the lowest point of its rim, and no higher than
@@ -368,7 +373,7 @@ export class Drainage {
     for (let q = 0; q < 40; q++) {
       const th = (q / 40) * TAU;
       const r = basinRadius(b, th) + 1.5;
-      const hn = g.naturalHeight(x + Math.cos(th) * r, z + Math.sin(th) * r);
+      const hn = g.forestNaturalHeight(x + Math.cos(th) * r, z + Math.sin(th) * r);
       if (hn < rimMin) rimMin = hn;
       if (hn > rimMax) rimMax = hn;
     }
@@ -447,7 +452,7 @@ export class Drainage {
       const x = pts[q * 2];
       const z = pts[q * 2 + 1];
       if (q) s[q] = s[q - 1] + Math.hypot(x - pts[q * 2 - 2], z - pts[q * 2 - 1]);
-      ground[q] = this.gen.broadHeight(x, z, 0);
+      ground[q] = this.gen.forestHeight(x, z, 0);
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
       if (z < minZ) minZ = z;

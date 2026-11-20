@@ -15,6 +15,7 @@ npm test             # unit and golden tests, in Node, ~1 s
 npm run smoke        # builds, then a play-through in headless Chromium, a few minutes
 npm run serve        # built site + save server together on :8787
 npm run together     # two visitors in one world; needs `npm run serve` running
+npm run hike -- photo.heic   # a hike from a photo into the world (fetches elevation + OSM)
 ```
 
 Run `npm test` after any change. Run `npm run smoke` after touching anything
@@ -86,6 +87,12 @@ don't edit the same lines:
   `test/golden/save-elements.json` are what is on the save server and in
   people's browsers. Add new element kinds; never change existing ones. The
   `localStorage` layouts in `test/local.test.js` likewise.
+- **Hikes are part of the world description too**, where each one is. Don't
+  move one (`at`) or edit its file by hand: re-import with `--force`, which
+  keeps it in place. `test/hikes.test.js` checks they leave the rest of the
+  world exactly as it was. The drainage network reads the forest's own land
+  (`forestHeight`, `forestNaturalHeight`), never a hike's, so a hike can't
+  reroute water outside it.
 - Values put into or taken out of the element record must be copies
   (`own()` in `save/regions.js` does this for domains that go through the
   registry).

@@ -170,6 +170,7 @@ export class ChunkManager extends Emitter {
           land: gen.land,
           chunkSize: this.size,
           structures: structures.map((s) => ({ x: s.x, z: s.z, radius: s.radius })),
+          hikes: gen.hikes,
           trunkRadius: this.trunkRadius,
         });
         this.workers.push(w);
