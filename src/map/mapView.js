@@ -39,7 +39,7 @@ const BADGE_FILL = { fresh: '#e9dfc0', visited: '#a99a76' };
 const SHAPE_FILL = 'rgba(74, 56, 36, 0.92)';
 const GROUND_FILL = 'rgba(176, 150, 108, 0.85)'; // a place's open ground: a town's street
 const SHAPES_FROM = 2.6; // device px per metre (per DPR) from which a place's shape is drawn
-const NEARBY = { r: 1500, n: 8 }; // places listed beside the map: within r m, at most n
+const NEARBY = { r: 1500, n: 8, every: 0.5 }; // places listed beside the map: within r m, at most n, looked at again every s while it's open (they fill in)
 
 const TEMPLATE = /* html */ `
   <div class="map-frame" role="dialog" aria-label="Map" aria-modal="true" tabindex="-1">
@@ -332,9 +332,22 @@ export class MapView {
   }
 
   // ── per frame ─────────────────────────────────────────────────────────────
+  // The places nearest you, for the list beside the map: [{ place, d }]
+  _nearbyPlaces() {
+    const pl = this.player.pos;
+    return this.places.nearest(pl.x, pl.z, NEARBY.r, NEARBY.n);
+  }
+
   update(dt) {
     if (!this.isOpen) return;
     this.t += dt;
+    // places fill in as their owners learn of them: list them as they do
+    this._nearbyIn = (this._nearbyIn ?? NEARBY.every) - dt;
+    if (this._nearbyIn <= 0) {
+      this._nearbyIn = NEARBY.every;
+      const items = this._nearbyPlaces();
+      if (items.map((i) => i.place.id).join(' ') !== this._nearbyKey) this._renderPlaces(items);
+    }
     const target = this._stopScale(this.stop);
     if (this.scale !== target) {
       const k = 1 - Math.exp(-dt * 18);
@@ -1264,9 +1277,8 @@ export class MapView {
   }
 
   // The places nearest you, as far as they're known yet.
-  _renderPlaces() {
-    const pl = this.player.pos;
-    const items = this.places.nearest(pl.x, pl.z, NEARBY.r, NEARBY.n);
+  _renderPlaces(items = this._nearbyPlaces()) {
+    this._nearbyKey = items.map((i) => i.place.id).join(' ');
     this.placeListEl.textContent = '';
     if (!items.length) {
       const p = document.createElement('p');
