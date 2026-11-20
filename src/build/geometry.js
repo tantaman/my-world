@@ -391,7 +391,9 @@ export function addRoof(m, { x0, z0, x1, z1, eave, axis }, pitch, overhang, seed
 
 // ── Hand tools ─────────────────────────────────────────────────────────────
 // Built so the hand grips at the origin and the business end points along
-// local -Y (the direction the forearm points).
+// local -Y (the direction the forearm points). A cutting edge faces local -Z,
+// the back of the hand: the way the head travels when the arm swings forward
+// and down, so a downward swing lands on the edge.
 const toolMat = (hex, rough = 0.8, metal = 0) => new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: metal });
 
 export function makeAxe() {
@@ -402,10 +404,10 @@ export function makeAxe() {
   handle.position.y = -0.26;
   g.add(handle);
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.09, 0.17), steel);
-  head.position.set(0, -0.58, 0.05);
+  head.position.set(0, -0.58, -0.05);
   g.add(head);
   const bit = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.15, 0.05), steel);
-  bit.position.set(0, -0.58, 0.14);
+  bit.position.set(0, -0.58, -0.14);
   g.add(bit);
   g.traverse((o) => o.isMesh && (o.castShadow = true));
   return g;
