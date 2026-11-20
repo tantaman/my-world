@@ -66,9 +66,10 @@ export const LAND_DRY = 80;
 // How far (m) past a real place's outer edge it can still change the ground:
 // a pond or lake of the forest's gives way when its middle is within its
 // size, its beach and LAND_DRY of the edge, and shapes the ground for its
-// size and beach again beyond that. The drainage network gives a basin at
-// most 48 m and a beach of 36 m (test/hikes.test.js checks), so 2 × 86 + 80.
-export const LAND_REACH = 260;
+// size and beach again beyond that. On the land with the biggest lakes
+// (land2.js) the drainage network gives a basin at most 90 m and a beach of
+// 36 m, so 2 × 128 + 80, and a little (test/hikes.test.js checks every land).
+export const LAND_REACH = 340;
 // How far (m) past a real lake's shore it still shapes the ground.
 const LAKE_BLEND = 8;
 

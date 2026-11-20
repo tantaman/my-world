@@ -134,7 +134,7 @@ the build keeps in a file of its own and the game only fetches the first
 time something near it is grown: when you walk within a kilometre or so, go
 there from the list, or open the map over it (`src/world/landforms.js`). So
 more hikes cost the start of the game almost nothing. Nothing within reach
-of a hike, its own land and the 260 m past it where the forest's water gives
+of a hike, its own land and the 340 m past it where the forest's water gives
 way, is grown until its land has come; the chunks, the map and the far view
 each wait for it.
 
