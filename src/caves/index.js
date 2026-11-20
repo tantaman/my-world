@@ -15,7 +15,9 @@
 //
 // A cave changes nothing the seed grows: the land is the same with it as
 // without, so no save moves. Its mouth is the one place it meets the land,
-// and there the hillside is cut open for it (world/cuts.js).
+// and there the hillside is cut open for it (world/cuts.js). Nor is one grown
+// on, or near enough to change, a real place brought in from a photo (see
+// src/hikes/): what is there is what is really there.
 
 import { Caves } from './caves.js';
 import { caveKit, ROCK } from './look.js';
@@ -51,9 +53,10 @@ function noteFor(cave) {
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map'];
 export function installCaves(game) {
-  const { scene, camera, gen, chunks, spaces, solids, sky, player, sound, hud, commands, builder, map, materials, save } = game;
+  const { scene, camera, gen, landforms, chunks, spaces, solids, sky, player, sound, hud, commands, builder, map, materials, save } = game;
 
-  const caves = new Caves({ scene, gen, spaces, solids, kit: caveKit(chunks.models, materials.vegetation) });
+  const keepOff = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);
+  const caves = new Caves({ scene, gen, spaces, solids, kit: caveKit(chunks.models, materials.vegetation), keepOff });
   game.provide('caves', caves);
   // someone set down in a cave (a reload, a teleport) finds it already there
   spaces.onDemand((x, z) => caves.ensure(x, z));

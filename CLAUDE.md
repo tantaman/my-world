@@ -117,7 +117,7 @@ don't edit the same lines:
   somewhere new (chunks, map tiles, the far view) asks
   `landforms.ready(box)` first and waits, and anything else grown from the
   seed keeps off a hike's reach (`landforms.reaches(box)`), as the old places
-  do.
+  and the caves do.
 - Values put into or taken out of the element record must be copies
   (`own()` in `save/regions.js` does this for domains that go through the
   registry).

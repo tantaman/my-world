@@ -9,6 +9,12 @@
 // once built it is drawn, walked in (it joins Spaces), and its mouth is cut
 // into the hillside.
 //
+// A square that a real place brought in from a photo reaches any of has no
+// cave (keepOff: world/landforms.js reaches): the land there isn't the
+// forest's alone, and until it's fetched it isn't even known. That is told
+// from the hikes' cards, so a square's cave never waits on, or changes with,
+// a hike's land arriving.
+//
 // Emits:
 //   'built'   (cave)   a cave is ready to go into
 //   'gone'    (cave)   ...and has been let go of
@@ -29,8 +35,10 @@ const key = (cx, cz) => `${cx},${cz}`;
 
 export class Caves extends Emitter {
   // kit: the materials and shapes every cave is drawn with (look.js caveKit)
-  constructor({ scene, gen, spaces, solids, kit }) {
+  // keepOff(x0, z0, x1, z1): is any of that square somewhere no cave may be?
+  constructor({ scene, gen, spaces, solids, kit, keepOff = () => false }) {
     super();
+    this.keepOff = keepOff;
     this.scene = scene;
     this.gen = gen;
     this.spaces = spaces;
@@ -51,7 +59,11 @@ export class Caves extends Emitter {
   // The cave in square (cx, cz), or null (worked out the first time it's asked).
   site(cx, cz) {
     const k = key(cx, cz);
-    if (!this.sites.has(k)) this.sites.set(k, layoutCave(this.gen, cx, cz));
+    if (!this.sites.has(k)) {
+      const S = CAVE.cell;
+      const off = this.keepOff(cx * S, cz * S, (cx + 1) * S, (cz + 1) * S);
+      this.sites.set(k, off ? null : layoutCave(this.gen, cx, cz));
+    }
     return this.sites.get(k);
   }
 
