@@ -35,6 +35,12 @@
 //   haze     how thick the air is, 1 being the forest's
 //   animals  the kinds (wildlife/species.js) that live there, or null for
 //            any that like the ground
+//   names    what its trees are called, where that isn't what the forest
+//            calls them: { broad: ['kamani', 'a kamani'] }
+//
+// Each also gets an id, its place in the table: the ground carries it vertex
+// by vertex, so the shaders, which are handed every country's colours, know
+// whose to use (render/uniforms.js has room for MAX_COUNTRIES).
 //
 // Colours are linear, as the shaders want them (materials.js); display()
 // gives one as the map draws it.
@@ -56,6 +62,7 @@ const FOREST = {
   clouds: { deck: null, cover: 0, shade: 0 },
   haze: 1,
   animals: null,
+  names: {},
 };
 
 const kind = (over) => ({ ...FOREST, ...over, ground: { ...FOREST.ground, ...over.ground }, clouds: { ...FOREST.clouds, ...over.clouds } });
@@ -76,6 +83,7 @@ export const COUNTRY = {
     clouds: { deck: 1000, cover: 0.8, shade: 0.35 },
     haze: 1.5,
     animals: ['flock', 'flit', 'bees', 'butterflies', 'mouse'],
+    names: { broad: ['ʻōhiʻa', 'an ʻōhiʻa'] },
   }),
 
   // The same island down at the shore: palms and ironwoods over a cove,
@@ -94,6 +102,7 @@ export const COUNTRY = {
     shore: 'rock',
     clouds: { deck: 1300, cover: 0.3, shade: 0.1 },
     animals: ['flock', 'flit', 'bees', 'butterflies', 'mouse'],
+    names: { broad: ['kamani', 'a kamani'] },
   }),
 
   // A high volcano above the tree line: cinder, red and grey, and nothing on
@@ -133,8 +142,15 @@ export const COUNTRY = {
     clouds: { deck: 650, cover: 0.92, shade: 0.6 },
     haze: 1.3,
     animals: ['flock', 'flit'],
+    names: { broad: ['kamani', 'a kamani'] },
   }),
 };
+
+// Every country, by its id (the forest is 0).
+export const COUNTRIES = Object.values(COUNTRY);
+COUNTRIES.forEach((c, id) => {
+  c.id = id;
+});
 
 // The country of that name, or the forest.
 export const countryOf = (name) => COUNTRY[name] || FOREST;

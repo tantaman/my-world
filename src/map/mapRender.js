@@ -7,7 +7,7 @@
 
 import { generateVegetation, VEG_KINDS } from '../world/chunkGen.js';
 import { TREE_KINDS } from '../world/flora.js';
-import { display } from '../world/country.js';
+import { display, COUNTRIES } from '../world/country.js';
 import { hash2i, smoothstep } from '../noise.js';
 
 export const TILE = 128; // map pixels per tile side
@@ -42,6 +42,10 @@ const PALM = [0.33, 0.47, 0.16];
 const IRONWOOD = [0.29, 0.38, 0.27];
 const TREEFERN = [0.25, 0.42, 0.14];
 const SILVERSWORD = [0.74, 0.78, 0.72];
+// What each country says its ground is made of (world/country.js), by id, as
+// the map draws colours: lighter than the ground itself.
+const paper = (col) => display(col).map((v) => Math.min(1, v * 1.2));
+const PAPER = COUNTRIES.map(({ ground: g }) => ({ tint: g.tint.map((v) => v ** 0.45), rock: paper(g.rock), bareA: paper(g.bare[0]), bareB: paper(g.bare[1]), sand: paper(g.sand) }));
 // how a tree's crown is drawn from above: its colour, and how many points to it
 const CROWN = { pine: [PINE, 9], broad: [BROAD, 5], birch: [BIRCH, 0], palm: [PALM, 7], ironwood: [IRONWOOD, 0] };
 const SMALL = { rock: [ROCK, 0.62], bush: [BUSH, 0.85], treefern: [TREEFERN, 1.2], silversword: [SILVERSWORD, 0.45] };
@@ -117,8 +121,8 @@ export function renderTile(gen, level, tx, tz, vegFor) {
   const BA = new Float32Array(S * S);
   const SA = new Float32Array(S * S);
   const LW = new Float32Array(S * S);
-  const sf = { bare: 0, sand: 0, land: 0 };
-  let own = null;
+  const CI = new Uint8Array(S * S);
+  const sf = { bare: 0, sand: 0, land: 0, country: 0 };
   // water: how much of the pixel is water (0..1), and how deep (m)
   const WA = new Float32Array(S * S);
   const WD = new Float32Array(S * S);
@@ -168,19 +172,15 @@ export function renderTile(gen, level, tx, tz, vegFor) {
         GR[k] = gen.groves(x, z);
         AB[k] = gen.above(x, z, hk);
         SN[k] = gen.snow(x, z, hk);
-        const country = gen.surface(x, z, sf);
-        if (country) {
+        if (gen.surface(x, z, sf)) {
           BA[k] = sf.bare;
           SA[k] = sf.sand;
           LW[k] = sf.land;
-          own = country.ground;
+          CI[k] = sf.country;
         }
       }
     }
   }
-  // (as the map draws colours: lighter than the ground itself)
-  const paper = (col) => display(col).map((v) => Math.min(1, v * 1.2));
-  const P = own && { tint: own.tint.map((v) => v ** 0.45), rock: paper(own.rock), bareA: paper(own.bare[0]), bareB: paper(own.bare[1]), sand: paper(own.sand) };
 
   const fine = level <= TREE_LEVEL;
   const ci = contourInterval(mpp);
@@ -227,7 +227,8 @@ export function renderTile(gen, level, tx, tz, vegFor) {
       // above the trees: thin turf among stones
       if (AB[k] > 0) mix3(c, c, ALPINE, AB[k] * 0.7);
       // a real place's own ground: its green, its bare cinder or lava, its beaches
-      const lw = P ? LW[k] : 0;
+      const lw = LW[k];
+      const P = PAPER[CI[k]];
       if (lw > 0) {
         for (let q = 0; q < 3; q++) c[q] *= 1 + (P.tint[q] - 1) * lw;
         mix3(t, P.bareB, P.bareA, smoothstep(0.7, 1, BA[k]) * (0.4 + 0.6 * rnd));

@@ -35,11 +35,12 @@ export function createTerrainMaterial() {
         attribute vec2 aGround;
         attribute vec2 aWater; // water level, region (1 where water may stand)
         attribute vec2 aHigh; // how far above the trees, snow (0..1 each)
-        attribute vec3 aLand; // what a real place's ground is made of (zero in the forest: see groundColor)
+        attribute vec4 aLand; // what a real place's ground is made of, and whose it is (zero in the forest: see groundColor)
         varying vec2 vGround;
         varying vec2 vWater;
         varying vec2 vHigh;
         varying vec3 vLand;
+        flat varying float vCountry;
         varying vec3 vWorldPos;
         varying vec3 vWorldNormal;`,
       )
@@ -49,7 +50,8 @@ export function createTerrainMaterial() {
         vGround = aGround;
         vWater = aWater;
         vHigh = aHigh;
-        vLand = aLand;
+        vLand = aLand.xyz;
+        vCountry = aLand.w;
         vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
         vWorldNormal = normalize(mat3(modelMatrix) * objectNormal);`,
       );
@@ -61,6 +63,7 @@ export function createTerrainMaterial() {
         varying vec2 vWater;
         varying vec2 vHigh;
         varying vec3 vLand;
+        flat varying float vCountry;
         varying vec3 vWorldPos;
         varying vec3 vWorldNormal;
         uniform float uTime;
@@ -133,7 +136,7 @@ export function createTerrainMaterial() {
         '#include <color_fragment>',
         `#include <color_fragment>
         vec2 wp = worldXZ(vWorldPos);
-        diffuseColor.rgb = groundColor(wp, vGround.x, vGround.y, 1.0 - vWorldNormal.y, vLand);
+        diffuseColor.rgb = groundColor(wp, vGround.x, vGround.y, 1.0 - vWorldNormal.y, vLand, vCountry);
         diffuseColor.rgb = highGround(diffuseColor.rgb, wp, vHigh, 1.0 - vWorldNormal.y);
         if (cutF < ${RIM.toFixed(3)} + 1.0) {
           // broken rock round a hole in the ground, ragged at its edge
@@ -177,7 +180,7 @@ export function createTerrainMaterial() {
         }`,
       );
   };
-  mat.customProgramCacheKey = () => 'terrain-v5';
+  mat.customProgramCacheKey = () => 'terrain-v6';
   return mat;
 }
 
@@ -291,9 +294,10 @@ export function createGrassMaterial() {
         `#include <common>
         attribute vec4 aBlade; // xyz = root (local), w = height fraction
         attribute vec2 aGround; // x = path (-1 = flower), y = forest
-        attribute float aLand; // how far it grows in a real place's own country (see groundColor)
+        attribute vec2 aLand; // how far it grows in a real place's own country, and which (see groundColor)
         varying vec2 vGround;
         varying float vLand;
+        flat varying float vCountry;
         varying vec2 vRootW; // where the root is in the world (worldXZ)
         uniform float uTime;
         uniform float uWind;
@@ -311,7 +315,8 @@ export function createGrassMaterial() {
           float hf = aBlade.w;
           vec3 wroot = (modelMatrix * vec4(root, 1.0)).xyz; // as drawn, like uPlayer
           vGround = aGround;
-          vLand = aLand;
+          vLand = aLand.x;
+          vCountry = aLand.y;
           vRootW = worldXZ(wroot);
           float dist = distance(wroot.xz, uPlayer.xz);
           float fade = 1.0 - smoothstep(uGrassRadius * 0.6, uGrassRadius, dist);
@@ -337,6 +342,7 @@ export function createGrassMaterial() {
         `#include <common>
         varying vec2 vGround;
         varying float vLand;
+        flat varying float vCountry;
         varying vec2 vRootW;
         ${NOISE_GLSL}
         ${WORLD_GLSL}
@@ -348,7 +354,7 @@ export function createGrassMaterial() {
         `#include <color_fragment>
         // blades take the colour of the ground they grow from; vertex colour
         // carries root-to-tip shading. Flowers keep their own colour.
-        if (vGround.x > -0.5) diffuseColor.rgb *= groundColor(vRootW, 0.0, vGround.y * 0.55, 0.0, vec3(0.0, 0.0, vLand));`,
+        if (vGround.x > -0.5) diffuseColor.rgb *= groundColor(vRootW, 0.0, vGround.y * 0.55, 0.0, vec3(0.0, 0.0, vLand), vCountry);`,
       )
       .replace(
         '#include <normal_fragment_begin>',
@@ -356,6 +362,6 @@ export function createGrassMaterial() {
         normal = normalize(vNormal);`,
       );
   };
-  mat.customProgramCacheKey = () => 'grass-v4';
+  mat.customProgramCacheKey = () => 'grass-v5';
   return mat;
 }

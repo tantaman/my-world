@@ -38,7 +38,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readPhoto } from './hike/exif.js';
 import { decodePng, encodePng } from './hike/png.js';
 import { localFrame, tileXY, terrarium, metresPerDegree } from './hike/geo.js';
-import { parseOsm, mergeOsm, trails, waters, coastlines, roads, beaches, peaks, incompleteWaters } from './hike/osm.js';
+import { parseOsm, mergeOsm, trails, waters, coastlines, roads, beaches, streams, peaks, incompleteWaters } from './hike/osm.js';
 import { buildHike, splitHike, DEFAULTS } from './hike/build.js';
 import { placeHike } from './hike/place.js';
 import { COUNTRY } from '../src/world/country.js';
@@ -47,7 +47,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HIKES_DIR = path.join(ROOT, 'src/world/hikes');
 const REGISTRY = path.join(ROOT, 'src/world/hikes.js');
 const CACHE = path.join(ROOT, 'node_modules/.cache/hike');
-const ZOOM = 13; // elevation tiles: about 13 m a pixel at 48° north
+// Elevation tiles: about 13 m a pixel at 48° north at zoom 13, and half that
+// for each zoom more. Finer heights (--cell) want finer tiles.
+const zoomFor = (cell) => (cell >= 25 ? 13 : cell >= 12 ? 14 : 15);
 const AGENT = 'my-world hike importer (a three.js game; occasional one-off imports)';
 
 // ── Arguments ────────────────────────────────────────────────────────────────
@@ -84,6 +86,7 @@ if (photo.lat === null || photo.lon === null) {
 }
 console.log(`photo: ${photo.lat.toFixed(5)}, ${photo.lon.toFixed(5)}${photo.bearing !== null ? `, looking ${Math.round(photo.bearing)}°` : ''}${photo.hour !== null ? `, at ${fmtHour(photo.hour)}` : ''}`);
 
+const ZOOM = zoomFor(num('cell', DEFAULTS.cell));
 const opt = {
   scale: num('scale', DEFAULTS.scale),
   radius: num('radius', DEFAULTS.radius),
@@ -226,7 +229,7 @@ else {
 }
 
 // ── Build it ─────────────────────────────────────────────────────────────────
-const { def, preview } = buildHike({ id, name, photo, elevation, trails: ts, waters: ws, coast, roads: roads(osm), beaches: beaches(osm), at, datum, ...opt });
+const { def, preview } = buildHike({ id, name, photo, elevation, trails: ts, waters: ws, coast, roads: roads(osm), beaches: beaches(osm), streams: streams(osm), at, datum, ...opt });
 const { card, land } = splitHike(def);
 const module = `// The land of ${def.name}, as \`npm run hike\` imported it from a photo taken
 // there: fetched the first time it's needed (src/world/landforms.js). Its card is
@@ -255,7 +258,10 @@ if (placed && placed.near) console.log(`  it meets ${placed.near.name}: placed e
 for (const note of placed ? placed.notes : []) console.log(`  note: ${note}`);
 if (def.trail) console.log(`  the walk: ${def.trail.name || 'a trail'}, ${def.trail.length} m, ${def.trail.climb < 0 ? `going down ${-def.trail.climb}` : `climbing ${def.trail.climb}`} m`);
 else console.log("  the photo wasn't taken on a trail; you'll arrive where it was taken");
-console.log(`  water: ${def.lakes.map((l) => l.name || 'an unnamed lake').join(', ') || 'none'}${def.beaches ? `; ${def.beaches.length} beach${def.beaches.length > 1 ? 'es' : ''}` : ''}`);
+const flowing = card.streams || [];
+const unnamed = (def.streams || []).filter((s) => !s.name).length;
+const running = [...flowing, ...(unnamed ? [`${unnamed} unnamed stream${unnamed > 1 ? 's' : ''}`] : [])];
+console.log(`  water: ${[...def.lakes.map((l) => l.name || 'an unnamed lake'), ...running].join(', ') || 'none'}${def.beaches ? `; ${def.beaches.length} beach${def.beaches.length > 1 ? 'es' : ''}` : ''}`);
 if (def.country) console.log(`  country: ${def.country}`);
 console.log(`  a picture of it: ${previewFile}`);
 

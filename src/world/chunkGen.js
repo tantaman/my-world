@@ -166,12 +166,13 @@ export function generateTerrain(gen, cx, cz, step, size) {
 }
 
 // ── What the ground is made of ─────────────────────────────────────────────
-// Where a real place has its own kind of country (country.js), three numbers
+// Where a real place has its own kind of country (country.js), four numbers
 // for each vertex of the terrain generateTerrain() makes for the same chunk,
 // in the same order (the grid, then the skirts): how bare the ground is, how
-// sandy, and how far it is that country's ground at all (WorldGen.surface).
-// null for a chunk that is all forest, which is nearly all of them.
-export const SURFACE_STRIDE = 3;
+// sandy, how far it is that country's ground at all, and which country's
+// (WorldGen.surface). null for a chunk that is all forest, which is nearly
+// all of them.
+export const SURFACE_STRIDE = 4;
 export function generateSurface(gen, cx, cz, step, size) {
   const x0 = cx * size;
   const z0 = cz * size;
@@ -182,7 +183,7 @@ export function generateSurface(gen, cx, cz, step, size) {
   const N = n + 1;
   const S = SURFACE_STRIDE;
   const out = new Float32Array((N * N + 4 * N) * S);
-  const at = { bare: 0, sand: 0, land: 0 };
+  const at = { bare: 0, sand: 0, land: 0, country: 0 };
   let any = false;
   for (let j = 0; j < N; j++) {
     for (let i = 0; i < N; i++) {
@@ -191,6 +192,7 @@ export function generateSurface(gen, cx, cz, step, size) {
       out[o] = at.bare;
       out[o + 1] = at.sand;
       out[o + 2] = at.land;
+      out[o + 3] = at.country;
       if (at.land > 0) any = true;
     }
   }

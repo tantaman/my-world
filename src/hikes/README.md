@@ -10,7 +10,7 @@ The photo (HEIC or JPEG, straight off a phone) says where it was taken, which
 way the camera looked and at what time. From that, `tools/hike.mjs` fetches
 the real shape of the land for 4 km around
 ([AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/)) and the
-trails and lakes on it, and the coast if it's by the sea
+trails, lakes and streams on it, and the coast if it's by the sea
 ([OpenStreetMap](https://www.openstreetmap.org/)), and writes the hike to
 `src/world/hikes/`. It prints what it found and where it put a picture of
 it:
@@ -47,7 +47,15 @@ game) the ground is the real ground; over the next kilometre it gives way to
 the forest around it. Every footpath, track and lake that OpenStreetMap has
 in there comes too, and the sea, up to its real shoreline: it breaks white
 along the shore, and stops at a low bank a little short of the edge of the
-land that was imported, where the forest begins. The walk starts where you'd
+land that was imported, where the forest begins. (From on the land you
+don't see that: looking out, the sea runs on to the horizon.) The shoreline
+is kept on a grid of its own, 3 m to the ground's 6 or more, so a cove a few
+metres across is still a cove. The streams and rivers on the map run where
+they really run, in channels like the forest's own: each lies just under
+the ground its line was drawn over, never rises as it goes, takes on what
+runs into it, and comes down to the lake or the sea it ends in. (Only the
+ones that run all year: a gulch that is dry till it rains is left dry.) The
+walk starts where you'd
 leave the car, at the nearest road or car park along the paths, and goes by
 them to where the photo was taken, uphill or down. (Failing a road, it's the
 trail the photo was taken on, from its lower end.) Steep ground is bare rock,
@@ -73,8 +81,12 @@ sky over it is doing, each as one entry in one table
 The cloud is a layer at its real height, so you can be under it or over it:
 walk up through it and it closes round you. A rocky shore keeps its cliffs
 where a gentle one would be given a beach. Animals that don't live there
-(bears, on an island) don't turn up. The map and the far view take the
-country's colours too. A walk that starts on top of its mountain (a summit
+(bears, on an island) don't turn up, and a tree is called what it would be
+there: fell a broadleaf on Maui and it's a kamani or an ʻōhiʻa that comes
+down, not an oak. The map and the far view take the country's colours too.
+Every piece of ground knows which country it's in, so where two places of
+different kinds overlap, each keeps its own colours right up to the other.
+A walk that starts on top of its mountain (a summit
 you drive to) stands the mountain over the forest round it, where otherwise
 the start of the walk is level with it.
 

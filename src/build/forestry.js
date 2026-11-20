@@ -21,6 +21,12 @@ export const SPECIES = {
   palm: { name: 'palm', a: 'a coconut palm', hits: (s) => Math.round(3 + 2 * s), meters: (s) => Math.round(7 * s * 2) / 2, r: 0.17, h: 8.5, bole: 0.9 },
   ironwood: { name: 'ironwood', a: 'an ironwood', hits: (s) => Math.round(6 + 3 * s), meters: (s) => Math.round(8 * s * 2) / 2, r: 0.26, h: 13, bole: 0.6 },
 };
+// What a tree of this kind is called where it stands: a country
+// (world/country.js) may have its own name for it. → { name, a }
+export function treeName(kind, country = null) {
+  const own = country && country.names[kind];
+  return own ? { name: own[0], a: own[1] } : SPECIES[kind];
+}
 export const BUCK_LEN = 4; // metres per log cut from a felled trunk
 export const BUCK_HITS = 2;
 export const LIMB_HITS = 2;

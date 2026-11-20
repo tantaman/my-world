@@ -39,7 +39,7 @@ import { axe, cutNotch, swingAt, hew, HEW } from '../build/tools/axe.js';
 import { roofCheck, raiseRoof } from '../build/tools/roof.js';
 import { spadeWork, digObstacles, grubStump, clearBrush, BRUSH } from '../build/tools/shovel.js';
 import { pickUp } from '../build/tools/hands.js';
-import { SPECIES } from '../build/forestry.js';
+import { SPECIES, treeName } from '../build/forestry.js';
 import { LIFTABLE } from '../build/constants.js';
 import { TREE_KINDS } from '../world/flora.js';
 import { normalize, place, findBuilding, survey, nextJob, progress, standAt, route, grow, inside } from './plan.js';
@@ -238,7 +238,8 @@ export class Foreman extends Emitter {
     if (chk.reason) return this._stuck(b, chk.reason);
     const key = jobKey(job);
     if (key !== this.key) this._begin(job, key);
-    this.doing = clearing ? `clearing the site: ${describe(job)}` : this.gathering ? `${this._gatheringWords(b, at)}: ${describe(job)}` : describe(job);
+    const words = describe(job, b.chunks.gen);
+    this.doing = clearing ? `clearing the site: ${words}` : this.gathering ? `${this._gatheringWords(b, at)}: ${words}` : words;
     if (job.type === 'hew' || job.type === 'wait') this.there = true; // done where you stand
     if (!this.there && !this._walk(b, job, dt)) return false;
     P.steer = null;
@@ -657,8 +658,9 @@ function jobKey(j) {
   return `f:${j.x}:${j.z}`;
 }
 
-function describe(j) {
-  if (j.type === 'fell') return `felling ${SPECIES[j.tree.kind].a}`;
+// gen: the world, which knows what a tree is called where it stands
+function describe(j, gen) {
+  if (j.type === 'fell') return `felling ${treeName(j.tree.kind, gen.countryAt(j.tree.x, j.tree.z)).a}`;
   if (j.type === 'wait') return 'timber!';
   if (j.type === 'buck') return j.f.state === 'limbed' ? 'bucking it into logs' : 'limbing it';
   if (j.type === 'hew') return 'hewing a log square';

@@ -33,17 +33,20 @@ export const SKY = {
   uTime: SHARED.uTime,
 };
 
-// What the ground is made of in the country you're in (world/country.js):
-// set by the country feature from the real place you're on or nearest. The
-// terrain says, vertex by vertex, how far each applies (aLand), so in the
-// forest these show nowhere.
+// What the ground is made of in each kind of country (world/country.js):
+// one colour of each sort for every country, by its id, filled in once by
+// the country feature. The terrain says, vertex by vertex, which country it
+// is and how far its colours apply (aLand), so in the forest they show
+// nowhere, and two places side by side each keep their own.
+export const MAX_COUNTRIES = 8;
+const each = (r, g, b) => ({ value: Array.from({ length: MAX_COUNTRIES }, () => new THREE.Color(r, g, b)) });
 export const LAND = {
-  uTint: { value: new THREE.Color(1, 1, 1) }, // what grass green is multiplied by
-  uDirt: { value: new THREE.Color(0.2, 0.135, 0.075) },
-  uRock: { value: new THREE.Color(0.16, 0.155, 0.145) },
-  uBareA: { value: new THREE.Color(0.2, 0.135, 0.075) },
-  uBareB: { value: new THREE.Color(0.115, 0.078, 0.045) },
-  uSand: { value: new THREE.Color(0.19, 0.16, 0.11) },
+  uTint: each(1, 1, 1), // what grass green is multiplied by
+  uDirt: each(0.2, 0.135, 0.075),
+  uRock: each(0.16, 0.155, 0.145),
+  uBareA: each(0.2, 0.135, 0.075),
+  uBareB: each(0.115, 0.078, 0.045),
+  uSand: each(0.19, 0.16, 0.11),
 };
 
 // A layer of cloud over the country you're in (world/country.js), drawn by

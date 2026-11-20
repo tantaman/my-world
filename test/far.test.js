@@ -236,7 +236,7 @@ test('what flies about far away still flies', () => {
 test('the land far away is drawn from its own corner', () => {
   // the far view of a hike
   const n = 8;
-  const grid = { x0: FAR[0], z0: FAR[1], n, step: 16, h: new Float32Array(n * n).fill(40), water: new Float32Array(n * n).fill(-1e9), forest: new Float32Array(n * n), species: new Float32Array(n * n) };
+  const grid = { x0: FAR[0], z0: FAR[1], n, step: 16, h: new Float32Array(n * n).fill(40), water: new Float32Array(n * n).fill(-1e9), forest: new Float32Array(n * n), species: new Float32Array(n * n), bare: new Float32Array(n * n), sand: new Float32Array(n * n), land: new Float32Array(n * n), country: new Uint8Array(n * n) };
   const far = new FarView(scene);
   far.add('there', grid);
   const mesh = far.meshes.get('there');

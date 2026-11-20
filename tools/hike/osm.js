@@ -114,6 +114,20 @@ export function waters(osm) {
   return out;
 }
 
+// Running water: [{ name, river, points: [[lat, lon], ...] }], each drawn the
+// way it flows (as OpenStreetMap draws a waterway). Streams and rivers that
+// run all year: not ditches or canals, nor gulches that are dry till it rains.
+export function streams(osm) {
+  const out = [];
+  for (const w of osm.ways.values()) {
+    const t = w.tags;
+    if ((t.waterway !== 'stream' && t.waterway !== 'river') || t.intermittent === 'yes') continue;
+    const points = coords(osm, w.refs);
+    if (points.length > 1) out.push({ name: t.name || '', river: t.waterway === 'river', points });
+  }
+  return out;
+}
+
 // Beaches: [[[lat, lon], ...], ...], the outline of each.
 export function beaches(osm) {
   const out = [];

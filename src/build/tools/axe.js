@@ -3,7 +3,7 @@
 // into squared timbers.
 
 import * as THREE from 'three';
-import { SPECIES, BUCK_LEN } from '../forestry.js';
+import { SPECIES, BUCK_LEN, treeName } from '../forestry.js';
 import { TREE_KINDS } from '../../world/flora.js';
 import { makeAxe } from '../geometry.js';
 import { rayCircle } from '../aim.js';
@@ -52,11 +52,13 @@ export const axe = {
     const tree = treeOnRay(b);
     if (tree) {
       const sp = SPECIES[tree.kind];
+      // (called what it's called where it stands)
+      const called = treeName(tree.kind, b.chunks.gen.countryAt(tree.x, tree.z));
       const reach = b.dist(tree.x, tree.z) - sp.r * tree.s;
       const n = b.forest.hitsOn(tree);
       const need = b.forest.hitsNeeded(tree);
-      if (reach > REACH.axe) return { prompt: `${sp.a}: <i>come closer</i>${hew}` };
-      return { type: 'tree', ok: true, tree, x: tree.x, z: tree.z, prompt: `<b>click</b> chop the ${sp.name} ${n ? `(${n}/${need})` : `· about ${sp.meters(tree.s)} m of log`}${hew}` };
+      if (reach > REACH.axe) return { prompt: `${called.a}: <i>come closer</i>${hew}` };
+      return { type: 'tree', ok: true, tree, x: tree.x, z: tree.z, prompt: `<b>click</b> chop the ${called.name} ${n ? `(${n}/${need})` : `· about ${sp.meters(tree.s)} m of log`}${hew}` };
     }
     // a felled tree?
     const at = b.ground ? b.ground.p : null;
@@ -130,7 +132,7 @@ export function swingAt(b, t) {
       b.chips.burst(at, 7, CHIPS, 2.2, 0.4, dx / l, dz / l);
       if (b.forest.chop(tree, P.x, P.z)) {
         b.sound.sfx('creak');
-        b.flash(`timber! the ${sp.name} is coming down`);
+        b.flash(`timber! the ${treeName(tree.kind, b.chunks.gen.countryAt(tree.x, tree.z)).name} is coming down`);
         b.regrow(tree.x, tree.z, 1);
       }
     });

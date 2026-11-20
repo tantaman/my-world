@@ -34,6 +34,7 @@ export function withRealPlaces(Land) {
       if (this.lands.some((L) => L.id === def.id)) return;
       const L = new Landform(def);
       this._settle(L);
+      L.settled();
       this.lands.push(L);
       this.hikes.push(def);
       // (a structure on real land stands on the real ground)
@@ -162,13 +163,14 @@ export function withRealPlaces(Land) {
 
     // What the ground is made of at (x, z), where a real place has its own
     // kind of country (country.js). Fills out.bare and out.sand (0..1: how
-    // much of it is bare ground, and beach) and out.land (0..1: how far it is
-    // that country's ground and not the forest's), and returns the country,
-    // or null in the forest, where all three are 0.
+    // much of it is bare ground, and beach), out.land (0..1: how far it is
+    // that country's ground and not the forest's) and out.country (its id),
+    // and returns the country, or null in the forest, where all four are 0.
     surface(x, z, out) {
       out.bare = 0;
       out.sand = 0;
       out.land = 0;
+      out.country = 0;
       let country = null;
       for (const L of this.lands) {
         const w = L.weight(x, z);
@@ -191,6 +193,7 @@ export function withRealPlaces(Land) {
         out.bare = Math.max(0, Math.min(1, bare)) * w;
         out.sand = sand * w;
         out.land = w;
+        out.country = L.country.id;
         country = L.country;
       }
       return country;

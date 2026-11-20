@@ -9,7 +9,7 @@ import { deflateSync } from 'node:zlib';
 import { readPhoto } from '../tools/hike/exif.js';
 import { decodePng, encodePng } from '../tools/hike/png.js';
 import { localFrame, tileXY, terrarium } from '../tools/hike/geo.js';
-import { parseOsm, trails, waters, coastlines, roads } from '../tools/hike/osm.js';
+import { parseOsm, trails, waters, coastlines, roads, streams } from '../tools/hike/osm.js';
 import { buildHike, splitHike, simplify, signedDistance, coastDistance, walkFromRoad } from '../tools/hike/build.js';
 import { placeHike, project, ORIGIN } from '../tools/hike/place.js';
 import { Landform, packHeights, unpackHeights, packShore, unpackShore } from '../src/world/landform.js';
@@ -137,6 +137,18 @@ test('OpenStreetMap: the coast, joined the way it runs, and where a car can be l
   const coast = coastlines(osm);
   assert.deepEqual(coast.map((c) => c.map(([lat]) => lat)), [[0, 0.01, 0.02, 0.03], [0.5, 0.5, 0.51, 0.5]], 'one line south to north, and an islet');
   assert.deepEqual(roads(osm).map((r) => r.length), [2, 4], 'the road and the car park, not the path');
+});
+
+test('OpenStreetMap: streams and rivers that run all year, the way they flow', () => {
+  const xml = `<osm>
+    <node id="1" lat="0" lon="0"/><node id="2" lat="0.01" lon="0"/><node id="3" lat="0.02" lon="0"/><node id="4" lat="0.03" lon="0.01"/>
+    <way id="10"><nd ref="3"/><nd ref="2"/><nd ref="1"/><tag k="waterway" v="stream"/><tag k="name" v="Beck"/></way>
+    <way id="11"><nd ref="4"/><nd ref="3"/><tag k="waterway" v="river"/></way>
+    <way id="12"><nd ref="1"/><nd ref="4"/><tag k="waterway" v="stream"/><tag k="intermittent" v="yes"/></way>
+    <way id="13"><nd ref="2"/><nd ref="4"/><tag k="waterway" v="ditch"/></way>
+  </osm>`;
+  const s = streams(parseOsm(xml));
+  assert.deepEqual(s.map((w) => [w.name, w.river, w.points.map(([lat]) => lat)]), [['Beck', false, [0.02, 0.01, 0]], ['', true, [0.03, 0.02]]], 'not the gulch that is dry till it rains, nor the ditch');
 });
 
 test('the coast: which side is the sea, and how far', () => {
@@ -346,6 +358,153 @@ test('a hike by the sea has the sea, and is walked up to from the road', () => {
   inland.height(AT[0] - 1600 * 0.2, AT[1]);
   assert.equal(inland.water.foam, 0);
   assert.ok(!inland.lands[0].sea);
+});
+
+// The same shore again, with water running to it, and a cove cut into it: a
+// brook down the mountain into the sea, drawn on the map as two lines end to
+// end; a beck that runs into it half way down; a rill that gives out on dry
+// land; and a river that comes onto the land at its edge.
+const COVE = 30; // real m: half the cove's width, and half how far in it's cut
+const coved = (lat, lon) => {
+  const [e, n] = frame.toEN(lat, lon);
+  const wet = e > COAST_AT || (e > COAST_AT - 2 * COVE && Math.abs(n) < COVE);
+  return wet ? -Math.max(5, (e - COAST_AT) * 0.1) : Math.max(1, elevation(lat, lon) - 395);
+};
+const brookAt = (k) => [300 + k * 50, 500 + Math.sin(k / 2) * 30]; // east, north (real m)
+const watered = buildHike({
+  id: 'watered',
+  name: 'Watered',
+  photo: PHOTO,
+  elevation: coved,
+  trails: [{ name: '', points: Array.from({ length: 41 }, (_, k) => toLL(1000 - k * 25, 0)) }],
+  coast: [[toLL(COAST_AT, -6000), toLL(COAST_AT, -COVE), toLL(COAST_AT - 2 * COVE, -COVE), toLL(COAST_AT - 2 * COVE, COVE), toLL(COAST_AT, COVE), toLL(COAST_AT, 6000)]],
+  roads: [[toLL(1000, -3000), toLL(1000, 3000)]],
+  streams: [
+    { name: 'Brook', river: false, points: Array.from({ length: 23 }, (_, k) => toLL(...brookAt(k))) },
+    { name: 'Brook', river: false, points: [toLL(100, 300), toLL(...brookAt(0))] },
+    { name: 'Beck', river: false, points: [toLL(400, 200), toLL(...brookAt(8))] },
+    { name: '', river: false, points: Array.from({ length: 9 }, (_, k) => toLL(-300 - k * 50, -600)) },
+    { name: 'Out', river: true, points: Array.from({ length: 30 }, (_, k) => toLL(-3200 + k * 100, -1200)) },
+  ],
+  at: AT,
+  radius: 2400,
+  fade: 600,
+  cell: 40,
+  trees: { cover: 0 },
+}).def;
+
+test("a hike's streams are kept the way they flow, as far as its land goes", () => {
+  const runs = watered.streams.map((r) => [r.name, r.big, r.pts.slice(0, 2), r.pts.slice(-2)]);
+  // the brook is cut short where it runs out to sea past the land, the river where it comes onto it
+  assert.deepEqual(runs[0].slice(0, 3), ['Brook', 0, [60, -100]], 'the brook, from its spring (1:5, north up)');
+  near(runs[0][3][0], 280, 1, 'to the sea');
+  assert.deepEqual(runs[1], ['Brook', 0, [20, -60], [60, -100]], 'the stretch above it, down to where it begins');
+  assert.equal(runs[4][0], 'Out');
+  assert.equal(runs[4][1], 1, 'a river');
+  assert.ok(Math.hypot(...runs[4][2]) < 480 && runs[4][2][0] < -370, `it begins at the edge of the land (${runs[4][2]})`);
+  // the card names them, once each, for the list of hikes; the lines are with the land
+  const { card, land } = splitHike(watered);
+  assert.deepEqual(card.streams, ['Brook', 'Beck', 'Out']);
+  assert.deepEqual(land.streams, watered.streams);
+  // a hike with none says nothing of them
+  assert.ok(!('streams' in hike) && !('streams' in splitHike(hike).card));
+});
+
+test('a real stream runs downhill all the way, into what the map says it runs into', () => {
+  const gen = new WorldGen(SEED, [], [watered]);
+  const L = gen.lands[0];
+  const at = (e, n) => [AT[0] + e * 0.2, AT[1] - n * 0.2];
+  const sea = L.offset;
+  // no piece of any of them rises as it goes
+  assert.ok(L.segs.length > 12, `${L.segs.length} pieces of channel`);
+  for (const s of L.segs) for (let i = 1; i <= s.count; i++) assert.ok(s.W[i] <= s.W[i - 1] + 1e-9, 'water does not run uphill');
+  // on the brook there is water, in a channel cut into the ground, going east
+  const [be, bn] = brookAt(5);
+  const bed = gen.height(...at(be, bn));
+  const w = gen.water;
+  assert.ok(w.region && bed < w.level - 0.5, `water over a bed (${w.level - bed} m)`);
+  assert.ok(w.kind === 'stream' && w.edge < -1.5, `in midstream (${w.kind}, ${w.edge})`);
+  assert.ok(w.flowX > 0.5, `running east, to the sea (${w.flowX})`);
+  near(w.level, L.raw(...at(be, bn)) + L.offset, 1, 'lying just under the ground the line was drawn over');
+  // and a bank stands over it to either side, though the hill falls away beyond
+  for (const side of [-15, 15]) {
+    const bank = gen.height(...at(be, bn + side));
+    assert.ok(gen.water.edge > 0 && bank > gen.water.level, `a bank (${bank - gen.water.level} m over the water)`);
+  }
+  // The two lines of the brook are one stream: where they meet it neither
+  // gives out nor starts again, and is as wide as it was
+  gen.height(...at(...brookAt(0)));
+  assert.ok(gen.water.region && gen.water.edge < -0.8, `running through the join (${gen.water.edge})`);
+  // the beck comes in half way down, and the brook is the bigger for it
+  const fed = L.segs.filter((s) => s.acc1 - s.acc0 > 12);
+  assert.equal(fed.length, 1, 'one stretch takes on more than it gathers');
+  assert.ok(fed[0].W[0] > fed[0].W[fed[0].count], 'falling still');
+  gen.height(...at(550, 350));
+  assert.ok(gen.water.region && gen.water.kind === 'stream', 'the beck, on its way down');
+  // it comes down to the sea, at the sea's level
+  gen.height(...at(COAST_AT + 20, brookAt(20)[1]));
+  assert.equal(gen.water.kind, 'lake');
+  near(gen.water.level, sea, 1e-9, 'the sea');
+  const mouth = L.segs.find((s) => Math.abs(s.pts[s.count * 2] - at(...brookAt(22))[0]) < 6 && s.W[s.count] === s.LB);
+  near(mouth.W[mouth.count], sea, 1e-9, 'the last of the brook lies at sea level');
+  // the rill gives out: half way along it runs, at its end there's none
+  gen.height(...at(-500, -600));
+  assert.ok(gen.water.region, 'the rill');
+  gen.height(...at(-700, -600));
+  assert.ok(!gen.water.region, 'and where it ends');
+  // the river is a river from where it comes onto the land
+  gen.height(...at(-1500, -1200));
+  assert.ok(gen.water.region && gen.water.kind === 'river' && gen.water.edge < -3, `the river (${gen.water.kind}, ${gen.water.edge})`);
+  // the map sees them too, without working out the ground
+  gen.water.probe(...at(be, bn));
+  assert.ok(gen.water.kind === 'stream' && gen.water.edge < 0, 'on the map');
+  // and none of it is felt beyond the land
+  const plain = new WorldGen(SEED, []);
+  for (let k = 0; k < 96; k++) {
+    const t = (k / 96) * Math.PI * 2;
+    const [x, z] = [L.cx + Math.cos(t) * (L.outer + 300), L.cz + Math.sin(t) * (L.outer + 300)];
+    assert.equal(gen.height(x, z), plain.height(x, z), `at ${Math.round(x)}, ${Math.round(z)}`);
+    assert.equal(gen.water.level, plain.water.level);
+  }
+});
+
+test('a cove a few metres across is a cove: the shore is kept finer than the ground', () => {
+  const sea = watered.lakes[0];
+  assert.ok(sea.sea && sea.cell < watered.ground.cell / 2 && !sea.box, `on a grid of its own, ${sea.cell} m to the ground's ${watered.ground.cell}`);
+  const gen = new WorldGen(SEED, [], [watered]);
+  const L = gen.lands[0];
+  const shore = (e, n) => L.shore(AT[0] + e * 0.2, AT[1] - n * 0.2);
+  // the cove is 12 m across in the game, and 12 deep: less than two of the ground's cells
+  near(shore(COAST_AT - COVE, 0), -COVE * 0.2, 0.5, 'in the middle of the cove, 6 m from its sides');
+  near(shore(COAST_AT - 2 * COVE - 10, 0), 2, 0.5, 'on the land behind it');
+  near(shore(COAST_AT - COVE, COVE + 10), 2, 0.5, 'and on the point beside it');
+  // and there is water in it
+  const bed = gen.height(AT[0] + (COAST_AT - COVE) * 0.2, AT[1]);
+  assert.ok(gen.water.region && gen.water.kind === 'lake' && bed < gen.water.level - 0.5, `the sea comes into it (${gen.water.level - bed} m deep)`);
+});
+
+test('seen from the land, the sea runs on to the horizon', () => {
+  const gen = new WorldGen(SEED, [], [watered]);
+  const L = gen.lands[0];
+  const at = (e, n) => [AT[0] + e * 0.2, AT[1] - n * 0.2];
+  assert.ok(L.openSea(...at(2600, 0)), 'out past the edge of the land, to the east');
+  assert.ok(L.openSea(...at(6000, 2500)), 'and far out');
+  assert.ok(!L.openSea(...at(-2600, 0)), 'not inland');
+  assert.ok(!L.openSea(...at(1500, 0)), 'nor on the land itself, where the sea is its own');
+  assert.ok(!gen.lands.length || !new WorldGen(SEED, [], [hike]).lands[0].openSea(AT[0] + 600, AT[1]), 'a land with a lake has no sea');
+  // the game's own ground out there is forest: it is only the far view that sees water
+  gen.height(...at(2600, 0));
+  assert.notEqual(gen.water.kind, 'lake');
+  const n = 25;
+  const g = sampleFar(gen, AT[0] - 240, AT[1] - 240, n, 40); // 240 m west of the middle to 720 m east
+  const row = Array.from({ length: n }, (_, i) => g.water[12 * n + i]);
+  for (let i = 0; i < n; i++) {
+    const e = (-240 + i * 40) / 0.2;
+    if (e > COAST_AT + 100) {
+      near(row[i], L.offset, 1e-6, `sea level ${e} m east`);
+      assert.ok(g.h[12 * n + i] < row[i], 'over a bed');
+    } else if (e < COAST_AT - 100) assert.ok(row[i] < NO_WATER * 0.5 || row[i] !== L.offset, `no sea ${e} m east`);
+  }
 });
 
 test('land with no trees has none at all', () => {
