@@ -11,6 +11,7 @@ import { growWorld, LANDS } from '../src/world/lands.js';
 import { generateTerrain, generateVegetation, VEG_KINDS } from '../src/world/chunkGen.js';
 import { renderTile, createVegCache } from '../src/map/mapRender.js';
 import { matchesGolden, summarise } from './helpers/golden.js';
+import { SEA } from '../src/world/sea.js';
 
 const TOL = 1e-6;
 const SEEDS = [20261119, 42];
@@ -90,3 +91,101 @@ for (const land of LANDS) test(`the map is drawn from the same world${land > 1 ?
   for (const [level, tx, tz] of [[1, 0, 0], [3, -1, 0], [-1, 2, 1]]) out[`${level}:${tx}:${tz}`] = summarise(renderTile(gen, level, tx, tz, veg), 16);
   matchesGolden(named('map-tiles', land), out);
 });
+
+// ── The sea (land 3 on) ─────────────────────────────────────────────────────
+const SEA_LANDS = LANDS.filter((land) => growWorld(SEEDS[0], [], land).sea);
+
+test('only a land with a sea has one, and the ones before it are as they were', () => {
+  assert.deepEqual(SEA_LANDS, LANDS.filter((land) => land >= 3));
+  for (const land of LANDS.filter((l) => l < 3)) {
+    const gen = growWorld(SEEDS[0], [], land);
+    assert.equal(gen.sea, null);
+    for (const [x, z] of [[0, 0], [700, -300], [-1500, 900], [2500, 2500]]) {
+      gen.height(x, z);
+      assert.notEqual(gen.water.kind, 'sea');
+    }
+  }
+});
+
+for (const land of SEA_LANDS) for (const seed of SEEDS) {
+  const on = ` on land ${land}`;
+
+  // Pinned along the way from the start to the sea, where the chunks near
+  // the middle don't reach.
+  test(`seed ${seed}${on}: the coast and the sea`, () => {
+    const gen = growWorld(seed, [], land);
+    const { dirX, dirZ } = gen.sea;
+    const out = { points: [], chunks: {} };
+    for (let d = 0; d <= 2000; d += 100) {
+      const x = dirX * d;
+      const z = dirZ * d;
+      const h = gen.height(x, z);
+      const w = gen.water;
+      out.points.push({ d, h, water: w.region ? [w.region, w.level, w.kind] : 0, edge: Math.max(-500, Math.min(500, w.edge)) });
+    }
+    for (const k of [0.8, 1.1, 1.5]) {
+      const cx = Math.floor((dirX * SEA.coastAt * k) / 64);
+      const cz = Math.floor((dirZ * SEA.coastAt * k) / 64);
+      const t = generateTerrain(gen, cx, cz, 2, 64);
+      const v = generateVegetation(gen, cx, cz, 64, TRUNK);
+      out.chunks[`${cx},${cz}`] = { heights: summarise(t.heights), wLevel: summarise(t.wLevel), wData: summarise(t.wData), rock: summarise(v.lists.rock, 8), trees: summarise(v.colliders, 8) };
+    }
+    matchesGolden(named(`sea-${seed}`, land), out, { tolerance: TOL });
+  });
+}
+
+test('a real place out at sea stands as an island, and on the lands before, where the forest is', () => {
+  for (const land of LANDS) {
+    const gen = growWorld(SEEDS[0], [], land);
+    assert.equal(gen.datumLevel(12.5), 12.5, `land ${land}: above the sea, where the forest is`);
+    if (!gen.sea) assert.equal(gen.datumLevel(-80), -80, `land ${land}: no sea, so wherever the forest is`);
+    else assert.equal(gen.datumLevel(gen.sea.level - 40), gen.sea.level + SEA.island, `land ${land}: out at sea, a little over it`);
+  }
+});
+
+for (const land of SEA_LANDS) for (const seed of [...SEEDS, 7]) {
+  const on = ` on land ${land}`;
+
+  test(`seed ${seed}${on}: you start on land, with the sea a walk away`, () => {
+    const gen = growWorld(seed, [], land);
+    const start = gen.findSpawn(0, 0);
+    assert.ok(gen.height(start.x, start.z) > gen.sea.level + 3, 'the start is on dry land');
+    // walk toward the coast until the water is over your head
+    let shore = null;
+    let deep = null;
+    for (let d = 0; d < 2500 && !deep; d += 4) {
+      const x = start.x + gen.sea.dirX * d;
+      const z = start.z + gen.sea.dirZ * d;
+      const h = gen.height(x, z);
+      if (gen.water.kind !== 'sea' || !gen.water.region) continue;
+      if (shore === null && h < gen.water.level) shore = d;
+      if (gen.water.level - h > 25) deep = d;
+    }
+    assert.ok(shore !== null && shore > 250 && shore < 1200, `the shore is ${shore} m off`);
+    assert.ok(deep !== null, 'and further out the sea is deep');
+  });
+
+  test(`seed ${seed}${on}: inland, no hollow goes below the sea, and lakes go deep`, () => {
+    const gen = growWorld(seed, [], land);
+    let inland = 0;
+    for (let z = -3000; z <= 3000; z += 61) {
+      for (let x = -3000; x <= 3000; x += 61) {
+        if (gen.sea.drop(x, z) > SEA.inland[0]) continue;
+        inland++;
+        assert.ok(gen.broadHeight(x, z, 0) > gen.sea.level + SEA.floor * 0.9, `at ${x},${z} the land inland is below the sea`);
+      }
+    }
+    assert.ok(inland > 1000);
+    const net = gen.water.net;
+    let deepest = 0;
+    for (let j = -14; j <= 14; j++) {
+      for (let i = -14; i <= 14; i++) {
+        const n = net.node(i, j);
+        if (net.down(n)) continue;
+        const b = net.basin(n);
+        if (b && b.kind === 'lake') deepest = Math.max(deepest, b.depth);
+      }
+    }
+    assert.ok(deepest > 15, `the deepest lake is only ${deepest.toFixed(1)} m`);
+  });
+}

@@ -35,7 +35,7 @@ for (const { seed, land, on } of WORLDS) {
     assert.ok(channels > 40, `only ${channels} channels`);
   });
 
-  test(`seed ${seed}${on}: every stream ends in a pond, a lake or more water`, () => {
+  test(`seed ${seed}${on}: every stream ends in a pond, a lake, the sea or more water`, () => {
     const gen = growWorld(seed, [], land);
     const net = gen.water.net;
     let lakes = 0;
@@ -48,8 +48,9 @@ for (const { seed, land, on } of WORLDS) {
         m = net.next(m);
       }
       const b = net.basin(m);
-      assert.ok(b, `the stream from ${n.i},${n.j} runs out at ${m.i},${m.j} with nowhere to go`);
-      if (b.kind === 'lake') lakes++;
+      const sea = gen.sea && net.level(m) === gen.sea.level;
+      assert.ok(b || sea, `the stream from ${n.i},${n.j} runs out at ${m.i},${m.j} with nowhere to go`);
+      if (b && b.kind === 'lake') lakes++;
     }
     assert.ok(lakes > 0, 'no stream reaches a lake');
   });
@@ -64,8 +65,14 @@ for (const { seed, land, on } of WORLDS) {
         const speed = Math.hypot(w.flowX, w.flowZ);
         if (!w.region || w.edge > -0.4 || speed < 0.05) continue;
         const level = w.level;
-        gen.height(x + (w.flowX / speed) * 2, z + (w.flowZ / speed) * 2);
+        const fx = w.flowX / speed;
+        const fz = w.flowZ / speed;
+        gen.height(x + fx * 2, z + fz * 2);
         if (!w.region) continue;
+        // (where the current turns sharply, that's another channel: one that
+        // crosses this one, which the network lets happen now and then)
+        const on = Math.hypot(w.flowX, w.flowZ);
+        if (on > 0.05 && (w.flowX * fx + w.flowZ * fz) / on < 0.5) continue;
         running++;
         assert.ok(w.level <= level + 0.05, `at ${x},${z} the current runs uphill`);
       }

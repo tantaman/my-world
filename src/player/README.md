@@ -14,12 +14,20 @@ climbs. Feet settle onto slopes and sills, and the hips drop to let the
 lower leg reach. Landings are absorbed in the knees. Standing still, the
 hiker shifts weight and looks around now and then.
 
+Out of your depth the hiker swims, head and shoulders out. Hold **shift**
+(or **dive** on a touch screen) to go under and **space** to come back up;
+let go and you drift slowly up to float. Under the surface you swim the way
+the camera looks, up and down as well as along, lying flat with a flutter
+kick and breaststroke, the body turning about the chest to lie along the way
+you go; still, you tread water upright. The camera follows you under. What
+it's like down there is [Under the water](../underwater/README.md).
+
 ## Files
 
 ```
 index.js              plugs it into the game: controls, the hiker, where you arrive
-player.js             movement, collision, wading and swimming, third-person camera
-character.js          procedural hiker model, IK gait, work poses, things raised to the face
+player.js             movement, collision, wading, swimming and diving, third-person camera
+character.js          procedural hiker model, IK gait, work poses, swimming, things raised to the face
 head.js               the hiker's face and beard, sunglasses and snapback
 input.js              keyboard, mouse, touch
 peers.js              everyone else, drawn and eased between messages

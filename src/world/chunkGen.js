@@ -337,9 +337,10 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
       if (gen.padClearance(x, z) < s + 1) continue;
       const tint = rng();
       // Boulders are welcome in streams and rivers (the water runs round
-      // them) and along any shore, but not lost in the depths of a lake.
+      // them) and along any shore, but not lost in the depths of a lake
+      // or the sea.
       dry(x, z, 0);
-      const still = water.kind === 'lake' || water.kind === 'pond';
+      const still = water.kind === 'lake' || water.kind === 'pond' || water.kind === 'sea';
       if (water.edge < 0 && water.region && (still ? water.edge < -1.5 : water.level - y > s * 0.9)) continue;
       put('rock', x, z, -0.28 * s, r3 * Math.PI * 2, s, tint, r4);
       if (s > 0.55) colliders.push(x, z, s * 0.85);
@@ -540,7 +541,8 @@ function generateVegetation2(gen, cx, cz, size, trunkRadius) {
       dry(x, z, 0);
       // out in the open high up, big ones
       s *= 1 + gen.above(x, z, y) * 0.3;
-      const still = water.kind === 'lake' || water.kind === 'pond';
+      // (and not lost in the depths of a lake or the sea)
+      const still = water.kind === 'lake' || water.kind === 'pond' || water.kind === 'sea';
       if (water.edge < 0 && water.region && (still ? water.edge < -1.5 : water.level - y > s * 0.9)) continue;
       put('rock', x, z, -0.28 * s, r3 * Math.PI * 2, s, tint, r4);
       if (s > 0.55) colliders.push(x, z, s * 0.85);

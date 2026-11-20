@@ -6,14 +6,17 @@
 //    silhouettes, height fog that melts into the sky, a layer of cloud where
 //    the country has one (see DECK in uniforms.js), filmic tone mapping,
 //    colour grading and ordered dithering onto a slightly reduced palette.
+//    With the camera under water, the fog is the water's instead: everything
+//    loses its reds with depth, fades into green or blue within a few tens
+//    of metres, and light comes down through it in slanting shafts.
 // 3. An upscale pass blows the art pixels up to the screen with a tunable
 //    "soft pixel" filter: hard enough to read as pixel art, soft enough that
 //    the pixels blur together into something that feels painted / real.
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import { SKY, DECK } from './uniforms.js';
-import { NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL } from './glsl.js';
+import { SKY, DECK, UNDER, SHARED } from './uniforms.js';
+import { NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, UNDER_GLSL } from './glsl.js';
 
 const FOG_DENSITY = 0.0021; // per metre at the height of the eye, in the forest's air
 
@@ -28,6 +31,10 @@ const COMPOSITE_FRAG = /* glsl */ `
 #include <packing>
 ${SKY_UNIFORMS_GLSL}
 ${SKY_GLSL}
+${UNDER_GLSL}
+uniform float uUnder;
+uniform float uUnderLevel;
+uniform float uUnderSea;
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
 uniform vec2 uRes;
@@ -49,6 +56,8 @@ uniform float uDeckCover;
 uniform vec2 uDeckMid;
 varying vec2 vUv;
 ${NOISE_GLSL}
+${WORLD_GLSL}
+${WORLD_NOISE_GLSL}
 
 // The layer of cloud. It is a sheet at uDeck, pushed up and down by its own
 // billows; this is how much cloud there is where a ray from the eye meets it
@@ -81,6 +90,40 @@ float bayer4(vec2 p) {
   return (float(m[idx]) + 0.5) / 16.0;
 }
 
+// Under water: what lies dist m off along rd looks like through the water.
+vec3 underWater(vec3 col, vec3 rd, float dist, vec2 frag) {
+  float k = uUnderSea;
+  vec3 p = uCamPos + rd * dist;
+  // the daylight that reached it came down through the water over it
+  col *= exp(-max(uUnderLevel - p.y, 0.0) * waterAbsorb(k));
+  // and what it sends back fades into the water between, which glows with
+  // the light it scatters
+  float fog = waterFog(k);
+  float camDepth = max(uUnderLevel - uCamPos.y, 0.0);
+  float far = 1.0 - exp(-dist * fog);
+  vec3 glow = waterGlow(k, camDepth + max(0.0, -rd.y) * min(dist, 30.0) * 0.5);
+  col = mix(col, glow, far);
+  // Shafts: sunlight through the moving surface, slanting with the sun,
+  // brightest near the top.
+  float sun = smoothstep(0.02, 0.25, uSunDir.y) * (1.0 - uNight);
+  if (sun > 0.0) {
+    float reach = min(dist, 26.0);
+    float jitter = 0.5; // (the same for every pixel: jittered, it shows as static)
+    vec2 slant = uSunDir.xz / max(uSunDir.y, 0.25);
+    float shafts = 0.0;
+    for (int i = 0; i < 6; i++) {
+      float t = reach * (float(i) + jitter) / 6.0;
+      vec3 q = uCamPos + rd * t;
+      float dq = max(uUnderLevel - q.y, 0.0);
+      vec2 at = worldXZ(q) + slant * dq; // (q is as drawn, from near the camera)
+      float n = wnoise(at, 0.32, vec2(uTime * 0.13, uTime * 0.05)) * wnoise(at, 0.71, -vec2(uTime * 0.04, uTime * 0.11));
+      shafts += smoothstep(0.22, 0.6, n) * exp(-dq * 0.07 - t * fog);
+    }
+    col += uSunColor * mix(vec3(0.5, 0.9, 0.7), vec3(0.45, 0.8, 1.0), k) * shafts * (reach / 6.0) * 0.03 * sun;
+  }
+  return col;
+}
+
 void main() {
   vec2 px = 1.0 / uRes;
   vec3 col = texture2D(tColor, vUv).rgb;
@@ -92,7 +135,22 @@ void main() {
   vec3 rd = normalize(mat3(uCamWorld) * vp.xyz);
   float dist = sky ? 1.0e6 : length(vp.xyz);
 
-  if (!sky) {
+  if (uUnder > 0.5) {
+    vec4 vp = uProjInv * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+    vp.xyz /= vp.w;
+    vec3 rd = normalize(mat3(uCamWorld) * vp.xyz);
+    float dist = sky ? 1000.0 : length(vp.xyz);
+    if (!sky) {
+      float z = viewZ(d);
+      float zl = viewZ(texture2D(tDepth, vUv - vec2(px.x, 0.0)).x);
+      float zr = viewZ(texture2D(tDepth, vUv + vec2(px.x, 0.0)).x);
+      float zu = viewZ(texture2D(tDepth, vUv + vec2(0.0, px.y)).x);
+      float zd = viewZ(texture2D(tDepth, vUv - vec2(0.0, px.y)).x);
+      float far = max(max(zl, zr), max(zu, zd));
+      col *= 1.0 - smoothstep(0.06, 0.2, (far - z) / z) * uOutline;
+    }
+    col = underWater(col, rd, dist, gl_FragCoord.xy);
+  } else if (!sky) {
     float z = viewZ(d);
     // Silhouette outline: darken pixels whose neighbours are much further away.
     float zl = viewZ(texture2D(tDepth, vUv - vec2(px.x, 0.0)).x);
@@ -203,6 +261,8 @@ export class PixelPipeline {
       uniforms: {
         ...SKY,
         ...DECK,
+        ...UNDER,
+        uOrigin: SHARED.uOrigin,
         tColor: { value: null },
         tDepth: { value: null },
         uRes: { value: new THREE.Vector2() },

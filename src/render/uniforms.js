@@ -64,3 +64,13 @@ export const DECK = {
 // how fast it's going past them (m/s, x and z: the current less your own
 // way through it), which sets the wake.
 export const WADE = { uWade: { value: 0 }, uWadeFlow: { value: new THREE.Vector2() } };
+
+// The sea, and the water the camera may be under. uSea is set by the world
+// from its land (far below everything in a land with no sea); the rest every
+// frame by whoever follows the camera under water (src/underwater/).
+export const UNDER = {
+  uSea: { value: -1e4 }, // the sea's level (m)
+  uUnder: { value: 0 }, // 1 with the camera under water, 0 in the air
+  uUnderLevel: { value: 0 }, // the surface over the camera (m), while it is under
+  uUnderSea: { value: 0 }, // 0 in fresh water .. 1 in the sea: clearer, and bluer
+};

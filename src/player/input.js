@@ -37,8 +37,9 @@ export class Input extends Emitter {
     this.isTouch = false;
     this.onFirstInteract = null;
     this.blocked = false; // while an overlay (the map) has the keyboard
-    // Tool buttons: 'use' (left mouse / touch button) and 'alt' (right mouse).
-    this.held = { use: false, alt: false };
+    // Tool buttons: 'use' (left mouse / touch button) and 'alt' (right mouse);
+    // and on a touch screen, 'dive'.
+    this.held = { use: false, alt: false, dive: false };
     this.hit = new Set(); // 'use' | 'alt' pressed this frame
 
     addEventListener('keydown', (e) => {
@@ -52,7 +53,7 @@ export class Input extends Emitter {
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => {
       this.keys.clear();
-      this.held.use = this.held.alt = false;
+      this.held.use = this.held.alt = this.held.dive = false;
     });
 
     dom.addEventListener('mousedown', (e) => {
@@ -172,7 +173,7 @@ export class Input extends Emitter {
     this.touchJump = false;
     Object.assign(this.touchMove, { id: null, x: 0, y: 0, active: false });
     this.touchLook.id = null;
-    this.held.use = this.held.alt = false;
+    this.held.use = this.held.alt = this.held.dive = false;
     this.hit.clear();
   }
 
@@ -240,6 +241,12 @@ export class Input extends Emitter {
       y /= l;
     }
     return { x, y };
+  }
+
+  // Diving, out of your depth: shift (as something that flies stoops), or
+  // the button on a touch screen.
+  diving() {
+    return this.isDown('run') || this.held.dive;
   }
 
   running() {

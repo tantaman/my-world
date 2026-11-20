@@ -22,6 +22,19 @@
   **open parkland**, where the meadows run together, the odd lone tree grows
   big, and scrub grows in the open. You start on level ground among the
   trees.
+- **The sea** (the third land, `src/world/land3.js`, `sea.js`). A walk from
+  the start, about half a kilometre to a kilometre off in a direction of the
+  seed's own, the land goes down to the sea. Far out the land falls away
+  under a sea that stands at one level everywhere; how far it falls is a
+  broad field of its own, nothing inland, then the ground tilting down over a
+  few kilometres into the deep. The coast is wherever the hills, tilted,
+  cross the sea's level, so it follows them: coves up the valleys, headlands
+  along the ridges, islands where a hilltop stands out of the deep, and the
+  hills going on down under the water, past 60 m. The shore eases into a
+  sand beach and the seabed is sand in ripples, with rock where it's steep.
+  Rivers run out into it, and inland no hollow goes below its level, so
+  there's no sea but the sea. It rises and falls in a slow swell, bluer than
+  a lake, breaks in lines of surf, and roars along the shore.
 - **Deterministic.** The same seed always produces the same hills, paths
   and trees. This matters because structures will be placed at fixed
   coordinates. The HUD shows your `x, z`, your heading and the time.
@@ -58,7 +71,10 @@
     little cascades, with white water at the lip and churning in the pool
     below; on a river, riffles. A channel widens into pools and narrows
     between them. A pond or lake fills its hollow to just under the lowest
-    point of its rim, with a beach that rises gently to meet the land.
+    point of its rim, with a beach that rises gently to meet the land. On
+    the third land most lakes are deep tarns: a shelf a metre or two deep
+    out from the shore, then a steep drop to a floor 15 to 30-odd metres
+    down.
   - **The water itself** is meshed per chunk on the main thread from the
     heights and the water grids the workers produce, so it follows your
     digging. It's see-through, writes depth (so the fog and outlines treat it
@@ -76,11 +92,12 @@
     lily pads, a few in flower, float further out.
   - **In it** you wade, slower the deeper it gets, and the current leans on
     you the deeper you're in it; out of your depth you swim, with your head
-    and shoulders out (no running or jumping), and a river carries you along.
-    Each step throws up a splash, running sends spray off your shins, and
-    landing in it sends up a sheet. The camera stays above the surface, and
-    footpaths cross streams and rivers at shallow fords. Animals ford a
-    shallow stream too, but go round anything deeper.
+    and shoulders out (no jumping), and a river carries you along. Hold
+    **shift** to dive (see [Under the water](../underwater/README.md)), and
+    the camera follows you under. Each step throws up a splash, running
+    sends spray off your shins, and landing in it sends up a sheet. Footpaths
+    cross streams and rivers at shallow fords. Animals ford a shallow stream
+    too, but go round anything deeper.
 - **Ecology.** A forest-density field opens into meadows full of wildflowers.
   A species field shifts the woods between conifers and broadleaf trees, with
   birches along the edges. Ferns grow where it's damp and shaded, and you'll
@@ -104,15 +121,16 @@ a new **land**, and every world keeps the land it was first grown on
 |---|---|
 | 1 | rolling hills and mixed woods everywhere (`world/worldgen.js`) — every world saved before there was a second |
 | 2 | lake country, hills and mountains, benches, and different woods (`world/land2.js`) |
+| 3 | all of that, and the sea a walk from the start, and deep lakes (`world/land3.js`, `sea.js`) |
 
 New worlds are grown on the newest. A shared world says which land it is on
 in its save, beside its name (`land` → 2); one that says nothing is land 1,
 which is every world saved before lands were counted. A world that lives only
 in your browser is known by its seed and its land, so the world you built in
-before is still there, at `?land=1`; the first time you open the new land
-where one is kept, the game says so. What each land grows is pinned by
-`test/golden/` (land 2's files end in `-land2`), and never changes: something
-new goes in a land of its own.
+before is still there, at `?land=1` or `?land=2`; the first time you open the
+new land where one is kept, the game says so. What each land grows is pinned
+by `test/golden/` (land 2's files end in `-land2`, land 3's in `-land3`), and
+never changes: something new goes in a land of its own.
 
 ## Real places
 
@@ -131,7 +149,11 @@ grown bare, as the golden tests grow it, a land is exactly itself. The one
 thing asked of a land is that its own workings ask `forestHeight()` rather
 than `broadHeight()`, which real places change: the water, for one, is
 routed over the forest's own land, so a real place can't send a river
-somewhere else.
+somewhere else. And a real place stands at the height of the forest round
+it, except that on a land with a sea (the third) one that would be under the
+sea stands a little over it instead, as an island (`datumLevel()`); the
+forest's sea keeps off land a real place holds entirely, and meets it round
+its edge.
 
 Each hike is a small *card* that is always here (`hikes.js`: what it is and
 where) and its *land*, a file of a couple of hundred kB that is fetched the
@@ -156,9 +178,11 @@ one country among them, and looks the way it always has.
 index.js              plugs it into the game: the land, the sky, the hour
 worldgen.js           pure world description: height, paths, forest, species (land 1)
 land2.js              the second land: lake country, mountains, benches, kinds of woods
+land3.js              the third land: the second, by the sea, with deep lakes
+sea.js                the sea: where the land falls away to it, its beaches
 lands.js              which land a world is grown on; growWorld()
 drainage.js           where water runs and gathers: the drainage network
-water.js              streams, rivers, ponds and lakes on the ground, from that network
+water.js              streams, rivers, ponds, lakes and the sea on the ground, from that network
 landform.js           a piece of real land (a hike): its heights, trails, lakes, streams
 realPlaces.js         a land with real places set into it: grown from any land, wraps what it says
 hikes.js              the hikes in the game, as cards (written by npm run hike)
@@ -169,7 +193,7 @@ country.js            the kinds of country, in one table: ground, plants, sky, a
 chunkGen.js           pure chunk generation (terrain buffers, vegetation lists)
 chunkWorker.js        Web Worker wrapper around chunkGen
 chunks.js             streaming, LOD, meshes, collision + height + water queries
-waterSurface.js       the water's mesh and shader
+waterSurface.js       the water's mesh and shader, from above and from under it
 solids.js             built things you bump into and stand on
 spaces.js             places under the ground you can be in (caves): floor, walls, roof
 cuts.js               holes in the ground, where something else stands in for it

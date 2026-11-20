@@ -73,6 +73,14 @@ const SHORE_FAR = 60; // m, what a packed shore distance saturates at
 const SURF = 0.85;
 const CHOP = 0.3;
 const SURF_REACH = 9;
+
+// How churned up a sea is u metres from its shore (negative in the water):
+// white where it breaks, a chop further out. Any sea: a real place's, or the
+// forest's own (sea.js).
+export function seaSurf(u) {
+  return CHOP + (SURF - CHOP) * smoothstep(-SURF_REACH, -1, u);
+}
+
 // m in from the land's edge that tells whether the sea runs on past it
 // (inside the bank the importer leaves round the sea: tools/hike/build.js)
 const SEA_EDGE = 40;
@@ -578,7 +586,7 @@ export class Landform {
   // How churned up the sea is u metres from its shore (negative in the
   // water): white where it breaks, a chop further out.
   surf(u) {
-    return CHOP + (SURF - CHOP) * smoothstep(-SURF_REACH, -1, u);
+    return seaSurf(u);
   }
 
   // The ground near a lake whose shore is u metres away (negative in the

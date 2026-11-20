@@ -9,15 +9,18 @@
 //   1  rolling hills and mixed woods everywhere (worldgen.js)
 //   2  lake country, hills and mountains, benches, and different woods
 //      (land2.js)
+//   3  all of that, and the sea, a walk from the start, and deep lakes
+//      (land3.js, sea.js)
 //
 // New worlds are grown on the newest. A world saved before lands were
 // counted says nothing about it, and is land 1.
 
 import { WorldGen } from './worldgen.js';
 import { Land2 } from './land2.js';
+import { Land3 } from './land3.js';
 import { withRealPlaces } from './realPlaces.js';
 
-const GROWN = { 1: WorldGen, 2: Land2 };
+const GROWN = { 1: WorldGen, 2: Land2, 3: Land3 };
 // Each, with real places set into it (realPlaces.js).
 const PLACED = Object.fromEntries(Object.entries(GROWN).map(([n, Land]) => [n, withRealPlaces(Land)]));
 

@@ -4,6 +4,12 @@
 // the deeper you're in it; where it's too deep to stand you swim: you float
 // with your head and shoulders out, and running water carries you along.
 //
+// Out of your depth on your own, you can dive (input.diving(): shift, as
+// something that flies stoops), and come up again (jump). Under the surface you swim the way the camera looks, up and
+// down as well as along, lying flat in the water as you go; let go and you
+// drift slowly back up. The camera follows you under, and stays on whichever
+// side of the surface your head is.
+//
 // Something can carry you instead (player.carrier: a mount). Then it's its
 // speeds, its depth, its width and head room that count, and if it flies,
 // space climbs and shift stoops. Or you can be aboard something that goes
@@ -36,6 +42,26 @@ export const SWIM_DEPTH = 1.12;
 const WADE_PUSH = [0.15, 0.9];
 const PUSH = { wade: 0.3, swim: 0.85 };
 const EYE = 1.45; // m above your feet the camera looks at
+const EYE_FLAT = 1.1; // ...and lying flat in the water
+// Swimming (m/s): along, straight down (dive) and up (jump), and how fast
+// you drift up on your own.
+const SWIM = { along: 1.3, down: 1.5, up: 1.8, drift: 0.22 };
+// How far (m) under floating height you have to be before you swim the way
+// the camera looks rather than along the surface.
+const UNDER_STEER = 0.6;
+// How far the camera's pitch is from looking straight along (radians), before
+// you swim upward or downward; and how much under that is still level.
+const LEVEL_PITCH = 0.25;
+const LEVEL_SLACK = 0.1;
+// Lying flat in the water: the feet this far (m) below the body's middle, so
+// you can lie on the bed.
+const PRONE_DROP = 0.8;
+// Where your eyes are above your feet (m), upright (or treading water) and
+// lying flat.
+const HEAD = [1.6, 1.15];
+// How far the camera can pitch (radians): in the air, and under water, where
+// you can look up at the surface from below.
+const PITCH = { air: [-0.35, 1.25], under: [-1.05, 1.25] };
 // Flying higher than this (m) over the ground, you're above the trunks.
 const TRUNK_CLEAR = 10;
 // A tap of jump in the air (a touch screen has no holding it) climbs for this long (s).
@@ -114,6 +140,14 @@ export class Player extends Emitter {
     // out of your depth and swimming.
     this.wade = 0;
     this.swimming = false;
+    // Diving: how far (m) below floating height you are, whether your head is
+    // under, the surface over you (m), how flat you lie in the water (0
+    // upright .. 1 flat) and how far you're pitched head down (radians).
+    this.under = 0;
+    this.submerged = false;
+    this.surface = 0;
+    this.prone = 0;
+    this.pitch = 0;
     // The solid you're standing on (a sill, a dock), or null on the ground.
     // One with a `surface` says what your footsteps sound like on it.
     this.underfoot = null;
@@ -161,9 +195,10 @@ export class Player extends Emitter {
 
   // Ground height under (x, z) for feet at y: terrain, the floor of a cave,
   // or the top of something built.
-  // (Which solid that was, if any, is left in this.groundSolid.)
-  groundAt(x, z, y = Infinity) {
-    let g = standHeight(this.world, x, z, this.carrier ? this.carrier.depth : SWIM_DEPTH, y, this.spaces);
+  // (Which solid that was, if any, is left in this.groundSolid.) afloat: in
+  // deep water, where you float rather than the bed.
+  groundAt(x, z, y = Infinity, afloat = true) {
+    let g = afloat ? standHeight(this.world, x, z, this.carrier ? this.carrier.depth : SWIM_DEPTH, y, this.spaces) : this.world.heightAt(x, z);
     this.groundSolid = null;
     if (this.solids) {
       this.solids.forEachNear(x, z, 1, (s) => {
@@ -202,7 +237,7 @@ export class Player extends Emitter {
   }
 
   get eye() {
-    return this.carrier ? this.carrier.eye : EYE;
+    return this.carrier ? this.carrier.eye : lerp(EYE, EYE_FLAT, this.prone);
   }
 
   update(dt) {
@@ -211,7 +246,10 @@ export class Player extends Emitter {
     const look = input.consumeLook();
     const sens = 0.0026;
     this.camYaw -= look.x * sens;
-    this.camPitch = clamp(this.camPitch + look.y * sens, -0.35, 1.25);
+    // under water you can look up at the surface from below
+    const range = this.submerged ? PITCH.under : PITCH.air;
+    this.camPitch = clamp(this.camPitch + look.y * sens, PITCH.under[0], range[1]);
+    if (this.camPitch < range[0]) this.camPitch = lerp(this.camPitch, range[0], 1 - Math.exp(-dt * 5));
     const z = input.consumeZoom();
     if (z) this.camDist = clamp(this.camDist * (z > 0 ? 1.12 : 1 / 1.12), 2.2, 16);
     if (input.isDown('turnLeft')) this.camYaw += dt * 1.8;
@@ -274,15 +312,46 @@ export class Player extends Emitter {
       const drag = this.swimming ? 0.42 : 1 - 0.5 * smoothstep(0.12, 1.0, depth);
       const run = running && !this.swimming;
       speed = (run ? CONFIG.runSpeed : CONFIG.walkSpeed) * amount * (1 - this.busy * 0.85) * drag;
+      if (this.swimming) speed = SWIM.along * amount;
       push = this.swimming ? PUSH.swim : PUSH.wade * smoothstep(WADE_PUSH[0], WADE_PUSH[1], depth);
     }
+    // On your own, out of your depth: where you'd float, and how far under it
+    // you are. Under the surface, forward is the way the camera looks, up or
+    // down.
+    const diver = !c && this.swimming;
+    const floatY = diver ? _w.level - SWIM_DEPTH : -Infinity;
+    this.surface = diver ? _w.level : 0;
+    this.under = diver ? Math.max(0, floatY - this.pos.y) : 0;
+    let climb = 0;
+    if (diver && this.under > UNDER_STEER && this.manual) {
+      const p = this.camPitch - LEVEL_PITCH;
+      const aim = Math.sign(p) * Math.max(0, Math.abs(p) - LEVEL_SLACK);
+      const ahead = Math.max(0, axes.y) / Math.max(1e-4, Math.hypot(axes.x, axes.y));
+      climb = -Math.sin(aim) * speed * ahead;
+      speed *= 1 - (1 - Math.cos(aim)) * ahead;
+    }
+    // in the water (not still in the air over it)
+    const afloat = diver && this.pos.y <= floatY + 0.05;
 
-    const accel = this.flying ? F.agility : this.grounded ? (c ? c.agility : 11) : 2.5;
+    const accel = this.flying ? F.agility : diver ? 4 : this.grounded ? (c ? c.agility : 11) : 2.5;
     const k = 1 - Math.exp(-accel * dt);
     this.vel.x = lerp(this.vel.x, wx * speed + this.current.x * push, k);
     this.vel.z = lerp(this.vel.z, wz * speed + this.current.z * push, k);
 
-    if (F) {
+    if (afloat) {
+      // no weight in the water: you go down when you dive, up when you kick
+      // up, and otherwise drift slowly back up to float
+      const down = input.diving();
+      const up = input.isDown('jump');
+      input.jumped(); // (no jumping out of your depth)
+      let vy = climb;
+      if (down && !up) vy = -SWIM.down;
+      else if (up && !down) vy = SWIM.up;
+      else if (!climb) vy = this.under > 0.02 ? SWIM.drift : 0;
+      // coming in from above (a jump, a fall) the water takes it off you
+      this.vel.y = lerp(this.vel.y, vy, 1 - Math.exp(-dt * (this.vel.y < -1 && this.under < 1.5 ? 6 : 4)));
+      this.climbing = false;
+    } else if (F) {
       // jump takes to the air; in it, jump climbs, shift stoops, and
       // otherwise it glides, slowly losing height
       const tapped = input.jumped();
@@ -370,7 +439,29 @@ export class Player extends Emitter {
     const fallSpeed = -this.vel.y;
     const gh = this.groundAt(this.pos.x, this.pos.z, this.pos.y);
     const under = this.groundSolid;
-    if (this.pos.y <= gh) {
+    // How flat you lie in the water: flat while you swim along under it,
+    // upright treading water, or at the surface, more upright the slower.
+    const hs0 = Math.hypot(this.vel.x, this.vel.z);
+    const moving = smoothstep(0.15, 0.8, Math.hypot(hs0, this.vel.y));
+    const flat = diver ? moving * (this.under > 0.3 ? 1 : 0.7) : 0;
+    this.prone = lerp(this.prone, flat, 1 - Math.exp(-dt * 3));
+    // pitched head down as you go down, head up as you come up
+    const dive = diver && moving > 0 ? Math.atan2(-this.vel.y, Math.max(hs0, 0.3)) : 0;
+    this.pitch = lerp(this.pitch, clamp(dive, -1.1, 1.2) * this.prone, 1 - Math.exp(-dt * 4));
+    // no higher than floating, unless you're still coming down into it
+    if (afloat && this.pos.y > floatY && this.vel.y > 0) {
+      this.pos.y = floatY;
+      this.vel.y = 0;
+    }
+    if (diver && (this.pos.y < floatY - 0.01 || (afloat && this.vel.y < 0))) {
+      // under the surface (or on your way down from it): no lower than the bed
+      const bed = this.groundAt(this.pos.x, this.pos.z, this.pos.y, false) - PRONE_DROP * this.prone;
+      if (this.pos.y < bed) {
+        this.pos.y = bed;
+        if (this.vel.y < 0) this.vel.y = 0;
+      }
+      this.grounded = true;
+    } else if (this.pos.y <= gh) {
       this.pos.y = gh;
       this.vel.y = 0;
       this.grounded = true;
@@ -402,11 +493,14 @@ export class Player extends Emitter {
     const root = this.character.root;
     root.position.copy(this.pos);
     root.rotation.y = this.yaw;
+    // bob a little while swimming at the surface
+    if (diver) root.position.y += Math.sin(this.character.time * 2.6) * 0.04 * (1 - smoothstep(0.1, 0.5, this.under));
+    this.character.swim(diver ? 1 : 0, this.prone, this.pitch, this.under > 0.3);
     // carried, the legs aren't walking (whatever carries you sits you on it)
     if (c) this.character.update(dt, 0, true, 0, 0);
     else this.character.update(dt, hs, this.grounded, this.vel.y, this.turnRate);
-    // bob a little while swimming
-    if (this.swimming && !c) root.position.y += Math.sin(this.character.time * 2.6) * 0.04;
+    // whether your head is under the water
+    this.submerged = diver && this.pos.y + lerp(HEAD[0], HEAD[1], this.prone) < this.surface - 0.05;
 
     this.updateCamera(dt, false);
   }
@@ -552,8 +646,12 @@ export class Player extends Emitter {
     // (in a cave the march above has already kept it in the open)
     if (!under) {
       let floor = this.world.heightAt(cam.position.x, cam.position.z) + 0.35;
-      // and keep it out of the water
-      if (this.world.waterAt(cam.position.x, cam.position.z, _w)) floor = Math.max(floor, _w.level + 0.3);
+      // and on the same side of the surface as your head: out of the water
+      // while it's out, under while you're under
+      if (this.world.waterAt(cam.position.x, cam.position.z, _w) && _w.depth > 0) {
+        if (!this.submerged) floor = Math.max(floor, _w.level + 0.3);
+        else if (cam.position.y > _w.level - 0.25) cam.position.y = Math.max(floor, _w.level - 0.25);
+      }
       if (cam.position.y < floor) cam.position.y = floor;
     }
     cam.lookAt(this.camTarget);

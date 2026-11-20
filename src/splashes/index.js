@@ -42,6 +42,7 @@ export function installSplashes(game) {
     if (!w) return;
     side = -side;
     if (player.swimming) {
+      if (player.under > 0.4) return; // (under it, nothing breaks the surface)
       // a stroke: water running off the arm as it comes over
       for (const s of [-1, 1]) {
         const p = at(0.4 * s, 0.25);
