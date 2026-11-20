@@ -672,8 +672,9 @@ Each of those files opens with what the thing is and what it is handed.
 
 - *The forest is grown, not stored.* The same seed always grows the same
   land, so a save holds only what was changed. Anything that alters what a
-  seed grows (`world/worldgen.js`, `chunkGen.js`, `water.js`, the order of
-  `world/flora.js`) moves every saved cabin relative to its hillside.
+  seed grows (`world/worldgen.js`, `chunkGen.js`, `water.js`, `drainage.js`,
+  the order of `world/flora.js`) moves every saved cabin relative to its
+  hillside.
 - *A save is spelled once, for good.* Each system says how its share of a
   save is cut into elements (`t:120:-40`, `l:x:0:0:4:0`), next to the class
   that owns it. Worlds on the server are spelled that way now: add new kinds,

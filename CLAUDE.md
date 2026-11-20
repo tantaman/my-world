@@ -48,7 +48,7 @@ with the contract.
 
 - **World generation is part of the save format.** A save is only the diff
   from what a seed grows. `world/worldgen.js`, `chunkGen.js`, `water.js`,
-  `noise.js` and the order of `world/flora.js` are pinned by
+  `drainage.js`, `noise.js` and the order of `world/flora.js` are pinned by
   `test/golden/`. If those tests fail, fix the code; do not re-record.
 - **Element spelling is for good.** Keys and values in
   `test/golden/save-elements.json` are what is on the save server and in
