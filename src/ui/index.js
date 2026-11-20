@@ -10,7 +10,8 @@ export function installHud(game) {
   game.commands.add({ id: 'help', keys: ['KeyH', 'Slash'], run: () => hud.toggleHelp() });
 
   // The help panel lists whatever keys ended up bound, by whichever features.
-  game.on('ready', () => hud.renderHelp(game.commands.help()));
+  hud.helpSource = () => game.commands.help();
+  game.on('ready', () => hud.renderHelp(hud.helpSource()));
   game.on('fault', (system) => hud.flash(`${system.name} has stopped · see the console`));
 
   game.addSystem({

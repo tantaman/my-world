@@ -33,6 +33,7 @@ export class Hud {
     this._inv = '';
     this.soundBtn = document.getElementById('sound-btn');
     this.saveBtn = document.getElementById('save-btn');
+    this.helpSource = null; // () => what renderHelp shows
     this.button('help-btn', () => this.toggleHelp());
   }
 
@@ -101,7 +102,9 @@ export class Hud {
     if (this.hint) this.hint.classList.add('gone');
   }
 
+  // Written afresh each time it opens, from whatever is bound by then.
   toggleHelp() {
+    if (this.helpSource && !this.help.classList.contains('open')) this.renderHelp(this.helpSource());
     this.help.classList.toggle('open');
   }
 

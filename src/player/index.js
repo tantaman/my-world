@@ -14,8 +14,6 @@ export function installPlayer(game) {
   const player = new Player({ scene, camera, world: chunks, input, solids });
   game.provide('input', input);
   game.provide('player', player);
-  // The world streams in around the player from here on.
-  game.focus = player.pos;
 
   input.on('touch', () => hud.showTouchActions());
   input.bindButton(document.getElementById('act-use'), 'use');
@@ -61,6 +59,7 @@ export function installPlayer(game) {
     phase: 'update',
     update({ dt }) {
       player.update(dt);
+      game.focus.copy(player.pos); // the world streams in around you
       if (player.hasMoved) hud.hideHint();
       SHARED.uPlayer.value.copy(player.pos);
       // ripples and froth around your legs, more when you're moving

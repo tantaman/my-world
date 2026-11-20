@@ -26,6 +26,7 @@ npm install
 npm run dev        # http://localhost:5173 — the game
 npm run api        # http://127.0.0.1:8787 — the save server (optional)
 npm run build      # static site in dist/
+npm test           # the rules, in Node (see "Checking it still works")
 ```
 
 The game is a static site and runs on its own; `npm run api` adds the save
@@ -250,7 +251,7 @@ also sway in the wind, and grass parts around your feet.
 ## How it sounds
 
 The sound is made in code too, with the Web Audio API. There are no audio
-files (`src/audio/soundscape.js`). Browsers only allow sound after you
+files (`src/audio/`). Browsers only allow sound after you
 interact, so it fades in after your first click, key press or tap.
 
 - **Wind** is low-passed brown noise that gusts along with the swaying
@@ -532,31 +533,252 @@ export const thinkingHut = {
 };
 ```
 
+## How it's put together
+
+The game is a list of **features**. Each is a function that takes the game
+and installs itself — makes its things, says what it saves, binds its keys,
+adds what it does each frame — and `src/main.js` is little more than the list:
+
+```js
+const FEATURES = [installRender, installHud, installWorld, installPlayer, installAudio,
+                  installBuild, installMap, installSave, installWildlife, installDebug];
+```
+
+A feature lives in a folder of its own, and its `index.js` is the only file in
+it that knows about the game as a whole. Everything else in the folder is
+ordinary classes and functions that are handed what they need, which is what
+lets most of them be tested in Node with nothing else running.
+
+**The frame.** Each frame runs in phases, and within a phase in the order
+features were installed (`src/game/game.js`):
+
+| phase | what happens |
+|---|---|
+| `input` | keys have been read and commands run; the clock ticks |
+| `update` | what you do: walking, the tool in your hands |
+| `world` | what follows from where you are: streaming, sky, animals, other people |
+| `audio` | what all of that sounds like |
+| `render` | draw it |
+| `late` | the HUD, saving, bookkeeping |
+
+`world.game.systems` in the console shows what runs, in order. A system that
+throws is reported and, if it keeps throwing, stopped: a stuck animal doesn't
+freeze the forest.
+
+**What features plug into.** Things a new feature usually needs already have
+a place to go, so that adding one doesn't mean editing the others:
+
+| to add… | …call | defined in |
+|---|---|---|
+| something done every frame | `game.addSystem({ name, phase, update })` | `game/game.js` |
+| a key, and its line on the help panel | `game.commands.add({ keys, run, group, label })` | `game/commands.js` |
+| something that is saved | `game.save.register({ id, collect, restore, … })` | `save/domains.js` |
+| a tool | `game.builder.register(tool)` | `build/builder.js` |
+| a thing tools must work round | `game.builder.obstacles.addSource(fn)` | `build/obstacles.js` |
+| a material to carry | `game.builder.stock.define({ id, label })` | `build/inventory.js` |
+| a one-off sound | `defineSfx(kind, play)` | `audio/sfx.js` |
+| an animal's voice | `defineCall(kind, reach, play)` | `audio/calls.js` |
+| a kind of ground underfoot | `defineSurface(name, { thump, step })` | `audio/footsteps.js` |
+| a sound that plays all the time | `game.sound.addLayer({ build, update })` | `audio/soundscape.js` |
+| a species | `defineSpecies(kind, def)` | `wildlife/species.js` |
+| a new kind of creature altogether | `defineAnimalClass(name, make)` | `wildlife/wildlife.js` |
+| a remembered preference | `game.settings.get / set` | `game/settings.js` |
+| a button on the HUD | `game.hud.button(id, fn)` | `ui/hud.js` |
+
+Each of those files opens with what the thing is and what it is handed.
+
+**A few rules the code keeps to.**
+
+- *The forest is grown, not stored.* The same seed always grows the same
+  land, so a save holds only what was changed. Anything that alters what a
+  seed grows (`world/worldgen.js`, `chunkGen.js`, `water.js`, the order of
+  `world/flora.js`) moves every saved cabin relative to its hillside.
+- *A save is spelled once, for good.* Each system says how its share of a
+  save is cut into elements (`t:120:-40`, `l:x:0:0:4:0`), next to the class
+  that owns it. Worlds on the server are spelled that way now: add new kinds,
+  don't alter old ones. An element this build has never heard of is left
+  alone, so an older client can't sweep away what a newer one saved.
+- *Say each thing once.* What grows is one table (`world/flora.js`), keys
+  are one registry, the address bar is read in one file (`config.js`), and
+  every `localStorage` key is listed in `core/storage.js`.
+- *Tell, don't be reached into.* A class that others need to hear from emits
+  events (`chunks.on('vegetation', …)`, `player.on('footstep', …)`,
+  `forest.on('crash', …)`) rather than holding one `onSomething` slot that the
+  last caller wins.
+- *Layers point one way.* `core` knows nothing; `render` knows `core`;
+  `world` knows those; the features know the world and, where they must,
+  each other — and nothing reaches back down.
+
+### Extending the game
+
+**A feature.** Say, campfires. Make `src/fires/`, with the fire itself in
+plain modules and an `index.js` that plugs it in:
+
+```js
+// src/fires/index.js
+export function installFires(game) {
+  const { scene, solids, builder, save, sound } = game;
+  const fires = new Fires({ scene, solids });
+
+  builder.register(fireTool(fires));                         // key 8, on the tool bar
+  builder.obstacles.addSource((x, z, R, out) => {            // walls and spades go round it
+    for (const f of fires.near(x, z, R)) out.push({ x: f.x, z: f.z, what: 'a fire ring', dig: 1.3, wall: 0.8, footing: 1.4 });
+  });
+  save.register({                                            // kept, shared, and synced live
+    id: 'fires', kinds: ['c'],
+    collect: () => fires.serialize(), restore: (data) => fires.load(data),
+    encode: (data, put) => data.forEach((f) => put(regionOf(f.x, f.z), `c:${f.x}:${f.z}`, [f.wood, f.lit])),
+    decode: () => { const out = []; return { take: (region, kind, rest, v) => out.push(fromElement(rest, v)), done: () => out }; },
+  });
+  fires.on('change', () => save.touch());
+  sound.addLayer(crackle(fires));                            // heard from where each one burns
+  game.addSystem({ name: 'fires', phase: 'world', update: ({ dt }) => fires.update(dt) });
+}
+```
+
+and add `installFires` to the list in `main.js`, after `installBuild`. That
+line is the only change outside the new folder.
+
+**A tool** is an object with `target(b)` — what would a click do, here, now?
+— and `work(b, t, io)` — act on the buttons. The contract, and everything the
+bench hands a tool, is at the top of `src/build/builder.js`; the six that come
+with the game are in `src/build/tools/`; `hands.js` is the shortest to read.
+
+**Something saved** registers a *domain*: `collect()` and `restore(data)`
+for its plain-JSON state, and, if it is part of the world rather than yours
+alone, how that state is cut into elements. This browser's copy, the save
+server, the diff that finds what changed and the socket other people build
+over all work off the registry — none of them needs telling. See the top of
+`src/save/domains.js`.
+
+**A sound.** One-off sounds are entries in a table: `defineSfx('strike',
+(k) => { k.noise(…); k.tone(…); })`. Sounds that are always there (a stream, a
+fire) are *layers* with `build` and `update`. Everything goes out through a
+bus — `ambience`, `effects`, `wildlife`, or one you name, like `music` — whose
+level can be set on its own: `world.sound.volume('wildlife', 0.5)`.
+
+**An animal** is an entry in `src/wildlife/species.js` (where it lives, when
+it's about, how it takes to people), a body in `mammals.js` or `birds.js`,
+and if it has a voice, a `defineCall`. Four-legged mammals need nothing else.
+
+**A key** is `game.commands.add({ id, keys: ['KeyB'], group: 'LOOK', label:
+'…', run })`, from the feature that owns what it does. The help panel is
+written from the same list, and two features wanting one key are warned about.
+
+### Checking it still works
+
+```bash
+npm test             # in Node, a second or so
+npm run smoke        # a play-through in a headless browser, about a minute
+npm run together     # two visitors in one world (run `npm run serve` first)
+```
+
+`npm test` pins the things other people's worlds depend on — that a seed
+grows the same land (`test/golden/`), that a save is spelled as it always was,
+that what is already in someone's browser still opens — along with the rules
+of building and the game loop. If one of the golden files stops matching, the
+code changed something it shouldn't have; only re-record
+(`UPDATE_GOLDEN=1 npm test`) when the change is meant.
+
+`npm run smoke` plays: it fells a tree, bucks and hews it, picks up a stone,
+digs, raises and roofs a cabin, reloads to see it was all kept, opens the map
+and leaves a mark, makes some noise and calls up one of every animal. It
+drives the keys and the crosshair and reads results through `window.world`,
+so it doesn't care how the insides are arranged. The last two need
+[Playwright](https://playwright.dev) (`npm i -D playwright && npx playwright
+install chromium`).
+
 ## Layout
 
 ```
 src/
-  main.js                 boot, loop, keys, opening a saved world
-  config.js               tunables (+ URL overrides)
+  main.js                 which world to open, the list of features, the opening
+  config.js               tunables (+ URL overrides): the only reader of the address bar
   noise.js                seeded simplex noise, hashing, helpers
-  audio/
-    soundscape.js         procedural wind, leaves, birds, crickets, owl, footsteps
-    calls.js              animal calls, placed where the animal is
+  core/
+    events.js             Emitter: on / emit, in place of single callback slots
+    storage.js            this browser's memory, and every key kept in it
+    geom.js               plan-view geometry and chance that several systems share
+    format.js             how numbers are written for people
+  game/
+    game.js               the Game: what features share, and the frame's phases
+    commands.js           keys and what they do; the help panel is written from it
+    settings.js           the visitor's preferences
+    debug.js              stats (V) and the console helpers
   render/
+    index.js              ← feature: renderer, scene, camera, the look keys
     pixelPipeline.js      low-res render → composite → soft-pixel upscale
+    uniforms.js           shader uniforms everything shares: time, wind, sky
     glsl.js               shared GLSL: noise, sky gradient, ground colour
+  ui/
+    index.js              ← feature
+    hud.js                coordinates, prompts, tool bar, help panel, buttons
   world/
+    index.js              ← feature: the land, the sky, the hour
     worldgen.js           pure world description: height, paths, forest, species
+    water.js              streams, rivers, ponds and lakes, as part of that description
+    flora.js              what grows, in one table
     chunkGen.js           pure chunk generation (terrain buffers, vegetation lists)
     chunkWorker.js        Web Worker wrapper around chunkGen
-    chunks.js             streaming, LOD, meshes, collision + height queries
+    chunks.js             streaming, LOD, meshes, collision + height + water queries
+    waterSurface.js       the water's mesh and shader
+    solids.js             built things you bump into and stand on
     models.js             procedural trees, bushes, ferns, rocks, logs
-    grass.js              grass blades + wildflowers near the player
+    grass.js              grass blades, wildflowers, reeds and lilies near the player
     materials.js          terrain / vegetation / grass shader hooks
     sky.js                sky dome, clouds, stars, sun/moon, time-of-day palettes
     particles.js          pollen motes and fireflies
-    markers.js            your map marks as pennants in the world
+  player/
+    index.js              ← feature: controls, the hiker, where you arrive
+    player.js             movement, collision, wading and swimming, third-person camera
+    character.js          procedural hiker model, IK gait, work poses
+    input.js              keyboard, mouse, touch
+    peers.js              everyone else, drawn and eased between messages
+  audio/
+    index.js              ← feature: footsteps, the sound key, what the forest is told
+    soundscape.js         the engine: audio context, mixer buses, the kit, layers
+    kit.js                noise, impulse, envelope
+    layers/               weather · crickets · birds · water and pond life
+    sfx.js                the sounds of work, as a table
+    calls.js              animal calls, placed where the animal is
+    footsteps.js          by what is underfoot
+  build/
+    index.js              ← feature: the tools, the obstacles, what is saved
+    builder.js            the bench: aim, swing, hold, prompt — and what a tool is
+    tools/                hands · axe · shovel · footing · wall · roof
+    buildings.js          footings, notched log walls, rooms, roofs (the rules)
+    forestry.js           felling, limbing, bucking, stumps, cleared plants
+    terrainEdits.js       digging, filling and grading on the 1 m vertex grid
+    inventory.js          what you carry
+    stake.js              the grade stake and its plane
+    obstacles.js          what work has to go round
+    previews.js           ghosts, grid dots, the shovel's ring
+    chips.js              wood chips and clods
+    aim.js                rays against ground and trunks
+    geometry.js           logs, timbers, chinking, piers, roofs, stumps, tools
+    constants.js          dimensions: course height, overhang, pier range, reach…
+  map/
+    index.js              ← feature
+    mapRender.js          pure top-down tile renderer (runs in a worker)
+    mapWorker.js          Web Worker wrapper around mapRender
+    tiles.js              tile cache + worker scheduling
+    mapView.js            the map overlay: pan/zoom, pins, mark editor, list
+    marks.js              the marks, their icons and colours
+    markers.js            your marks as pennants in the world
+    map.css               map styles
+  save/
+    index.js              ← feature: other people, the panel, the key
+    domains.js            what a save is made of: the registry every system adds to
+    worldSave.js          keeping a world: what moved, when it goes out
+    local.js              a world that lives only in this browser
+    regions.js            elements by 64 m region, and the changes between two sets
+    live.js               the socket: changes and people, both ways
+    frame.js              the wire format, shared with the Worker
+    remote.js             gzip in the browser, and the calls to the server
+    sharePanel.js         the save panel (L): link, name, who's here
+    save.css              save panel styles
   wildlife/
+    index.js              ← feature
     wildlife.js           who's about: arrivals, departures, what animals can sense
     species.js            habitat, hours, rarity, group size, temperament
     rig.js                primitives → one skinned mesh per animal
@@ -567,43 +789,17 @@ src/
     flyers.js             flocks, passing birds, a soaring hawk, owls
     crawlers.js           snakes and salamanders
     insects.js            bee swarms and butterflies
-  player/
-    character.js          procedural hiker model, IK gait, work poses
-    player.js             movement, collision, third-person camera
-    input.js              keyboard, mouse, touch
-  map/
-    mapRender.js          pure top-down tile renderer (runs in a worker)
-    mapWorker.js          Web Worker wrapper around mapRender
-    tiles.js              tile cache + worker scheduling
-    mapView.js            the map overlay: pan/zoom, pins, mark editor, list
-    marks.js              mark storage, icons and colours
-    map.css               map styles
-  build/
-    builder.js            tools, aiming, actions, previews, prompts, save/load
-    buildings.js          footings, notched log walls, rooms, roofs (the rules)
-    forestry.js           felling, limbing, bucking, stumps, cleared plants
-    terrainEdits.js       digging, filling and grading on the 1 m vertex grid
-    geometry.js           logs, timbers, chinking, piers, roofs, stumps, tools
-    solids.js             built things you bump into and stand on
-    constants.js          dimensions: course height, overhang, pier range…
   structures/
     index.js              ← register structures here
     loader.js             places structures on their pads
-  save/
-    worldSave.js          what moved, when it goes out, the offline copy
-    snapshot.js           what a saved world is: seed + what you changed
-    regions.js            a world as keyed elements, grouped by 64 m region
-    live.js               the socket: changes and people, both ways
-    apply.js              folding someone else's changes into the live world
-    frame.js              the wire format, shared with the Worker
-    remote.js             gzip in the browser, and the calls to the server
-    sharePanel.js         the save panel (L): link, name, who's here
-    save.css              save panel styles
-  world/peers.js          everyone else, drawn and eased between messages
-  ui/hud.js               coordinates, tracked mark, hints, help
 worker/
   index.js                the front door: mint an id, route to the world
   world.js                a world's Durable Object — the only writer
+test/
+  *.test.js               npm test: world generation, saving, building, the game loop
+  golden/                 recorded answers the code has to keep giving
+  smoke.mjs               npm run smoke: a play-through in a headless browser
+  together.mjs            npm run together: two visitors, one world
 ```
 
 Inside a world's own SQLite:
