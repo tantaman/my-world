@@ -22,6 +22,7 @@ import { Builder } from './build/builder.js';
 import { WorldSave } from './save/worldSave.js';
 import { SharePanel } from './save/sharePanel.js';
 import { spawnFrom } from './save/snapshot.js';
+import { Wildlife } from './wildlife/wildlife.js';
 
 const SAVE_KEY = 'my-world:state';
 const SETTINGS_KEY = 'my-world:settings';
@@ -115,6 +116,10 @@ const map = new MapView({ seed: CONFIG.seed, structures: STRUCTURES, marks, play
 
 // ── Saving, and everyone else in this world ────────────────────────────────
 const peers = new Peers(scene, (x, z) => chunks.heightAt(x, z));
+
+// ── Animals ────────────────────────────────────────────────────────────────
+// Never saved or shared: each visitor meets their own.
+const wildlife = new Wildlife({ scene, gen, chunks, player, peers, sound, camera, hud });
 worldSave.attach({ gen, builder, marks, player, sky, peers, me: '' });
 const share = new SharePanel({ save: worldSave, input, hud });
 hud.onSaveToggle = () => share.toggle();
@@ -297,6 +302,7 @@ function loop(now) {
   particles.update(player.pos, player.pos.y);
   markers.update(now / 1000, SHARED.uWind.value, player.pos);
   peers.update(dt);
+  wildlife.update(dt, { hours: sky.hours, night: SKY.uNight.value });
   sound.update(dt, {
     hours: sky.hours,
     night: SKY.uNight.value,
@@ -363,6 +369,7 @@ window.world = {
   save: worldSave,
   peers,
   sound,
+  wildlife,
   marks,
   map,
   chunks,

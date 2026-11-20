@@ -47,6 +47,9 @@ export const CONFIG = {
   jumpSpeed: 6.2,
   gravity: 19,
 
+  // Wildlife: 0 = none, 1 = the usual, 2 = twice as many about.
+  animals: num('animals', 1),
+
   mute: params.has('mute'),
   reset: params.has('reset'),
   debug: params.has('debug'),

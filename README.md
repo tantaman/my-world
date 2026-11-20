@@ -10,6 +10,11 @@ You can also **build**: fell trees, buck them into logs, hew timbers, clear
 and grade the ground, set stone footings, and raise a notched log cabin with
 rooms, doors, windows and a roof. See [Building](#building).
 
+And you're not alone out there: deer, elk, moose, black bears, wolves,
+mountain lions, bobcats, foxes, rabbits, squirrels, chipmunks, mice, snakes,
+salamanders, songbirds, crows, hawks, owls, bees and butterflies come and go.
+See [Wildlife](#wildlife).
+
 Over time we'll also add hand-made **structures**: places to keep thoughts and
 ideas, and places to explore. See [Adding a structure](#adding-a-structure).
 
@@ -255,6 +260,12 @@ interact, so it fades in after your first click, key press or tap.
   occasional woodpecker. There's a dawn chorus, quieter days, a little
   evensong, and silence after dark.
 - **Night** brings crickets, louder in the open, and an owl in the distance.
+- **Animals** call from where they actually are: a deer's alarm snort and
+  stamp, an elk bugling across a meadow, a wolf pack howling one after
+  another, a fox's yapping bark, a squirrel scolding from its trunk, a
+  chipmunk's chips, a bear blowing, a rattlesnake's buzz, crows, a red-tail's
+  scream, a flock bursting up in a whirr of wings, bumblebees about your
+  knees, and hooves when something big bolts past.
 - **Footsteps** follow the stride of the walk and run animation. They
   change with the ground under you: packed earth and grit on paths, a swish
   in grass, crackling leaf litter in the woods. They get sharper when you
@@ -282,6 +293,7 @@ Sound pauses when the tab is hidden. Add `?mute` to the URL to start silent.
 | `grass`, `grassDensity` | `40`, `7` | grass radius (m) and blades per m² |
 | `q=low` | | lighter preset for modest GPUs |
 | `mute` | | start with sound off |
+| `animals` | `1` | how much wildlife: `0` none, `2` twice as much |
 | `creative` | | build without gathering materials |
 | `clearbuild` | | forget everything you've built and changed in this world |
 | `debug` | | show stats from the start |
@@ -325,6 +337,72 @@ Example: `/?soft=0.3&px=5&time=7.5`
 
 From the browser console you can jump around with
 `await world.teleport(x, z)`.
+
+## Wildlife
+
+Every so often something arrives — always out of sight, somewhere that suits
+it, at an hour it keeps — goes about its business, notices you, and in time
+wanders off again. Nothing is saved and nothing is shared: wildlife belongs
+to the forest, so someone building with you meets animals of their own
+(though yours are wary of them too).
+
+**Where and when.** Habitat is read off the same fields that grow the forest:
+deer along woodland edges, elk out in the meadows, moose where it's wet, bears
+and bobcats in the woods, red squirrels in the pines and grey ones in the
+oaks, salamanders on damp ground, snakes basking in open sun, bees and
+butterflies over the meadow flowers. Deer, elk, rabbits and foxes like dawn
+and dusk; chipmunks, hawks and songbirds keep to the day; mice and owls come
+out at night; wolves and mountain lions favour the half-light. Some are
+common and some are not: you'll see a lot of deer before you see a mountain
+lion.
+
+**How they take to you.** Each species has its own temperament:
+
+- Deer look up and stare, flick their tails and stamp. Stand still and they
+  often decide you're nothing and go back to feeding; come closer and they
+  snort and bound away with their white tails up. The whole herd goes with
+  them.
+- Elk and moose are less flighty: they watch, then walk off. A bull elk
+  bugles at dawn and dusk.
+- A black bear stands up on its hind legs for a better look, blows, and
+  ambles away. Cubs follow their mother.
+- Wolves travel in single file and howl together after dark.
+- Mountain lions and bobcats prowl low; noticed, they sit and look straight
+  at you, then slip away.
+- A fox trots its rounds, stops dead to listen to the grass, and pounces.
+- Rabbits freeze flat, then zig-zag for cover. Squirrels sit up and scold,
+  then bolt for the nearest trunk and spiral up into the canopy. Chipmunks
+  dive under the nearest rock or log. Mice vanish into the leaf litter.
+- Snakes lift their heads on guard (a rattlesnake rattles), then slide off.
+- Songbirds and crows drop onto clearings and paths to hop and peck, and burst
+  up into the trees when you come too close. A red-tailed hawk circles high
+  over the meadows; an owl ghosts across a clearing at night.
+
+Running is noisy, so they notice you from further off; standing still makes
+you hard to spot. When you look straight at an animal, the name of what
+you're seeing shows for a moment.
+
+**How they're made.** Like everything else, from primitives with colour baked
+into the vertices. Each animal is one skinned mesh — a whole moose, antlers
+and all, is a single draw call — and is animated procedurally. Four-legged
+animals share one skeleton and gait engine (`src/wildlife/quadruped.js`): a
+lateral-sequence walk, a diagonal trot, a transverse gallop and the
+half-bound of rabbits and squirrels, with two-bone IK putting each foot on
+the actual ground under it, so they stand on slopes and their feet don't
+skate. Snakes and salamanders bend a chain of spine bones to lie along the
+path the head took. Birds beat, glide and fold two-jointed wings.
+
+From the console:
+
+```js
+world.wildlife.spawn('bear')                       // one turns up nearby, out of view
+world.wildlife.spawn('fox', { here: true })        // right in front of you
+world.wildlife.list()                              // who's about
+world.wildlife.species.deer.notice = 60            // tune a temperament
+```
+
+Species: `deer elk moose bear wolf cougar bobcat fox rabbit squirrel
+chipmunk mouse snake salamander flock flit crows hawk owl bees butterflies`.
 
 ## Building
 
@@ -421,6 +499,7 @@ src/
   noise.js                seeded simplex noise, hashing, helpers
   audio/
     soundscape.js         procedural wind, leaves, birds, crickets, owl, footsteps
+    calls.js              animal calls, placed where the animal is
   render/
     pixelPipeline.js      low-res render → composite → soft-pixel upscale
     glsl.js               shared GLSL: noise, sky gradient, ground colour
@@ -435,6 +514,17 @@ src/
     sky.js                sky dome, clouds, stars, sun/moon, time-of-day palettes
     particles.js          pollen motes and fireflies
     markers.js            your map marks as pennants in the world
+  wildlife/
+    wildlife.js           who's about: arrivals, departures, what animals can sense
+    species.js            habitat, hours, rarity, group size, temperament
+    rig.js                primitives → one skinned mesh per animal
+    quadruped.js          shared skeleton + gaits + leg IK for four-legged animals
+    mammals.js            what each mammal looks like
+    beasts.js             how mammals behave (graze, alert, flee, climb, howl...)
+    birds.js              bird bodies and wings, flapping and folding
+    flyers.js             flocks, passing birds, a soaring hawk, owls
+    crawlers.js           snakes and salamanders
+    insects.js            bee swarms and butterflies
   player/
     character.js          procedural hiker model, IK gait, work poses
     player.js             movement, collision, third-person camera
