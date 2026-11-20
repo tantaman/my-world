@@ -245,6 +245,8 @@ export class Player extends Emitter {
       push = this.swimming ? PUSH.swim : PUSH.wade * smoothstep(WADE_PUSH[0], WADE_PUSH[1], depth);
     }
 
+    // m/s that gravity takes off vel.y this step, if it pulls at all (see Integrate)
+    let fell = 0;
     const accel = this.flying ? F.agility : this.grounded ? (c ? c.agility : 11) : 2.5;
     const k = 1 - Math.exp(-accel * dt);
     this.vel.x = lerp(this.vel.x, wx * speed + this.current.x * push, k);
@@ -267,7 +269,7 @@ export class Player extends Emitter {
         const over = this.height - F.ceiling;
         if (over > 0) vy = Math.min(vy, -over);
         this.vel.y = lerp(this.vel.y, vy, 1 - Math.exp(-dt * 3));
-      } else this.vel.y -= CONFIG.gravity * dt;
+      } else fell = CONFIG.gravity * dt;
     } else {
       const jump = c ? c.jump : CONFIG.jumpSpeed;
       if (this.grounded && jump > 0 && input.jumped() && !this.swimming) {
@@ -276,13 +278,16 @@ export class Player extends Emitter {
         this.emit('jump');
       }
       this.climbing = false;
-      this.vel.y -= CONFIG.gravity * dt;
+      fell = CONFIG.gravity * dt;
     }
 
-    // Integrate
+    // Integrate. Under gravity alone the height moves by the step's average
+    // speed, not its final one, so a jump rises exactly as high however long
+    // the frames are: the same jump at 30 fps as at 144.
+    this.vel.y -= fell;
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
-    this.pos.y += this.vel.y * dt;
+    this.pos.y += (this.vel.y + fell / 2) * dt;
 
     // Collide with trunks / boulders (circle push-out), unless flying over them
     const radius = c ? c.radius : PLAYER_RADIUS;
