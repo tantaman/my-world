@@ -196,7 +196,7 @@ export class WorldSave extends Emitter {
   }
 
   // ── Wiring ────────────────────────────────────────────────────────────────
-  // peers: everyone else in the world (src/world/peers.js)
+  // peers: everyone else in the world (src/player/peers.js)
   // where: () => { x, z, yaw }, where you are standing, to tell them
   attach({ peers = null, where, me = '' }) {
     this.attached = { where, me };

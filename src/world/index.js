@@ -55,8 +55,8 @@ export function installWorld(game) {
   game.provide('structures', STRUCTURES);
   // Built things you bump into and stand on. Whoever builds, writes to it.
   game.provide('solids', new Solids());
-  // What the world streams in around. The player feature points this at the
-  // player; until then it is the origin.
+  // What the world streams in around: a point that whoever is being followed
+  // keeps up to date (the player feature copies the hiker's position into it).
   game.provide('focus', new THREE.Vector3());
 
   // ── The hour ──────────────────────────────────────────────────────────────
