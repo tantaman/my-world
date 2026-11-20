@@ -7,16 +7,19 @@
 
 import * as THREE from 'three';
 import { Character } from '../player/character.js';
+import { Emitter } from '../core/events.js';
 
 const EASE = 9; // how hard a peer is pulled toward where they said they were
 const FADE = 25_000; // ms of silence before we assume someone is gone
 
-export class Peers {
+// Emits:
+//   'change'  (peers)   someone arrived or left
+export class Peers extends Emitter {
   constructor(scene, heightAt) {
+    super();
     this.scene = scene;
     this.heightAt = heightAt;
     this.all = new Map();
-    this.onChange = null;
   }
 
   get count() {
@@ -34,7 +37,7 @@ export class Peers {
     if (!p) {
       p = this.#make(id, colour, x, z);
       this.all.set(id, p);
-      if (this.onChange) this.onChange(this);
+      this.emit('change', this);
     }
     if (name !== undefined) p.name = name || '';
     if (colour) p.flag.material.color.set(colour);
@@ -52,7 +55,7 @@ export class Peers {
     p.flag.geometry.dispose();
     p.flag.material.dispose();
     this.all.delete(id);
-    if (this.onChange) this.onChange(this);
+    this.emit('change', this);
   }
 
   clear() {

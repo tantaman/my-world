@@ -11,7 +11,6 @@
 
 import * as THREE from 'three';
 import { smoothstep, lerp, clamp } from '../noise.js';
-import { makeAxe, makeShovel } from '../build/geometry.js';
 
 // Work poses as keyframes over one swing (p = 0..1). Angles in radians:
 //   sh = shoulder pitch (negative raises the arm forward), el = elbow,
@@ -390,12 +389,10 @@ export class Character {
     this.armR = arm(-1);
 
     // Tools are gripped in the right hand; the business end points along -y.
+    // What can be held is handed in from outside (addHeld): the hiker doesn't
+    // know an axe from a fishing rod.
     this.hand = group(this.armR.elbow, 0, -0.27, 0);
-    this.tools = { axe: makeAxe(), shovel: makeShovel() };
-    for (const t of Object.values(this.tools)) {
-      t.visible = false;
-      this.hand.add(t);
-    }
+    this.tools = {}; // name -> { object, rest, elbow }
 
     // legs
     const leg = (side) => {
@@ -431,9 +428,20 @@ export class Character {
     this.legR = leg(-1);
   }
 
+  // Something the hiker can carry in the right hand.
+  //   object  a three.js object, gripped at its origin, business end along -y
+  //   rest    how the arm hangs with it when not working (radians at the shoulder)
+  //   elbow   and how far the elbow is bent, if it should be
+  addHeld(name, object, { rest = 0, elbow } = {}) {
+    if (this.tools[name]) return;
+    object.visible = false;
+    this.hand.add(object);
+    this.tools[name] = { object, rest, elbow };
+  }
+
   setTool(name) {
     this.tool = this.tools[name] ? name : null;
-    for (const k in this.tools) this.tools[k].visible = k === this.tool;
+    for (const k in this.tools) this.tools[k].object.visible = k === this.tool;
   }
 
   // Start a work animation: 'chop' | 'chopLow' | 'dig' | 'bend'.
@@ -621,8 +629,9 @@ export class Character {
     this.root.rotation.z = lerp(this.root.rotation.z, turnLean, k);
 
     // How the tool rides when you're just carrying it.
-    const toolRest = this.tool === 'shovel' ? 2.75 : this.tool === 'axe' ? -0.3 : 0;
-    if (this.tool === 'shovel') this.armR.elbow.rotation.x = -0.35;
+    const held = this.tool ? this.tools[this.tool] : null;
+    const toolRest = held ? held.rest : 0;
+    if (held && held.elbow !== undefined) this.armR.elbow.rotation.x = held.elbow;
     this.hand.rotation.x = toolRest;
 
     // ── Work poses blend over the walk ─────────────────────────────────────

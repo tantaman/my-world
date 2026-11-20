@@ -1,6 +1,11 @@
 // Global tunables. Most can be overridden from the URL, e.g.
 //   ?seed=42&px=4&soft=0.3&view=5
+//
+// This is the only place that reads the address bar. Everything else asks
+// CONFIG, or urlHas() when it needs to know whether the visitor said so
+// explicitly (so a remembered setting doesn't override what they just typed).
 const params = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
+export const urlHas = (key) => params.has(key);
 const num = (key, fallback) => {
   const v = params.get(key);
   return v !== null && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : fallback;
@@ -49,6 +54,13 @@ export const CONFIG = {
 
   // Wildlife: 0 = none, 1 = the usual, 2 = twice as many about.
   animals: num('animals', 1),
+
+  // Building
+  creative: params.has('creative'), // build without gathering materials
+  clearBuild: params.has('clearbuild'), // forget what was built and changed in this (local) world
+
+  // ?w=<id> opens a world kept on the save server
+  worldId: (params.get('w') || '').trim().toLowerCase(),
 
   mute: params.has('mute'),
   reset: params.has('reset'),

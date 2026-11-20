@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { Character } from './character.js';
 import { lerp, clamp, smoothstep } from '../noise.js';
+import { Emitter } from '../core/events.js';
+import { segDist, waterSample } from '../core/geom.js';
 
 const PLAYER_RADIUS = 0.32;
 // How high a ledge you can walk onto without jumping. Less than one course of
@@ -18,7 +20,7 @@ const BODY_H = 1.5; // head clearance (a little forgiving under door headers)
 export const SWIM_DEPTH = 1.12;
 const _dir = new THREE.Vector3();
 const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
-const _w = { level: 0, depth: 0, flowX: 0, flowZ: 0, foam: 0 };
+const _w = waterSample();
 
 // Where someone at (x, z) stands: on the ground, or afloat in deep water.
 // world is the ChunkManager.
@@ -28,31 +30,23 @@ export function standHeight(world, x, z) {
   return g;
 }
 
-// Distance in xz from p to segment ab, with the push-out normal.
-function segDist(px, pz, ax, az, bx, bz, out) {
-  const ex = bx - ax;
-  const ez = bz - az;
-  const l2 = ex * ex + ez * ez;
-  let t = l2 > 1e-9 ? ((px - ax) * ex + (pz - az) * ez) / l2 : 0;
-  t = t < 0 ? 0 : t > 1 ? 1 : t;
-  const dx = px - (ax + ex * t);
-  const dz = pz - (az + ez * t);
-  const d = Math.hypot(dx, dz);
-  out.d = d;
-  out.t = t;
-  out.nx = d > 1e-6 ? dx / d : 1;
-  out.nz = d > 1e-6 ? dz / d : 0;
-  return out;
-}
-
-export class Player {
-  constructor(scene, camera, world, input) {
+// Emits:
+//   'footstep'  (run 0..1)       a heel came down
+//   'jump'      ()
+//   'land'      (strength 0..1)
+export class Player extends Emitter {
+  // world: the ChunkManager (heightAt, waterAt, forEachCollider)
+  // solids: built things you bump into and stand on (src/world/solids.js)
+  constructor({ scene, camera, world, input, solids = null }) {
+    super();
     this.camera = camera;
-    this.world = world; // ChunkManager (heightAt, forEachCollider)
+    this.world = world;
     this.input = input;
+    this.solids = solids;
     this.character = new Character();
     // Feet find the ground under each of them (terrain, or a sill underfoot).
     this.character.groundAt = (x, z) => this.groundAt(x, z, this.pos.y + 0.02);
+    this.character.onFootstep = (run) => this.emit('footstep', run);
     scene.add(this.character.root);
 
     this.pos = new THREE.Vector3();
@@ -67,13 +61,13 @@ export class Player {
     this.camDistSmooth = 6;
     this.camTarget = new THREE.Vector3();
     this.hasMoved = false;
-    this.onJump = null; // ()
-    this.onLand = null; // (strength 0..1)
-
-    // Built things you bump into and stand on (see src/build/solids.js).
-    this.solids = null;
-    // (origin, dir, maxDist) -> distance at which something blocks the camera
-    this.cameraBlock = null;
+    // { x, z, yaw }: where the path starts, and where to appear when the
+    // world opens (the start, unless a save remembers where you stood).
+    this.start = null;
+    this.arrival = null;
+    // Things other than the hillside that the camera must stay in front of:
+    // (origin, dir, maxDist) -> the distance at which the view is blocked.
+    this.cameraBlockers = [];
     // While working (chopping, digging) you barely move and face the work.
     this.busy = 0;
     this.faceTo = null; // { x, z } or null
@@ -97,6 +91,13 @@ export class Player {
     return g;
   }
 
+  // Appear where a world opens. Call once the ground there has streamed in.
+  arrive() {
+    const a = this.arrival;
+    this.spawn(a.x, a.z, a.yaw ?? 0, a.camYaw);
+    if (typeof a.camPitch === 'number') this.camPitch = a.camPitch;
+  }
+
   spawn(x, z, yaw, camYaw = yaw + Math.PI) {
     this.pos.set(x, this.groundAt(x, z), z);
     this.vel.set(0, 0, 0);
@@ -116,8 +117,8 @@ export class Player {
     this.camPitch = clamp(this.camPitch + look.y * sens, -0.35, 1.25);
     const z = input.consumeZoom();
     if (z) this.camDist = clamp(this.camDist * (z > 0 ? 1.12 : 1 / 1.12), 2.2, 16);
-    if (input.down('KeyQ')) this.camYaw += dt * 1.8;
-    if (input.down('KeyE')) this.camYaw -= dt * 1.8;
+    if (input.isDown('turnLeft')) this.camYaw += dt * 1.8;
+    if (input.isDown('turnRight')) this.camYaw -= dt * 1.8;
 
     // Camera-relative movement
     const axes = input.moveAxes();
@@ -151,7 +152,7 @@ export class Player {
     if (this.grounded && input.jumped() && !this.swimming) {
       this.vel.y = CONFIG.jumpSpeed;
       this.grounded = false;
-      if (this.onJump) this.onJump();
+      this.emit('jump');
     }
     this.vel.y -= CONFIG.gravity * dt;
 
@@ -214,7 +215,7 @@ export class Player {
     } else {
       this.grounded = false;
     }
-    if (!wasGrounded && this.grounded && fallSpeed > 2.5 && this.onLand) this.onLand(Math.min(1, fallSpeed / 12));
+    if (!wasGrounded && this.grounded && fallSpeed > 2.5) this.emit('land', Math.min(1, fallSpeed / 12));
 
     // Facing
     const hs = Math.hypot(this.vel.x, this.vel.z);
@@ -263,8 +264,8 @@ export class Player {
       }
     }
     // ...or a wall or roof.
-    if (this.cameraBlock) {
-      const hit = this.cameraBlock(this.camTarget, dir, dist);
+    for (const blocked of this.cameraBlockers) {
+      const hit = blocked(this.camTarget, dir, dist);
       if (hit < dist) dist = Math.max(0.6, hit - 0.25);
     }
     const kd = snap ? 1 : 1 - Math.exp(-dt * (dist < this.camDistSmooth ? 14 : 3));

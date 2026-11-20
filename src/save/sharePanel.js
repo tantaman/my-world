@@ -79,7 +79,7 @@ export class SharePanel {
     this.el.name.addEventListener('input', () => this.save.rename(this.el.name.value));
     this.el.url.addEventListener('focus', () => this.el.url.select());
     addEventListener('keydown', (e) => this._onKey(e));
-    save.onStatus = () => this.refresh();
+    save.on('status', () => this.refresh());
     this.refresh();
   }
 

@@ -8,8 +8,9 @@
 
 import * as THREE from 'three';
 import { Mesher, addTrunk, addSlash, stumpGeometry, phash } from './geometry.js';
-
-export const TREE_KINDS = ['pine', 'broad', 'birch'];
+import { regionOf } from '../save/regions.js';
+import { TREE_KINDS, VEG_STRIDE } from '../world/flora.js';
+import { Emitter } from '../core/events.js';
 
 // Per species: swings to fell, metres of usable log, trunk radius, height.
 export const SPECIES = {
@@ -26,8 +27,11 @@ const posKey = (kind, x, z) => `${kind}@${Math.round(x * 100)},${Math.round(z * 
 const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
 
-export class Forestry {
+// Emits:
+//   'crash'  (felled, speed)   a falling tree hit the ground
+export class Forestry extends Emitter {
   constructor({ scene, chunks, models, solids, materials }) {
+    super();
     this.scene = scene;
     this.chunks = chunks;
     this.models = models;
@@ -39,8 +43,6 @@ export class Forestry {
     this.hits = new Map(); // posKey of a standing tree -> swings so far
     this.dirty = false;
     this.nextId = 1;
-    this.onCrash = null; // (felled) when a tree hits the ground
-    chunks.onVegetation = (ch) => this.hideRemoved(ch);
   }
 
   // ── Plants removed from the generated forest ──────────────────────────────
@@ -49,7 +51,7 @@ export class Forestry {
     if (!set || !ch.vegLists) return;
     for (const kind in ch.vegLists) {
       const list = ch.vegLists[kind];
-      for (let o = 0, k = 0; o < list.length; o += 7, k++) {
+      for (let o = 0, k = 0; o < list.length; o += VEG_STRIDE, k++) {
         if (set.has(posKey(kind, list[o], list[o + 2]))) this.chunks.hideInstance(ch, kind, k);
       }
     }
@@ -57,7 +59,7 @@ export class Forestry {
 
   removePlant(ch, kind, k) {
     const list = ch.vegLists[kind];
-    const key = posKey(kind, list[k * 7], list[k * 7 + 2]);
+    const key = posKey(kind, list[k * VEG_STRIDE], list[k * VEG_STRIDE + 2]);
     const ck = `${ch.cx},${ch.cz}`;
     let set = this.removed.get(ck);
     if (!set) this.removed.set(ck, (set = new Set()));
@@ -326,7 +328,7 @@ export class Forestry {
           if (f.omega > 0.25) {
             if (!f.bounced) {
               f.bounced = true;
-              if (this.onCrash) this.onCrash(f, f.omega);
+              this.emit('crash', f, f.omega);
             }
             f.omega *= -0.16;
           } else {
@@ -393,3 +395,48 @@ export class Forestry {
     this.dirty = false;
   }
 }
+
+// How the forest's changes are spelled in a save (see src/save/domains.js):
+//
+//   r:<kind>@<x>,<z>     a plant taken out of the generated forest      -> 1
+//   s:<x>:<z>            a stump                                        -> [kind, y, r]
+//   f:<kind>:<x>:<z>     a felled tree, keyed by the tree it came from  -> [y, s, yaw, dir, end, state, total, left, r0]
+//
+// The data is serialize()'s { removed, stumps, felled }.
+export const forestSave = {
+  id: 'forest',
+  scope: 'world',
+  kinds: ['r', 's', 'f'],
+  encode(data, put) {
+    const forest = data || {};
+    // Removed plants are kept by chunk, which is the same grid as a region.
+    for (const chunk in forest.removed || {}) {
+      for (const plant of forest.removed[chunk] || []) put(chunk, `r:${plant}`, 1);
+    }
+    for (const st of forest.stumps || []) put(regionOf(st.x, st.z), `s:${st.x}:${st.z}`, [st.kind, st.y, st.r]);
+    // A felled tree's id is minted locally and never stored, so it is keyed by
+    // the tree it came from instead — which every machine agrees on.
+    for (const f of forest.felled || []) {
+      put(regionOf(f.x, f.z), `f:${f.kind}:${f.x}:${f.z}`, [f.y, f.s, f.yaw, f.dir, f.end, f.state, f.total, f.left, f.r0]);
+    }
+  },
+  decode() {
+    const removed = {};
+    const stumps = [];
+    const felled = [];
+    return {
+      take(region, kind, rest, v) {
+        if (kind === 'r') (removed[region] || (removed[region] = [])).push(rest);
+        else if (kind === 's') {
+          const [x, z] = rest.split(':').map(Number);
+          stumps.push({ kind: v[0], x, y: v[1], z, r: v[2] });
+        } else {
+          const at = rest.split(':');
+          felled.push({ kind: at[0], x: Number(at[1]), z: Number(at[2]), y: v[0], s: v[1], yaw: v[2], dir: v[3], end: v[4], state: v[5], total: v[6], left: v[7], r0: v[8] });
+        }
+      },
+      done: () => ({ removed, stumps, felled }),
+    };
+  },
+  validate: (raw) => (raw && typeof raw === 'object' ? raw : null),
+};

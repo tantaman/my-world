@@ -162,7 +162,7 @@
       <div id="crosshair"></div>
       <div id="progress"><i></i></div>
       <div id="hint">
-        <span class="desk"><b>click</b> to look · <b>WASD</b> walk · <b>space</b> jump · <b>M</b> map · <b>1–7</b> tools · <b>H</b> help</span>
+        <span class="desk"><b>click</b> to look · <b>WASD</b> walk · <b>space</b> jump · <b>M</b> map · <b id="hint-tools">1–7</b> tools · <b>H</b> help</span>
         <span class="touch"><b>left thumb</b> walk · <b>right thumb</b> look · <b>tap</b> jump</span>
       </div>
       <div id="prompt" class="gone"></div>
@@ -181,34 +181,8 @@
         <button id="sound-btn" type="button" aria-pressed="true">sound on</button>
         <button id="help-btn" type="button" aria-label="Show controls">?</button>
       </div>
-      <div id="help">
-        <h2>WANDER</h2>
-        <div class="row"><kbd>W A S D</kbd><span>walk</span></div>
-        <div class="row"><kbd>shift</kbd><span>run</span></div>
-        <div class="row"><kbd>space</kbd><span>jump</span></div>
-        <div class="row"><kbd>mouse · Q E</kbd><span>look around</span></div>
-        <div class="row"><kbd>scroll</kbd><span>zoom</span></div>
-        <div class="row"><kbd>R</kbd><span>back to the start</span></div>
-        <div class="row"><kbd>M</kbd><span>map · mark places</span></div>
-        <div class="row"><kbd>L</kbd><span>save this world · get a link</span></div>
-        <hr />
-        <h2>BUILD</h2>
-        <div class="row"><kbd>1 – 7</kbd><span>pick a tool</span></div>
-        <div class="row"><kbd>click</kbd><span>use the tool (hold to keep going)</span></div>
-        <div class="row"><kbd>right-click</kbd><span>second action · take down</span></div>
-        <div class="row"><kbd>G</kbd><span>set / pull up a grade stake</span></div>
-        <hr />
-        <h2>LOOK</h2>
-        <div class="row"><kbd>P</kbd><span>pixel art on / off</span></div>
-        <div class="row"><kbd>[ ]</kbd><span>pixel size</span></div>
-        <div class="row"><kbd>- =</kbd><span>pixel softness</span></div>
-        <div class="row"><kbd>O</kbd><span>outlines</span></div>
-        <div class="row"><kbd>, .</kbd><span>time of day</span></div>
-        <div class="row"><kbd>T</kbd><span>let time flow</span></div>
-        <div class="row"><kbd>F</kbd><span>fullscreen</span></div>
-        <div class="row"><kbd>N</kbd><span>sound on / off</span></div>
-        <div class="row"><kbd>V</kbd><span>stats</span></div>
-      </div>
+      <!-- written by the game from the keys that are bound (Hud.renderHelp) -->
+      <div id="help"></div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

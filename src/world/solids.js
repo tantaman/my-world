@@ -8,6 +8,9 @@
 // `step` is how far below its top you can be and still walk up onto it
 // (defaults to the player's usual step height).
 // Owners (a building, a stump...) replace their whole list at once.
+//
+// There is one of these for the whole world. The player, the animals and the
+// camera all read it; whoever puts something solid in the world writes to it.
 
 const CELL = 8;
 const ck = (cx, cz) => (cx + 32768) * 65536 + (cz + 32768);
