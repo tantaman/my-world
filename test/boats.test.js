@@ -178,6 +178,7 @@ function paddler(shore = (x) => -SLOPE * x) {
   const input = {
     held,
     consumeLook: () => ({ x: 0, y: 0 }),
+    lookRate: () => ({ x: 0, y: 0 }),
     consumeZoom: () => 0,
     isDown: (a) => held.has(a),
     moveAxes: () => ({ x: held.has('right') ? 1 : 0, y: held.has('forward') ? 1 : held.has('back') ? -1 : 0 }),

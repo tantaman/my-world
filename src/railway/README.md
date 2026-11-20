@@ -11,6 +11,7 @@ tender stacked with firewood, and two open cars with benches.
 | **Y**, or **M** then *stations* | the stations within reach, beside the map: pick one (click, or its number) to go there |
 | **Y** beside a standing train | get on |
 | **Y** at a station | get off |
+| on a pad | **Y** does what Y does; in the list, the d-pad goes from station to station and **A** picks |
 
 **Getting there.** Press **Y** away from a train, or open the map (**M**) and
 its *stations* tab, for the stations within about 7 km, nearest first: which line each is on, how far it is and

@@ -16,6 +16,7 @@ so the map opens already drawn.
 | **arrows** / **WASD** | pan |
 | **C** / *me* | back to where you are |
 | **M** / **Esc** | close |
+| on a pad | **select** opens it, and **B** or **select** closes it; the stick pans, **LB RB** zoom, and the d-pad goes from button to button (the tabs and lists beside it too) for **A** to press |
 
 **Where to go** is beside the map, a tab for each list of it: *places* (your
 marks and the places nearest you, below), and the lists other features add,

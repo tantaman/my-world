@@ -27,7 +27,7 @@ the tips of the stalactites round you, now and then into a pool.
 
 | | |
 |---|---|
-| **K** | headlamp on / off (it comes on by itself in the dark of a cave) |
+| **K** · pad d-pad **←** | headlamp on / off (it comes on by itself in the dark of a cave) |
 
 A cave is part of the land, so it's the same for everyone with the same seed
 and land, and someone you share a world with is seen walking in it. The

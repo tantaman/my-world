@@ -22,6 +22,34 @@ kick and breaststroke, the body turning about the chest to lie along the way
 you go; still, you tread water upright. The camera follows you under. What
 it's like down there is [Under the water](../underwater/README.md).
 
+## With a game controller
+
+Plug a pad in and press any button on it: the browser shows a page no pad
+until then. From then on the help panel (start) and the prompts call the
+controls by its buttons, and a key or the mouse puts it down again. Most pads
+with the standard layout work: Xbox, PlayStation, Nintendo Pro and the like,
+each with its buttons called what they're called on it.
+
+| on the pad | does |
+|---|---|
+| left stick | walk (the further over, the faster) · under water, swim |
+| right stick | look around |
+| **A** | jump · climb, flying · come up, out of your depth |
+| **B**, held | run · stoop, flying · dive, out of your depth |
+| d-pad **↑ ↓** | zoom in · out |
+
+What the other buttons do is on the help panel, and in each feature's own
+notes beside its keys.
+
+With the map or a panel open, **B** or the button that opened it closes it,
+the d-pad goes from one button to the next (the lists beside the map too) and
+**A** presses it, the stick pans the map and **LB RB** zoom it. The browser
+starts sound only after a key or a click, so with a pad alone the forest may
+stay quiet until one.
+
+A feature gives a command a pad button by listing it with its keys
+(`keys: ['KeyM', 'PadSelect']`); `gamepad.js` has the names.
+
 ## Files
 
 ```
@@ -29,6 +57,7 @@ index.js              plugs it into the game: controls, the hiker, where you arr
 player.js             movement, collision, wading, swimming and diving, third-person camera
 character.js          procedural hiker model, IK gait, work poses, swimming, things raised to the face, a stance on skis or a board
 head.js               the hiker's face and beard, sunglasses and snapback
-input.js              keyboard, mouse, touch
+input.js              keyboard, mouse, touch, and a pad's buttons as keys
+gamepad.js            game controllers: reading them, what their buttons are called, typing into panels
 peers.js              everyone else, drawn and eased between messages
 ```

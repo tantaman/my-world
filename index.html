@@ -131,6 +131,9 @@
       #help h2 { margin: 0 0 6px; font-size: 11px; letter-spacing: 0.25em; color: var(--accent); font-weight: 600; }
       #help .row { display: flex; justify-content: space-between; gap: 12px; }
       #help kbd { font-family: var(--font); color: var(--ink); }
+      #help kbd.pad { color: var(--accent); }
+      /* with a pad in hand, the button its d-pad has gone to in a panel */
+      body.pad button:focus, body.pad input:focus, body.pad a:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
       #help span:last-child { color: var(--ink-dim); text-align: right; }
       #help hr { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
       #corner {

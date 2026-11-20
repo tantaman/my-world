@@ -1,6 +1,7 @@
 // You: the controls, the hiker, the camera that follows.
 
 import { Input } from './input.js';
+import { padNames } from './gamepad.js';
 import { Player } from './player.js';
 import { SHARED, WADE } from '../render/uniforms.js';
 
@@ -18,6 +19,16 @@ export function installPlayer(game) {
   game.provide('player', player);
 
   input.on('touch', () => hud.showTouchActions());
+  // With a pad in hand the help panel and the prompts call the controls by its
+  // buttons, the button the d-pad has gone to in a panel is ringed (body.pad,
+  // in index.html), and the first time, it says where to find them.
+  let padSeen = false;
+  input.on('pad', (on) => {
+    hud.namePad(on ? (codes) => padNames(codes, input.pads.kind) : null);
+    document.body.classList.toggle('pad', on);
+    if (on && !padSeen) hud.flash(`controller ready · ${input.pads.name('PadStart')} lists its buttons`, 3000);
+    padSeen ||= on;
+  });
   input.bindButton(document.getElementById('act-use'), 'use');
   input.bindButton(document.getElementById('act-alt'), 'alt');
   // on a touch screen, a button to dive with, there while you're out of your depth
@@ -50,13 +61,13 @@ export function installPlayer(game) {
     },
   });
 
-  commands.describe({ group: 'WANDER', help: 'W A S D', label: 'walk' });
-  commands.describe({ group: 'WANDER', help: 'shift', label: 'run' });
-  commands.describe({ group: 'WANDER', help: 'space', label: 'jump' });
-  commands.describe({ group: 'WANDER', help: 'shift · space', label: 'out of your depth: dive · come up' });
-  commands.describe({ group: 'WANDER', help: 'W · mouse', label: 'under water, swim where you look' });
-  commands.describe({ group: 'WANDER', help: 'mouse · Q E', label: 'look around' });
-  commands.describe({ group: 'WANDER', help: 'scroll', label: 'zoom' });
+  commands.describe({ group: 'WANDER', help: 'W A S D', pad: ['PadLS'], label: 'walk' });
+  commands.describe({ group: 'WANDER', help: 'shift', pad: ['PadB'], label: 'run' });
+  commands.describe({ group: 'WANDER', help: 'space', pad: ['PadA'], label: 'jump' });
+  commands.describe({ group: 'WANDER', help: 'shift · space', pad: ['PadB', 'PadA'], label: 'out of your depth: dive · come up' });
+  commands.describe({ group: 'WANDER', help: 'W · mouse', pad: ['PadLS', 'PadRS'], label: 'under water, swim where you look' });
+  commands.describe({ group: 'WANDER', help: 'mouse · Q E', pad: ['PadRS'], label: 'look around' });
+  commands.describe({ group: 'WANDER', help: 'scroll', pad: ['PadUp', 'PadDown'], label: 'zoom' });
   commands.add({
     id: 'home',
     keys: ['KeyR'],

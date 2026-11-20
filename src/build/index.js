@@ -132,10 +132,22 @@ export function installBuild(game) {
       },
     });
   }
-  commands.describe({ group: 'BUILD', help: () => `1 – ${builder.kits.length}`, label: 'pick a tool · again: the next in its kit' });
-  commands.describe({ group: 'BUILD', help: 'click', label: 'use the tool (hold to keep going)' });
-  commands.describe({ group: 'BUILD', help: 'right-click', label: 'second action · take down' });
-  commands.add({ id: 'stake', keys: ['KeyG'], group: 'BUILD', label: 'set / pull up a grade stake', run: () => builder.toggleStake() });
+  // On a pad, the shoulder buttons go along the tool bar a tool at a time,
+  // through each kit in turn (its fan opens to show where you are), and round
+  // from the ends.
+  const along = (by) => {
+    const all = builder.kits.flatMap((k) => k.tools);
+    if (!all.length) return;
+    const tool = all[(all.indexOf(builder.current) + by + all.length) % all.length];
+    builder.select(tool.id);
+    hud.showKit(builder.slotOf(tool.id) - 1);
+  };
+  commands.add({ id: 'tool-before', keys: ['PadLB'], run: () => along(-1) });
+  commands.add({ id: 'tool-after', keys: ['PadRB'], run: () => along(1) });
+  commands.describe({ group: 'BUILD', help: () => `1 – ${builder.kits.length}`, pad: ['PadLB', 'PadRB'], label: 'pick a tool · again: the next in its kit' });
+  commands.describe({ group: 'BUILD', help: 'click', pad: ['PadRT'], label: 'use the tool (hold to keep going)' });
+  commands.describe({ group: 'BUILD', help: 'right-click', pad: ['PadLT'], label: 'second action · take down' });
+  commands.add({ id: 'stake', keys: ['KeyG', 'PadRight'], group: 'BUILD', label: 'set / pull up a grade stake', run: () => builder.toggleStake() });
   hud.button('act-stake', () => builder.toggleStake());
 
   // ── Saving ────────────────────────────────────────────────────────────────

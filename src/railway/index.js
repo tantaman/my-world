@@ -435,7 +435,7 @@ export function installRailway(game) {
     }
     map.open('rail');
   }
-  commands.add({ id: 'railway', keys: ['KeyY'], group: 'WANDER', label: 'railway: stations to go to · get on a train · get off', run: press });
+  commands.add({ id: 'railway', keys: ['KeyY', 'PadY'], group: 'WANDER', label: 'railway: stations to go to · get on a train · get off', run: press });
 
   // on a touch screen, a button to get on and off, when there's a train
   const act = document.createElement('button');

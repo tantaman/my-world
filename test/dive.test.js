@@ -22,6 +22,7 @@ function swimmer() {
   const held = new Set();
   const input = {
     consumeLook: () => ({ x: 0, y: 0 }),
+    lookRate: () => ({ x: 0, y: 0 }),
     consumeZoom: () => 0,
     isDown: (a) => held.has(a),
     moveAxes: () => ({ x: 0, y: held.has('forward') ? 1 : 0 }),
