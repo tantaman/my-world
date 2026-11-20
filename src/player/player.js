@@ -67,6 +67,13 @@ const PITCH = { air: [-0.35, 1.25], under: [-1.05, 1.25] };
 const TRUNK_CLEAR = 10;
 // A tap of jump in the air (a touch screen has no holding it) climbs for this long (s).
 const FLAP = 0.45;
+// A pad's right stick, pushed all the way, turns the camera this fast (rad/s)
+// round you and up and down; a held zoom button brings it this many times
+// nearer or further each second.
+const STICK_TURN = { yaw: 2.4, pitch: 1.4 };
+const ZOOM_HOLD = 2.5;
+// How near and far the camera can be (m).
+const CAM_DIST = [2.2, 16];
 const _dir = new THREE.Vector3();
 const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
 const _w = waterSample();
@@ -271,17 +278,21 @@ export class Player extends Emitter {
     const input = this.input;
     const c = this.carrier;
     const look = input.consumeLook();
-    const sens = 0.0026 / (this.sight ? Math.max(1, this.sight.zoom) : 1);
-    this.camYaw -= look.x * sens;
+    const stick = input.lookRate(); // a pad's right stick: a rate, not a distance
+    const steady = this.sight ? Math.max(1, this.sight.zoom) : 1; // through a sight, finer
+    const sens = 0.0026 / steady;
+    this.camYaw -= look.x * sens + (stick.x * STICK_TURN.yaw * dt) / steady;
     // under water you can look up at the surface from below
     const range = this.submerged ? PITCH.under : PITCH.air;
-    this.camPitch = clamp(this.camPitch + look.y * sens, PITCH.under[0], range[1]);
+    this.camPitch = clamp(this.camPitch + look.y * sens + (stick.y * STICK_TURN.pitch * dt) / steady, PITCH.under[0], range[1]);
     if (this.camPitch < range[0]) this.camPitch = lerp(this.camPitch, range[0], 1 - Math.exp(-dt * 5));
     const z = input.consumeZoom();
-    if (z) this.camDist = clamp(this.camDist * (z > 0 ? 1.12 : 1 / 1.12), 2.2, 16);
+    if (z) this.camDist = clamp(this.camDist * (z > 0 ? 1.12 : 1 / 1.12), ...CAM_DIST);
+    const zoomHeld = (input.isDown('zoomOut') ? 1 : 0) - (input.isDown('zoomIn') ? 1 : 0);
+    if (zoomHeld) this.camDist = clamp(this.camDist * Math.pow(ZOOM_HOLD, zoomHeld * dt), ...CAM_DIST);
     if (input.isDown('turnLeft')) this.camYaw += dt * 1.8;
     if (input.isDown('turnRight')) this.camYaw -= dt * 1.8;
-    if (this.aboard) return this._ride(dt, look.x || look.y || input.isDown('turnLeft') || input.isDown('turnRight'));
+    if (this.aboard) return this._ride(dt, look.x || look.y || stick.x || stick.y || input.isDown('turnLeft') || input.isDown('turnRight'));
     this._rode = false;
 
     // Camera-relative movement

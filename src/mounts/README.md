@@ -32,7 +32,8 @@ ride. Leave it anywhere: it waits there, grazing, basking or perched. From
 anywhere else, **Z** whistles for it, and it comes (from out of sight, if it
 has to: a horse at a gallop, an eagle down out of the sky, a turtle up out of
 the nearest water, which it needs to reach you). Tame more than one, and **Z**
-again just after a whistle calls the next instead.
+again just after a whistle calls the next instead. On a game controller, **X**
+does all that Z does, and **A** and **B** are space and shift.
 
 Where they live is grown from the seed like everything else
 (`src/mounts/haunts.js`), so the hints point at the same places on every

@@ -43,7 +43,7 @@ export function installMap(game) {
   marks.subscribe(() => save.touch());
 
   game.on('panel', (which) => which !== 'map' && map.close());
-  commands.add({ id: 'map', keys: ['KeyM'], group: 'WANDER', label: 'map · mark places · where to go', run: () => map.open() });
+  commands.add({ id: 'map', keys: ['KeyM', 'PadSelect'], group: 'WANDER', label: 'map · mark places · where to go', run: () => map.open() });
   hud.button('map-btn', () => map.toggle());
 
   // The map covers the view, so the world isn't drawn under it.

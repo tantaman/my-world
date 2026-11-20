@@ -392,7 +392,7 @@ export function installMounts(game) {
 
   commands.add({
     id: 'mount',
-    keys: ['KeyZ'],
+    keys: ['KeyZ', 'PadX'],
     group: 'WANDER',
     help: 'Z',
     label: 'ride · get off · whistle for yours · hold to calm a wild one',

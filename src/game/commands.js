@@ -9,7 +9,9 @@
 //     run: () => map.open(),
 //   });
 //
-//   keys    KeyboardEvent.code values; any of them triggers the command
+//   keys    KeyboardEvent.code values; any of them triggers the command. A
+//           game controller's buttons go here too, spelled PadA, PadSelect,
+//           PadUp… (src/player/gamepad.js): keys: ['KeyM', 'PadSelect']
 //   run     called once when a key goes down
 //   hold    called every frame a key is down, with dt (for scrubbing)
 //   group   which heading of the help panel it is listed under; leave `label`
@@ -17,7 +19,10 @@
 //   help    how the keys are written on the panel, if not as they come ('M')
 //
 // Controls that aren't commands (walking, the mouse) still belong on the help
-// panel: commands.describe({ group, help: 'W A S D', label: 'walk' }).
+// panel: commands.describe({ group, help: 'W A S D', pad: ['PadLS'], label: 'walk' }).
+//
+// The help panel says the keys, or to someone playing with a pad, its buttons
+// where there are any: each row has `pad`, the pad buttons, if it has some.
 
 const GROUP_ORDER = ['WANDER', 'BUILD', 'LOOK'];
 
@@ -33,6 +38,7 @@ const KEY_NAMES = {
   Escape: 'esc',
 };
 const keyName = (code) => KEY_NAMES[code] || code.replace(/^Key|^Digit/, '');
+const isPad = (code) => code.startsWith('Pad');
 
 export class Commands {
   constructor() {
@@ -49,12 +55,17 @@ export class Commands {
       this.bound.set(code, c.id);
     }
     this.list.push(c);
-    if (c.label) this.rows.push({ group: c.group || 'OTHER', help: c.help || c.keys.map(keyName).join(' '), label: c.label });
+    if (c.label) {
+      const pad = c.keys.filter(isPad);
+      const help = c.help || c.keys.filter((k) => !isPad(k)).map(keyName).join(' ');
+      this.rows.push({ group: c.group || 'OTHER', help, label: c.label, ...(pad.length ? { pad } : {}) });
+    }
     return c;
   }
 
   // A row of the help panel with no command behind it. `help` and `label` may
-  // be functions, for rows that depend on what else is installed.
+  // be functions, for rows that depend on what else is installed. `pad`: the
+  // pad buttons (or sticks: PadLS, PadRS) that do it, if any.
   describe(row) {
     this.rows.push({ group: 'OTHER', ...row });
   }
@@ -72,13 +83,13 @@ export class Commands {
     }
   }
 
-  // -> [{ group, rows: [{ help, label }] }] for the help panel
+  // -> [{ group, rows: [{ help, label, pad? }] }] for the help panel
   help() {
     const groups = new Map();
     for (const r of this.rows) {
       if (!groups.has(r.group)) groups.set(r.group, []);
       const text = (v) => (typeof v === 'function' ? v() : v);
-      groups.get(r.group).push({ help: text(r.help), label: text(r.label) });
+      groups.get(r.group).push({ help: text(r.help), label: text(r.label), ...(r.pad ? { pad: r.pad } : {}) });
     }
     const rank = (g) => (GROUP_ORDER.includes(g) ? GROUP_ORDER.indexOf(g) : GROUP_ORDER.length);
     return [...groups.keys()].sort((a, b) => rank(a) - rank(b)).map((group) => ({ group, rows: groups.get(group) }));

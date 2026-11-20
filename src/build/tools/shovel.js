@@ -33,8 +33,8 @@ export const shovel = {
     if (b.stake.datum) {
       const dh = g.p.y - b.stake.level;
       const rel = Math.abs(dh) < 0.03 ? 'on grade' : `${dh > 0 ? '+' : '−'}${Math.round(Math.abs(dh) * 100)} cm`;
-      txt = `<b>hold click</b> cut · <b>right</b> fill to grade <i>(${rel})</i> · <b>G</b> move stake`;
-    } else txt = '<b>hold click</b> dig · <b>right</b> fill · <b>G</b> set a grade stake';
+      txt = `<b>hold click</b> cut · <b>right-click</b> fill to grade <i>(${rel})</i> · <b>G</b> move stake`;
+    } else txt = '<b>hold click</b> dig · <b>right-click</b> fill · <b>G</b> set a grade stake';
     if (roots) txt += ' · <i>roots or stone in the way</i>';
     return { type: 'ground', ok: true, x: g.p.x, z: g.p.z, blocked, prompt: txt };
   },

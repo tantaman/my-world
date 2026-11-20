@@ -273,7 +273,7 @@ test('Spaces: which one you are in, and making them on demand', () => {
 function hiker(spaces) {
   const ground = terrainOf(gen);
   const world = { heightAt: ground, waterAt: () => false, forEachCollider() {} };
-  const input = { consumeLook: () => ({ x: 0, y: 0 }), consumeZoom: () => 0, isDown: () => false, moveAxes: () => ({ x: 0, y: 0 }), running: () => false, jumped: () => false };
+  const input = { consumeLook: () => ({ x: 0, y: 0 }), lookRate: () => ({ x: 0, y: 0 }), consumeZoom: () => 0, isDown: () => false, moveAxes: () => ({ x: 0, y: 0 }), running: () => false, jumped: () => false };
   return new Player({ scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(), world, input, spaces });
 }
 const walkTo = (p, x, z, run = false, frames = 1500) => {

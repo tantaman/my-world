@@ -2,9 +2,10 @@
 
 What is written over the picture: your coordinates, your heading and the
 hour; the prompt that says what a click would do; the tool bar; the buttons
-along the edge; the help panel (**H** or **?**), which is written from the
-keys the features bind, so it lists every one of them; and the settings
-panel.
+along the edge; the help panel (**H** or **?**, or a pad's **start**), which
+is written from the keys the features bind, so it lists every one of them;
+and the settings panel. With a pad in hand the help panel names the pad's
+buttons, and so do the prompts.
 
 **The tool bar** has a slot for each kit of tools (see
 [Building](../build/README.md)), numbered for its key. A kit of more than
@@ -19,7 +20,7 @@ closes it.
 
 | | |
 |---|---|
-| **H** / **?** | help: every key |
+| **H** / **?** · pad **start** | help: every key |
 | **O** | settings |
 
 ## Files

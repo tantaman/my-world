@@ -19,7 +19,7 @@ export function installHud(game) {
     hud.toggleHelp();
   };
   game.on('panel', (which) => which !== 'help' && hud.closeHelp());
-  game.commands.add({ id: 'help', keys: ['KeyH', 'Slash'], run: toggleHelp });
+  game.commands.add({ id: 'help', keys: ['KeyH', 'Slash', 'PadStart'], run: toggleHelp });
   hud.button('help-btn', toggleHelp);
 
   const toggleSettings = () => {

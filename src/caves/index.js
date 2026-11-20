@@ -100,7 +100,7 @@ export function installCaves(game) {
   let told = false;
   commands.add({
     id: 'headlamp',
-    keys: ['KeyK'],
+    keys: ['KeyK', 'PadLeft'],
     group: 'WANDER',
     label: 'headlamp on / off',
     run() {

@@ -9,10 +9,10 @@ above the tool bar always says what a click would do, or why it can't.
 
 | | |
 |---|---|
-| **1 – 6** | pick a tool; press it again for the next in its kit (below) |
-| **click** (while looking) | use the tool, hold to keep working |
-| **right-click** | the tool's second action, or take a piece down |
-| **G** | set or pull up a grade stake |
+| **1 – 6** · pad **LB RB** | pick a tool; press it again for the next in its kit (below). The shoulder buttons go along the bar a tool at a time |
+| **click** (while looking) · pad **RT** | use the tool, hold to keep working |
+| **right-click** · pad **LT** | the tool's second action, or take a piece down |
+| **G** · pad d-pad **→** | set or pull up a grade stake |
 
 **The tool bar.** Tools that go together share a slot, and its number key: a
 **kit**. Pressing the key takes up the tool you last used from the kit, and

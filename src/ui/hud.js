@@ -11,6 +11,14 @@ const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
 const ARRIVED = 8; // meters
 const FAN_SHOWS = 2200; // ms a kit's fan stays open after it's picked
 
+// A prompt with the keys in it in bold (<b>Z</b> ride, <b>hold click</b> dig),
+// with those that `words` has another name for called that instead:
+// Map { 'Z' => 'X', 'click' => 'RT' }.
+export function renameKeys(html, words) {
+  if (!words || !words.size || !html) return html;
+  return html.replace(/<b>(hold )?([^<]+)<\/b>/g, (all, hold, key) => (words.has(key) ? `<b>${hold || ''}${words.get(key)}</b>` : all));
+}
+
 export class Hud {
   // settings: the settings panel (settingsPanel.js), which hud.setting() adds to
   constructor({ settings = null } = {}) {
@@ -43,6 +51,10 @@ export class Hud {
     this.settings = settings;
     this.saveBtn = document.getElementById('save-btn');
     this.helpSource = null; // () => what renderHelp shows
+    // With a pad in hand (namePad): what its buttons are called, and the
+    // names of keys in prompts that it has buttons for.
+    this._padNames = null;
+    this._words = null;
     this.guides = []; // see guide()
   }
 
@@ -84,8 +96,23 @@ export class Hud {
     if (el) el.hidden = false;
   }
 
+  // Someone has picked up a pad (names: [codes] -> what they're called on it),
+  // or put it down (null). The help panel and the prompts name its buttons
+  // where it has some for what they say, and keys where it hasn't.
+  namePad(names) {
+    this._padNames = names;
+    this._words = null;
+    if (names && this.helpSource) {
+      this._words = new Map();
+      for (const g of this.helpSource()) for (const r of g.rows) if (r.pad && typeof r.help === 'string') this._words.set(r.help, names(r.pad));
+    }
+    this._prompt = null;
+    this._showPrompt();
+    if (this.help && this.help.classList.contains('open') && this.helpSource) this.renderHelp(this.helpSource());
+  }
+
   // The help panel (H), written from the keys that are actually bound.
-  // groups: [{ group, rows: [{ help, label }] }], see Commands.help().
+  // groups: [{ group, rows: [{ help, label, pad? }] }], see Commands.help().
   renderHelp(groups) {
     if (!this.help) return;
     this.help.textContent = '';
@@ -98,7 +125,9 @@ export class Hud {
         const row = document.createElement('div');
         row.className = 'row';
         const k = document.createElement('kbd');
-        k.textContent = r.help;
+        const pad = this._padNames && r.pad;
+        k.textContent = pad ? this._padNames(r.pad) : r.help;
+        if (pad) k.className = 'pad';
         const what = document.createElement('span');
         what.textContent = r.label;
         row.append(k, what);
@@ -328,7 +357,7 @@ export class Hud {
     const key = `${bad ? 1 : 0}${html}`;
     if (key === this._prompt) return;
     this._prompt = key;
-    this.prompt.innerHTML = html;
+    this.prompt.innerHTML = renameKeys(html, this._words);
     this.prompt.classList.toggle('bad', !!bad);
     this.prompt.classList.toggle('gone', !html);
   }

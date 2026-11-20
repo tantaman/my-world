@@ -179,7 +179,7 @@ place in that order, not at the end:
 | `build/builder.js` | hands too full for tools | `builder.idleWhile(fn)` |
 | `build/inventory.js` | a material to carry (`optional`: on the HUD only while you have some) | `game.builder.stock.define({ id, label, optional })` |
 | `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)` |
-| `game/commands.js` | a key, and its line on the help panel | `game.commands.add({ keys, run, group, label })` |
+| `game/commands.js` | a key or a pad's button, and its line on the help panel | `game.commands.add({ keys, run, group, label })` |
 | `game/game.js` | something done every frame | `game.addSystem({ name, phase, update })` |
 | `game/settings.js` | a remembered preference | `game.settings.get / set` |
 | `hunting/shot.js` | something else the rifle can hit (a man, a wall that stops a shot) | `game.hunting.targets.add({ aimed, struck?, heard? })` |
