@@ -73,6 +73,25 @@ test('another seed is another world', () => {
   assert.deepEqual(state, {});
 });
 
+test('a world grown on another land is another world, kept beside the first', () => {
+  const storage = memoryStorage(left());
+  const { domains } = world({ terrain: [[1, 2, 0.5]], inv: { log: 2 }, player: { x: 5, z: 6, yaw: 0, camYaw: 1, camPitch: 0.3 }, hours: 9 });
+  const store = new LocalStore({ domains, storage, seed: SEED, land: 2 });
+  assert.deepEqual(store.read(), {}, "nothing of the first land's world");
+  assert.equal(store.elsewhere([1, 2]), 1, 'but it knows that one is here');
+  store.flush();
+  assert.equal(KEYS.build(SEED, 2), `my-world:build:${SEED}:land2`);
+  assert.deepEqual(storage.get(KEYS.build(SEED, 2)).inv, { log: 2 });
+  assert.equal(storage.get(KEYS.state).land, 2, 'where you stood, and on which land');
+  assert.equal(store.elsewhere([1, 2]), 0, 'once this one holds something, nothing to say');
+  // the first land's world is as it was, and doesn't pick up where you stood on the second
+  for (const key of [KEYS.build(SEED), KEYS.marks(SEED)]) assert.deepEqual(storage.get(key), left()[key], key);
+  const first = new LocalStore({ domains: world().domains, storage, seed: SEED }).read();
+  assert.deepEqual(first.buildings, BUILD.buildings);
+  assert.equal(first.player, undefined);
+  assert.equal(KEYS.build(SEED, 1), KEYS.build(SEED), 'land 1 is spelled as it always was');
+});
+
 test('a new domain is kept without anyone being told', () => {
   const { domains } = world({ terrain: [], inv: { log: 1 } });
   let wells = [{ x: 3, z: 4, depth: 2 }];

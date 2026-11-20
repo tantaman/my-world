@@ -1,6 +1,12 @@
 // Pure, deterministic description of the world: height, footpaths, where the
 // forest is thick and where it opens into meadows. No three.js in here so it
 // can be reused anywhere (workers, tools, tests).
+//
+// This is the first *land*: the way every world was grown until the land got
+// more to it (land2.js, which grows from this). A world keeps the land it was
+// first grown on, because a save is only what was changed from it — so what
+// this file grows must never change (see test/golden/). lands.js picks which
+// to grow.
 
 import { createSimplex2, fbm, smoothstep } from '../noise.js';
 import { Water } from './water.js';
@@ -9,20 +15,8 @@ export class WorldGen {
   constructor(seed, structures = []) {
     const n = (k) => createSimplex2((seed * 131 + k * 7919) >>> 0);
     this.seed = seed;
-    this.nHills = n(1);
-    this.nBig = n(2);
-    this.nWarpA = n(3);
-    this.nWarpB = n(4);
-    this.nDetail = n(5);
-    this.nPathA = n(6);
-    this.nPathB = n(7);
-    this.nPathMask = n(8);
-    this.nForest = n(9);
-    this.nForest2 = n(10);
-    this.nSpecies = n(11);
-    this.nPathWarpA = n(12);
-    this.nPathWarpB = n(13);
-    this.nMoist = n(14);
+    this.land = 1;
+    this._fields(n);
 
     // Structures carve flat clearings. Their pad height is the natural
     // ground height at their centre.
@@ -39,6 +33,26 @@ export class WorldGen {
     this.water = new Water(this, seed);
   }
 
+  // The noise fields the land is made of. n(k) is the k-th field of this
+  // seed; a land grown from this one adds fields of its own here, before
+  // anything is asked of it.
+  _fields(n) {
+    this.nHills = n(1);
+    this.nBig = n(2);
+    this.nWarpA = n(3);
+    this.nWarpB = n(4);
+    this.nDetail = n(5);
+    this.nPathA = n(6);
+    this.nPathB = n(7);
+    this.nPathMask = n(8);
+    this.nForest = n(9);
+    this.nForest2 = n(10);
+    this.nSpecies = n(11);
+    this.nPathWarpA = n(12);
+    this.nPathWarpB = n(13);
+    this.nMoist = n(14);
+  }
+
   // ── Footpaths ─────────────────────────────────────────────────────────────
   // Paths follow the zero-isolines of two warped noise fields. Isolines of
   // smooth noise form a natural meandering network of loops and long trails.
@@ -50,6 +64,17 @@ export class WorldGen {
     const wz = z + wb;
     out[0] = this.nPathA(wx * (1 / 230), wz * (1 / 230));
     out[1] = this.nPathB(wx * (1 / 105) + 40.0, wz * (1 / 105) - 13.0);
+  }
+
+  // 0..1: whether there are trails here at all (they give out high up, in
+  // a land with mountains).
+  _trailsHere() {
+    return 1;
+  }
+
+  // 0..1: how much there is of a side trail here, where there is one.
+  _sideTrails(x, z) {
+    return smoothstep(-0.15, 0.25, this.nPathMask(x * 0.0035, z * 0.0035));
   }
 
   // Returns a mask in [0,1] (1 = middle of a path). Also fills this.pathEdge
@@ -70,11 +95,12 @@ export class WorldGen {
 
     // Main trails are ~2.4m wide, side trails narrower and they fade in/out,
     // like deer paths that come and go.
-    const wA = 1.2;
-    const side = smoothstep(-0.15, 0.25, this.nPathMask(x * 0.0035, z * 0.0035));
+    const here = this._trailsHere(x, z);
+    const wA = 1.2 * here;
+    const side = this._sideTrails(x, z) * here;
     const wB = 0.75 * side;
 
-    const mA = 1 - smoothstep(0.5, 1.0, dA / wA);
+    const mA = wA > 0.08 ? 1 - smoothstep(0.5, 1.0, dA / wA) : 0;
     const mB = wB > 0.08 ? 1 - smoothstep(0.45, 1.0, dB / wB) : 0;
 
     // The map draws main and side trails separately when zoomed out.
@@ -163,6 +189,31 @@ export class WorldGen {
     return this.nMoist(x * 0.006, z * 0.006) * 0.5 + 0.5;
   }
 
+  // What this land has that the first one didn't, for whoever draws it (the
+  // map, the ground). Nothing, here.
+  //   groves(x, z)     0..1 how much more of the woods is birch than usual
+  //   above(x, z, h)   0..1 how far above the trees: alpine ground
+  //   snow(x, z, h)    0..1 snow lying on the ground
+  //   highGround       whether above() and snow() are ever more than 0
+  groves() {
+    return 0;
+  }
+  above() {
+    return 0;
+  }
+  snow() {
+    return 0;
+  }
+  get highGround() {
+    return false;
+  }
+
+  // Whatever else a land asks of a place to start from (a path in the woods,
+  // out of the water, it always asks).
+  _fineStart() {
+    return true;
+  }
+
   // Find a nice spot on a footpath near (x0, z0) to start from.
   findSpawn(x0 = 0, z0 = 0) {
     for (let r = 0; r < 600; r += 3) {
@@ -171,7 +222,7 @@ export class WorldGen {
         const a = (s / steps) * Math.PI * 2;
         const x = x0 + Math.cos(a) * r;
         const z = z0 + Math.sin(a) * r;
-        if (this.pathMask(x, z) > 0.97 && this.forest(x, z) > 0.45) {
+        if (this.pathMask(x, z) > 0.97 && this.forest(x, z) > 0.45 && this._fineStart(x, z)) {
           this.height(x, z);
           if (this.water.edge < 6) continue; // not with your feet in a stream
           // path direction: the direction around us that stays on the path

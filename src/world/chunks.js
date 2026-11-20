@@ -25,6 +25,13 @@ const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _c = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
+// A land with no high ground (see chunkGen.js) draws its terrain with nothing
+// above the trees and no snow: one array of zeros per size of chunk.
+const NO_HIGH = new Map();
+function noHigh(n) {
+  if (!NO_HIGH.has(n)) NO_HIGH.set(n, new Float32Array(n));
+  return NO_HIGH.get(n);
+}
 
 class Chunk {
   constructor(cx, cz) {
@@ -52,6 +59,7 @@ class Chunk {
     this.pos = null; // terrain vertex buffers, kept for live edits
     this.nor = null;
     this.gnd = null;
+    this.high = null; // above the trees, snow (see chunkGen.js), on a land with high ground
     this.disposed = false;
   }
 
@@ -159,6 +167,7 @@ export class ChunkManager extends Emitter {
         w.postMessage({
           type: 'init',
           seed: gen.seed,
+          land: gen.land,
           chunkSize: this.size,
           structures: structures.map((s) => ({ x: s.x, z: s.z, radius: s.radius })),
           trunkRadius: this.trunkRadius,
@@ -211,6 +220,8 @@ export class ChunkManager extends Emitter {
     out.h = ch.sampleHeight(x, z);
     out.path = ch.sampleGrid(ch.paths, x, z);
     out.forest = ch.sampleGrid(ch.forest, x, z);
+    out.above = ch.high ? ch.sampleGrid(ch.high, x, z, 2, 0) : 0;
+    out.snow = ch.high ? ch.sampleGrid(ch.high, x, z, 2, 1) : 0;
     if (ch.hasWater) {
       out.wRegion = ch.sampleGrid(ch.wData, x, z, WS, 0);
       out.wLevel = ch.sampleLevel(x, z);
@@ -375,6 +386,7 @@ export class ChunkManager extends Emitter {
     geo.setAttribute('normal', new THREE.BufferAttribute(t.nor, 3));
     geo.setAttribute('aGround', new THREE.BufferAttribute(t.gnd, 2));
     geo.setAttribute('aWater', new THREE.BufferAttribute(t.wat, 2));
+    geo.setAttribute('aHigh', new THREE.BufferAttribute(t.hi || noHigh(t.wat.length), 2));
     geo.setIndex(new THREE.BufferAttribute(t.idx, 1));
     geo.computeBoundingSphere();
 
@@ -399,6 +411,7 @@ export class ChunkManager extends Emitter {
     ch.pos = t.pos;
     ch.nor = t.nor;
     ch.gnd = t.gnd;
+    ch.high = t.high || null;
     ch.wLevel = t.wLevel;
     ch.wData = t.wData;
     ch.hasWater = false;

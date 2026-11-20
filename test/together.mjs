@@ -194,6 +194,11 @@ try {
 
   await step('and walks into the same world — at the start, not where ana is', async () => {
     assert.deepEqual(await ben.seen(), await ana.seen());
+    // grown from the same seed, on the land the server says the world is on
+    const grown = (v) => v.page.evaluate(() => ({ seed: world.gen.seed, land: world.gen.land, held: world.save.elements.get('*')?.get('land') ?? 1 }));
+    const [a, b] = [await grown(ana), await grown(ben)];
+    assert.deepEqual(b, a, 'the same seed and land');
+    assert.equal(b.held, b.land, 'the land the server holds is the one grown');
     assert.equal((await ben.seen()).name, 'The clearing');
     assert.ok(far(await ben.at(), anaAt) > 10, 'what is ana’s is not handed to ben');
     await ben.until(() => world.save.connected && world.peers.list().some((p) => p.name === 'ana'), null, 'ben can see ana here, by name');

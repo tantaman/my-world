@@ -1,9 +1,9 @@
 // Water runs downhill, gathers somewhere, and stays where the land holds it.
-// These are rules, not recorded answers: they hold for any seed.
+// These are rules, not recorded answers: they hold for any seed, on any land.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { WorldGen } from '../src/world/worldgen.js';
+import { growWorld, LANDS } from '../src/world/lands.js';
 import { generateTerrain, WATER_STRIDE as WS } from '../src/world/chunkGen.js';
 import { NET } from '../src/world/drainage.js';
 
@@ -14,9 +14,13 @@ function* nodes(net) {
   for (let j = -AREA; j <= AREA; j++) for (let i = -AREA; i <= AREA; i++) yield net.node(i, j);
 }
 
-for (const seed of SEEDS) {
-  test(`seed ${seed}: water never runs uphill`, () => {
-    const gen = new WorldGen(seed, []);
+// Each seed on each land, and the middle of a stretch of lake country on the
+// second (where the lakes are biggest), in drainage cells.
+const WORLDS = LANDS.flatMap((land) => SEEDS.map((seed) => ({ seed, land, on: land > 1 ? ` on land ${land}` : '' })));
+
+for (const { seed, land, on } of WORLDS) {
+  test(`seed ${seed}${on}: water never runs uphill`, () => {
+    const gen = growWorld(seed, [], land);
     const net = gen.water.net;
     let channels = 0;
     for (const n of nodes(net)) {
@@ -31,8 +35,8 @@ for (const seed of SEEDS) {
     assert.ok(channels > 40, `only ${channels} channels`);
   });
 
-  test(`seed ${seed}: every stream ends in a pond, a lake or more water`, () => {
-    const gen = new WorldGen(seed, []);
+  test(`seed ${seed}${on}: every stream ends in a pond, a lake or more water`, () => {
+    const gen = growWorld(seed, [], land);
     const net = gen.water.net;
     let lakes = 0;
     for (const n of nodes(net)) {
@@ -50,8 +54,8 @@ for (const seed of SEEDS) {
     assert.ok(lakes > 0, 'no stream reaches a lake');
   });
 
-  test(`seed ${seed}: the current runs down the channel, and water stays in its banks`, () => {
-    const gen = new WorldGen(seed, []);
+  test(`seed ${seed}${on}: the current runs down the channel, and water stays in its banks`, () => {
+    const gen = growWorld(seed, [], land);
     const w = gen.water;
     let running = 0;
     for (let z = -400; z <= 400; z += 3) {
@@ -83,11 +87,11 @@ for (const seed of SEEDS) {
   });
 }
 
-test('any part of the network can be worked out on its own', () => {
+for (const land of LANDS) test(`any part of the network can be worked out on its own${land > 1 ? `, on land ${land}` : ''}`, () => {
   // A worker that only ever sees one corner of the world must agree with one
   // that has seen it all, whatever order they came at it in.
-  const a = new WorldGen(20261119, []).water.net;
-  const b = new WorldGen(20261119, []).water.net;
+  const a = growWorld(20261119, [], land).water.net;
+  const b = growWorld(20261119, [], land).water.net;
   for (let j = AREA; j >= -AREA; j--) for (let i = AREA; i >= -AREA; i--) b.level(b.node(i, j));
   for (const [i, j] of [[3, -2], [-7, 5], [0, 0], [11, 9]]) {
     const na = a.node(i, j);
@@ -99,13 +103,17 @@ test('any part of the network can be worked out on its own', () => {
   assert.ok(NET.cell > 0);
 });
 
-test('nothing that reaches a spot is missed when shaping it', () => {
+// Lake country on the second land, for seed 20261119: the biggest lakes.
+const LAKE_COUNTRY = { x: -1275, z: -85 };
+
+for (const land of LANDS) test(`nothing that reaches a spot is missed when shaping it${land > 1 ? `, on land ${land}` : ''}`, () => {
   // Shaping a point only looks at the channels and lakes near its cell. Do it
   // again with every one in a much wider window: the land must come out the
   // same.
   const seed = 20261119;
-  const quick = new WorldGen(seed, []);
-  const thorough = new WorldGen(seed, []);
+  const quick = growWorld(seed, [], land);
+  const thorough = growWorld(seed, [], land);
+  const at = land > 1 ? LAKE_COUNTRY : { x: 0, z: 0 };
   const net = thorough.water.net;
   const wide = new Map();
   net.near = (ci, cj) => {
@@ -131,8 +139,8 @@ test('nothing that reaches a spot is missed when shaping it', () => {
     return out;
   };
   let wet = 0;
-  for (let z = -500; z <= 500; z += 7) {
-    for (let x = -500; x <= 500; x += 7) {
+  for (let z = at.z - 500; z <= at.z + 500; z += 7) {
+    for (let x = at.x - 500; x <= at.x + 500; x += 7) {
       const a = quick.height(x, z);
       const b = thorough.height(x, z);
       assert.ok(Math.abs(a - b) < 1e-9, `at ${x},${z} the ground is ${a} one way and ${b} the other`);

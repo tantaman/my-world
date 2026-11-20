@@ -1,8 +1,12 @@
 # my-world
 
 An open-world forest you can wander through as a little explorer, seen from
-behind in third person. Streams run down its valleys, join and grow into
-rivers, and gather in ponds and lakes in the hollows. It's built with
+behind in third person. Over a few kilometres it changes country: low lake
+country strung with ponds and lakes, rolling hills, and mountains with rock on
+their faces, a treeline, alpine meadows and snow on the tops; and its woods
+turn from dark conifer forest to birch groves to open parkland. Streams run
+down its valleys, join and grow into rivers, and gather in ponds and lakes in
+the hollows. It's built with
 three.js. The art is pixelated but lit and shaded like a real scene, and the
 pixels are softened just enough that you can't quite tell whether it's pixel
 art trying to look real or a painting made of pixels.
@@ -82,7 +86,8 @@ world, hold **talk** or **radio** beside them to talk.
 
 Your position, the time of day, your look settings and whether sound is on
 are remembered between visits. Add `?reset` to the URL to start fresh (your
-map marks are kept). To keep a world somewhere other than this browser — and
+map marks are kept). A world you made before the land got more varied is
+still there at `?land=1` (see [Lands](src/world/README.md#lands)). To keep a world somewhere other than this browser — and
 to build in it with other people — see [Building together](src/save/README.md).
 
 ## Tuning from the URL
@@ -96,6 +101,7 @@ to build in it with other people — see [Building together](src/save/README.md)
 | `levels` | `36` | colour levels per channel before dithering |
 | `time` | `16.6` | starting hour of the day |
 | `seed` | `20261119` | a completely different world |
+| `land` | newest | which [land](src/world/README.md#lands) a local world is grown on: `1` for the first |
 | `view` | `4` | chunks loaded in each direction (64 m each) |
 | `grass`, `grassDensity` | `40`, `7` | grass radius (m) and blades per m² |
 | `q=low` | | lighter preset for modest GPUs |
@@ -190,9 +196,10 @@ Each of those files opens with what the thing is and what it is handed.
 
 - *The forest is grown, not stored.* The same seed always grows the same
   land, so a save holds only what was changed. Anything that alters what a
-  seed grows (`world/worldgen.js`, `chunkGen.js`, `water.js`, `drainage.js`,
-  the order of `world/flora.js`) moves every saved cabin relative to its
-  hillside.
+  seed grows (`world/worldgen.js`, `land2.js`, `chunkGen.js`, `water.js`,
+  `drainage.js`, the order of `world/flora.js`) moves every saved cabin
+  relative to its hillside — so a change to how the forest grows is a new
+  [land](src/world/README.md#lands), and the old ones keep growing as they did.
 - *A save is spelled once, for good.* Each system says how its share of a
   save is cut into elements (`t:120:-40`, `l:x:0:0:4:0`), next to the class
   that owns it. Worlds on the server are spelled that way now: add new kinds,
@@ -291,7 +298,7 @@ third browser by signing in — and checks that each finds their own things,
 not the other's.
 
 `npm test` pins the things other people's worlds depend on — that a seed
-grows the same land (`test/golden/`), that a save is spelled as it always was,
+grows the same land, on each land (`test/golden/`), that a save is spelled as it always was,
 that what is already in someone's browser still opens — along with the rules
 of building and the game loop. If one of the golden files stops matching, the
 code changed something it shouldn't have; only re-record

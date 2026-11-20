@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { CONFIG, urlHas } from '../config.js';
-import { WorldGen } from './worldgen.js';
+import { growWorld } from './lands.js';
 import { ChunkManager } from './chunks.js';
 import { Grass } from './grass.js';
 import { Sky } from './sky.js';
@@ -25,7 +25,7 @@ export const after = ['render'];
 export function installWorld(game) {
   const { scene, camera, commands, save } = game;
 
-  const gen = new WorldGen(CONFIG.seed, STRUCTURES);
+  const gen = growWorld(CONFIG.seed, STRUCTURES, CONFIG.land);
   const materials = {
     terrain: createTerrainMaterial(),
     vegetation: createVegetationMaterial(),

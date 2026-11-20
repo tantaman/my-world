@@ -13,6 +13,7 @@ import { Settings } from './game/settings.js';
 import { installDebug } from './game/debug.js';
 import { WorldSave } from './save/worldSave.js';
 import { SignIn } from './save/signIn.js';
+import { landOf, NEWEST_LAND } from './world/lands.js';
 
 // In order: each can use what the ones before it provide.
 const FEATURES = inOrder(featuresIn(import.meta.glob('./*/index.js', { eager: true })));
@@ -30,18 +31,23 @@ const loader = {
   },
 };
 const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
+// ms a word about how the world opened stays up: long enough to read a sentence
+const SAY_FOR = 6000;
 
 // ── Which world? ─────────────────────────────────────────────────────────────
-// ?w=<id> opens a world kept on the save server. Its seed lives inside the
-// save, so this has to be settled before the forest is grown from it. The
-// server lets in only people it knows, so a browser it doesn't know is asked
-// for a name and a password first. If the world can't be opened we fall
-// through to an ordinary local world, and the save says why.
+// ?w=<id> opens a world kept on the save server. Its seed and its land live
+// inside the save, so this has to be settled before the forest is grown from
+// them. The server lets in only people it knows, so a browser it doesn't know
+// is asked for a name and a password first. If the world can't be opened we
+// fall through to an ordinary local world, and the save says why. A world
+// that is only local is grown on the newest land unless ?land says otherwise.
 const save = new WorldSave({ storage, who: new SignIn() });
 if (CONFIG.worldId) loader.say('opening your world…');
 const opened = await save.open(CONFIG.worldId);
-if (opened) CONFIG.seed = opened.seed;
-save.begin({ seed: CONFIG.seed, fresh: CONFIG.reset, clear: CONFIG.clearBuild });
+const chosen = !opened && CONFIG.land > 0;
+if (opened) Object.assign(CONFIG, { seed: opened.seed, land: opened.land });
+else CONFIG.land = landOf(CONFIG.land, NEWEST_LAND);
+save.begin({ seed: CONFIG.seed, land: CONFIG.land, fresh: CONFIG.reset, clear: CONFIG.clearBuild, chosen });
 
 // ── The game ─────────────────────────────────────────────────────────────────
 const game = new Game({ config: CONFIG, storage });
@@ -81,6 +87,6 @@ loader.done();
 // Anything worth knowing about how this world opened.
 if (opened && opened.recovered) hud.flash('picked up where you left off');
 else if (opened && opened.offline) hud.flash("opened this browser's copy · the save server is out of reach");
-else if (save.detail) hud.flash(save.detail);
+else if (save.detail) hud.flash(save.detail, SAY_FOR);
 
 game.start();

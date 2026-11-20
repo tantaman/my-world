@@ -46,7 +46,7 @@ export default async function ({ page, step, key, frames, made }) {
     assert.equal(await page.evaluate(() => T.prompt()), 'click plant a flag', 'its prompt shows');
     await page.evaluate(() => T.tap('use'));
     await page.evaluate(() => T.frames(140)); // long enough for the change to be written down
-    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('my-world:build:20261119')).flags);
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem(world.save.local.keyFor('build'))).flags);
     assert.equal(kept.length, 1, 'and what it made is in the save');
     await key('KeyH');
     const help = await page.evaluate(() => [...document.querySelectorAll('#help .row kbd')].map((k) => k.textContent));

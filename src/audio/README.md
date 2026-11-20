@@ -34,8 +34,9 @@ interact, so it fades in after your first click, key press or tap.
   when they talk aloud, and through your radio when they're on it. See
   [Talking](../voice/README.md).
 - **Footsteps** follow the stride of the walk and run animation. They
-  change with the ground under you: packed earth and grit on paths, a swish
-  in grass, crackling leaf litter in the woods, a slosh and a splash and
+  change with the ground under you: packed earth and grit on paths and on
+  the stony ground above the trees, a swish in grass, crackling leaf litter
+  in the woods, a squeaky crunch in snow, a slosh and a splash and
   falling drops in water, a hollow knock on the boards of a dock or a cabin
   floor. They get sharper when you run, there's a thud when
   you land a jump, and out of your depth each stroke sweeps through the water.

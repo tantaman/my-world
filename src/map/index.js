@@ -7,7 +7,6 @@ import { MapView } from './mapView.js';
 import { Markers } from './markers.js';
 import { Places } from './places.js';
 import { SHARED } from '../render/uniforms.js';
-import { CONFIG } from '../config.js';
 
 const PREFETCH_EVERY = 2000; // ms between checks
 const PREFETCH_AFTER = 120; // metres walked before the map is drawn afresh around you
@@ -15,7 +14,7 @@ const PREFETCH_AFTER = 120; // metres walked before the map is drawn afresh arou
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player'];
 export function installMap(game) {
-  const { scene, chunks, player, input, hud, commands, save, structures } = game;
+  const { scene, chunks, player, input, hud, commands, save, structures, gen } = game;
 
   const marks = new MarkStore();
   const markers = new Markers(scene, (x, z) => chunks.heightAt(x, z));
@@ -23,7 +22,7 @@ export function installMap(game) {
   // Places other features put on the map (an old cabin, a dock): see places.js.
   const places = new Places();
   marks.findPlace = (id) => places.get(id);
-  const map = new MapView({ seed: CONFIG.seed, structures, marks, player, input, places });
+  const map = new MapView({ seed: gen.seed, land: gen.land, structures, marks, player, input, places });
   game.provide('marks', marks);
   game.provide('map', map);
 

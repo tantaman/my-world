@@ -22,12 +22,13 @@ export function installAudio(game) {
   game.provide('sound', sound);
 
   // ── What's underfoot ──────────────────────────────────────────────────────
-  const ground = { h: 0, path: 0, forest: 0 };
+  const ground = { h: 0, path: 0, forest: 0, above: 0, snow: 0 };
   function groundHere() {
     const { x, z } = player.pos;
     if (!chunks.groundAt(x, z, ground)) {
       ground.path = gen.pathMask(x, z);
       ground.forest = gen.forest(x, z);
+      ground.above = ground.snow = 0;
     }
     return ground;
   }
@@ -36,7 +37,9 @@ export function installAudio(game) {
     if (player.underfoot && player.underfoot.surface) return player.underfoot.surface;
     if (player.wade > 0.04) return 'water';
     const g = groundHere();
-    if (g.path > 0.45) return 'dirt';
+    if (g.snow > 0.5) return 'snow';
+    // a trail, or the stony ground up above the trees
+    if (g.path > 0.45 || g.above > 0.6) return 'dirt';
     return g.forest > 0.62 ? 'litter' : 'grass';
   }
   player.on('footstep', (run) => sound.footstep(surfaceHere(), run, player.swimming ? 'swim' : 'step', player.wade));

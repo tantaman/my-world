@@ -2,8 +2,8 @@
 
 Press **M** (or tap *map*) for a top-down map of the forest. It's drawn from
 the same world description as the 3D view (`src/map/`), so it always matches
-what's there: meadows and woods, footpaths, rock, water, and hillshaded
-relief with contour lines. Zoomed out it keeps the rivers, lakes and ponds and
+what's there: meadows and woods, footpaths, rock, water, alpine ground and
+snow, and hillshaded relief with contour lines. Zoomed out it keeps the rivers, lakes and ponds and
 lets the streams go. Zoomed in, every tree, bush and boulder is in its real place.
 Tiles are rendered in Web Workers and pre-rendered around you while you walk,
 so the map opens already drawn.

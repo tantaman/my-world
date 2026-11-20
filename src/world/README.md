@@ -1,5 +1,27 @@
 # The world
 
+- **Varied.** Over a few kilometres the country changes
+  (`src/world/land2.js`):
+  - **Lake country** lies low, in broad smooth hollows that each gather a lot
+    of water, so there's a pond or a lake in every other one, and the lakes are
+    the biggest anywhere (well over 100 m across). It's wetter, more open, and
+    the woods there are birch and broadleaf.
+  - **Hill country** rolls, as the whole forest once did.
+  - **Mountains** rise a hundred metres and more over their valleys, in ridges
+    sharp along the crests. The trees turn to conifers on the way up, grow
+    smaller and thin out to a treeline about 90 m up, and above it are alpine
+    meadows of thin, tawny turf, stones and big boulders, with a few low
+    shrubs, and snow lying on the tops from about 120 m. Rock shows on the
+    steep faces, no tree grows on a cliff, and the trails give out about where
+    the trees do.
+  - **Benches** step the land into level shelves with a rock face between
+    each and the next, here and there in the hills and mountains.
+
+  And over a kilometre or so the woods change, whatever the country: **dark
+  conifer forest**, thick, with ferns and fallen logs; **birch groves**; and
+  **open parkland**, where the meadows run together, the odd lone tree grows
+  big, and scrub grows in the open. You start on level ground among the
+  trees.
 - **Deterministic.** The same seed always produces the same hills, paths
   and trees. This matters because structures will be placed at fixed
   coordinates. The HUD shows your `x, z`, your heading and the time.
@@ -70,6 +92,28 @@
 From the browser console you can jump around with
 `await world.teleport(x, z)`.
 
+## Lands
+
+A save is only what was changed from what a seed grows, so changing how the
+forest grows would leave every cabin ever built floating over, or buried in,
+somebody's hillside. So when the way the forest grows changes, the change is
+a new **land**, and every world keeps the land it was first grown on
+(`src/world/lands.js`):
+
+| land | |
+|---|---|
+| 1 | rolling hills and mixed woods everywhere (`world/worldgen.js`) — every world saved before there was a second |
+| 2 | lake country, hills and mountains, benches, and different woods (`world/land2.js`) |
+
+New worlds are grown on the newest. A shared world says which land it is on
+in its save, beside its name (`land` → 2); one that says nothing is land 1,
+which is every world saved before lands were counted. A world that lives only
+in your browser is known by its seed and its land, so the world you built in
+before is still there, at `?land=1`; the first time you open the new land
+where one is kept, the game says so. What each land grows is pinned by
+`test/golden/` (land 2's files end in `-land2`), and never changes: something
+new goes in a land of its own.
+
 ## Keys
 
 | | |
@@ -81,7 +125,9 @@ From the browser console you can jump around with
 
 ```
 index.js              plugs it into the game: the land, the sky, the hour
-worldgen.js           pure world description: height, paths, forest, species
+worldgen.js           pure world description: height, paths, forest, species (land 1)
+land2.js              the second land: lake country, mountains, benches, kinds of woods
+lands.js              which land a world is grown on; growWorld()
 drainage.js           where water runs and gathers: the drainage network
 water.js              streams, rivers, ponds and lakes on the ground, from that network
 flora.js              what grows, in one table

@@ -1,7 +1,8 @@
 // Pure top-down map tile renderer: no DOM, no three.js, so it runs in a Web
 // Worker. It reads the same WorldGen fields the 3D world is built from, so
 // the map always matches the forest: meadows, woods, footpaths, rock, water,
-// and hillshaded relief with contour lines. Zoomed in far enough, it stamps
+// alpine ground and snow where the land has them, and hillshaded relief with
+// contour lines. Zoomed in far enough, it stamps
 // every real tree, bush and boulder from the chunk generator.
 
 import { generateVegetation, VEG_KINDS } from '../world/chunkGen.js';
@@ -22,6 +23,8 @@ const MOSS = [0.26, 0.33, 0.17];
 const DIRT = [0.7, 0.57, 0.39];
 const DIRT_EDGE = [0.5, 0.41, 0.27];
 const ROCK = [0.55, 0.53, 0.49];
+const ALPINE = [0.5, 0.52, 0.38];
+const SNOW = [0.9, 0.92, 0.95];
 const BROAD = [0.21, 0.35, 0.15];
 const PINE = [0.12, 0.25, 0.18];
 const BIRCH = [0.45, 0.55, 0.27];
@@ -96,6 +99,10 @@ export function renderTile(gen, level, tx, tz, vegFor) {
   const F = new Float32Array(S * S);
   const SP = new Float32Array(S * S);
   const MO = new Float32Array(S * S);
+  // birch groves, how far above the trees, snow (only some lands have them)
+  const GR = new Float32Array(S * S);
+  const AB = new Float32Array(S * S);
+  const SN = new Float32Array(S * S);
   // water: how much of the pixel is water (0..1), and how deep (m)
   const WA = new Float32Array(S * S);
   const WD = new Float32Array(S * S);
@@ -141,6 +148,10 @@ export function renderTile(gen, level, tx, tz, vegFor) {
         F[k] = gen.forest(x, z);
         SP[k] = gen.species(x, z);
         MO[k] = gen.moisture(x, z);
+        const hk = H[gz * G + gx];
+        GR[k] = gen.groves(x, z);
+        AB[k] = gen.above(x, z, hk);
+        SN[k] = gen.snow(x, z, hk);
       }
     }
   }
@@ -187,12 +198,14 @@ export function renderTile(gen, level, tx, tz, vegFor) {
       mix3(c, c, MEADOW_LUSH, smoothstep(0.6, 0.85, m) * 0.7);
       mix3(t, FLOOR, MOSS, smoothstep(0.45, 0.8, m) * 0.7);
       mix3(c, c, t, smoothstep(0.3, 0.85, f));
+      // above the trees: thin turf among stones
+      if (AB[k] > 0) mix3(c, c, ALPINE, AB[k] * 0.7);
 
       // canopy, as a texture, when we're too far out to draw single trees
       if (!fine) {
         const cover = smoothstep(0.1, 0.72, f);
         const pineW = smoothstep(-0.3, 0.3, SP[k]);
-        const birchW = Math.max(0, 1 - Math.abs(f - 0.4) * 2.4) * 0.5;
+        const birchW = Math.max(0, 1 - Math.abs(f - 0.4) * 2.4) * 0.5 + GR[k];
         mix3(t, BROAD, PINE, pineW);
         mix3(t, t, BIRCH, birchW * 0.7);
         const crown = level <= 2 ? 0.82 + rnd * 0.34 : 0.93 + rnd * 0.12;
@@ -207,6 +220,8 @@ export function renderTile(gen, level, tx, tz, vegFor) {
       // rock on steep ground
       const rock = smoothstep(0.3, 0.45, slope + (rnd - 0.5) * 0.08);
       if (rock > 0) mix3(c, c, ROCK, rock);
+      // snow, where it lies: not on the cliffs
+      if (SN[k] > 0) mix3(c, c, SNOW, SN[k] * (1 - smoothstep(0.32, 0.55, slope)));
 
       // water over it all; it lies flat, so the hillshade barely shows on it
       const wa = WA[k];

@@ -5,7 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { WorldGen } from '../src/world/worldgen.js';
+import { growWorld, LANDS } from '../src/world/lands.js';
 import { findHaunts, hintArea, bearing, shore, STAGE, HINTS, RANGE, KINDS } from '../src/mounts/haunts.js';
 import { Hints, FIRST, EVERY } from '../src/mounts/hints.js';
 import { sense, tamed, STILL } from '../src/mounts/taming.js';
@@ -14,9 +14,9 @@ import { MOUNTS } from '../src/mounts/kinds.js';
 const SEEDS = [20261119, 42];
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
-for (const seed of SEEDS) {
-  test(`seed ${seed}: each mount has a haunt that suits it, the same every time`, () => {
-    const gen = new WorldGen(seed, []);
+for (const land of LANDS) for (const seed of SEEDS) {
+  test(`seed ${seed}${land > 1 ? ` on land ${land}` : ''}: each mount has a haunt that suits it, the same every time`, () => {
+    const gen = growWorld(seed, [], land);
     const start = gen.findSpawn(0, 0);
     const h = findHaunts(gen, start);
     assert.deepEqual(Object.keys(h).sort(), [...KINDS].sort(), 'a horse, a turtle and an eagle');
@@ -43,7 +43,7 @@ for (const seed of SEEDS) {
     assert.ok(dist(eagle, start) > dh, 'further off than the horse');
 
     // the same seed, the same places
-    const again = findHaunts(new WorldGen(seed, []), start);
+    const again = findHaunts(growWorld(seed, [], land), start);
     for (const k of KINDS) {
       assert.equal(again[k].x, h[k].x);
       assert.equal(again[k].z, h[k].z);
@@ -52,7 +52,7 @@ for (const seed of SEEDS) {
 }
 
 test('the hint circles narrow down, and always hold the haunt', () => {
-  const gen = new WorldGen(42, []);
+  const gen = growWorld(42, [], 1);
   const h = findHaunts(gen, gen.findSpawn(0, 0));
   for (const k of KINDS) {
     const wide = hintArea(h[k], STAGE.RUMOUR, 42);

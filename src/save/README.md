@@ -87,8 +87,8 @@ race loses it on one element, not on your afternoon.
 
 ## What a save actually holds
 
-The forest is procedural, grown from a seed, so a save stores the seed and the
-**diff** — only what you changed. Elements are grouped into 64 m regions, the
+The forest is procedural, grown from a seed, so a save stores the seed, the
+[land](../world/README.md#lands) it was grown on, and the **diff** — only what you changed. Elements are grouped into 64 m regions, the
 same grid the world streams on.
 
 A world dug over 320 × 320 m is 59,000 elements in 37 regions, and costs 160 kB
@@ -139,6 +139,10 @@ costs bandwidth, which is why it is opt-in.
 > When water learned to run downhill, every seed grew different valleys. A
 > world saved before then opens on the new land, so what was built or dug in
 > it may now float above the ground or sit buried in it.
+>
+> When the land got more varied, it didn't happen again: that is a new
+> [land](../world/README.md#lands), and every world saved before it keeps the land it was built
+> on.
 
 ## The save API
 
@@ -195,6 +199,7 @@ cabin isn't gone for good.
 ```
 index.js              plugs it into the game: other people, the panel, the key
 domains.js            what a save is made of: the registry every system adds to
+land.js               which land a world is grown on, as it is saved
 worldSave.js          keeping a world: what moved, when it goes out
 local.js              a world that lives only in this browser
 regions.js            elements by 64 m region, and the changes between two sets

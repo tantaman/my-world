@@ -9,12 +9,24 @@ import assert from 'node:assert/strict';
 export default async function ({ page, step, key, frames, shot }) {
   await step('find a wild horse, win it over and ride it', async () => {
     const horse = () => page.evaluate(() => world.mounts.list().find((m) => m.kind === 'horse'));
-    // with no mount of your own, Z says where to look, and the map shows it
+    // with no mount of your own, Z says where to look for the nearest, and the
+    // map shows it
     await key('KeyZ');
-    const word = await page.evaluate(() => ({ said: document.getElementById('toast').textContent, known: world.mounts.hints.stage.horse, area: world.mounts.hints.area('horse') }));
-    assert.match(word.said, /wild horse.*m to the/, 'word of a horse, and which way');
+    const word = await page.evaluate(() => {
+      const h = world.mounts.hints;
+      const first = h.order[0];
+      return { said: document.getElementById('toast').textContent, first, known: h.stage[first], area: h.area(first) };
+    });
+    assert.match(word.said, /word is .*m to the/, 'word of the nearest, and which way');
     assert.equal(word.known, 1);
     assert.ok(word.area && word.area.r > 30, 'a circle on the map to look in');
+    // if that wasn't the horse, word of it comes in its own time: hurry it along
+    word.area = await page.evaluate(() => {
+      const h = world.mounts.hints;
+      while (h.stage.horse === 0 && h.rumour());
+      return h.area('horse');
+    });
+    assert.ok(word.area && word.area.r > 30, "and a circle for the horse's");
     // into the circle: signs of it, and a smaller circle
     const signs = await page.evaluate(async (a) => {
       await world.teleport(a.x, a.z);
@@ -115,7 +127,7 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.equal(await page.evaluate(() => world.player.flying), false);
     const kept = await page.evaluate(async () => {
       await T.frames(140);
-      return JSON.parse(localStorage.getItem('my-world:build:20261119')).mounts;
+      return JSON.parse(localStorage.getItem(world.save.local.keyFor('build'))).mounts;
     });
     assert.deepEqual(Object.keys(kept.tame).sort(), ['eagle', 'horse', 'turtle'], 'all three are kept as yours');
     return { swam: true, flew: true, kept: Object.keys(kept.tame).length };
