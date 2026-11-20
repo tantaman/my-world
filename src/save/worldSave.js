@@ -8,6 +8,11 @@
 //            socket open; changes go up as ops and come back down from
 //            everyone else, and you can see each other walking around.
 //
+// The server only lets in people it knows. The first time a browser opens a
+// world, `who` (signIn.js) asks for a name and a password — new ones, or
+// ones picked before — and what is yours alone in that world comes back to
+// whoever gives them.
+//
 // Changes are found by *diffing*, not by instrumenting every swing of the axe:
 // a few times a second the world is reduced to its elements and compared with
 // what the server is known to hold. Nothing can be forgotten that way, and a
@@ -27,7 +32,7 @@ import { SaveDomains } from './domains.js';
 import { LocalStore } from './local.js';
 import { LOOSE, diffElements, applyOps, cloneElements, elementsToPlain, plainToElements } from './regions.js';
 import { Live } from './live.js';
-import { createWorld, openWorld, sendOps, WorldError } from './remote.js';
+import { createWorld, openWorld, sendOps, join, signIn, signOut, WorldError } from './remote.js';
 import { Emitter } from '../core/events.js';
 import { KEYS } from '../core/storage.js';
 
@@ -38,20 +43,28 @@ const SLOW_LULL = 3000; // and when there is no socket to send them over
 const AT_EVERY = 150; // ms between telling everyone where you are
 const BIG_BATCH = 400; // ops; more than this goes over HTTP instead
 const BACKOFF = [1000, 2000, 5000, 10000, 30000];
+// Times to ask who you are before giving up on opening a world. More than
+// once only if signing in worked and the world still doesn't know you.
+const SIGN_IN_TRIES = 2;
+const SIGNED_OUT = 'this browser is no longer signed in to this world';
 
 // Emits:
 //   'status'  (save)   the status, the name or who is here changed
 export class WorldSave extends Emitter {
-  constructor({ storage }) {
+  // who: asks for a name and a password when the server wants them —
+  //      { ask({ world, problem, name, back }) -> { name, password, back }, close() }
+  constructor({ storage, who = null }) {
     super();
     this.storage = storage;
+    this.who = who;
+    this.you = ''; // your name in this world, once the server knows it
     this.domains = new SaveDomains();
     this.local = null; // this browser's copy of a world with no address (see begin)
     this.id = null;
     this.seed = 0;
     this.gen = 0;
     this.name = '';
-    this.status = 'local'; // local | live | saved | saving | offline | full | gone
+    this.status = 'local'; // local | live | saved | saving | offline | full | gone | out
     this.detail = '';
     this.dirty = false;
     this.changedAt = 0;
@@ -123,39 +136,71 @@ export class WorldSave extends Emitter {
     const cached = this._readCache(id);
 
     let remote = null;
-    try {
-      remote = await openWorld(id);
-    } catch (err) {
-      if (err.status === 404) {
-        dropParam('w');
-        this._set('local', 'there is no world at that address any more');
-        return null;
+    let greeting = '';
+    for (let asked = 0; !remote; asked++) {
+      try {
+        remote = await openWorld(id);
+      } catch (err) {
+        if (err.status !== 401 || !this.who || asked >= SIGN_IN_TRIES) return this._unopened(err, id, cached);
+        // The world is there, but doesn't know you yet. Signed in and still
+        // a stranger means the cookie that says who you are isn't kept.
+        const problem = asked ? "that worked, but this browser isn't keeping the sign-in — are cookies blocked for this site?" : '';
+        greeting = await this._signIn(id, err.body, cached, problem);
       }
-      if (err.status >= 400 && err.status < 500) {
-        this._set('local', err.message);
-        return null;
-      }
-      // Couldn't reach it. Carry on from this browser's copy if we have one,
-      // and let the socket push what we do once it comes back.
-      if (cached && cached.elements) {
-        this._adopt(id, cached, cached.seed, cached.visitor);
-        this._set('offline', err.message);
-        return { id, seed: this.seed, name: this.name, offline: true };
-      }
-      this._set('offline', err.message);
-      return null;
     }
 
     // Anything we made last time and never got through is still ours: it goes
-    // on top of whatever the world has become, and out again as ops.
+    // on top of whatever the world has become, and out again as ops. So is
+    // what you were carrying then, if it was you this browser was then.
     const held = cached && cached.pending && cached.pending.length ? cached.pending : [];
-    this._adopt(id, { ...remote, pending: held }, remote.seed, held.length && cached.visitor ? cached.visitor : remote.visitor);
-    this._set('saved', held.length ? 'picking up where you left off' : '');
+    const yours = held.length && cached.visitor && cached.you === remote.you ? cached.visitor : remote.visitor;
+    this._adopt(id, { ...remote, pending: held }, remote.seed, yours);
+    this._set('saved', held.length ? 'picking up where you left off' : greeting);
     return { id, seed: this.seed, name: this.name, recovered: held.length > 0 };
+  }
+
+  // The world couldn't be opened. -> what open() resolves to.
+  _unopened(err, id, cached) {
+    if (err.status === 404) {
+      dropParam('w');
+      this._set('local', 'there is no world at that address any more');
+      return null;
+    }
+    if (err.status >= 400 && err.status < 500) {
+      this._set('local', err.message);
+      return null;
+    }
+    // Couldn't reach it. Carry on from this browser's copy if we have one,
+    // and let the socket push what we do once it comes back.
+    if (cached && cached.elements) {
+      this._adopt(id, cached, cached.seed, cached.visitor);
+      this._set('offline', err.message);
+      return { id, seed: this.seed, name: this.name, offline: true };
+    }
+    this._set('offline', err.message);
+    return null;
+  }
+
+  // Ask who you are until the server agrees. -> a greeting.
+  async _signIn(id, body, cached, problem) {
+    const world = (body && body.world) || '';
+    // someone this browser has been here before is most likely coming back
+    let asking = { world, problem, name: (cached && cached.you) || '', back: !!(cached && cached.you) };
+    for (;;) {
+      const said = await this.who.ask(asking);
+      try {
+        const got = said.back ? await signIn(id, said) : await join(id, said);
+        this.who.close();
+        return said.back ? `welcome back, ${got.name}` : `welcome, ${got.name}`;
+      } catch (err) {
+        asking = { world, problem: err.message, name: said.name, back: said.back };
+      }
+    }
   }
 
   _adopt(id, from, seed, visitor) {
     this.id = id;
+    this.you = from.you || '';
     this.seed = Math.trunc(seed);
     this.gen = from.gen || 0;
     this.elements = from.elements instanceof Map ? from.elements : plainToElements(from.elements);
@@ -198,8 +243,8 @@ export class WorldSave extends Emitter {
   // ── Wiring ────────────────────────────────────────────────────────────────
   // peers: everyone else in the world (src/player/peers.js)
   // where: () => { x, z, yaw }, where you are standing, to tell them
-  attach({ peers = null, where, me = '' }) {
-    this.attached = { where, me };
+  attach({ peers = null, where }) {
+    this.attached = { where };
     this.peers = peers;
     if (peers) peers.on('change', () => this.emit('status', this));
     document.addEventListener('visibilitychange', () => {
@@ -243,7 +288,7 @@ export class WorldSave extends Emitter {
     if (this.connected && now - this.toldAt > AT_EVERY) {
       this.toldAt = now;
       const p = this.attached.where();
-      this.live.at(round(p.x), round(p.z), round(p.yaw, 100), this.attached.me || '');
+      this.live.at(round(p.x), round(p.z), round(p.yaw, 100));
     }
 
     // Finding changes means looking over the whole world, which on a world
@@ -252,7 +297,7 @@ export class WorldSave extends Emitter {
     // stuttering.
     const lull = Math.max(this.connected ? LIVE_LULL : SLOW_LULL, this.diffCost * 6);
     if (this.dirty && now - this.changedAt >= lull) this._collect();
-    if (this.pending.size && !this.pushing && now >= this.holdUntil && this.status !== 'full' && this.status !== 'gone') this._send();
+    if (this.pending.size && !this.pushing && now >= this.holdUntil && !STUCK.has(this.status)) this._send();
   }
 
   // Reduce the world to its elements and see what differs from what the
@@ -323,8 +368,9 @@ export class WorldSave extends Emitter {
     return this._send(opts);
   }
 
-  // Put this world on the server for the first time. -> the world's URL.
-  async publish(name = '') {
+  // Put this world on the server for the first time, with you as the first
+  // person in it. you: { name, password }. -> the world's URL.
+  async publish(name = '', you = {}) {
     if (this.id) return this.url();
     if (!this.attached) throw new WorldError('the world is not ready yet', 0);
     this._set('saving');
@@ -334,7 +380,7 @@ export class WorldSave extends Emitter {
     const visitor = this.domains.yours(state);
     let made;
     try {
-      made = await createWorld({ seed: this.seed, name, ops, visitor });
+      made = await createWorld({ seed: this.seed, name, ops, visitor, you });
     } catch (err) {
       this._set('local', err.message);
       throw err;
@@ -342,6 +388,7 @@ export class WorldSave extends Emitter {
     this.id = made.id;
     this.gen = made.gen || 0;
     this.name = name;
+    this.you = made.you || '';
     // what the server now holds: the ops, not the map they were made from,
     // whose values are still the game's own objects
     this.elements = new Map();
@@ -356,6 +403,24 @@ export class WorldSave extends Emitter {
     this._goLive();
     this._set('saved', `${(made.sentBytes / 1024).toFixed(1)} kB · ${ops.length} things`);
     return this.url();
+  }
+
+  // Leave this world as yourself. What you did goes out under your name
+  // first; then whoever opens it next in this browser is asked who they are.
+  // Reload the page after.
+  async signOut() {
+    if (!this.id) return;
+    await this.flush();
+    await signOut(this.id);
+    if (this.live) this.live.close();
+    this.live = null;
+    this.you = '';
+    this.visitor = {};
+    // What was yours goes from this browser. Changes to the world that
+    // haven't got through yet stay, for whoever comes in next to send.
+    if (this.pending.size) this._cache();
+    else this.storage.remove(KEYS.world(this.id));
+    this._set('out', 'signed out');
   }
 
   // ── The socket ────────────────────────────────────────────────────────────
@@ -373,6 +438,7 @@ export class WorldSave extends Emitter {
           for (const m of list) this.peers.at(m);
         },
         reopen: () => this._reopen(),
+        denied: () => this._set('out', SIGNED_OUT),
         state: (how) => {
           if (how === 'open') this._set(this.pending.size ? 'saving' : 'live');
           else if (how === 'closed') {
@@ -410,6 +476,7 @@ export class WorldSave extends Emitter {
 
   _failed(err) {
     const status = err instanceof WorldError ? err.status : 0;
+    if (status === 401) return this._set('out', SIGNED_OUT);
     if (status === 413) return this._set('full', err.message);
     if (status === 404) return this._set('gone', 'this world is no longer on the server');
     this.holdUntil = performance.now() + BACKOFF[Math.min(this.attempt++, BACKOFF.length - 1)];
@@ -422,6 +489,7 @@ export class WorldSave extends Emitter {
     this.storage.set(KEYS.world(this.id), {
       gen: this.gen,
       seed: this.seed,
+      you: this.you, // whose the visitor is
       visitor: this.visitor,
       elements: elementsToPlain(this.elements),
       pending: [...this.pending.values()],
@@ -443,6 +511,8 @@ export class WorldSave extends Emitter {
 // ── Odds and ends ───────────────────────────────────────────────────────────
 
 const opKey = (op) => `${op.r}\u0000${op.k}`;
+// Nothing goes out while the world is in one of these: it would be refused.
+const STUCK = new Set(['full', 'gone', 'out']);
 const round = (v, f = 10) => Math.round(v * f) / f;
 
 // ── The address bar ─────────────────────────────────────────────────────────

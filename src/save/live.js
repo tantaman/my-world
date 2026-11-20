@@ -8,13 +8,18 @@
 // builder already applies your own edits the moment you swing, the object is
 // the only writer so its order is the order, and a change that loses a race
 // loses it on one element, not on your afternoon. Nothing is ever rolled back.
+//
+// The object only lets in people it knows. A socket it closes with
+// NOT_SIGNED_IN is not tried again: trying again would get the same answer.
+
+import { NOT_SIGNED_IN } from './who.js';
 
 const RETRY = [500, 1000, 2000, 4000, 8000, 15000];
 
 export class Live {
   constructor({ id, handlers }) {
     this.id = id;
-    this.on = handlers; // { ops, at, gone, here, reopen, state }
+    this.on = handlers; // { ops, at, gone, here, reopen, state, denied }
     this.ws = null;
     this.me = null;
     this.gen = 0;
@@ -56,9 +61,9 @@ export class Live {
   }
 
   // Where you are. Dropped on the floor if the socket is down — it is only
-  // ever true for an instant anyway.
-  at(x, z, yaw, name) {
-    if (this.connected) this.ws.send(JSON.stringify({ t: 'at', x, z, yaw, name }));
+  // ever true for an instant anyway. (Who you are, the object knows already.)
+  at(x, z, yaw) {
+    if (this.connected) this.ws.send(JSON.stringify({ t: 'at', x, z, yaw }));
   }
 
   #connect() {
@@ -77,11 +82,16 @@ export class Live {
       this.on.state?.('open');
     });
     ws.addEventListener('message', (e) => this.#heard(e.data));
-    ws.addEventListener('close', () => {
+    ws.addEventListener('close', (e) => {
       if (this.ws !== ws) return;
       this.ws = null;
       this.#fail();
       this.on.state?.('closed');
+      if (e.code === NOT_SIGNED_IN) {
+        this.want = false;
+        this.on.denied?.(e.reason);
+        return;
+      }
       this.#retry();
     });
     ws.addEventListener('error', () => {

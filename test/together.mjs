@@ -4,10 +4,13 @@
 //   node test/together.mjs         (in another)
 //   node test/together.mjs http://127.0.0.1:8787
 //
-// One visitor builds a little, puts the world on the server, and a second
-// opens the link. Each then changes things and the other must see them (a
-// campfire one lights, the other puts out); a reload must bring it all back; and something a *newer* game saved, which
-// this one has never heard of, must survive being walked past.
+// One visitor builds a little and puts the world on the server, picking a
+// name and a password; a second opens the link and must pick their own before
+// walking in. Each then changes things and the other must see them (a
+// campfire one lights, the other puts out); a reload must bring it all back;
+// something a *newer* game saved, which this one has never heard of, must
+// survive being walked past; and the second, signing in from another
+// browser, must come back as himself — where *he* left off.
 
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
@@ -31,13 +34,40 @@ async function visitor(name) {
   const context = await browser.newContext({ viewport: { width: 800, height: 500 } });
   const page = await context.newPage();
   page.on('console', (m) => {
-    // a socket being closed under a page that is going away is not a problem
-    if (m.type() === 'error' && !/WebSocket/.test(m.text())) problems.push(`${name}: ${m.text()}`);
+    // A socket being closed under a page that is going away is not a problem,
+    // and nor is the server saying who it lets in: the browser logs a 401
+    // (who are you?), 403 (wrong password) or 409 (name taken) itself.
+    if (m.type() === 'error' && !/WebSocket|status of 40[139]/.test(m.text())) problems.push(`${name}: ${m.text()}`);
   });
   page.on('pageerror', (e) => problems.push(`${name}: ${e.message}`));
-  const open = async (query) => {
-    await page.goto(`${base}/?${query}`);
-    await page.waitForFunction(() => document.getElementById('loader')?.classList.contains('gone') && window.world, null, { timeout: 120000 });
+  const go = (query) => page.goto(`${base}/?${query}`);
+  // The door asks who you are (src/save/signIn.js). Answer it.
+  const door = async (who, password, { back = false } = {}) => {
+    await page.waitForSelector('#door:not([hidden]) [data-el="go"]:not([disabled])', { timeout: 60000 });
+    const asking = await page.$eval('#door [data-el="go"]', (b) => b.textContent);
+    if ((asking === 'sign in') !== back) await page.click('#door [data-act="switch"]');
+    await page.fill('#door [data-el="name"]', who);
+    await page.fill('#door [data-el="password"]', password);
+    await page.click('#door [data-el="go"]');
+  };
+  const doorSays = (re) =>
+    page.waitForFunction((src) => new RegExp(src).test(document.querySelector('#door [data-el="problem"]')?.textContent || ''), re.source, { timeout: 20000 });
+  // In the world, or asked who you are at the door: whichever comes first.
+  // (A door with its button held down is still hearing back about the last answer.)
+  const ready = async ({ expectDoor = false } = {}) => {
+    const where = await page.waitForFunction(
+      () =>
+        document.querySelector('#door:not([hidden]) [data-el="go"]:not([disabled])')
+          ? 'door'
+          : document.getElementById('loader')?.classList.contains('gone') && window.world
+            ? 'in'
+            : false,
+      null,
+      { timeout: 120000 },
+    );
+    const at = await where.jsonValue();
+    if (expectDoor) return assert.equal(at, 'door', 'asked who they are');
+    assert.equal(at, 'in', `${name} walked straight in`);
     await page.evaluate(() => {
       world.pipeline.render = () => {}; // software GL is slow, and nobody is watching
       const frame = () => new Promise((r) => requestAnimationFrame(r));
@@ -68,9 +98,19 @@ async function visitor(name) {
       };
     });
   };
+  // Open the game; if it asks who you are, answer as `as`: [name, password, { back }].
+  const open = async (query, as = null) => {
+    await go(query);
+    if (as) await door(...as);
+    await ready();
+  };
   const until = (fn, arg, what) => page.evaluate(([f, a]) => window.until(() => new Function('a', `return (${f})(a)`)(a)), [fn.toString(), arg]).then((ok) => assert.ok(ok, what));
-  return { name, page, context, open, until, seen: () => page.evaluate(() => window.seen()) };
+  const at = () => page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z }));
+  const settled = () => until(() => world.save.status === 'live' && !world.save.dirty && !world.save.pending.size && !world.save.visitorDirty, null, `${name}’s changes are all out`);
+  return { name, page, context, go, door, doorSays, ready, open, until, at, settled, seen: () => page.evaluate(() => window.seen()) };
 }
+
+const far = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
 const step = async (name, fn) => {
   const t0 = Date.now();
@@ -83,6 +123,7 @@ try {
   const ben = await visitor('ben');
   let id = '';
   let site = null;
+  let anaAt = null;
 
   await step('ana builds a little, in a world of her own', async () => {
     await ana.open(`${QUERY}&creative&reset&clearbuild`);
@@ -101,30 +142,57 @@ try {
       world.marks.setTracked(world.marks.list()[0].id);
       return { x, z };
     });
+    // and wanders off from the start, so where she stands is hers alone
+    anaAt = await ana.page.evaluate(() => {
+      world.player.spawn(world.player.pos.x + 14, world.player.pos.z - 11, 0.5);
+      return { x: world.player.pos.x, z: world.player.pos.z };
+    });
     const s = await ana.seen();
     assert.equal(s.buildings[0].logs.length, 2);
     assert.ok(s.moved > 0);
   });
 
-  await step('and puts it on the server', async () => {
+  await step('and puts it on the server, as herself', async () => {
     await ana.page.keyboard.press('KeyL');
     await ana.page.fill('[data-el="new-name"]', 'The clearing');
+    await ana.page.fill('[data-el="you"]', 'ana');
+    await ana.page.fill('[data-el="pass"]', 'pine-and-birch');
     await ana.page.click('[data-act="publish"]');
     await ana.until(() => !!world.save.id && world.save.connected, null, 'the world has an address and a socket');
     id = await ana.page.evaluate(() => world.save.id);
     assert.match(id, /^[0-9a-z]{4,32}$/);
     assert.match(ana.page.url(), new RegExp(`w=${id}`), 'the address bar has the link');
+    assert.equal(await ana.page.evaluate(() => world.save.you), 'ana');
     await ana.page.keyboard.press('Escape');
   });
 
-  await step('ben opens the link and walks into the same world', async () => {
-    await ben.open(`${QUERY}&w=${id}`);
+  await step('nobody gets in without a name', async () => {
+    const opened = await fetch(`${base}/api/worlds/${id}`);
+    assert.equal(opened.status, 401, 'opening the world');
+    assert.equal((await opened.json()).world, 'The clearing', 'though it says which world it is');
+    const sent = await fetch(`${base}/api/worlds/${id}/ops`, { method: 'POST', body: JSON.stringify({ ops: [{ r: '0,0', k: 't:0:0', v: [9, 1] }] }) });
+    assert.equal(sent.status, 401, 'changing it');
+  });
+
+  await step('ben opens the link, and is asked who he is', async () => {
+    await ben.go(`${QUERY}&w=${id}`);
+    await ben.ready({ expectDoor: true });
+    assert.equal(await ben.page.$eval('#door [data-el="world"]', (e) => e.textContent), 'The clearing');
+    await ben.door('ben', '123');
+    await ben.doorSays(/at least 6 characters/);
+    await ben.door('ANA', 'something-long');
+    await ben.doorSays(/already goes by ANA/);
+    await ben.door('ben', 'ben-was-here');
+    await ben.ready();
+    assert.equal(await ben.page.evaluate(() => world.save.you), 'ben');
+  });
+
+  await step('and walks into the same world — at the start, not where ana is', async () => {
     assert.deepEqual(await ben.seen(), await ana.seen());
     assert.equal((await ben.seen()).name, 'The clearing');
-    await ben.until(() => world.save.connected && world.peers.count === 1, null, 'ben can see someone else here');
-    await ana.until(() => world.peers.count === 1, null, 'and so can ana');
-    // (Ben starts from what the last visitor left — where they stood, what
-    // they carried. The server keeps one such note per world, not per person.)
+    assert.ok(far(await ben.at(), anaAt) > 10, 'what is ana’s is not handed to ben');
+    await ben.until(() => world.save.connected && world.peers.list().some((p) => p.name === 'ana'), null, 'ben can see ana here, by name');
+    await ana.until(() => world.peers.list().some((p) => p.name === 'ben'), null, 'and ana can see ben');
   });
 
   await step('what ana changes, ben sees', async () => {
@@ -197,12 +265,16 @@ try {
   });
 
   await step('a newer game saves something this one has never heard of', async () => {
-    const res = await fetch(`${base}/api/worlds/${id}/ops`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ops: [{ r: '0,0', k: 'zz:campfire:3:4', v: [2.5, 1] }] }),
-    });
-    assert.ok(res.ok, `the server took it (${res.status})`);
+    // sent from ana's page, so it goes as her
+    const status = await ana.page.evaluate(async (id) => {
+      const res = await fetch(`/api/worlds/${id}/ops`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ops: [{ r: '0,0', k: 'zz:campfire:3:4', v: [2.5, 1] }] }),
+      });
+      return res.status;
+    }, id);
+    assert.equal(status, 200, 'the server took it');
     await ana.until(() => world.save.elements.get('0,0')?.has('zz:campfire:3:4'), null, 'ana hears of it');
     // ana carries on building; her next save must not sweep it away
     await ana.page.evaluate(() => world.marks.add({ x: 1, z: 1, name: 'after the campfire' }));
@@ -218,12 +290,48 @@ try {
     });
     // where you stand rides along with the next change
     await ana.page.evaluate(() => world.marks.update(world.marks.list()[0].id, { note: 'home' }));
-    await ana.until(() => world.save.status === 'live' && !world.save.dirty && !world.save.pending.size && !world.save.visitorDirty, null, 'ana’s changes are all out');
-    await ana.open(`${QUERY}&w=${id}`);
+    await ana.settled();
+    await ana.open(`${QUERY}&w=${id}`); // this browser remembers her: no door
     assert.deepEqual(await ana.seen(), before);
     const back = await ana.page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z, unknown: world.save.elements.get('0,0')?.get('zz:campfire:3:4') }));
     assert.ok(Math.hypot(back.x - where.x, back.z - where.z) < 0.5, 'she is standing where she stopped');
     assert.deepEqual(back.unknown, [2.5, 1], 'and what the newer game saved is still on the server');
+    anaAt = where;
+  });
+
+  let benAt = null;
+  let elsewhere = null;
+  await step('ben comes back from another browser, signs in, and is where he left off', async () => {
+    benAt = await ben.page.evaluate(() => {
+      world.player.spawn(world.player.pos.x - 9, world.player.pos.z + 6, 2);
+      return { x: world.player.pos.x, z: world.player.pos.z };
+    });
+    await ben.page.evaluate(() => world.marks.add({ x: 3, z: 3, name: 'ben’s second mark' }));
+    await ben.settled();
+    assert.ok(far(benAt, anaAt) > 5, 'somewhere else from ana');
+
+    elsewhere = await visitor('ben, elsewhere');
+    await elsewhere.go(`${QUERY}&w=${id}`);
+    await elsewhere.ready({ expectDoor: true });
+    await elsewhere.door('ben', 'birch-and-pine', { back: true });
+    await elsewhere.doorSays(/isn't ben's password/);
+    await elsewhere.door('carl', 'ben-was-here', { back: true });
+    await elsewhere.doorSays(/nobody here goes by carl/);
+    await elsewhere.door('Ben', 'ben-was-here', { back: true });
+    await elsewhere.ready();
+    assert.equal(await elsewhere.page.evaluate(() => world.save.you), 'ben');
+    assert.ok(far(await elsewhere.at(), benAt) < 0.5, 'he is standing where he stopped');
+    assert.deepEqual(await elsewhere.seen(), await ben.seen(), 'in the same world');
+  });
+
+  await step('and signs out there: the next person is asked who they are', async () => {
+    await elsewhere.page.keyboard.press('KeyL');
+    await Promise.all([elsewhere.page.waitForEvent('load'), elsewhere.page.click('[data-act="signout"]')]);
+    await elsewhere.ready({ expectDoor: true });
+    await elsewhere.context.close();
+    // the browser he came in on first is still signed in
+    await ben.open(`${QUERY}&w=${id}`);
+    assert.ok(far(await ben.at(), benAt) < 0.5, 'and he is still where he stopped');
   });
 
   assert.deepEqual(problems, [], 'nothing went wrong in either page');

@@ -17,7 +17,7 @@ export function installSave(game) {
   const peers = new Peers(scene, (x, z) => standHeight(chunks, x, z));
   game.provide('peers', peers);
 
-  const share = new SharePanel({ save, input, hud });
+  const share = new SharePanel({ save, peers, input, hud });
   game.provide('share', share);
   const toggle = () => {
     if (!share.isOpen) game.emit('panel', 'share');

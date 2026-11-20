@@ -34,10 +34,10 @@ export class Peers extends Emitter {
   at({ id, x, z, yaw, name, colour }) {
     if (!id || !Number.isFinite(x) || !Number.isFinite(z)) return;
     let p = this.all.get(id);
-    if (!p) {
+    const arrived = !p;
+    if (arrived) {
       p = this.#make(id, colour, x, z);
       this.all.set(id, p);
-      this.emit('change', this);
     }
     if (name !== undefined) p.name = name || '';
     if (colour) p.flag.material.color.set(colour);
@@ -45,6 +45,8 @@ export class Peers extends Emitter {
     p.to.set(x, 0, z);
     p.yawTo = Number.isFinite(yaw) ? yaw : p.yawTo;
     p.heard = performance.now();
+    // told once they have a name, so whoever hears can say who arrived
+    if (arrived) this.emit('change', this);
   }
 
   remove(id) {
