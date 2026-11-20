@@ -117,9 +117,10 @@ export function installBuild(game) {
 
   // ── Keys ──────────────────────────────────────────────────────────────────
   // Tools take the number keys in the order they were registered, including
-  // any a later feature adds.
-  for (let i = 0; i < 9; i++) {
-    commands.add({ id: `tool-${i + 1}`, keys: [`Digit${i + 1}`, `Numpad${i + 1}`], run: () => builder.tools[i] && builder.select(builder.tools[i].id) });
+  // any a later feature adds: 1 to 9, and 0 for the tenth, as on the keyboard.
+  for (let i = 0; i < 10; i++) {
+    const n = (i + 1) % 10;
+    commands.add({ id: `tool-${i + 1}`, keys: [`Digit${n}`, `Numpad${n}`], run: () => builder.tools[i] && builder.select(builder.tools[i].id) });
   }
   commands.describe({ group: 'BUILD', help: () => `1 – ${builder.tools.length}`, label: 'pick a tool' });
   commands.describe({ group: 'BUILD', help: 'click', label: 'use the tool (hold to keep going)' });

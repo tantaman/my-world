@@ -172,7 +172,7 @@ place in that order, not at the end:
 | `audio/soundscape.js` | being shut in: the open air muffled, the rest echoing | `game.sound.setEnclosed(0..1)` |
 | `build/builder.js` | a tool | `game.builder.register(tool)` |
 | `build/builder.js` | hands too full for tools | `builder.idleWhile(fn)` |
-| `build/inventory.js` | a material to carry | `game.builder.stock.define({ id, label })` |
+| `build/inventory.js` | a material to carry (`optional`: on the HUD only while you have some) | `game.builder.stock.define({ id, label, optional })` |
 | `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)` |
 | `game/commands.js` | a key, and its line on the help panel | `game.commands.add({ keys, run, group, label })` |
 | `game/game.js` | something done every frame | `game.addSystem({ name, phase, update })` |
@@ -182,9 +182,11 @@ place in that order, not at the end:
 | `player/character.js` | something the hiker holds up to the face | `character.addRaised(name, object, { stowed })`, `raise(name)` |
 | `player/character.js` | sitting astride what carries you | `character.seat({ spread, hang, lean })` |
 | `player/character.js` | something the hiker wears on the cap | `character.addWorn(object, { band })` |
+| `player/character.js` | a way of standing to the work (a rifle shouldered) | `definePose(kind, keyframes)`, `character.play(kind, dur)` |
 | `player/player.js` | walking the hiker somewhere | `player.steer = { x, z, run }` |
 | `player/player.js` | something that carries you (how fast, how deep, whether it flies) | `player.carrier = { walk, run, swim, depth, fly, … }` |
 | `player/player.js` | something that moves you itself, while you sit (a train) | `player.aboard = { place(out) }` |
+| `player/player.js` | something held to the eye: look through it, magnified | `player.sight = { zoom }` |
 | `render/origin.js` | a uniform that says where something is | `game.origin.place(uniform)` |
 | `save/domains.js` | something that is saved | `game.save.register({ id, collect, restore, … })` |
 | `save/worldSave.js` | a word to the others here, never stored | `game.save.say(ch, body, to)`, `game.save.on('message', fn)` |
@@ -193,6 +195,7 @@ place in that order, not at the end:
 | `ui/hud.js` | somewhere the HUD points you to | `game.hud.guide(() => target)` |
 | `wildlife/species.js` | a species | `defineSpecies(kind, def)` |
 | `wildlife/wildlife.js` | a new kind of creature altogether | `defineAnimalClass(name, make)` |
+| `wildlife/wildlife.js` | shooting at the animals, or startling them with a loud noise | `wildlife.aimed(o, d, far)`, `kill(hit)`, `startle(x, z, reach)` |
 | `world/country.js` | a kind of country (its ground, plants, sky, animals, what its trees are called) | an entry in `COUNTRY` |
 | `world/cuts.js` | a hole in the ground, for something to stand in for it | `setCuts([{ ax, az, bx, bz, fa, fb, w, h }])` |
 | `world/flora.js` | a plant | an entry in `FLORA`, a model, and where it grows (`chunkGen.js`) |

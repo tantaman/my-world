@@ -37,6 +37,16 @@ test('a feature can bring its own material', () => {
   assert.throws(() => inv.define({ id: 'clay', label: 'clay' }), /already defined/);
 });
 
+test('a material most people never carry stays off the line until you have some', () => {
+  const inv = new Inventory();
+  inv.define({ id: 'meat', label: 'raw meat', optional: true });
+  assert.equal(inv.line(), 'logs 0 m · timber 0 m · stone 0 · soil 0.0 m³');
+  inv.gain('meat', 2);
+  assert.match(inv.line(), /soil 0\.0 m³ · raw meat 2$/);
+  inv.spend('meat', 2);
+  assert.doesNotMatch(inv.line(), /meat/);
+});
+
 test('what you carry is saved, and what a newer game carried is kept', () => {
   const inv = new Inventory();
   inv.load({ log: 4, stone: 2, flint: 1, soil: 'lots' });

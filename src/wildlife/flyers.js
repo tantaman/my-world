@@ -246,6 +246,11 @@ export class Flock {
     if (this.crows) ctx.call('caw', this.home.x, ctx.ground(this.home.x, this.home.z) + 1, this.home.z, { delay: 0.3 });
   }
 
+  // A sudden loud noise from (x, z): up off the ground and away from it.
+  startle(x, z, ctx) {
+    if (this.state === 'arrive' || this.state === 'forage') this.flush(ctx, { x, z });
+  }
+
   dispose() {
     for (const b of this.birds) b.dispose();
   }

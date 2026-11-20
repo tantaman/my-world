@@ -148,6 +148,13 @@ export class Player extends Emitter {
     this.aboard = null;
     this._at = { x: 0, y: 0, z: 0, yaw: 0 };
     this._rode = false;
+    // Something held up to the eye (a rifle's scope), or null. While there
+    // is one the camera looks out from your eye the way it was looking,
+    // `zoom` times closer; you aren't drawn (it would be the back of your own
+    // head), and the mouse turns the view `zoom` times more finely.
+    //   { zoom }
+    this.sight = null;
+    this._unsighted = null; // the field of view to go back to (degrees)
     // carried through the air, and climbing (jump held, or tapped just now)
     this.flying = false;
     this.climbing = false;
@@ -209,7 +216,7 @@ export class Player extends Emitter {
     const input = this.input;
     const c = this.carrier;
     const look = input.consumeLook();
-    const sens = 0.0026;
+    const sens = 0.0026 / (this.sight ? Math.max(1, this.sight.zoom) : 1);
     this.camYaw -= look.x * sens;
     this.camPitch = clamp(this.camPitch + look.y * sens, -0.35, 1.25);
     const z = input.consumeZoom();
@@ -557,5 +564,25 @@ export class Player extends Emitter {
       if (cam.position.y < floor) cam.position.y = floor;
     }
     cam.lookAt(this.camTarget);
+    this._lookThrough(dir);
+  }
+
+  // Through a sight, while one is held up (this.sight): from your eye, the
+  // same way the camera was looking, so the crosshair stays on what it was on.
+  _lookThrough(dir) {
+    const cam = this.camera;
+    const s = this.sight;
+    if (!s && this._unsighted === null) return;
+    if (s) {
+      if (this._unsighted === null) this._unsighted = cam.fov;
+      cam.position.set(this.pos.x, this.pos.y + this.eye, this.pos.z);
+      cam.lookAt(cam.position.x - dir.x, cam.position.y - dir.y, cam.position.z - dir.z);
+      cam.fov = this._unsighted / Math.max(1, s.zoom);
+    } else {
+      cam.fov = this._unsighted;
+      this._unsighted = null;
+    }
+    cam.updateProjectionMatrix();
+    this.character.root.visible = !s;
   }
 }

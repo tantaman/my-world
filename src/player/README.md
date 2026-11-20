@@ -18,8 +18,8 @@ hiker shifts weight and looks around now and then.
 
 ```
 index.js              plugs it into the game: controls, the hiker, where you arrive
-player.js             movement, collision, wading and swimming, third-person camera
-character.js          procedural hiker model, IK gait, work poses, things raised to the face
+player.js             movement, collision, wading and swimming, third-person camera, looking through a sight
+character.js          procedural hiker model, IK gait, work poses (and features' own), things raised to the face
 head.js               the hiker's face and beard, sunglasses and snapback
 input.js              keyboard, mouse, touch
 peers.js              everyone else, drawn and eased between messages

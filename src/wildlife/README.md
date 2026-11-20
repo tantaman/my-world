@@ -43,7 +43,8 @@ lion.
   over the meadows; an owl ghosts across a clearing at night.
 
 Running is noisy, so they notice you from further off; standing still makes
-you hard to spot. When you look straight at an animal, the name of what
+you hard to spot. A gunshot ([Hunting](../hunting/README.md)) is heard by
+everything for a few hundred metres round, and they all run from it. When you look straight at an animal, the name of what
 you're seeing shows for a moment.
 
 **How they're made.** Like everything else, from primitives with colour baked

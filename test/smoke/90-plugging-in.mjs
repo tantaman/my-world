@@ -35,13 +35,13 @@ export default async function ({ page, step, key, frames, made }) {
     });
     assert.equal(f.slots, n, 'it is on the tool bar');
     assert.equal(f.hint, `1–${n}`);
-    // the number keys go up to 9; past that, a tool is picked from the bar
-    if (n <= 9) await key(`Digit${n}`);
+    // the number keys go up to 9, and 0 for a tenth; past that, a tool is picked from the bar
+    if (n <= 10) await key(`Digit${n % 10}`);
     else {
       await page.evaluate((i) => document.querySelectorAll('#hotbar .slot')[i - 1].dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })), n);
       await frames(3);
     }
-    assert.equal(await page.evaluate(() => T.tool()), n, n <= 9 ? 'the next number key picks it' : 'and it can be picked from the bar');
+    assert.equal(await page.evaluate(() => T.tool()), n, n <= 10 ? 'the next number key picks it' : 'and it can be picked from the bar');
     await page.evaluate((m) => T.aimGround(m.x - 6, m.z - 6, 3), middle);
     assert.equal(await page.evaluate(() => T.prompt()), 'click plant a flag', 'its prompt shows');
     await page.evaluate(() => T.tap('use'));

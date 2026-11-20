@@ -352,6 +352,7 @@ export class Builder extends Emitter {
       // name the on-screen buttons instead of mouse buttons
       prompt = prompt
         .replace(/<b>hold click<\/b>/g, '<b>hold use</b>')
+        .replace(/<b>hold right-click<\/b>/g, '<b>hold alt</b>')
         .replace(/<b>click<\/b>/g, '<b>use</b>')
         .replace(/<b>right-click<\/b>|<b>right<\/b>/g, '<b>alt</b>')
         .replace(/<b>G<\/b>/g, '<b>stake</b>');
