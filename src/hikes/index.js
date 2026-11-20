@@ -5,7 +5,7 @@
 // out in the world (world/hikes.js lists them; world/landform.js is how the
 // world grows them). This feature is the part you play:
 //
-//   - K (or the hikes button) lists them all (hikesPanel.js): go to one's
+//   - J (or the hikes button) lists them all (hikesPanel.js): go to one's
 //     trailhead, or straight to the spot its photo was taken from, facing
 //     the way it looked, at the hour it was taken.
 //   - On a hike, the HUD points the way to that spot (unless you're
@@ -161,7 +161,7 @@ export function installHikes(game) {
   };
   game.on('panel', (which) => which !== 'hikes' && panel.close());
   if (cards.length) {
-    commands.add({ id: 'hikes', keys: ['KeyK'], group: 'WANDER', label: 'hikes · go to one', run: toggle });
+    commands.add({ id: 'hikes', keys: ['KeyJ'], group: 'WANDER', label: 'hikes · go to one', run: toggle });
     hud.button('hikes-btn', toggle);
     const btn = document.getElementById('hikes-btn');
     if (btn) btn.hidden = false;
