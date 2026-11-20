@@ -402,10 +402,8 @@ export class World {
     if (msg.t === 'at') {
       // Where someone is standing. Never stored, just passed on, under the
       // name they signed in with.
-      me.x = num(msg.x);
-      me.z = num(msg.z);
-      me.yaw = num(msg.yaw);
-      this.#tell({ t: 'at', id: me.id, x: me.x, z: me.z, yaw: me.yaw, name: me.name, colour: me.colour }, ws);
+      Object.assign(me, standing(msg));
+      this.#tell({ t: 'at', id: me.id, x: me.x, z: me.z, yaw: me.yaw, ms: me.ms, name: me.name, colour: me.colour }, ws);
       return;
     }
     if (msg.t === 'say') {
@@ -480,7 +478,7 @@ export class World {
     for (const ws of this.ctx.getWebSockets()) {
       if (ws === except) continue;
       const me = this.live.get(ws);
-      if (me && Number.isFinite(me.x)) out.push({ id: me.id, x: me.x, z: me.z, yaw: me.yaw, name: me.name, colour: me.colour });
+      if (me && Number.isFinite(me.x)) out.push({ id: me.id, x: me.x, z: me.z, yaw: me.yaw, ms: me.ms, name: me.name, colour: me.colour });
     }
     return out;
   }
@@ -531,6 +529,12 @@ function badOp(op) {
   }
   if (text.length > MAX_VALUE) return 'a single thing cannot be that big';
   return null;
+}
+
+// Where someone says they are standing, as passed on: { x, z, yaw, ms }.
+// `ms` is when, on their own clock; a build that doesn't say leaves it out.
+export function standing(msg) {
+  return { x: num(msg.x), z: num(msg.z), yaw: num(msg.yaw), ms: Number.isFinite(msg.ms) ? msg.ms : undefined };
 }
 
 // What someone said, if it can be passed on: { ch, to, body }, or null.

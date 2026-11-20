@@ -198,6 +198,8 @@ try {
     assert.ok(far(await ben.at(), anaAt) > 10, 'what is ana’s is not handed to ben');
     await ben.until(() => world.save.connected && world.peers.list().some((p) => p.name === 'ana'), null, 'ben can see ana here, by name');
     await ana.until(() => world.peers.list().some((p) => p.name === 'ben'), null, 'and ana can see ben');
+    // drawn from when ana said where she was, on her clock, which the server passed on
+    await ben.until(() => world.peers.get(world.peers.list().find((p) => p.name === 'ana').id).track.timed === true, null, 'ben hears when ana said where she was');
   });
 
   await step('what ana changes, ben sees', async () => {

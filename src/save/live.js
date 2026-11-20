@@ -61,10 +61,12 @@ export class Live {
     });
   }
 
-  // Where you are. Dropped on the floor if the socket is down — it is only
-  // ever true for an instant anyway. (Who you are, the object knows already.)
-  at(x, z, yaw) {
-    if (this.connected) this.ws.send(JSON.stringify({ t: 'at', x, z, yaw }));
+  // Where you are, and when on your own clock (ms), so others can draw you
+  // at the pace you went (player/track.js). Dropped on the floor if the
+  // socket is down — it is only ever true for an instant anyway. (Who you
+  // are, the object knows already.)
+  at(x, z, yaw, ms) {
+    if (this.connected) this.ws.send(JSON.stringify({ t: 'at', x, z, yaw, ms }));
   }
 
   // Something for the others here, on a channel (`ch`), to everyone or to one
