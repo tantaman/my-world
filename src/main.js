@@ -17,6 +17,7 @@ import { installPlayer } from './player/index.js';
 import { installAudio } from './audio/index.js';
 import { installBuild } from './build/index.js';
 import { installFires } from './fires/index.js';
+import { installBlueprints } from './blueprints/index.js';
 import { installMap } from './map/index.js';
 import { installSave } from './save/index.js';
 import { installVoice } from './voice/index.js';
@@ -25,7 +26,7 @@ import { installSplashes } from './splashes/index.js';
 import { installDebug } from './game/debug.js';
 
 // In order: each can use what the ones before it provide.
-const FEATURES = [installRender, installHud, installWorld, installPlayer, installAudio, installBuild, installFires, installMap, installSave, installVoice, installWildlife, installSplashes, installDebug];
+const FEATURES = [installRender, installHud, installWorld, installPlayer, installAudio, installBuild, installFires, installBlueprints, installMap, installSave, installVoice, installWildlife, installSplashes, installDebug];
 
 const loader = {
   bar: document.getElementById('load-bar'),

@@ -17,6 +17,7 @@ export const YOURS = [
   { id: 'player', scope: 'yours', local: 'state' },
   { id: 'hours', scope: 'yours', local: 'state' },
   { id: 'tracked', scope: 'yours', local: 'marks' },
+  { id: 'blueprint', scope: 'yours' },
 ];
 
 const nameSave = {

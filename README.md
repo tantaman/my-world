@@ -10,7 +10,9 @@ art trying to look real or a painting made of pixels.
 You can also **build**: fell trees, buck them into logs, hew timbers, clear
 and grade the ground, set stone footings, and raise a notched log cabin with
 rooms, doors, windows and a roof. And when it gets dark, ring a pit with
-stones and light a **campfire**. See [Building](#building).
+stones and light a **campfire**. See [Building](#building). Or pick a
+**blueprint**, stake it out, and let the hiker build it for you. See
+[Blueprints](#blueprints).
 
 And you're not alone out there: deer, elk, moose, black bears, wolves,
 mountain lions, bobcats, foxes, rabbits, squirrels, chipmunks, mice, snakes,
@@ -50,7 +52,8 @@ See [Building together](#building-together) to set the server up, or skip it
 | **L** | save this world, and get a link others can build in with you |
 | **hold C** | talk to whoever is near (in a shared world) |
 | **hold X** | talk on the radio, to everyone in the world |
-| **1 – 8** | tools: hands, axe, shovel, footing, log wall, timber, roof, campfire |
+| **1 – 9** | tools: hands, axe, shovel, footing, log wall, timber, roof, campfire, plan |
+| **B** | build the staked-out blueprint for you (again to pause) |
 | **click** (while looking) | use the tool, hold to keep working |
 | **right-click** | the tool's second action, or take a piece down |
 | **G** | set or pull up a grade stake |
@@ -681,6 +684,57 @@ seed. That covers felled trees, stumps, the shape of the ground, buildings,
 fires and what you're carrying. Add `?clearbuild` to start over, or `?creative` to
 skip the gathering.
 
+## Blueprints
+
+A blueprint is a building written down: its footings, its logs course by
+course, its roofs. Pick one, stake it out, and the hiker puts it up for you,
+piece by piece, with the same tools and the same rules as building by hand.
+
+- **Plan (9).** A ghost of the plan follows the crosshair, green where it
+  will go and red where it won't, and the prompt says why (ground off level,
+  a tree on a wall line, another building too close) and what it takes in
+  wood and stone. **Right-click** turns it a quarter. Press **9** again for
+  the next plan. Four come with the game: a small cabin, a cabin with
+  windows, a two-room cabin and a hewn-timber hut.
+- **Click** to stake it out. The plan stays on the ground as a pale-blue
+  ghost of whatever is still to go up, whatever tool you hold.
+- **Click** again (or press **B** with any tool in hand) and the hiker gets
+  on with it: walks round the site rather than through it, digs and sets
+  each footing, lays the logs a course at a time, cuts every notch with the
+  axe and raises the roof. It's no faster than you, and a small cabin takes
+  two or three minutes.
+- It stops and says why when it can't go on: out of logs or stones, the
+  ground too high or low for a footing, a tree in the way. Put it right and
+  **click** to carry on. Touch the controls and you have the hiker back
+  (it pauses). Putting the plan tool down pauses it too.
+- **Right-click** twice pulls up the stakes. What is built stays built.
+
+The site is saved with your other things, so it's there after a reload and
+the hiker picks up where it was. What is built is the world's, saved and
+shared like anything you build by hand.
+
+**Ground.** The foreman doesn't dig or fill yet, and these hills are steep:
+all of a plan's footings have to reach one level, and a pier only makes up
+about 25 cm. Look for the ghost to turn green, or grade the site yourself
+(shovel and **G**) and carry on.
+
+**Your own.** Aim the plan tool at a building you've put up and **click** to
+copy it down as a blueprint; doors, windows and all come with it, since
+they're only gaps in the courses. Your blueprints are kept in this browser,
+for every world. From the console:
+
+```js
+world.blueprints.list()                  // the plans to hand
+world.blueprints.export('Small cabin')   // one as JSON, to pass on
+world.blueprints.import(json)            // ...and to take one in
+world.blueprints.rename('My building 1', 'Boathouse')
+world.blueprints.remove('Boathouse')
+```
+
+The format is in [`src/blueprints/plan.js`](src/blueprints/plan.js), and the
+plans that ship are written as walls with openings in
+[`src/blueprints/plans.js`](src/blueprints/plans.js).
+
 ## Adding a structure
 
 Structures are registered in [`src/structures/index.js`](src/structures/index.js),
@@ -715,7 +769,7 @@ adds what it does each frame — and `src/main.js` is little more than the list:
 
 ```js
 const FEATURES = [installRender, installHud, installWorld, installPlayer, installAudio,
-                  installBuild, installFires, installMap, installSave, installVoice,
+                  installBuild, installFires, installBlueprints, installMap, installSave, installVoice,
                   installWildlife, installSplashes, installDebug];
 ```
 
@@ -758,6 +812,7 @@ a place to go, so that adding one doesn't mean editing the others:
 | a species | `defineSpecies(kind, def)` | `wildlife/species.js` |
 | a new kind of creature altogether | `defineAnimalClass(name, make)` | `wildlife/wildlife.js` |
 | a remembered preference | `game.settings.get / set` | `game/settings.js` |
+| walking the hiker somewhere | `player.steer = { x, z, run }` | `player/player.js` |
 | a button on the HUD | `game.hud.button(id, fn)` | `ui/hud.js` |
 | a word to the others here, never stored | `game.save.say(ch, body, to)`, `game.save.on('message', fn)` | `save/worldSave.js` |
 | something the hiker holds up to the face | `character.addRaised(name, object, { stowed })`, `raise(name)` | `player/character.js` |
@@ -849,7 +904,7 @@ written from the same list, and two features wanting one key are warned about.
 
 ```bash
 npm test             # in Node, a second or so
-npm run smoke        # a play-through in a headless browser, about a minute
+npm run smoke        # a play-through in a headless browser, about two minutes
 npm run together     # two visitors in one world (run `npm run serve` first)
 ```
 
@@ -868,9 +923,10 @@ code changed something it shouldn't have; only re-record
 
 `npm run smoke` plays: it fells a tree, bucks and hews it, picks up a stone,
 digs, raises and roofs a cabin, lights a campfire in it (and finds the roof
-won't go over that), reloads to see it was all kept, opens the map and leaves
-a mark, makes some noise, wades into a stream to be carried by it and runs up
-it splashing, and calls up one of every animal. It
+won't go over that), reloads to see it was all kept, stakes out a blueprint
+and lets the hiker build it, opens the map and leaves a mark, makes some
+noise, wades into a stream to be carried by it and runs up it splashing, and
+calls up one of every animal. It
 drives the keys and the crosshair and reads results through `window.world`,
 so it doesn't care how the insides are arranged. The last two need
 [Playwright](https://playwright.dev) (`npm i -D playwright && npx playwright
@@ -964,6 +1020,14 @@ src/
     look.js               flames, glowing coals, smoke and sparks
     geometry.js           the stone ring, the teepee of firewood, the ash
     sound.js              the crackle; the strike, the catch and the hiss
+  blueprints/
+    index.js              ← feature: the plan tool, B, the site you staked out
+    plan.js               what a blueprint is; putting one down; what to do next
+    plans.js              the blueprints that come with the game
+    library.js            those, and the ones you copied, kept in this browser
+    foreman.js            building a staked-out site for you
+    ghost.js              what's still to go up, drawn where it will stand
+    tool.js               the plan tool (9)
   map/
     index.js              ← feature
     mapRender.js          pure top-down tile renderer (runs in a worker)

@@ -50,13 +50,11 @@ export function wallTool(kind, { label, short }) {
       const s1 = axis === 'x' ? Math.max(A.x, x) : Math.max(A.z, z);
       const at = b.buildings.buildingFor((A.x + x) / 2, (A.z + z) / 2) || b.buildings.buildingFor(A.x, A.z);
       if (!at) return { node, prompt: 'lay footings first', bad: true };
-      const c = b.buildings.logCandidate(at, axis, line, s0, s1);
-      const len = s1 - s0;
+      const { c, reason, short, len } = logCheck(b, at, kind, axis, line, s0, s1);
       const ghost = { b: at, axis, line, s0, s1, k: c.k, kind };
       if (!c.ok) return { node, ghost: c.k !== undefined && len >= 1 ? ghost : null, bad: true, prompt: `${c.reason} · <b>right-click</b> cancel` };
-      const blocker = inTheWay(b, axis, line, s0, s1, c.k);
-      if (blocker) return { node, ghost, bad: true, prompt: `${blocker} is in the way · <b>right-click</b> cancel` };
-      if (!b.have(kind, len)) return { node, ghost, bad: true, prompt: `you need ${len} m of ${name} (have ${tenths(b.inv[kind])})` };
+      if (short) return { node, ghost, bad: true, prompt: reason };
+      if (reason) return { node, ghost, bad: true, prompt: `${reason} · <b>right-click</b> cancel` };
       const course = Math.floor(c.k / 2) + 1;
       return { type: 'lay', ok: true, node, b: at, ghost, len, prompt: `<b>click</b> lay a ${len} m ${name} <i>(course ${course})</i> · <b>right-click</b> done` };
     },
@@ -82,14 +80,7 @@ export function wallTool(kind, { label, short }) {
         return;
       }
       const g = t.ghost;
-      const L = b.buildings.addLog(t.b, g.kind, g.axis, g.line, g.s0, g.s1);
-      if (!L) return;
-      b.spend(g.kind, t.len);
-      const [mx, mz] = g.axis === 'x' ? [(g.s0 + g.s1) / 2, g.line] : [g.line, (g.s0 + g.s1) / 2];
-      b.face(mx, mz);
-      b.player.character.play('bend', 0.6);
-      b.sound.sfx('thud', { size: Math.min(1, t.len / 6) });
-      if (!L.seated) b.flash(`it rides on ${L.below.length} crossing${L.below.length > 1 ? 's' : ''}: notch it in with the axe`);
+      layLog(b, t.b, g.kind, g.axis, g.line, g.s0, g.s1);
     },
 
     preview(b, t) {
@@ -136,9 +127,38 @@ export function wallTool(kind, { label, short }) {
   };
 }
 
+// Can a log of `kind` go from s0 to s1 along `axis` on `line` of building
+// `at`, here and now? What the prompt says, and what the blueprint foreman
+// asks before it lays one.
+// -> { c: logCandidate, len, reason: why not (the rules, something in the
+//      way, or not enough wood) or null, short: it's the wood that's lacking }
+export function logCheck(b, at, kind, axis, line, s0, s1) {
+  const c = b.buildings.logCandidate(at, axis, line, s0, s1);
+  const len = s1 - s0;
+  if (!c.ok) return { c, len, reason: c.reason };
+  const blocker = inTheWay(b, axis, line, s0, s1, c.k);
+  if (blocker) return { c, len, reason: `${blocker} is in the way` };
+  if (!b.have(kind, len)) return { c, len, short: true, reason: `you need ${len} m of ${kind === 'log' ? 'log' : 'timber'} (have ${tenths(b.inv[kind])})` };
+  return { c, len, reason: null };
+}
+
+// Lay the log, and pay for it. -> the log, or null if the rules said no.
+export function layLog(b, at, kind, axis, line, s0, s1) {
+  const L = b.buildings.addLog(at, kind, axis, line, s0, s1);
+  if (!L) return null;
+  const len = L.s1 - L.s0;
+  b.spend(kind, len);
+  const [mx, mz] = axis === 'x' ? [(L.s0 + L.s1) / 2, line] : [line, (L.s0 + L.s1) / 2];
+  b.face(mx, mz);
+  b.player.character.play('bend', 0.6);
+  b.sound.sfx('thud', { size: Math.min(1, len / 6) });
+  if (!L.seated) b.flash(`it rides on ${L.below.length} crossing${L.below.length > 1 ? 's' : ''}: notch it in with the axe`);
+  return L;
+}
+
 // Something standing on a wall line (a tree; for the lowest courses, a stump).
 // -> what to call it, or null.
-function inTheWay(b, axis, line, s0, s1, k) {
+export function inTheWay(b, axis, line, s0, s1, k) {
   const [mx, mz] = axis === 'x' ? [(s0 + s1) / 2, line] : [line, (s0 + s1) / 2];
   const R = (s1 - s0) / 2 + 2;
   for (const o of b.obstacles.near(mx, mz, R)) {

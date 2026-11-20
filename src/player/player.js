@@ -17,6 +17,10 @@ const PLAYER_RADIUS = 0.32;
 // (higher) step so you can walk in through a doorway over the threshold.
 const STEP_UP = 0.28;
 const BODY_H = 1.5; // head clearance (a little forgiving under door headers)
+// Being walked somewhere (steer): close enough at this many metres, and
+// slowing down over the last few so as not to overshoot.
+const STEER_ARRIVE = 0.08;
+const STEER_EASE = 0.7;
 // Water deeper than this floats you: you swim with your feet this far down.
 export const SWIM_DEPTH = 1.12;
 // How much of the current's speed it carries you at: wading in it up to your
@@ -83,6 +87,11 @@ export class Player extends Emitter {
     // out of your depth and swimming.
     this.wade = 0;
     this.swimming = false;
+    // Something else can walk you: { x, z, run } to head for, or null (the
+    // blueprint foreman sets it). Your own keys or stick always win, and
+    // `manual` says whether they moved you this frame.
+    this.steer = null;
+    this.manual = false;
   }
 
   // Ground height under (x, z) for feet at y: terrain or the top of something built.
@@ -136,12 +145,27 @@ export class Player extends Emitter {
     const rz = -Math.sin(this.camYaw);
     let wx = fx * axes.y + rx * axes.x;
     let wz = fz * axes.y + rz * axes.x;
-    const wl = Math.hypot(wx, wz);
-    const amount = Math.min(1, wl);
+    let wl = Math.hypot(wx, wz);
+    let amount = Math.min(1, wl);
+    let running = input.running();
+    this.manual = wl > 1e-4;
+    if (this.manual) this.hasMoved = true;
+    // ...or, with your hands off the controls, wherever you're being walked
+    else if (this.steer) {
+      const dx = this.steer.x - this.pos.x;
+      const dz = this.steer.z - this.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > STEER_ARRIVE) {
+        wx = dx;
+        wz = dz;
+        wl = d;
+        amount = Math.min(1, d / STEER_EASE);
+        running = !!this.steer.run;
+      }
+    }
     if (wl > 1e-4) {
       wx /= wl;
       wz /= wl;
-      this.hasMoved = true;
     }
     // water: wading drags at you; swimming is slow, and there's no running
     const inWater = this.world.waterAt(this.pos.x, this.pos.z, _w) && _w.depth > 0;
@@ -151,7 +175,7 @@ export class Player extends Emitter {
     this.current.z = inWater ? _w.flowZ : 0;
     this.swimming = depth > SWIM_DEPTH;
     const drag = this.swimming ? 0.42 : 1 - 0.5 * smoothstep(0.12, 1.0, depth);
-    const run = input.running() && !this.swimming;
+    const run = running && !this.swimming;
     const speed = (run ? CONFIG.runSpeed : CONFIG.walkSpeed) * amount * (1 - this.busy * 0.85) * drag;
     const push = this.swimming ? PUSH.swim : PUSH.wade * smoothstep(WADE_PUSH[0], WADE_PUSH[1], depth);
 
