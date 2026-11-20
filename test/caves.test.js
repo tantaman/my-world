@@ -55,7 +55,8 @@ for (const land of LANDS) for (const seed of [SEED, 42]) {
 
 test('on every land, each cave is closed rock you can walk from its mouth to its far end', () => {
   for (const { land, gen: g, caves: list } of WORLDS) {
-    for (const c of list.slice(0, 3)) {
+    // all of them on the newest land, where new worlds are (and the hillsides steepest)
+    for (const c of land === LANDS.at(-1) ? list : list.slice(0, 3)) {
       const { mesh, cols } = build(c, g);
       assert.equal(openEdges(mesh), 0, `land ${land}, ${c.id}: no edge left open`);
       assert.deepEqual(unreached(c, cols), [], `land ${land}, ${c.id}: every part can be got to`);
@@ -156,20 +157,23 @@ function facingAway(mesh) {
   return away;
 }
 
-// The nodes of a cave you can't walk to from just inside its mouth: [index].
+// The nodes of a cave you can't walk to from its lip: [index]. You can
+// walk where it's walkable, and in the cutting wherever it's no deeper than
+// a step (no walls there to stop you).
 function unreached(c, cols) {
-  const { nx, res, x0, z0, walk } = cols;
+  const { nx, res, x0, z0, walk, F, T } = cols;
   const col = (x, z) => Math.round((x - x0) / res) + Math.round((z - z0) / res) * nx;
+  const can = (k) => walk[k] || (Number.isFinite(F[k]) && T[k] >= F[k] - 0.02 && T[k] - F[k] < WALK.walls);
   const m = c.mouth;
-  const start = col(m.x + m.ux * 2, m.z + m.uz * 2);
-  if (!walk[start]) return ['the way in'];
+  const start = col(m.x + m.ux * 0.25, m.z + m.uz * 0.25);
+  if (!can(start)) return ['the lip'];
   const seen = new Uint8Array(walk.length);
   const todo = [start];
   seen[start] = 1;
   while (todo.length) {
     const k = todo.pop();
     for (const o of [k - 1, k + 1, k - nx, k + nx]) {
-      if (o >= 0 && o < walk.length && walk[o] && !seen[o]) {
+      if (o >= 0 && o < walk.length && can(o) && !seen[o]) {
         seen[o] = 1;
         todo.push(o);
       }

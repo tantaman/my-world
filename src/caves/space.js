@@ -21,7 +21,7 @@ import { RES } from './shape.js';
 
 export const WALK = {
   clear: 1.65, // m of headroom to walk through
-  slope: 0.9, // steepest floor you can walk up (rise per metre)
+  slope: 1.3, // steepest floor you can walk up (rise per metre): walls are far steeper
   walls: 0.9, // m: a cutting shallower than this is stepped out of, not walled in
   cut: 0.05, // m: land this far under the roof is cut away
   over: 3, // m over the land in the cutting that still counts as in it (higher, you're flying over)

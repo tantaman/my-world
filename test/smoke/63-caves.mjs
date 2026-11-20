@@ -70,9 +70,10 @@ export default async function ({ page, step, key, open, shot }) {
       player.steer = null;
       await T.frames(60);
       const place = world.map.places.get(c.id);
-      return { inside: !!player.space, open: world.sky.open, place: place && { kind: place.kind, name: place.name, visited: place.visited }, known: world.caves.list().length };
+      const p = player.pos;
+      return { inside: !!player.space, at: [p.x, p.y, p.z].map((v) => +v.toFixed(2)), short: +Math.hypot(p.x - c.out.x, p.z - c.out.z).toFixed(2), open: world.sky.open, place: place && { kind: place.kind, name: place.name, visited: place.visited }, known: world.caves.list().length };
     }, cave);
-    assert.equal(out.inside, false, 'back out on the hillside');
+    assert.equal(out.inside, false, `back out on the hillside (${JSON.stringify(out)})`);
     assert.ok(out.open > 0.9, 'in the daylight');
     assert.deepEqual(out.place, { kind: 'cave', name: cave.name, visited: true }, "it's on the map, and remembered as visited");
     return { ...cave, deep, back, out };
