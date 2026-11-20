@@ -28,7 +28,9 @@ export const hands = {
   },
 };
 
-function pickUp(b, rock) {
+// Bend and pick up a small stone: rock is { ch, kind, k, x, z, s } as
+// forEachPlant gives it. The blueprint foreman gathers stones this way too.
+export function pickUp(b, rock) {
   b.face(rock.x, rock.z);
   b.swing('bend', 0.7, 0.55, () => {
     b.forest.removePlant(rock.ch, 'rock', rock.k);

@@ -64,13 +64,14 @@ export const roof = {
 
 // Can the room of building `at` around (x, z) take its roof, here and now?
 // -> { c: roofCandidate, reason: why not (the rules, something under it that
-//      a roof can't go over, or not enough timber), or null }
+//      a roof can't go over, or not enough timber) or null, short: it's the
+//      timber that's lacking }
 export function roofCheck(b, at, x, z) {
   const c = b.buildings.roofCandidate(at, x, z);
   if (!c.ok) return { c, reason: c.reason };
   const under = underRoof(b, c.room);
   if (under) return { c, reason: `there is ${under.what} in this room${under.roofWhy ? ` and ${under.roofWhy}` : ''}: take it out first` };
-  if (!b.have('timber', c.cost)) return { c, reason: `a roof here takes ${c.cost} m of hewn timber (have ${tenths(b.inv.timber)})` };
+  if (!b.have('timber', c.cost)) return { c, short: true, reason: `a roof here takes ${c.cost} m of hewn timber (have ${tenths(b.inv.timber)})` };
   return { c, reason: null };
 }
 

@@ -10,7 +10,7 @@ import { rayCircle } from '../aim.js';
 import { REACH } from '../constants.js';
 
 const SWING = { chop: 0.62, low: 0.66, hew: 0.8 }; // seconds a swing takes
-const HEW = 0.5; // metres of log squared up per swing
+export const HEW = 0.5; // metres of log squared up per swing
 const CHIPS = 0xd8b27a;
 const LEAVES = 0x3a5a22;
 
@@ -110,7 +110,11 @@ function treeOnRay(b) {
   return null;
 }
 
-function swingAt(b, t) {
+// One swing of the axe at what t is (from target(), or made up the same way
+// by the blueprint foreman): { type: 'tree', tree } a standing tree (from
+// Forestry.treeNear), { type: 'felled', f, x, y, z } a felled trunk (from
+// Forestry.felledNear), or { type: 'notch', ... } (see cutNotch).
+export function swingAt(b, t) {
   if (t.type === 'tree') {
     const tree = t.tree;
     b.face(tree.x, tree.z);
@@ -163,8 +167,9 @@ export function cutNotch(b, t) {
   });
 }
 
-// Square up a log lying at your feet.
-function hew(b, tool) {
+// Square up a log lying at your feet: one swing, half a metre. `tool` is the
+// axe (it keeps the log you work on).
+export function hew(b, tool) {
   const P = b.player.pos;
   const fx = Math.sin(b.player.yaw);
   const fz = Math.cos(b.player.yaw);
