@@ -1,6 +1,7 @@
 // A procedural soundscape. Like everything else in the world there are no
-// audio files: wind, leaves, birds, crickets, owls and footsteps are all
-// synthesised with the Web Audio API from noise and oscillators.
+// audio files: wind, leaves, birds, crickets, owls, water, frogs and
+// footsteps are all synthesised with the Web Audio API from noise and
+// oscillators.
 //
 // Browsers only allow audio after the visitor interacts with the page, so
 // nothing is created until the first click / key / tap.
@@ -221,16 +222,179 @@ export class Soundscape {
       this.crickets.push({ g, next: t + rand(0, 1), period: rand(0.5, 0.95), amp: rand(0.35, 1), pulses: Math.random() < 0.5 ? 3 : 2 });
     }
 
+    this.water = this._waterBed(ctx, t);
+
     this.gust = 0.5;
     this.gustTarget = 0.5;
     this.nextBird = t + rand(1, 3);
     this.nextOwl = t + rand(10, 25);
+    this.nextFrog = t + rand(3, 8);
+    this.nextPlop = t + rand(8, 20);
     this.cricketLevel = 0;
     this.env = { night: 0, forest: 0.5, birdActivity: 0 };
   }
 
+  // ── Water ────────────────────────────────────────────────────────────────
+  // A bed of running water: a broad rush, and a few narrow resonances that
+  // hop from pitch to pitch, rising as they go, which is what makes water
+  // babble. And a slow lapping for still water at the shore. Each sits at the
+  // middle of the water you can hear (see ChunkManager.waterAround), so it
+  // comes from the right side.
+  _waterBed(ctx, t) {
+    const place = () => {
+      const p = ctx.createPanner();
+      p.panningModel = this.offline ? 'equalpower' : 'HRTF';
+      // loudness is worked out from how near the water is; this only places it
+      p.distanceModel = 'linear';
+      p.rolloffFactor = 0;
+      p.connect(this.master);
+      const send = ctx.createGain();
+      send.gain.value = 0.35;
+      p.connect(send).connect(this.reverb);
+      return p;
+    };
+    const loop = (buf, at) => {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      src.start(at, rand(0, 2));
+      return src;
+    };
+    const run = place();
+    const runGain = ctx.createGain();
+    runGain.gain.value = 0;
+    runGain.connect(run);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 850;
+    bp.Q.value = 0.5;
+    const rush = ctx.createGain();
+    rush.gain.value = 0;
+    loop(this.pink, t).connect(bp).connect(rush).connect(runGain);
+    const babble = [];
+    for (let i = 0; i < 5; i++) {
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.Q.value = 11;
+      f.frequency.value = rand(400, 1200);
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      loop(this.white, t).connect(f).connect(g).connect(runGain);
+      babble.push({ f, g, next: t + rand(0, 0.2) });
+    }
+    const still = place();
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 380;
+    const lap = ctx.createGain();
+    lap.gain.value = 0;
+    loop(this.brown, t).connect(lp).connect(lap).connect(still);
+    return { run, runGain, rush, babble, still, lap, lapNext: t, near: { run: 0, foam: 0, still: 0 } };
+  }
+
+  _moveTo(panner, x, y, z, t) {
+    if (panner.positionX) {
+      panner.positionX.setTargetAtTime(x, t, 0.25);
+      panner.positionY.setTargetAtTime(y, t, 0.25);
+      panner.positionZ.setTargetAtTime(z, t, 0.25);
+    } else panner.setPosition(x, y, z);
+  }
+
+  // w: ChunkManager.waterAround()
+  _updateWater(t, w) {
+    const W = this.water;
+    W.near = w;
+    if (w.run > 0.005) this._moveTo(W.run, w.rx, w.ry, w.rz, t);
+    W.runGain.gain.setTargetAtTime(w.run * 0.75, t, 0.5);
+    W.rush.gain.setTargetAtTime(0.1 + 0.55 * w.foam, t, 0.5);
+    // each voice: a bubble, rising in pitch, then quiet a moment
+    const horizon = t + 0.1;
+    for (const b of W.babble) {
+      if (b.next > horizon || w.run < 0.005) continue;
+      const at = Math.max(t, b.next);
+      const dur = rand(0.035, 0.13);
+      const f0 = rand(380, 1250) * (1 + w.foam * 0.25);
+      b.f.frequency.setTargetAtTime(f0, at, 0.008);
+      b.f.frequency.setTargetAtTime(f0 * rand(1.15, 1.6), at + dur * 0.3, dur * 0.4);
+      b.g.gain.setTargetAtTime(rand(0.5, 1.6), at, 0.008);
+      b.g.gain.setTargetAtTime(0, at + dur * 0.7, 0.025);
+      b.next = at + dur + rand(0, 0.1) * (1 - w.foam * 0.7);
+    }
+    // still water laps at the shore in slow swells
+    if (w.still > 0.005) this._moveTo(W.still, w.sx, w.sy, w.sz, t);
+    if (t >= W.lapNext) {
+      const amp = w.still * rand(0.18, 0.32) * (0.6 + 0.6 * this.gust);
+      W.lap.gain.setTargetAtTime(amp, t, 0.25);
+      W.lap.gain.setTargetAtTime(amp * 0.15, t + rand(0.5, 0.9), 0.5);
+      W.lapNext = t + rand(1.6, 3.4);
+    }
+  }
+
+  // A frog by still water: a couple of throaty, pulsing croaks.
+  _frog(t, w) {
+    const { out, nodes } = this._placeAt(w.sx + rand(-6, 6), w.sy + 0.1, w.sz + rand(-6, 6));
+    const ctx = this.ctx;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = rand(550, 900);
+    bp.Q.value = 3;
+    bp.connect(out);
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    const f = rand(130, 230);
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    o.connect(g).connect(bp);
+    const croaks = 1 + Math.floor(rand(0, 3));
+    let tt = t;
+    for (let c = 0; c < croaks; c++) {
+      const dur = rand(0.18, 0.32);
+      o.frequency.setValueAtTime(f, tt);
+      o.frequency.linearRampToValueAtTime(f * 0.88, tt + dur);
+      // a croak is a quick rattle of pulses
+      for (let p = tt; p < tt + dur; p += 0.045) {
+        g.gain.setValueAtTime(0, p);
+        g.gain.linearRampToValueAtTime(0.11, p + 0.008);
+        g.gain.linearRampToValueAtTime(0, p + 0.035);
+      }
+      tt += dur + rand(0.15, 0.4);
+    }
+    o.start(t);
+    o.stop(tt + 0.1);
+    this._cleanup(tt, [...nodes, bp, g]);
+  }
+
+  // Something small jumping into still water: plop, and the rings settle.
+  _plop(t, w) {
+    const { out, nodes } = this._placeAt(w.sx + rand(-8, 8), w.sy, w.sz + rand(-8, 8));
+    const o = this._voice(out, t, t + 0.2, 'sine', 0);
+    o.osc.frequency.setValueAtTime(rand(900, 1300), t);
+    o.osc.frequency.exponentialRampToValueAtTime(rand(260, 380), t + 0.07);
+    this._note(o, t, 0.09, 0.09, 0.003);
+    this._cleanup(t + 0.3, nodes);
+  }
+
+  // A one-off source at a given spot (like _place, but not at random).
+  _placeAt(x, y, z) {
+    const ctx = this.ctx;
+    const pan = ctx.createPanner();
+    pan.panningModel = this.offline ? 'equalpower' : 'HRTF';
+    pan.distanceModel = 'inverse';
+    pan.refDistance = 8;
+    pan.rolloffFactor = 1;
+    setPos(pan, x, y, z);
+    const out = ctx.createGain();
+    out.connect(pan);
+    pan.connect(this.master);
+    const send = ctx.createGain();
+    send.gain.value = 0.3;
+    pan.connect(send).connect(this.reverb);
+    return { out, nodes: [out, pan, send] };
+  }
+
   // ── Per frame ────────────────────────────────────────────────────────────
-  // env: { hours, night, forest (0..1 at the player), height, wind, camera }
+  // env: { hours, night, forest (0..1 at the player), height, wind, camera,
+  //        water (ChunkManager.waterAround) }
   update(dt, env) {
     if (!this.ctx || (!this.offline && this.ctx.state !== 'running')) return;
     const ctx = this.ctx;
@@ -293,6 +457,21 @@ export class Soundscape {
     if (t >= this.nextOwl) {
       if (night > 0.6) this._owl(t + 0.05);
       this.nextOwl = t + rand(22, 55);
+    }
+
+    if (env.water) {
+      const w = env.water;
+      this._updateWater(t, w);
+      // frogs from dusk, by still water
+      if (t >= this.nextFrog) {
+        const frogs = smoothstep(0.2, 0.7, night) * smoothstep(0.03, 0.3, w.still);
+        if (frogs > 0.05) this._frog(t + 0.05, w);
+        this.nextFrog = t + lerp(14, 1.5, frogs) * rand(0.5, 1.5);
+      }
+      if (t >= this.nextPlop) {
+        if (w.still > 0.08 && night < 0.5) this._plop(t + 0.05, w);
+        this.nextPlop = t + rand(9, 30);
+      }
     }
   }
 
@@ -565,7 +744,9 @@ export class Soundscape {
   }
 
   // ── Footsteps ────────────────────────────────────────────────────────────
-  // surface: 'dirt' | 'grass' | 'litter'; run: 0..1; kind: 'step' | 'jump' | 'land'
+  // surface: 'dirt' | 'grass' | 'litter' | 'water'; run: 0..1;
+  // kind: 'step' | 'jump' | 'land' | 'swim'; strength: how hard you landed,
+  // or for a step or a stroke in water, how deep it is (m)
   footstep(surface, run = 0, kind = 'step', strength = 1) {
     if (!this.ctx || (!this.offline && this.ctx.state !== 'running')) return;
     const ctx = this.ctx;
@@ -587,7 +768,7 @@ export class Soundscape {
     const tg = ctx.createGain();
     thump.frequency.setValueAtTime(rand(95, 125) * (land ? 0.7 : 1), t);
     thump.frequency.exponentialRampToValueAtTime(48, t + 0.08);
-    const thumpAmp = (surface === 'grass' ? 0.35 : 0.7) * (land ? 1.6 : 1);
+    const thumpAmp = (surface === 'water' ? (kind === 'swim' ? 0 : 0.15) : surface === 'grass' ? 0.35 : 0.7) * (land ? 1.6 : 1);
     envelope(tg.gain, t, 0.004, thumpAmp, land ? 0.16 : 0.07);
     thump.connect(tg).connect(out);
     thump.start(t);
@@ -616,7 +797,34 @@ export class Soundscape {
     };
 
     const sharp = 1 + run * 0.5;
-    if (surface === 'dirt') {
+    // a drop falling back into the water: a tiny rising chirp
+    const drip = (at, amp) => {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      const f = rand(700, 1500);
+      o.frequency.setValueAtTime(f, at);
+      o.frequency.exponentialRampToValueAtTime(f * 1.7, at + 0.025);
+      const g = ctx.createGain();
+      envelope(g.gain, at, 0.002, amp, 0.035);
+      o.connect(g).connect(out);
+      o.start(at);
+      o.stop(at + 0.06);
+      nodes.push(g);
+    };
+    if (surface === 'water' && kind === 'swim') {
+      // a stroke: the arm sweeping through, and the water running off it
+      noise(this.pink, t, 0.9, [['bandpass', rand(380, 560), 0.7]], 0.75, 0.12, 0.38);
+      noise(this.white, t + 0.15, 0.4, [['bandpass', 2600, 1.2]], 0.14, 0.05, 0.18);
+      for (let i = 0; i < 5; i++) drip(t + rand(0.25, 0.6), rand(0.03, 0.08));
+    } else if (surface === 'water') {
+      const d = kind === 'land' ? 0.6 : Math.min(1.1, strength);
+      // the leg pushing through, deeper and longer the deeper it is
+      noise(this.pink, t, 0.6, [['lowpass', 1000 - d * 350], ['highpass', 140]], (0.55 + d * 0.6) * sharp, 0.015 + d * 0.035, 0.14 + d * 0.22);
+      // the splash
+      noise(this.white, t + 0.008, 0.3, [['bandpass', 2300 - d * 700, 0.8]], (0.3 + 0.25 * (1 - d)) * sharp * (land ? 1.6 : 1), 0.003, 0.08 + d * 0.08);
+      const drops = 2 + Math.floor(rand(0, 4) + run * 3);
+      for (let i = 0; i < drops; i++) drip(t + rand(0.05, 0.3), rand(0.03, 0.1));
+    } else if (surface === 'dirt') {
       noise(this.white, t, 0.2, [['bandpass', 850, 0.9]], 0.9 * sharp, 0.003, 0.085);
       noise(this.white, t + 0.006, 0.08, [['highpass', 3200]], 0.22 * sharp, 0.002, 0.035);
       // a little gravel grit

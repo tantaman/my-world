@@ -8,7 +8,9 @@
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import { generateTerrain, generateVegetation, VEG_KINDS, VEG_STRIDE } from './chunkGen.js';
+import { generateTerrain, generateVegetation, VEG_KINDS, VEG_STRIDE, WATER_STRIDE as WS } from './chunkGen.js';
+import { buildWaterGeometry } from './waterSurface.js';
+import { NO_WATER } from './water.js';
 
 const KEY_OFF = 32768;
 const chunkKey = (cx, cz) => (cx + KEY_OFF) * 65536 + (cz + KEY_OFF);
@@ -38,6 +40,10 @@ class Chunk {
     this.heights = null;
     this.paths = null;
     this.forest = null;
+    this.wLevel = null; // water grids (see chunkGen.js)
+    this.wData = null;
+    this.hasWater = false; // any vertex where water may stand
+    this.water = null; // water surface mesh
     this.step = 1;
     this.n = 0;
     this.veg = []; // { kind, mesh }
@@ -68,7 +74,8 @@ class Chunk {
     return d + (c - d) * (1 - u) + (b - d) * (1 - v);
   }
 
-  sampleGrid(grid, x, z) {
+  // Bilinear sample of a per-vertex grid (stride values per vertex, from off).
+  sampleGrid(grid, x, z, stride = 1, off = 0) {
     const fx = (x - this.x0) / this.step;
     const fz = (z - this.z0) / this.step;
     const N = this.n + 1;
@@ -76,11 +83,36 @@ class Chunk {
     const j = Math.min(this.n - 1, Math.max(0, Math.floor(fz)));
     const u = fx - i;
     const v = fz - j;
-    const a = grid[j * N + i];
-    const b = grid[j * N + i + 1];
-    const c = grid[(j + 1) * N + i];
-    const d = grid[(j + 1) * N + i + 1];
+    const a = grid[(j * N + i) * stride + off];
+    const b = grid[(j * N + i + 1) * stride + off];
+    const c = grid[((j + 1) * N + i) * stride + off];
+    const d = grid[((j + 1) * N + i + 1) * stride + off];
     return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+  }
+
+  // Water level at (x, z) from the corners of its cell that have one.
+  sampleLevel(x, z) {
+    const fx = (x - this.x0) / this.step;
+    const fz = (z - this.z0) / this.step;
+    const N = this.n + 1;
+    const i = Math.min(this.n - 1, Math.max(0, Math.floor(fx)));
+    const j = Math.min(this.n - 1, Math.max(0, Math.floor(fz)));
+    const u = fx - i;
+    const v = fz - j;
+    const L = this.wLevel;
+    let sum = 0;
+    let wsum = 0;
+    const add = (k, w) => {
+      if (L[k] > NO_WATER * 0.5 && w > 0) {
+        sum += L[k] * w;
+        wsum += w;
+      }
+    };
+    add(j * N + i, (1 - u) * (1 - v));
+    add(j * N + i + 1, u * (1 - v));
+    add((j + 1) * N + i, (1 - u) * v);
+    add((j + 1) * N + i + 1, u * v);
+    return wsum > 1e-6 ? sum / wsum : NO_WATER;
   }
 }
 
@@ -174,6 +206,42 @@ export class ChunkManager {
     out.h = ch.sampleHeight(x, z);
     out.path = ch.sampleGrid(ch.paths, x, z);
     out.forest = ch.sampleGrid(ch.forest, x, z);
+    if (ch.hasWater) {
+      out.wRegion = ch.sampleGrid(ch.wData, x, z, WS, 0);
+      out.wLevel = ch.sampleLevel(x, z);
+      out.wSpeed = Math.hypot(ch.sampleGrid(ch.wData, x, z, WS, 1), ch.sampleGrid(ch.wData, x, z, WS, 2));
+    } else {
+      out.wRegion = 0;
+      out.wLevel = NO_WATER;
+      out.wSpeed = 0;
+    }
+    return true;
+  }
+
+  // The water at (x, z), if any may stand there. Fills out.level, out.depth
+  // (level − ground: > 0 in the water, < 0 on the bank), out.flowX/Z and
+  // out.foam, and returns true; false where there's no water about.
+  waterAt(x, z, out) {
+    const ch = this.chunkAt(x, z);
+    if (ch && ch.heights) {
+      if (!ch.hasWater || ch.sampleGrid(ch.wData, x, z, WS, 0) < 0.5) return false;
+      const level = ch.sampleLevel(x, z);
+      if (level <= NO_WATER * 0.5) return false;
+      out.level = level;
+      out.depth = level - ch.sampleHeight(x, z);
+      out.flowX = ch.sampleGrid(ch.wData, x, z, WS, 1);
+      out.flowZ = ch.sampleGrid(ch.wData, x, z, WS, 2);
+      out.foam = ch.sampleGrid(ch.wData, x, z, WS, 3);
+      return true;
+    }
+    const h = this.gen.height(x, z) + (this.heightOffset ? this.heightOffset(x, z) : 0);
+    const w = this.gen.water;
+    if (!w.region) return false;
+    out.level = w.level;
+    out.depth = w.level - h;
+    out.flowX = w.flowX;
+    out.flowZ = w.flowZ;
+    out.foam = w.foam;
     return true;
   }
 
@@ -301,6 +369,7 @@ export class ChunkManager {
     geo.setAttribute('position', new THREE.BufferAttribute(t.pos, 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(t.nor, 3));
     geo.setAttribute('aGround', new THREE.BufferAttribute(t.gnd, 2));
+    geo.setAttribute('aWater', new THREE.BufferAttribute(t.wat, 2));
     geo.setIndex(new THREE.BufferAttribute(t.idx, 1));
     geo.computeBoundingSphere();
 
@@ -325,6 +394,113 @@ export class ChunkManager {
     ch.pos = t.pos;
     ch.nor = t.nor;
     ch.gnd = t.gnd;
+    ch.wLevel = t.wLevel;
+    ch.wData = t.wData;
+    ch.hasWater = false;
+    for (let k = 0; k < t.wData.length; k += WS) {
+      if (t.wData[k] > 0.5) {
+        ch.hasWater = true;
+        break;
+      }
+    }
+    this.updateWater(ch);
+  }
+
+  // What water there is within r of (x, z), for the soundscape, read straight
+  // off the loaded chunk grids. Fills out with:
+  //   run    0..1 how much running water you'd hear (near, fast, foaming)
+  //   foam   0..1 how much of that is white water
+  //   rx, ry, rz  where it's centred
+  //   still  0..1 how much still-water shore is near
+  //   sx, sy, sz  where that is
+  waterAround(x, z, r, out) {
+    let run = 0;
+    let foam = 0;
+    let rx = 0;
+    let ry = 0;
+    let rz = 0;
+    let still = 0;
+    let sx = 0;
+    let sy = 0;
+    let sz = 0;
+    const s = this.size;
+    for (let cz = Math.floor((z - r) / s); cz <= Math.floor((z + r) / s); cz++) {
+      for (let cx = Math.floor((x - r) / s); cx <= Math.floor((x + r) / s); cx++) {
+        const ch = this.chunks.get(chunkKey(cx, cz));
+        if (!ch || !ch.hasWater || !ch.heights) continue;
+        const N = ch.n + 1;
+        const every = Math.max(1, Math.round(2 / ch.step)); // about every 2 m
+        for (let j = 0; j < N; j += every) {
+          for (let i = 0; i < N; i += every) {
+            const k = j * N + i;
+            const D = ch.wData;
+            const o = k * WS;
+            if (D[o] < 0.5) continue;
+            const depth = ch.wLevel[k] - ch.heights[k];
+            if (depth <= 0) continue;
+            const px = ch.x0 + i * ch.step;
+            const pz = ch.z0 + j * ch.step;
+            const d2 = (px - x) ** 2 + (pz - z) ** 2;
+            if (d2 > r * r) continue;
+            const near = 1 / (1 + d2 / 40);
+            const speed = Math.hypot(D[o + 1], D[o + 2]);
+            if (speed > 0.15) {
+              const w = (0.25 + Math.min(speed, 2) * 0.35 + D[o + 3] * 2) * near;
+              run += w;
+              foam += D[o + 3] * near;
+              rx += px * w;
+              ry += ch.wLevel[k] * w;
+              rz += pz * w;
+            } else if (depth < 0.35) {
+              const w = near;
+              still += w;
+              sx += px * w;
+              sy += ch.wLevel[k] * w;
+              sz += pz * w;
+            }
+          }
+        }
+      }
+    }
+    out.run = 1 - Math.exp(-run * 0.6);
+    out.foam = run > 0 ? Math.min(1, (foam / run) * 3) : 0;
+    if (run > 0) {
+      out.rx = rx / run;
+      out.ry = ry / run;
+      out.rz = rz / run;
+    }
+    out.still = 1 - Math.exp(-still * 0.5);
+    if (still > 0) {
+      out.sx = sx / still;
+      out.sy = sy / still;
+      out.sz = sz / still;
+    }
+    return out;
+  }
+
+  // (Re)build a chunk's water surface from its current heights: after it
+  // streams in, and after digging changes its ground.
+  updateWater(ch) {
+    const geo = ch.hasWater ? buildWaterGeometry(ch) : null;
+    if (!geo) {
+      if (ch.water) {
+        this.scene.remove(ch.water);
+        ch.water.geometry.dispose();
+        ch.water = null;
+      }
+      return;
+    }
+    if (!ch.water) {
+      ch.water = new THREE.Mesh(geo, this.materials.water);
+      ch.water.position.set(ch.x0, 0, ch.z0);
+      ch.water.receiveShadow = true;
+      ch.water.matrixAutoUpdate = false;
+      ch.water.updateMatrix();
+      this.scene.add(ch.water);
+    } else {
+      ch.water.geometry.dispose();
+      ch.water.geometry = geo;
+    }
   }
 
   // ── Vegetation ───────────────────────────────────────────────────────────
@@ -422,6 +598,11 @@ export class ChunkManager {
     if (ch.terrain) {
       this.scene.remove(ch.terrain);
       ch.terrain.geometry.dispose();
+    }
+    if (ch.water) {
+      this.scene.remove(ch.water);
+      ch.water.geometry.dispose();
+      ch.water = null;
     }
     for (const { mesh } of ch.veg) {
       this.scene.remove(mesh);

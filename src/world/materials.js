@@ -13,15 +13,20 @@ export const SHARED = {
 // The ground colour is computed per pixel from world position: meadow grass,
 // leaf litter and moss under the trees, packed dirt on the paths, bare rock on
 // steep slopes. At low resolution this reads as hand-placed pixel texture.
+// Under water it turns to silt and stones, darkening (reds first) with depth,
+// with a damp band and a little beach along the shore.
 export function createTerrainMaterial() {
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
   mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = SHARED.uTime;
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
         `#include <common>
         attribute vec2 aGround;
+        attribute vec2 aWater; // water level, region (1 where water may stand)
         varying vec2 vGround;
+        varying vec2 vWater;
         varying vec3 vWorldPos;
         varying vec3 vWorldNormal;`,
       )
@@ -29,6 +34,7 @@ export function createTerrainMaterial() {
         '#include <fog_vertex>',
         `#include <fog_vertex>
         vGround = aGround;
+        vWater = aWater;
         vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
         vWorldNormal = normalize(mat3(modelMatrix) * objectNormal);`,
       );
@@ -37,18 +43,42 @@ export function createTerrainMaterial() {
         '#include <common>',
         `#include <common>
         varying vec2 vGround;
+        varying vec2 vWater;
         varying vec3 vWorldPos;
         varying vec3 vWorldNormal;
+        uniform float uTime;
         ${NOISE_GLSL}
         ${GROUND_GLSL}`,
       )
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
-        diffuseColor.rgb = groundColor(vWorldPos.xz, vGround.x, vGround.y, 1.0 - vWorldNormal.y);`,
+        diffuseColor.rgb = groundColor(vWorldPos.xz, vGround.x, vGround.y, 1.0 - vWorldNormal.y);
+        if (vWater.y > 0.01) {
+          vec2 wp = vWorldPos.xz;
+          float wd = vWater.x - vWorldPos.y; // depth under the water surface
+          float n1 = vnoise(wp * 0.7);
+          float n2 = vnoise(wp * 2.9 + 5.0);
+          // a beach of sand and gravel just above the water, damp at the edge
+          vec3 sand = mix(vec3(0.19, 0.16, 0.11), vec3(0.15, 0.135, 0.11), smoothstep(0.35, 0.7, n2));
+          float beach = (1.0 - smoothstep(0.08, 0.3 + 0.35 * n1, -wd)) * vWater.y;
+          diffuseColor.rgb = mix(diffuseColor.rgb, sand, beach * 0.85);
+          diffuseColor.rgb *= 1.0 - 0.4 * (1.0 - smoothstep(0.0, 0.1 + 0.08 * n2, -wd)) * vWater.y;
+          if (wd > 0.0) {
+            // silt and stones, the light dappled by the ripples overhead
+            vec3 silt = vec3(0.11, 0.095, 0.065) * (0.8 + 0.4 * n1);
+            vec2 sq = wp * 3.2 + vec2(vnoise(wp * 1.3), vnoise(wp * 1.3 + 9.0)) * 1.6;
+            float stone = step(0.62, hash12(floor(sq))) * smoothstep(0.3, 0.6, n2);
+            vec3 bed = mix(silt, vec3(0.17, 0.16, 0.14) * (0.7 + 0.6 * hash12(floor(sq) + 3.0)), stone);
+            float caustic = smoothstep(0.62, 0.9, vnoise(wp * 1.7 + vec2(uTime * 0.31, uTime * 0.17)) * vnoise(wp * 1.9 - vec2(uTime * 0.23, -uTime * 0.29)) * 2.6);
+            bed *= 1.0 + caustic * 0.7 * exp(-wd * 1.5);
+            diffuseColor.rgb = mix(diffuseColor.rgb, bed, smoothstep(0.0, 0.12, wd));
+            diffuseColor.rgb *= exp(-wd * vec3(1.15, 0.6, 0.48));
+          }
+        }`,
       );
   };
-  mat.customProgramCacheKey = () => 'terrain-v1';
+  mat.customProgramCacheKey = () => 'terrain-v2';
   return mat;
 }
 

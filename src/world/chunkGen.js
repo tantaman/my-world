@@ -1,8 +1,18 @@
 // Pure chunk generation (no three.js) so it can run inside Web Workers.
 // Produces raw typed arrays: terrain geometry buffers + ground grids, and
 // deterministic vegetation placement lists.
+//
+// Water comes out as two grids over the terrain vertices:
+//   wLevel  the water surface height (NO_WATER where there's none nearby)
+//   wData   WATER_STRIDE per vertex: region (1 where water may stand),
+//           current x, z (m/s), foam (0..1) and how open the sky above it is
+//           (0..1: a stream in the woods is roofed by leaves, a lake isn't)
+// The water surface itself is meshed on the main thread from these and the
+// heights (waterSurface.js), so it can follow the digging.
 
 import { mulberry32, hash2i, smoothstep } from '../noise.js';
+
+export const WATER_STRIDE = 5;
 
 // ── Terrain ────────────────────────────────────────────────────────────────
 export function generateTerrain(gen, cx, cz, step, size) {
@@ -15,6 +25,9 @@ export function generateTerrain(gen, cx, cz, step, size) {
   const Hb = new Float32Array(G * G);
   const paths = new Float32Array(N * N);
   const forest = new Float32Array(N * N);
+  const wLevel = new Float32Array(N * N);
+  const wData = new Float32Array(N * N * WATER_STRIDE);
+  const water = gen.water;
   for (let gz = 0; gz < G; gz++) {
     for (let gx = 0; gx < G; gx++) {
       const x = x0 + (gx - 1) * step;
@@ -25,6 +38,13 @@ export function generateTerrain(gen, cx, cz, step, size) {
         const k = (gz - 1) * N + (gx - 1);
         paths[k] = pm;
         forest[k] = gen.forest(x, z);
+        wLevel[k] = water.level;
+        const o = k * WATER_STRIDE;
+        wData[o] = water.region;
+        wData[o + 1] = water.flowX;
+        wData[o + 2] = water.flowZ;
+        wData[o + 3] = water.foam;
+        wData[o + 4] = water.open;
       }
     }
   }
@@ -34,6 +54,7 @@ export function generateTerrain(gen, cx, cz, step, size) {
   const pos = new Float32Array(vCount * 3);
   const nor = new Float32Array(vCount * 3);
   const gnd = new Float32Array(vCount * 2);
+  const wat = new Float32Array(vCount * 2); // per vertex: water level, region
   const heights = new Float32Array(N * N);
 
   for (let j = 0; j < N; j++) {
@@ -54,6 +75,8 @@ export function generateTerrain(gen, cx, cz, step, size) {
       nor[k * 3 + 2] = nz / l;
       gnd[k * 2] = paths[k];
       gnd[k * 2 + 1] = forest[k];
+      wat[k * 2] = wLevel[k];
+      wat[k * 2 + 1] = wData[k * WATER_STRIDE];
     }
   }
 
@@ -91,6 +114,8 @@ export function generateTerrain(gen, cx, cz, step, size) {
       nor[v * 3 + 2] = nor[src * 3 + 2];
       gnd[v * 2] = gnd[src * 2];
       gnd[v * 2 + 1] = gnd[src * 2 + 1];
+      wat[v * 2] = wat[src * 2];
+      wat[v * 2 + 1] = wat[src * 2 + 1];
       v++;
     }
     for (let t = 0; t < n; t++) {
@@ -113,11 +138,15 @@ export function generateTerrain(gen, cx, cz, step, size) {
     }
   }
 
-  return { n, step, pos, nor, gnd, idx, heights, paths, forest };
+  return { n, step, pos, nor, gnd, wat, idx, heights, paths, forest, wLevel, wData };
 }
 
 // ── Vegetation ─────────────────────────────────────────────────────────────
 // Lists are packed as [x, y, z, yaw, scale, tint, extra] per instance.
+//
+// Plants are known by where they stand (felling one saves its position), so
+// every candidate draws its random numbers whether or not it's planted: a
+// stream through one corner of a chunk mustn't move every tree after it.
 export const VEG_STRIDE = 7;
 export const VEG_KINDS = ['pine', 'broad', 'birch', 'bush', 'fern', 'rock', 'log'];
 
@@ -129,9 +158,15 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
   for (const k of VEG_KINDS) lists[k] = [];
   const colliders = [];
 
+  const water = gen.water;
+  // The ground at (x, z), and whether it's at least `clear` m from water.
+  let y = 0;
+  const dry = (x, z, clear) => {
+    y = gen.height(x, z);
+    return water.edge >= clear;
+  };
   const put = (kind, x, z, yOff, yaw, s, tint, extra = 0) => {
-    const y = gen.height(x, z) + yOff;
-    lists[kind].push(x, y, z, yaw, s, tint, extra);
+    lists[kind].push(x, y + yOff, z, yaw, s, tint, extra);
   };
 
   // Trees on a jittered grid
@@ -160,7 +195,9 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
       if (r2 < birchW) kind = 'birch';
       else kind = r3 < pineW ? 'pine' : 'broad';
       const s = kind === 'pine' ? 0.68 + r4 * 0.62 : kind === 'broad' ? 0.75 + r4 * 0.5 : 0.75 + r4 * 0.45;
-      put(kind, x, z, -0.1, r6 * Math.PI * 2, s, rng());
+      const tint = rng();
+      if (!dry(x, z, 1.4 + r5 * 1.6)) continue;
+      put(kind, x, z, -0.1, r6 * Math.PI * 2, s, tint);
       colliders.push(x, z, trunkRadius[kind] * s + 0.08);
     }
   }
@@ -184,8 +221,11 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
       gen.pathMask(x, z);
       if (gen.pathEdge < 0.35 + r4) continue;
       if (gen.padClearance(x, z) < 1) continue;
-      if (r1 < fernP) put('fern', x, z, -0.05, r2 * Math.PI * 2, 0.8 + r3 * 0.7, rng());
-      else put('bush', x, z, -0.15, r2 * Math.PI * 2, 0.7 + r3 * 0.9, rng());
+      const tint = rng();
+      // ferns like it damp, right down to the bank
+      if (!dry(x, z, r1 < fernP ? 0.45 : 0.9 + r4 * 0.5)) continue;
+      if (r1 < fernP) put('fern', x, z, -0.05, r2 * Math.PI * 2, 0.8 + r3 * 0.7, tint);
+      else put('bush', x, z, -0.15, r2 * Math.PI * 2, 0.7 + r3 * 0.9, tint);
     }
   }
 
@@ -205,7 +245,13 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
       gen.pathMask(x, z);
       if (gen.pathEdge < s * 1.1 + 0.2) continue;
       if (gen.padClearance(x, z) < s + 1) continue;
-      put('rock', x, z, -0.28 * s, r3 * Math.PI * 2, s, rng(), r4);
+      const tint = rng();
+      // Boulders are welcome in streams and rivers (the water runs round
+      // them) and along any shore, but not lost in the depths of a lake.
+      dry(x, z, 0);
+      const still = water.kind === 'lake' || water.kind === 'pond';
+      if (water.edge < 0 && water.region && (still ? water.edge < -1.5 : water.level - y > s * 0.9)) continue;
+      put('rock', x, z, -0.28 * s, r3 * Math.PI * 2, s, tint, r4);
       if (s > 0.55) colliders.push(x, z, s * 0.85);
     }
   }
@@ -225,7 +271,9 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
       gen.pathMask(x, z);
       if (gen.pathEdge < 3) continue;
       if (gen.padClearance(x, z) < 4) continue;
-      put('log', x, z, -0.12, r2 * Math.PI * 2, 0.8 + r3 * 0.5, rng());
+      const tint = rng();
+      if (!dry(x, z, 3)) continue;
+      put('log', x, z, -0.12, r2 * Math.PI * 2, 0.8 + r3 * 0.5, tint);
     }
   }
 

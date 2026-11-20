@@ -1,10 +1,12 @@
 // Third-person explorer: movement, simple physics, collision with trunks and
 // boulders, and an orbiting follow camera that stays out of the hillside.
+// In water you wade, slower the deeper it gets, and where it's too deep to
+// stand you swim: you float with your head and shoulders out.
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { Character } from './character.js';
-import { lerp, clamp } from '../noise.js';
+import { lerp, clamp, smoothstep } from '../noise.js';
 
 const PLAYER_RADIUS = 0.32;
 // How high a ledge you can walk onto without jumping. Less than one course of
@@ -12,8 +14,19 @@ const PLAYER_RADIUS = 0.32;
 // (higher) step so you can walk in through a doorway over the threshold.
 const STEP_UP = 0.28;
 const BODY_H = 1.5; // head clearance (a little forgiving under door headers)
+// Water deeper than this floats you: you swim with your feet this far down.
+export const SWIM_DEPTH = 1.12;
 const _dir = new THREE.Vector3();
 const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
+const _w = { level: 0, depth: 0, flowX: 0, flowZ: 0, foam: 0 };
+
+// Where someone at (x, z) stands: on the ground, or afloat in deep water.
+// world is the ChunkManager.
+export function standHeight(world, x, z) {
+  const g = world.heightAt(x, z);
+  if (world.waterAt(x, z, _w) && _w.level - g > SWIM_DEPTH) return _w.level - SWIM_DEPTH;
+  return g;
+}
 
 // Distance in xz from p to segment ab, with the push-out normal.
 function segDist(px, pz, ax, az, bx, bz, out) {
@@ -64,11 +77,15 @@ export class Player {
     // While working (chopping, digging) you barely move and face the work.
     this.busy = 0;
     this.faceTo = null; // { x, z } or null
+    // How deep the water is where you are (0 on dry land), and whether you're
+    // out of your depth and swimming.
+    this.wade = 0;
+    this.swimming = false;
   }
 
   // Ground height under (x, z) for feet at y: terrain or the top of something built.
   groundAt(x, z, y = Infinity) {
-    let g = this.world.heightAt(x, z);
+    let g = standHeight(this.world, x, z);
     if (this.solids) {
       this.solids.forEachNear(x, z, 1, (s) => {
         segDist(x, z, s.ax, s.az, s.bx, s.bz, _seg);
@@ -117,14 +134,21 @@ export class Player {
       wz /= wl;
       this.hasMoved = true;
     }
-    const speed = (input.running() ? CONFIG.runSpeed : CONFIG.walkSpeed) * amount * (1 - this.busy * 0.85);
+    // water: wading drags at you; swimming is slow, and there's no running
+    const inWater = this.world.waterAt(this.pos.x, this.pos.z, _w) && _w.depth > 0;
+    const depth = inWater ? _w.depth : 0;
+    this.wade = depth;
+    this.swimming = depth > SWIM_DEPTH;
+    const drag = this.swimming ? 0.42 : 1 - 0.5 * smoothstep(0.12, 1.0, depth);
+    const run = input.running() && !this.swimming;
+    const speed = (run ? CONFIG.runSpeed : CONFIG.walkSpeed) * amount * (1 - this.busy * 0.85) * drag;
 
     const accel = this.grounded ? 11 : 2.5;
     const k = 1 - Math.exp(-accel * dt);
     this.vel.x = lerp(this.vel.x, wx * speed, k);
     this.vel.z = lerp(this.vel.z, wz * speed, k);
 
-    if (this.grounded && input.jumped()) {
+    if (this.grounded && input.jumped() && !this.swimming) {
       this.vel.y = CONFIG.jumpSpeed;
       this.grounded = false;
       if (this.onJump) this.onJump();
@@ -212,6 +236,8 @@ export class Player {
     root.position.copy(this.pos);
     root.rotation.y = this.yaw;
     this.character.update(dt, hs, this.grounded, this.vel.y, this.turnRate);
+    // bob a little while swimming
+    if (this.swimming) root.position.y += Math.sin(this.character.time * 2.6) * 0.04;
 
     this.updateCamera(dt, false);
   }
@@ -246,7 +272,9 @@ export class Player {
 
     const cam = this.camera;
     cam.position.copy(this.camTarget).addScaledVector(dir, this.camDistSmooth);
-    const floor = this.world.heightAt(cam.position.x, cam.position.z) + 0.35;
+    let floor = this.world.heightAt(cam.position.x, cam.position.z) + 0.35;
+    // and keep it out of the water
+    if (this.world.waterAt(cam.position.x, cam.position.z, _w)) floor = Math.max(floor, _w.level + 0.3);
     if (cam.position.y < floor) cam.position.y = floor;
     cam.lookAt(this.camTarget);
   }

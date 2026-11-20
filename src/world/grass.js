@@ -1,9 +1,12 @@
 // Grass blades and wildflowers in tiles around the player. Built from the
 // full-resolution chunk height grids so blades sit exactly on the ground.
+// Where there's water the grass stops at the bank; reeds and bulrushes stand
+// along the shallows of still water, and lily pads float further out.
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import { mulberry32, hash2i, smoothstep } from '../noise.js';
+import { mulberry32, hash2i, smoothstep, createSimplex2 } from '../noise.js';
+import { NO_WATER } from './water.js';
 
 const tileKey = (tx, tz) => (tx + 32768) * 65536 + (tz + 32768);
 
@@ -20,9 +23,19 @@ const FLOWERS = [
   new THREE.Color(0.25, 0.4, 0.95),
 ];
 const STEM = new THREE.Color(0.05, 0.1, 0.02);
+const REED_ROOT = new THREE.Color(0.05, 0.09, 0.025);
+const REED_TIP = new THREE.Color(0.2, 0.24, 0.07);
+const CATTAIL = new THREE.Color(0.17, 0.085, 0.035);
+const PAD = new THREE.Color(0.065, 0.15, 0.04);
+const LILY = [new THREE.Color(0.95, 0.93, 0.85), new THREE.Color(0.95, 0.6, 0.72)];
+const LILY_HEART = new THREE.Color(0.95, 0.75, 0.15);
 
 const _tip = new THREE.Color();
-const _g = { h: 0, path: 0, forest: 0 };
+const _c = new THREE.Color();
+const _g = { h: 0, path: 0, forest: 0, wRegion: 0, wLevel: NO_WATER, wSpeed: 0 };
+
+// Depth of water over the ground in _g (> 0 under water), or −99 if none.
+const waterDepth = () => (_g.wRegion > 0.3 && _g.wLevel > NO_WATER * 0.5 ? _g.wLevel - _g.h : -99);
 
 export class Grass {
   constructor(scene, chunks, material, seed) {
@@ -31,6 +44,9 @@ export class Grass {
     this.material = material;
     this.seed = seed;
     this.tiles = new Map();
+    // where reeds and lily pads grow in clumps
+    this.nReed = createSimplex2((seed ^ 0x2eed5) >>> 0);
+    this.nLily = createSimplex2((seed ^ 0x1117) >>> 0);
   }
 
   update(px, pz, budgetMs = 3) {
@@ -137,7 +153,10 @@ export class Grass {
       this.chunks.groundAt(ox + lx, oz + lz, _g);
       const meadow = 1 - smoothstep(0.25, 0.9, _g.forest);
       const onPath = smoothstep(0.3, 0.62, _g.path);
-      let density = (0.26 + meadow * 0.74) * (1 - onPath * 0.97);
+      // none under water, and thinning out on the damp edge of the bank
+      const wd = waterDepth();
+      const bank = wd > -0.4 ? smoothstep(-0.03, -0.3, wd) : 1;
+      let density = (0.26 + meadow * 0.74) * (1 - onPath * 0.97) * bank;
       if (r1 > density) continue;
 
       const edgeShort = 1 - smoothstep(0.1, 0.45, _g.path) * 0.6;
@@ -200,6 +219,103 @@ export class Grass {
           const f2 = vert(bx + fs, fy, bz, fc, lx, y0, lz, 1);
           const f3 = vert(bx, fy + fs * 0.5, bz + fs, fc, lx, y0, lz, 1);
           idx.push(f0, f1, f2, f0, f2, f3);
+        }
+      }
+    }
+
+    // ── by the water ──
+    // Reeds stand in the shallows and on the wet bank of still or slow water,
+    // in clumps; some carry a bulrush head. Lily pads float on still water a
+    // little further out. Their own colours (path = −1), so they don't take
+    // the ground's.
+    const wrng = mulberry32(hash2i(tx, tz, this.seed ^ 0x3a7e5));
+    const spots = Math.floor(T * T * 0.9);
+    for (let i = 0; i < spots; i++) {
+      const lx = wrng() * T;
+      const lz = wrng() * T;
+      const r1 = wrng();
+      const r2 = wrng();
+      const r3 = wrng();
+      const r4 = wrng();
+      const wx = ox + lx;
+      const wz = oz + lz;
+      this.chunks.groundAt(wx, wz, _g);
+      const wd = waterDepth();
+      if (wd < -0.3 || wd > 1.5) continue;
+      const calm = 1 - smoothstep(0.2, 0.6, _g.wSpeed);
+      gPath = -1;
+      gForest = 0;
+      const reedP = smoothstep(0.05, 0.45, this.nReed(wx / 11, wz / 11)) * (1 - smoothstep(0.35, 0.6, wd)) * (0.25 + 0.75 * calm);
+      if (r1 < reedP * 0.55) {
+        const y0 = _g.h - 0.05;
+        const blades = 3 + Math.floor(r2 * 5);
+        const tall = 0.9 + r3 * 0.8;
+        for (let b = 0; b < blades; b++) {
+          const a = wrng() * Math.PI * 2;
+          const bx = lx + Math.cos(a) * wrng() * 0.18;
+          const bz = lz + Math.sin(a) * wrng() * 0.18;
+          const h = tall * (0.7 + wrng() * 0.4);
+          const yaw = wrng() * Math.PI;
+          const sx = Math.cos(yaw) * 0.022;
+          const sz = Math.sin(yaw) * 0.022;
+          const lean = (wrng() - 0.5) * 0.25;
+          const tx2 = bx + Math.cos(a) * lean;
+          const tz2 = bz + Math.sin(a) * lean;
+          _c.copy(REED_TIP).multiplyScalar(0.8 + wrng() * 0.4);
+          const p0 = vert(bx - sx, y0, bz - sz, REED_ROOT, bx, y0, bz, 0);
+          const p1 = vert(bx + sx, y0, bz + sz, REED_ROOT, bx, y0, bz, 0);
+          const p2 = vert(tx2, y0 + h, tz2, _c, bx, y0, bz, 1);
+          idx.push(p0, p1, p2);
+          if (b === 0 && r4 < 0.4) {
+            // a bulrush: a brown head near the top of the stalk
+            const hy = y0 + h * 0.8;
+            const hx = bx + (tx2 - bx) * 0.8;
+            const hz = bz + (tz2 - bz) * 0.8;
+            for (const [cx, cz] of [
+              [0.03, 0],
+              [0, 0.03],
+            ]) {
+              const q0 = vert(hx - cx, hy, hz - cz, CATTAIL, bx, y0, bz, 0.8);
+              const q1 = vert(hx + cx, hy, hz + cz, CATTAIL, bx, y0, bz, 0.8);
+              const q2 = vert(hx + cx, hy + 0.17, hz + cz, CATTAIL, bx, y0, bz, 0.9);
+              const q3 = vert(hx - cx, hy + 0.17, hz - cz, CATTAIL, bx, y0, bz, 0.9);
+              idx.push(q0, q1, q2, q0, q2, q3);
+            }
+          }
+        }
+        continue;
+      }
+      const lilyP = smoothstep(0.15, 0.5, this.nLily(wx / 7, wz / 7)) * smoothstep(0.25, 0.45, wd) * calm * calm;
+      if (r1 < reedP * 0.55 + lilyP * 0.5) {
+        // a lily pad: a disc with a notch, floating
+        const y = _g.wLevel + 0.012;
+        const r = 0.13 + r2 * 0.17;
+        const notch = r3 * Math.PI * 2;
+        _c.copy(PAD).multiplyScalar(0.75 + r4 * 0.5);
+        const c0 = vert(lx, y, lz, _c, lx, y, lz, 0);
+        const seg = 9;
+        let prev = -1;
+        for (let k = 0; k <= seg; k++) {
+          const a = notch + 0.35 + (k / seg) * (Math.PI * 2 - 0.7);
+          const e = vert(lx + Math.cos(a) * r, y, lz + Math.sin(a) * r, _c, lx, y, lz, 0);
+          if (prev >= 0) idx.push(c0, e, prev);
+          prev = e;
+        }
+        if (r4 > 0.86) {
+          // and now and then a flower
+          const fc = LILY[r2 > 0.5 ? 1 : 0];
+          const fy = y + 0.05;
+          for (let k = 0; k < 5; k++) {
+            const a = (k / 5) * Math.PI * 2 + r3;
+            const p0 = vert(lx, fy - 0.03, lz, fc, lx, y, lz, 0);
+            const p1 = vert(lx + Math.cos(a - 0.3) * 0.07, fy, lz + Math.sin(a - 0.3) * 0.07, fc, lx, y, lz, 0);
+            const p2 = vert(lx + Math.cos(a) * 0.1, fy + 0.03, lz + Math.sin(a) * 0.1, fc, lx, y, lz, 0);
+            idx.push(p0, p2, p1);
+          }
+          const h0 = vert(lx - 0.02, fy, lz, LILY_HEART, lx, y, lz, 0);
+          const h1 = vert(lx + 0.02, fy, lz, LILY_HEART, lx, y, lz, 0);
+          const h2 = vert(lx, fy + 0.03, lz + 0.02, LILY_HEART, lx, y, lz, 0);
+          idx.push(h0, h1, h2);
         }
       }
     }

@@ -6,10 +6,11 @@ import { Grass } from './world/grass.js';
 import { Sky, SKY } from './world/sky.js';
 import { createParticles } from './world/particles.js';
 import { SHARED, createTerrainMaterial, createVegetationMaterial, createGrassMaterial } from './world/materials.js';
+import { createWaterMaterial, WADE } from './world/waterSurface.js';
 import { makePine, makeBroadleaf, makeBirch, makeBush, makeFern, makeRock, makeLog } from './world/models.js';
 import { PixelPipeline } from './render/pixelPipeline.js';
 import { Input } from './player/input.js';
-import { Player } from './player/player.js';
+import { Player, standHeight } from './player/player.js';
 import { Hud } from './ui/hud.js';
 import { Soundscape } from './audio/soundscape.js';
 import { STRUCTURES } from './structures/index.js';
@@ -72,6 +73,7 @@ const materials = {
   terrain: createTerrainMaterial(),
   vegetation: createVegetationMaterial(),
   grass: createGrassMaterial(),
+  water: createWaterMaterial(),
 };
 const models = {
   pine: makePine(11),
@@ -115,7 +117,8 @@ marks.subscribe(() => markers.sync(marks.list()));
 const map = new MapView({ seed: CONFIG.seed, structures: STRUCTURES, marks, player, input });
 
 // ── Saving, and everyone else in this world ────────────────────────────────
-const peers = new Peers(scene, (x, z) => chunks.heightAt(x, z));
+// (someone swimming floats, just as you do)
+const peers = new Peers(scene, (x, z) => standHeight(chunks, x, z));
 
 // ── Animals ────────────────────────────────────────────────────────────────
 // Never saved or shared: each visitor meets their own.
@@ -151,11 +154,12 @@ function groundHere() {
   return _ground;
 }
 function surfaceHere() {
+  if (player.wade > 0.04) return 'water';
   const g = groundHere();
   if (g.path > 0.45) return 'dirt';
   return g.forest > 0.62 ? 'litter' : 'grass';
 }
-player.character.onFootstep = (run) => sound.footstep(surfaceHere(), run);
+player.character.onFootstep = (run) => sound.footstep(surfaceHere(), run, player.swimming ? 'swim' : 'step', player.wade);
 player.onJump = () => sound.footstep(surfaceHere(), 0.5, 'jump');
 player.onLand = (s) => sound.footstep(surfaceHere(), 1, 'land', s);
 function toggleSound() {
@@ -200,6 +204,8 @@ let fps = 0;
 let showDebug = CONFIG.debug;
 let prefetchAt = null; // where the map last pre-rendered around
 let prefetchCheck = 0; // wall-clock ms of the next check
+const waterNear = { run: 0, foam: 0, rx: 0, ry: 0, rz: 0, still: 0, sx: 0, sy: 0, sz: 0 }; // for the soundscape
+let waterCheck = 0; // wall-clock ms of the next look round for water
 
 async function boot() {
   const bar = document.getElementById('load-bar');
@@ -295,6 +301,9 @@ function loop(now) {
   builder.update(dt);
   if (player.hasMoved) hud.hideHint();
   SHARED.uPlayer.value.copy(player.pos);
+  // ripples and froth around your legs, more when you're moving
+  const wadeTo = player.wade > 0.02 ? Math.min(1, player.wade * 3) * (0.35 + 0.65 * Math.min(1, Math.hypot(player.vel.x, player.vel.z) / 2)) : 0;
+  WADE.uWade.value += (wadeTo - WADE.uWade.value) * (1 - Math.exp(-dt * 4));
 
   chunks.update(player.pos.x, player.pos.z, 5);
   grass.update(player.pos.x, player.pos.z, 3);
@@ -303,6 +312,10 @@ function loop(now) {
   markers.update(now / 1000, SHARED.uWind.value, player.pos);
   peers.update(dt);
   wildlife.update(dt, { hours: sky.hours, night: SKY.uNight.value });
+  if (now > waterCheck) {
+    waterCheck = now + 250;
+    chunks.waterAround(player.pos.x, player.pos.z, 45, waterNear);
+  }
   sound.update(dt, {
     hours: sky.hours,
     night: SKY.uNight.value,
@@ -310,6 +323,7 @@ function loop(now) {
     height: player.pos.y,
     wind: SHARED.uWind.value,
     camera,
+    water: waterNear,
   });
 
   // The map covers the view, so skip drawing the world under it.

@@ -1,8 +1,8 @@
 // Pure top-down map tile renderer: no DOM, no three.js, so it runs in a Web
 // Worker. It reads the same WorldGen fields the 3D world is built from, so
-// the map always matches the forest: meadows, woods, footpaths, rock, and
-// hillshaded relief with contour lines. Zoomed in far enough, it stamps every
-// real tree, bush and boulder from the chunk generator.
+// the map always matches the forest: meadows, woods, footpaths, rock, water,
+// and hillshaded relief with contour lines. Zoomed in far enough, it stamps
+// every real tree, bush and boulder from the chunk generator.
 
 import { generateVegetation, VEG_KINDS } from '../world/chunkGen.js';
 import { hash2i, smoothstep } from '../noise.js';
@@ -27,6 +27,9 @@ const PINE = [0.12, 0.25, 0.18];
 const BIRCH = [0.45, 0.55, 0.27];
 const BUSH = [0.3, 0.41, 0.17];
 const CONTOUR = [0.2, 0.15, 0.08];
+const WATER = [0.36, 0.53, 0.6];
+const WATER_DEEP = [0.2, 0.35, 0.47];
+const WATER_EDGE = [0.25, 0.38, 0.42];
 
 // canopy radius in meters at scale 1
 const CANOPY = { pine: 2.5, broad: 3.4, birch: 2.2 };
@@ -93,6 +96,10 @@ export function renderTile(gen, level, tx, tz, vegFor) {
   const F = new Float32Array(S * S);
   const SP = new Float32Array(S * S);
   const MO = new Float32Array(S * S);
+  // water: how much of the pixel is water (0..1), and how deep (m)
+  const WA = new Float32Array(S * S);
+  const WD = new Float32Array(S * S);
+  const water = gen.water;
   for (let gz = 0; gz < G; gz++) {
     const z = z0 + (gz - 0.5) * mpp;
     for (let gx = 0; gx < G; gx++) {
@@ -103,15 +110,34 @@ export function renderTile(gen, level, tx, tz, vegFor) {
         if (!inner) continue;
       }
       const pm = gen.pathMask(x, z);
+      // far out, only the main trails and well-trodden side trails. (Read
+      // now: the first look at a lake works out its rim from the paths.)
+      const pe =
+        level >= 3
+          ? Math.min(gen.pathEdgeMain, gen.pathSide > 0.75 ? gen.pathEdgeSide + mpp * 0.4 : 1e9)
+          : Math.min(gen.pathEdgeMain, gen.pathSide > 0.35 ? gen.pathEdgeSide : 1e9);
       if (!broad) H[gz * G + gx] = gen.height(x, z, pm);
       if (inner) {
         const k = (gz - 1) * S + (gx - 1);
+        // Up close, the real water (deep where the ground is far below it).
+        // Further out, lines and shapes by their distance to the shore, like
+        // the trails: streams only while they're more than a hair.
+        if (!broad) {
+          const h = H[gz * G + gx];
+          const wet = water.region ? water.level - h : -1;
+          WA[k] = Math.max(0, Math.min(1, 0.5 - water.edge / mpp));
+          if (wet > 0) WA[k] = 1;
+          WD[k] = Math.max(0, wet);
+        } else {
+          water.probe(x, z);
+          if (water.kind !== 'stream' || level < 3) {
+            const e = water.kind === 'stream' ? water.edge - mpp * 0.15 : water.edge;
+            WA[k] = Math.max(0, Math.min(1, 0.5 - e / mpp));
+            WD[k] = water.kind === 'lake' ? Math.min(4, -water.edge * 0.15) : 0.5;
+          }
+        }
         PM[k] = pm;
-        // far out, only the main trails and well-trodden side trails
-        PE[k] =
-          level >= 3
-            ? Math.min(gen.pathEdgeMain, gen.pathSide > 0.75 ? gen.pathEdgeSide + mpp * 0.4 : 1e9)
-            : Math.min(gen.pathEdgeMain, gen.pathSide > 0.35 ? gen.pathEdgeSide : 1e9);
+        PE[k] = pe;
         F[k] = gen.forest(x, z);
         SP[k] = gen.species(x, z);
         MO[k] = gen.moisture(x, z);
@@ -182,6 +208,15 @@ export function renderTile(gen, level, tx, tz, vegFor) {
       const rock = smoothstep(0.3, 0.45, slope + (rnd - 0.5) * 0.08);
       if (rock > 0) mix3(c, c, ROCK, rock);
 
+      // water over it all; it lies flat, so the hillshade barely shows on it
+      const wa = WA[k];
+      if (wa > 0) {
+        mix3(t, WATER, WATER_DEEP, smoothstep(0.2, 3, WD[k]));
+        if (wa < 1) mix3(t, t, WATER_EDGE, 0.5);
+        mix3(c, c, t, wa);
+        shadeA[k] = 1 + (shade - 1) * (1 - wa * 0.85);
+      }
+
       const grain = level <= 2 ? 0.1 : 0.05;
       c[0] *= 1 - grain * 0.6 + rnd * grain;
       c[1] *= 1 - grain * 0.6 + rnd * grain;
@@ -191,7 +226,7 @@ export function renderTile(gen, level, tx, tz, vegFor) {
       const lv = Math.floor(h / ci);
       const lr = Math.floor(H[g + 1] / ci);
       const ld = Math.floor(H[g + G] / ci);
-      if (lv !== lr || lv !== ld) {
+      if ((lv !== lr || lv !== ld) && WA[k] < 0.5) {
         const top = Math.max(lv, lr, ld);
         const strong = top % 5 === 0;
         mix3(c, c, CONTOUR, strong ? 0.42 : 0.24);
@@ -201,7 +236,8 @@ export function renderTile(gen, level, tx, tz, vegFor) {
       let pa = 0;
       if (mpp <= 1) pa = smoothstep(0.35, 0.6, PM[k] + (rnd - 0.5) * 0.15);
       else pa = Math.min(1, Math.max(0, 0.5 - PE[k] / mpp) * 1.6);
-      pathA[k] = pa;
+      // a trail goes into the water and picks up again on the far side
+      pathA[k] = pa * (1 - WA[k] * 0.85);
 
       rgb[k * 3] = c[0];
       rgb[k * 3 + 1] = c[1];

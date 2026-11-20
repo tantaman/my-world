@@ -18,7 +18,7 @@ self.onmessage = (e) => {
   if (m.type === 'chunk') {
     const t = generateTerrain(gen, m.cx, m.cz, m.step, size);
     const out = { type: 'chunk', id: m.id, lod: m.lod, terrain: t, veg: null };
-    const transfer = [t.pos.buffer, t.nor.buffer, t.gnd.buffer, t.idx.buffer, t.heights.buffer, t.paths.buffer, t.forest.buffer];
+    const transfer = [t.pos.buffer, t.nor.buffer, t.gnd.buffer, t.wat.buffer, t.idx.buffer, t.heights.buffer, t.paths.buffer, t.forest.buffer, t.wLevel.buffer, t.wData.buffer];
     if (m.veg) {
       const v = generateVegetation(gen, m.cx, m.cz, size, trunkRadius);
       out.veg = v;
