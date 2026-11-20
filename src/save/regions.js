@@ -22,9 +22,26 @@ export const regionOf = (x, z) => `${Math.floor(x / REGION)},${Math.floor(z / RE
 export const keyOf = (rx, rz) => `${rx},${rz}`;
 export const parseKey = (key) => key.split(',').map(Number);
 
+// ── Whose value is it? ──────────────────────────────────────────────────────
+// An element map is a *record* — of what the server holds, of what was saved.
+// The game's own objects must never end up inside one, nor the record's
+// inside the game: a mark that is renamed in place would rename the record of
+// what was sent too, the two would never differ again, and the rename would
+// never go out. So values are copied on the way in (ops made by diffElements)
+// and on the way out (SaveDomains.fromElements).
+export const own = (v) => {
+  if (v === null || typeof v !== 'object') return v;
+  if (Array.isArray(v)) return v.map(own);
+  const out = {};
+  for (const k in v) out[k] = own(v[k]);
+  return out;
+};
+
 // ── Changes ─────────────────────────────────────────────────────────────────
 
 // What moved between two element maps. -> [{ r, k, v }], v === null = gone.
+// The values in the ops are copies: they can be kept, sent, and folded into a
+// record without anything that happens to `after` later showing through.
 //
 // `owned(key)`: an element this build doesn't know how to make is never
 // reported gone. Its absence from `after` only means we didn't write it — a
@@ -36,11 +53,11 @@ export function diffElements(before, after, owned = null) {
     const was = before.get(region);
     for (const [key, value] of now) {
       if (!was) {
-        ops.push({ r: region, k: key, v: value });
+        ops.push({ r: region, k: key, v: own(value) });
         continue;
       }
       const had = was.get(key);
-      if (had === undefined || !same(had, value)) ops.push({ r: region, k: key, v: value });
+      if (had === undefined || !same(had, value)) ops.push({ r: region, k: key, v: own(value) });
     }
   }
   for (const [region, was] of before) {

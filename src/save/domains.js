@@ -41,6 +41,8 @@
 // (test/golden/save-elements.json): change how a domain spells its elements
 // and the worlds saved before the change stop opening. Add, don't alter.
 
+import { own } from './regions.js';
+
 export class SaveDomains {
   constructor() {
     this.list = [];
@@ -124,7 +126,8 @@ export class SaveDomains {
         const cut = key.indexOf(':');
         const kind = cut < 0 ? key : key.slice(0, cut);
         const reader = readers.get(this.byKind.get(kind));
-        if (reader) reader.take(region, kind, cut < 0 ? '' : key.slice(cut + 1), value, key);
+        // a copy: what a domain is handed is its to keep and to change
+        if (reader) reader.take(region, kind, cut < 0 ? '' : key.slice(cut + 1), own(value), key);
       }
     }
     const state = {};

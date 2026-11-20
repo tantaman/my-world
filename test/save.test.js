@@ -155,3 +155,21 @@ test('a domain is registered once, and owns its kinds outright', () => {
   assert.deepEqual(plain(elements), { '1,-1': { 'c:70:-3': [2.5] } });
   assert.deepEqual(domains.fromElements(elements), { fires: data });
 });
+
+test('a record of what was saved is never the game’s own objects', () => {
+  const domains = makeDomains();
+  // going out: the game renames a mark in place after it was sent
+  const live = state();
+  const sent = new Map();
+  applyOps(sent, diffElements(new Map(), domains.toElements(live)));
+  live.marks[0].name = 'renamed';
+  live.buildings[0].logs[2][6].push(22); // and cuts a notch
+  const ops = diffElements(sent, domains.toElements(live));
+  assert.deepEqual(ops.map((o) => o.k).sort(), ['l:z:10:20:24:1', 'm:k3f9x1'], 'both changes are seen, so both go out');
+  // coming in: what a domain is handed is its own to change
+  const back = domains.fromElements(sent);
+  back.marks.find((m) => m.id === 'p0q8zz').name = 'changed after opening';
+  back.buildings[0].logs[0][6].push(99);
+  assert.equal(sent.get(LOOSE).get('m:p0q8zz').name, '', 'the record did not change with it');
+  assert.equal(diffElements(sent, domains.toElements({ ...state(), marks: back.marks })).length, 1);
+});
