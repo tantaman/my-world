@@ -1,0 +1,130 @@
+/* The railway panel. Uses the colour tokens defined on :root in index.html. */
+
+#rail-panel {
+  position: absolute;
+  right: calc(16px + var(--inset-r));
+  bottom: calc(44px + var(--inset-b));
+  width: min(340px, calc(100vw - 32px));
+  max-height: calc(100vh - 70px - var(--inset-t) - var(--inset-b));
+  overflow-y: auto;
+  padding: 13px 15px 12px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  background: rgba(10, 16, 11, 0.93);
+  border: 1px solid var(--line);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+#rail-panel.open {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+#rail-panel .rail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+#rail-panel h2 {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  color: var(--accent);
+  font-weight: 600;
+}
+#rail-panel p {
+  margin: 0 0 8px;
+  color: var(--ink-dim);
+  font-size: 10.5px;
+}
+#rail-panel p b {
+  color: var(--ink);
+}
+#rail-panel button {
+  font: inherit;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+#rail-panel .rail-head button {
+  font-size: 12px;
+  padding: 0 2px;
+}
+#rail-panel .rail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+#rail-panel .rail-list button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1.4em 1fr auto;
+  grid-template-areas: 'key name far' 'key line due';
+  column-gap: 8px;
+  text-align: left;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-top-color: var(--line);
+}
+#rail-panel .rail-list li:first-child button {
+  border-top-color: transparent;
+}
+#rail-panel .rail-list button:hover,
+#rail-panel .rail-list button:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+#rail-panel kbd {
+  grid-area: key;
+  font-family: var(--font);
+  color: var(--accent);
+  opacity: 0.8;
+}
+#rail-panel .name {
+  grid-area: name;
+  color: var(--ink);
+}
+#rail-panel .far {
+  grid-area: far;
+  text-align: right;
+}
+#rail-panel .line {
+  grid-area: line;
+  font-size: 10.5px;
+}
+#rail-panel .due {
+  grid-area: due;
+  text-align: right;
+  font-size: 10.5px;
+  color: var(--accent);
+}
+#rail-panel .here .name::after {
+  content: ' · you are here';
+  color: var(--ink-dim);
+}
+#rail-panel .rail-none {
+  color: var(--ink-dim);
+  padding: 6px 0;
+}
+#rail-panel .rail-more {
+  margin: 6px 0 0;
+}
+@media (hover: none) {
+  #rail-panel kbd {
+    display: none;
+  }
+  #rail-panel .rail-list button {
+    grid-template-columns: 0 1fr auto;
+    padding: 8px 6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #rail-panel {
+    transition: none;
+  }
+}

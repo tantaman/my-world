@@ -184,6 +184,7 @@ place in that order, not at the end:
 | `player/character.js` | something the hiker wears on the cap | `character.addWorn(object, { band })` |
 | `player/player.js` | walking the hiker somewhere | `player.steer = { x, z, run }` |
 | `player/player.js` | something that carries you (how fast, how deep, whether it flies) | `player.carrier = { walk, run, swim, depth, fly, … }` |
+| `player/player.js` | something that moves you itself, while you sit (a train) | `player.aboard = { place(out) }` |
 | `render/origin.js` | a uniform that says where something is | `game.origin.place(uniform)` |
 | `save/domains.js` | something that is saved | `game.save.register({ id, collect, restore, … })` |
 | `save/worldSave.js` | a word to the others here, never stored | `game.save.say(ch, body, to)`, `game.save.on('message', fn)` |
