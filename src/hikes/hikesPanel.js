@@ -1,4 +1,4 @@
-// The hikes panel (K, or the hikes button): every hike in the world, what
+// The hikes panel (J, or the hikes button): every hike in the world, what
 // it is (the trail, how long, how far up, the lakes on it), and a button to
 // go to its trailhead or straight to where its photo was taken.
 //
@@ -32,7 +32,7 @@ export class HikesPanel {
     root.innerHTML = `
       <div class="hikes-head">
         <h2>HIKES</h2>
-        <button type="button" data-act="close" aria-label="Close (K)">✕</button>
+        <button type="button" data-act="close" aria-label="Close (J)">✕</button>
       </div>
       <ol class="hikes-list">${hikes.map((h) => this._row(h)).join('')}</ol>
       <p class="hikes-note">${
@@ -99,11 +99,11 @@ export class HikesPanel {
     this.onGo(li.dataset.hike, act.dataset.act);
   }
 
-  // Escape or K closes it; the arrow keys move between the buttons, a row up
+  // Escape or J closes it; the arrow keys move between the buttons, a row up
   // or down, or across to the other end of the walk.
   _onKey(e) {
     if (!this.isOpen) return;
-    if (e.key === 'Escape' || e.code === 'KeyK') {
+    if (e.key === 'Escape' || e.code === 'KeyJ') {
       e.preventDefault();
       this.close();
       return;

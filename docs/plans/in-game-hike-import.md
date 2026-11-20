@@ -1,7 +1,7 @@
 # Plan: importing a hike from inside the game
 
 Status: **planned, not built.** Written against `095b782` (hikes from the
-command line, and the hikes list on K). Since then, fetching a hike's land
+command line, and the hikes list on J). Since then, fetching a hike's land
 when it's needed (`src/world/landforms.js`) has built part of step 2; see there.
 
 ## What we want

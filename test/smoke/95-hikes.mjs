@@ -1,4 +1,4 @@
-// Hikes: the list of them (K), the way to one's trailhead and to where its
+// Hikes: the list of them (J), the way to one's trailhead and to where its
 // photo was taken, and the land beyond the forest drawn from up there.
 //
 // Leaves: you standing at a hike's view, kilometres from where the play began.
@@ -14,18 +14,18 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.evaluate(() => world.marks.setTracked(null));
     const near = (p, q, what) => assert.ok(Math.hypot(p.x - q.x, p.z - q.z) < 1, `${what}: at ${p.x}, ${p.z}, not ${q.x}, ${q.z}`);
     const where = () => page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z, track: document.getElementById('track').textContent }));
-    // K lists the hikes; each has a way to its trailhead and to its view
-    await key('KeyK');
+    // J lists the hikes; each has a way to its trailhead and to its view
+    await key('KeyJ');
     const listed = await page.evaluate(() => ({
       open: document.getElementById('hikes').classList.contains('open'),
       names: [...document.querySelectorAll('#hikes li .hikes-name')].map((n) => n.firstChild.textContent),
     }));
-    assert.ok(listed.open, 'K opens the list of hikes');
+    assert.ok(listed.open, 'J opens the list of hikes');
     assert.deepEqual(listed.names, hikes.map((x) => x.name), 'and every hike is on it');
-    await key('KeyK');
-    assert.ok(!(await page.evaluate(() => document.getElementById('hikes').classList.contains('open'))), 'K again closes it');
+    await key('KeyJ');
+    assert.ok(!(await page.evaluate(() => document.getElementById('hikes').classList.contains('open'))), 'J again closes it');
     const pick = async (at) => {
-      await key('KeyK');
+      await key('KeyJ');
       await page.click(`#hikes li[data-hike="${h.id}"] [data-act="${at}"]`);
       await frames(3);
     };
