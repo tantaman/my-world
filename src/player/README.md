@@ -27,7 +27,7 @@ it's like down there is [Under the water](../underwater/README.md).
 ```
 index.js              plugs it into the game: controls, the hiker, where you arrive
 player.js             movement, collision, wading, swimming and diving, third-person camera
-character.js          procedural hiker model, IK gait, work poses, swimming, things raised to the face
+character.js          procedural hiker model, IK gait, work poses, swimming, things raised to the face, a stance on skis or a board
 head.js               the hiker's face and beard, sunglasses and snapback
 input.js              keyboard, mouse, touch
 peers.js              everyone else, drawn and eased between messages

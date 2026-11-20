@@ -81,6 +81,13 @@ export function definePose(kind, keys) {
   if (!Array.isArray(keys) || keys.length < 2) throw new Error(`pose "${kind}" needs at least two keyframes`);
   POSES[kind] = keys;
 }
+// Standing on skis (Character.stance) unless the stance says otherwise: the
+// feet a little apart and parallel, no pole reaching. Tucked up in the air,
+// the feet come this far (m) up under the body.
+const STANCE_FEET = [[0.11, 0], [-0.11, 0]];
+const STANCE_OUT = [0, 0];
+const STANCE_PLANT = [0, 0];
+const STANCE_TUCK = 0.32;
 
 // The left arm holding something up to the mouth (Character.addRaised): the
 // shoulder's pitch (sh), twist (tw) and swing inward (inw), the elbow, and the
@@ -141,6 +148,8 @@ const REACH = (THIGH + SHIN) * 0.985; // a planted leg never quite locks straigh
 // The boot, from the ankle joint: sole below, heel behind, toe ahead. A boot
 // sole hardly bends, so it rolls up onto the tip of the toe.
 const ANKLE_H = 0.07;
+// What is worn under a boot (a ski) goes this far below the ankle joint.
+export const SOLE = ANKLE_H;
 const HEEL_B = 0.075;
 const TOE_F = 0.165;
 
@@ -218,6 +227,9 @@ export class Character {
     this.seated = null; // what the hiker sits astride (seat())
     this._seat = null; // ...or last sat on, while getting down
     this.sit = 0; // blend into sitting
+    this.stood = null; // what the hiker stands on that slides (stance())
+    this._stance = null; // ...or last stood on, while stepping off
+    this.std = 0; // blend into standing on it
 
     // Per-foot state: target ankle position (root space), foot pitch, toe-out,
     // whether it's carrying weight, and the smoothed ground height under it.
@@ -492,6 +504,60 @@ export class Character {
     if (s) this._seat = s;
   }
 
+  // Stand on something that slides (skis, a board), or with null, step off.
+  // The feet stay planted where the stance puts them instead of walking, and
+  // whatever carries the hiker owns the root's tilt: it pitches and rolls it
+  // to the snow (and leans it into a turn), and the body stays over the feet.
+  // Read every frame, so its owner can change it as it goes:
+  //   feet    [[x, z], [x, z]]  where the left and right feet stand (m, body
+  //           frame: +x is the hiker's left, +z ahead)
+  //   out     [l, r]  how far each toe turns out (radians; negative turns it in)
+  //   crouch  0..1    how far down into the knees
+  //   lean    how far the body leans forward over the feet (radians)
+  //   pitch, roll     how far the owner has tipped the root forward and to
+  //                   the right (radians): the body leans back against most of it
+  //   twist   how far the shoulders turn left of the hips (radians)
+  //   look    how far the head turns left of the hips (radians)
+  //   arms    'poles' (low and forward, a pole in each hand) or 'out' (out to
+  //           the sides, for balance)
+  //   plant   [l, r]  0..1: a pole reached forward to plant
+  //   reach   0..1    a hand down to what is underfoot (a grab)
+  //   tuck    0..1    the feet drawn up under the body (in the air)
+  // and the gear, put on while the stance lasts:
+  //   shod    [left, right]  worn under each boot (skis), in the ankle's
+  //           frame: the sole is SOLE below its origin, +z ahead
+  //   board   under both feet (a snowboard), in the body's frame, its top
+  //           at the soles: it comes up with them when they tuck
+  //   hands   [left, right]  held in each hand (poles), gripped at the origin,
+  //           pointing along -y
+  stance(s) {
+    if (s === this.stood) return;
+    this.#gear(this.stood, false);
+    this.stood = s || null;
+    if (s) {
+      this._stance = s;
+      this.#gear(s, true);
+    }
+  }
+
+  #gear(s, on) {
+    if (!s) return;
+    const put = (parent, o) => {
+      if (!o) return;
+      if (on) parent.add(o);
+      else parent.remove(o);
+    };
+    if (s.shod) {
+      put(this.legL.ankle, s.shod[0]);
+      put(this.legR.ankle, s.shod[1]);
+    }
+    if (s.hands) {
+      put(this.handL, s.hands[0]);
+      put(this.hand, s.hands[1]);
+    }
+    put(this.root, s.board);
+  }
+
   // Start a work animation: 'chop' | 'chopLow' | 'fell' | 'dig' | 'bend' |
   // 'reach', or one a feature defined (definePose).
   play(kind, dur, loop = false) {
@@ -684,9 +750,10 @@ export class Character {
     armPose(this.armL, 1, swing, 1);
     armPose(this.armR, -1, -swing, carry);
 
-    // Lean into the turn.
+    // Lean into the turn (unless standing on something whose owner tilts
+    // the root itself).
     const turnLean = clamp(-turn * v * 0.018, -0.2, 0.2) * (1 - ab * 0.5);
-    this.root.rotation.z = lerp(this.root.rotation.z, turnLean, k);
+    if (!this.stood) this.root.rotation.z = lerp(this.root.rotation.z, turnLean, k);
 
     // How the tool rides when you're just carrying it.
     const held = this.tool ? this.tools[this.tool] : null;
@@ -765,6 +832,68 @@ export class Character {
       this.hand.rotation.x = lerp(this.hand.rotation.x, 0, reins);
     }
 
+    // ── Standing on something that slides ──────────────────────────────────
+    // Feet planted where the stance puts them, knees bent and the body over
+    // them, leaning back against the slope the root is tipped to; the arms
+    // low and forward with the poles, or out for balance.
+    this.std = lerp(this.std, this.stood ? 1 : 0, 1 - Math.exp(-dt * (this.stood ? 12 : 6)));
+    const std = this._stance && this.std > 0.001 ? ease(this.std) : 0;
+    if (std) {
+      const S = this._stance;
+      const crouch = S.crouch ?? 0.3;
+      const tuck = S.tuck ?? 0;
+      const reach = S.reach ?? 0;
+      hx = lerp(hx, 0, std);
+      hz = lerp(hz, -0.04 - crouch * 0.1, std);
+      hy = lerp(hy, HIPS_Y - 0.04 - crouch * 0.3 - reach * 0.06 + this.land, std);
+      hPitch *= 1 - std;
+      hYaw *= 1 - std;
+      hRoll *= 1 - std;
+      const feet = S.feet || STANCE_FEET;
+      const out = S.out || STANCE_OUT;
+      for (const F of [this.footL, this.footR]) {
+        const i = F.side > 0 ? 0 : 1;
+        F.x = lerp(F.x, feet[i][0], std);
+        F.y = lerp(F.y, ANKLE_H + tuck * STANCE_TUCK, std);
+        F.z = lerp(F.z, feet[i][1], std);
+        F.p = lerp(F.p, 0, std);
+        F.out = lerp(F.out, out[i], std);
+        F.load = lerp(F.load, 1, std);
+      }
+      // a board comes up with the feet
+      if (S.board) S.board.position.y = tuck * STANCE_TUCK * std;
+      const lean = (S.lean ?? 0.25) + reach * 0.4 - (S.pitch ?? 0) * 0.7;
+      const twist = S.twist ?? 0;
+      this.spine.rotation.x = lerp(this.spine.rotation.x, lean, std);
+      this.spine.rotation.y = lerp(this.spine.rotation.y, twist, std);
+      this.spine.rotation.z = lerp(this.spine.rotation.z, -(S.roll ?? 0) * 0.7, std);
+      this.head.rotation.x = lerp(this.head.rotation.x, -lean * 0.8, std);
+      this.head.rotation.y = lerp(this.head.rotation.y, (S.look ?? 0) - twist, std);
+      this.head.rotation.z = lerp(this.head.rotation.z, 0, std);
+      const poles = (S.arms ?? 'poles') === 'poles';
+      const plant = S.plant || STANCE_PLANT;
+      for (const [A, s, i] of [[this.armL, 1, 0], [this.armR, -1, 1]]) {
+        const p = poles ? plant[i] : 0;
+        const sh = (poles ? -0.45 : -0.25) - lean * 0.6 - p * 0.55;
+        A.shoulder.rotation.x = lerp(A.shoulder.rotation.x, sh, std);
+        A.shoulder.rotation.y = lerp(A.shoulder.rotation.y, 0, std);
+        A.shoulder.rotation.z = lerp(A.shoulder.rotation.z, s * (poles ? 0.22 : 0.85), std);
+        A.elbow.rotation.x = lerp(A.elbow.rotation.x, poles ? -0.95 + p * 0.35 : -0.45, std);
+      }
+      // a pole in each hand points down and a little back
+      const wrist = poles ? 1.75 : 0;
+      this.hand.rotation.set(lerp(this.hand.rotation.x, wrist, std), this.hand.rotation.y * (1 - std), this.hand.rotation.z * (1 - std));
+      this.handL.rotation.set(wrist * std, 0, 0);
+      // a grab: the right hand down to the skis or the board
+      if (reach > 0) {
+        const A = this.armR;
+        const w = reach * std;
+        A.shoulder.rotation.x = lerp(A.shoulder.rotation.x, -0.3, w);
+        A.shoulder.rotation.z = lerp(A.shoulder.rotation.z, -0.12, w);
+        A.elbow.rotation.x = lerp(A.elbow.rotation.x, -0.1, w);
+      }
+    }
+
     // ── Something held up to the face, in the left hand ────────────────────
     const raising = this.raised !== null;
     this.lift = lerp(this.lift, raising ? 1 : 0, 1 - Math.exp(-dt * (raising ? 9 : 5)));
@@ -795,10 +924,11 @@ export class Character {
     else if (this.root.rotation.x) this.root.rotation.x = 0;
 
     // ── Meet the ground ────────────────────────────────────────────────────
-    if (this.groundAt && ab < 0.999 && sit < 0.999 && swim < 0.5) this.#feelGround(dt, (1 - ab) * (1 - sit) * (1 - swim * 2));
+    if (this.groundAt && ab < 0.999 && sit < 0.999 && swim < 0.5 && std < 0.999) this.#feelGround(dt, (1 - ab) * (1 - sit) * (1 - swim * 2) * (1 - std));
 
     // The body banks into turns about the feet; keep the feet on the ground.
-    const bank = this.root.rotation.z;
+    // (Standing on skis, the feet tip with the root: they're on edge.)
+    const bank = this.root.rotation.z * (1 - std);
     if (bank) {
       const cb = Math.cos(bank);
       const sb = Math.sin(bank);
