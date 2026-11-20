@@ -24,10 +24,11 @@ import { installSave } from './save/index.js';
 import { installVoice } from './voice/index.js';
 import { installWildlife } from './wildlife/index.js';
 import { installSplashes } from './splashes/index.js';
+import { installMounts } from './mounts/index.js';
 import { installDebug } from './game/debug.js';
 
 // In order: each can use what the ones before it provide.
-const FEATURES = [installRender, installHud, installWorld, installPlayer, installAudio, installBuild, installFires, installBlueprints, installMap, installLandmarks, installSave, installVoice, installWildlife, installSplashes, installDebug];
+const FEATURES = [installRender, installHud, installWorld, installPlayer, installAudio, installBuild, installFires, installBlueprints, installMap, installLandmarks, installSave, installVoice, installWildlife, installSplashes, installMounts, installDebug];
 
 const loader = {
   bar: document.getElementById('load-bar'),

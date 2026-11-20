@@ -11,7 +11,8 @@
 // something a *newer* game saved, which this one has never heard of, must
 // survive being walked past; and the second, signing in from another
 // browser, must come back as himself — where *he* left off. And they talk:
-// over the radio from anywhere, aloud only from close by.
+// over the radio from anywhere, aloud only from close by; and each sees what
+// the other is riding.
 
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
@@ -245,6 +246,36 @@ try {
       return world.fires.state(f).state === 'laid' && f.ash === 2;
     }, null, 'ana sees it put out, with wood left to light again');
     assert.deepEqual(await ana.seen(), await ben.seen());
+  });
+
+  await step('ben sees ana on her horse, and up in the air on her eagle', async () => {
+    // Each finds and tames their own; what you ride is shown to everyone.
+    const anaRides = (w) => {
+      const p = world.peers.list().find((q) => q.name === 'ana');
+      const peer = p && world.peers.get(p.id);
+      if (!peer || !peer.character.seated) return false;
+      const lift = peer.character.root.position.y - world.chunks.heightAt(peer.pos.x, peer.pos.z);
+      return w === 'high' ? lift > 8 : lift > 0.5;
+    };
+    await ana.page.evaluate(() => {
+      world.mounts.tame('horse');
+      world.mounts.ride('horse');
+    });
+    await ben.until(anaRides, 'low', 'ben sees ana sitting up on something');
+    await ana.page.evaluate(() => {
+      world.mounts.tame('eagle');
+      world.mounts.ride('eagle');
+    });
+    await ana.page.keyboard.down('Space');
+    await ana.until(() => world.player.flying && world.player.height > 15, null, 'ana takes off');
+    await ana.page.keyboard.up('Space');
+    await ben.until(anaRides, 'high', 'ben sees her up in the air');
+    await ana.page.evaluate(() => world.mounts.getOff());
+    await ben.until(() => {
+      const p = world.peers.list().find((q) => q.name === 'ana');
+      return p && !world.peers.get(p.id).character.seated;
+    }, null, 'and back on her own two feet');
+    assert.deepEqual(await ben.page.evaluate(() => world.mounts.list().filter((m) => m.tame).length), 0, 'ana’s mounts are hers, not ben’s');
   });
 
   await step('ana and ben talk: on the radio from anywhere, aloud only close by', async () => {
