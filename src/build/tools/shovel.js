@@ -26,11 +26,7 @@ export const shovel = {
     if (b.dist(g.p.x, g.p.z) > REACH.shovel) return { prompt: 'too far to dig', far: true };
     const stump = b.forest.stumpNear(g.p.x, g.p.z, 0.7);
     if (stump) return { type: 'stump', ok: true, stump, x: stump.x, z: stump.z, prompt: '<b>hold click</b> grub out the stump' };
-    // vertices the shovel can't move: roots of standing trees, stumps,
-    // boulders, footings — anything that says it needs the ground left alone
-    const inTheWay = b.obstacles.near(g.p.x, g.p.z, DIG.radius + 3).filter((o) => o.dig);
-    const blocked = (ix, iz) => inTheWay.some((o) => (ix - o.x) ** 2 + (iz - o.z) ** 2 < o.dig * o.dig);
-    const roots = inTheWay.some((o) => Math.hypot(o.x - g.p.x, o.z - g.p.z) < o.dig);
+    const { blocked, roots } = digObstacles(b, g.p.x, g.p.z);
     let txt;
     if (b.stake.datum) {
       const dh = g.p.y - b.stake.level;
@@ -77,29 +73,7 @@ export const shovel = {
       }
       return false;
     }
-    // clear the undergrowth and pick up any small stones in the way
-    b.chunks.forEachPlant(g.x, g.z, DIG.radius * 0.85, ['bush', 'fern', 'log', 'rock'], (c, kind, k, x, y, z, s) => {
-      if (kind === 'rock') {
-        if (s > LIFTABLE) return;
-        b.gain('stone', stonesIn(s));
-      }
-      b.forest.removePlant(c, kind, k);
-    });
-    const r = b.terrain.stroke({
-      x: g.x,
-      z: g.z,
-      mode,
-      dt: io.dt,
-      datum: b.stake.level,
-      soil: b.creative ? Infinity : b.inv.soil,
-      blocked: t.blocked,
-    });
-    if (r.soil > 0) b.gain('soil', r.soil);
-    else if (r.soil < 0) b.spend('soil', -r.soil);
-    b.regrow(g.x, g.z, DIG.radius + 1);
-    b.face(g.x, g.z);
-    ch.play('dig', 0.9, true);
-    if (r.moved) b.digNoise(io.dt, mode, g, EARTH);
+    spadeWork(b, g.x, g.z, mode, io.dt, b.stake.level, t.blocked);
     return true;
   },
 
@@ -107,3 +81,37 @@ export const shovel = {
     if (t && t.type === 'ground') this.ring.place(t.x, t.z, DIG.radius);
   },
 };
+
+// What stops a spade near (x, z): the roots of standing trees, stumps,
+// boulders, footings — anything that says it needs the ground left alone.
+// -> { blocked(ix, iz): that vertex can't be moved, roots: (x, z) itself is among them }
+export function digObstacles(b, x, z) {
+  const inTheWay = b.obstacles.near(x, z, DIG.radius + 3).filter((o) => o.dig);
+  return {
+    blocked: (ix, iz) => inTheWay.some((o) => (ix - o.x) ** 2 + (iz - o.z) ** 2 < o.dig * o.dig),
+    roots: inTheWay.some((o) => Math.hypot(o.x - x, o.z - z) < o.dig),
+  };
+}
+
+// One frame of spade work centred on (x, z): clear the undergrowth and pocket
+// any small stones, then dig or fill ('dig' | 'fill'), to `datum` if there is
+// one, never touching a vertex that's `blocked`. The soil goes into, or comes
+// out of, what you carry. The blueprint foreman levels a site with this too.
+// -> whether any ground moved
+export function spadeWork(b, x, z, mode, dt, datum, blocked) {
+  b.chunks.forEachPlant(x, z, DIG.radius * 0.85, ['bush', 'fern', 'log', 'rock'], (c, kind, k, px, py, pz, s) => {
+    if (kind === 'rock') {
+      if (s > LIFTABLE) return;
+      b.gain('stone', stonesIn(s));
+    }
+    b.forest.removePlant(c, kind, k);
+  });
+  const r = b.terrain.stroke({ x, z, mode, dt, datum, soil: b.creative ? Infinity : b.inv.soil, blocked });
+  if (r.soil > 0) b.gain('soil', r.soil);
+  else if (r.soil < 0) b.spend('soil', -r.soil);
+  b.regrow(x, z, DIG.radius + 1);
+  b.face(x, z);
+  b.player.character.play('dig', 0.9, true);
+  if (r.moved) b.digNoise(dt, mode, { x, z }, EARTH);
+  return r.moved;
+}

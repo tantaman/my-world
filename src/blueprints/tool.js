@@ -14,9 +14,11 @@
 // The building itself is the foreman's (foreman.js); this is the handle on it.
 
 import { JOIN_RADIUS, PIER } from '../build/constants.js';
-import { footingCheck } from '../build/tools/footing.js';
+import { footingSpot } from '../build/tools/footing.js';
 import { inTheWay } from '../build/tools/wall.js';
+import { tenths } from '../build/inventory.js';
 import { place, findBuilding, survey, needs } from './plan.js';
+import { levelling, siteGround } from './grade.js';
 
 const RECHECK = 0.5; // s between looks at a spot you keep aiming at (the ground can change)
 const CONFIRM = 2.5; // s to right-click again to pull up the stakes
@@ -85,7 +87,7 @@ export function blueprintTool({ library, foreman, ghost, copy }) {
     preview(b, t) {
       if (!t || t.type !== 'place') return;
       const L = this.look;
-      ghost.draw(`${L.key}|${L.y0.toFixed(2)}|${[...L.uneven].join(' ')}`, L.placed, { y0: L.y0, ground: (x, z) => b.chunks.heightAt(x, z), trouble: L.uneven });
+      ghost.draw(`${L.key}|${L.y0.toFixed(2)}|${[...L.uneven].join(' ')}`, L.placed, { y0: L.y0, ground: (x, z) => b.chunks.heightAt(x, z), trouble: L.uneven, pad: L.pad });
       b.previews.show(ghost.pieces, !t.bad);
       b.previews.show(ghost.trouble, false);
     },
@@ -100,28 +102,32 @@ export function blueprintTool({ library, foreman, ghost, copy }) {
 }
 
 // Would the plan go here? Everything that would stop it, short of materials,
-// which you might yet go and gather.
-// -> { placed, y0, uneven: Set of 'x,z', need: words, trouble: words or null }
+// which you might yet go and gather. Uneven ground is no trouble if the
+// foreman can level it (grade.js).
+// -> { placed, y0: the footings' level, uneven: 'x,z' of footings that can't
+//      reach it, need: what it takes, in words, pad: the grade it will be
+//      levelled to or null, trouble: words or null }
 function assess(b, plan, x, z, rot) {
   const placed = place(plan, x, z, rot);
   const { b: there, clash } = findBuilding(placed, b.buildings.list, JOIN_RADIUS);
-  const ground = (px, pz) => b.chunks.heightAt(px, pz);
-  const s = survey(placed, ground, there ? there.y0 : null);
-  const uneven = new Set(s.footings.filter((f) => !f.ok).map((f) => `${f.x},${f.z}`));
+  const built = new Set(there ? [...there.footings.values()].map((f) => `${f.x},${f.z}`) : []);
+  const lv = levelling(placed, siteGround(b, placed.rect), { y0: there ? there.y0 : null, built, earn: !b.creative });
+  const s = survey(placed, (px, pz) => b.chunks.heightAt(px, pz), there ? there.y0 : lv.need ? lv.level + PIER.first : null);
   const n = needs(plan);
-  const need = [n.log && `${n.log} m log`, n.timber && `${n.timber} m timber`, `${n.stone} stones`].filter(Boolean).join(' · ');
+  const need = [n.log && `${n.log} m log`, n.timber && `${n.timber} m timber`, `${n.stone} stones`, lv.need && `levelling ${tenths(lv.cut + lv.fill)} m³`].filter(Boolean).join(' · ');
   let trouble = null;
+  let uneven = new Set();
   if (clash) trouble = `too close to another building (keep ${JOIN_RADIUS} m apart)`;
-  else if (uneven.size) {
-    const worst = s.footings.filter((f) => !f.ok).sort((a, c) => Math.abs(c.pier - PIER.first) - Math.abs(a.pier - PIER.first))[0];
-    trouble = `${uneven.size} of ${s.footings.length} footings off level: ${worst.reason}`;
+  else if (lv.need && lv.trouble) {
+    trouble = lv.trouble;
+    uneven = new Set(s.footings.filter((f) => !f.ok && !built.has(`${f.x},${f.z}`)).map((f) => `${f.x},${f.z}`));
   } else {
     for (const f of placed.footings) {
-      if (there && [...there.footings.values()].some((g) => g.x === f.x && g.z === f.z)) continue;
-      const chk = footingCheck(b, f.x, f.z);
-      // stones you can go and get; anything else about the spot is trouble
-      if (chk.reason && !chk.short) {
-        trouble = `a footing: ${chk.reason}`;
+      if (built.has(`${f.x},${f.z}`)) continue;
+      // levelling settles the water question; otherwise the footing tool asks it
+      const why = footingSpot(b, f.x, f.z, { water: !lv.need });
+      if (why) {
+        trouble = `a footing: ${why}`;
         break;
       }
     }
@@ -133,5 +139,5 @@ function assess(b, plan, x, z, rot) {
       }
     }
   }
-  return { placed, y0: s.y0, uneven, need, trouble };
+  return { placed, y0: s.y0, uneven, need, trouble, pad: lv.need ? lv.level : null };
 }

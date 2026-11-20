@@ -11,6 +11,10 @@ import { JOIN_RADIUS } from '../src/build/constants.js';
 import { PLANS } from '../src/blueprints/plans.js';
 import { normalize, place, capture, nextJob, progress, survey, findBuilding, needs, bounds, route, crosses, standAt, grow, inside } from '../src/blueprints/plan.js';
 import { Library } from '../src/blueprints/library.js';
+import { validSite } from '../src/blueprints/foreman.js';
+import { levelling, nextSpot, balance, padNodes, TOL } from '../src/blueprints/grade.js';
+import { TerrainEdits } from '../src/build/terrainEdits.js';
+import { PIER, DIG } from '../src/build/constants.js';
 import { memoryStorage, KEYS } from '../src/core/storage.js';
 
 const scene = { add() {}, remove() {} };
@@ -233,4 +237,112 @@ test('your blueprints are kept in this browser, in a layout that stays put', () 
   // what you are handed is yours to change
   again.current.footings.push([99, 99]);
   assert.equal(again.current.footings.length, PLANS[0].footings.length);
+});
+
+// ── Levelling ───────────────────────────────────────────────────────────────
+
+// A hillside as a seed would grow it, and the spade's edits over it: the
+// game's own TerrainEdits, with no chunks loaded.
+function hillside(height, { blockers = [], water = null } = {}) {
+  const terrain = new TerrainEdits({ height }, { size: 64, chunks: new Map(), chunkAt: () => null });
+  const ground = {
+    height: (ix, iz) => terrain.vertexHeight(ix, iz),
+    delta: (ix, iz) => terrain.delta(ix, iz),
+    blocker: (ix, iz) => blockers.find((o) => (ix - o.x) ** 2 + (iz - o.z) ** 2 < o.dig * o.dig) || null,
+    water: () => water,
+  };
+  return { terrain, ground };
+}
+
+// Level a site the way the foreman does, minus the walking: the spot most
+// off grade, a spade stroke there, again, until nothing is left to move.
+function levelSite(placed, { terrain, ground }, earn = false) {
+  const first = levelling(placed, ground, { earn });
+  let soil = 0;
+  let strokes = 0;
+  const skip = new Set();
+  let near = { x: placed.rect.x0, z: placed.rect.z0 };
+  for (;;) {
+    const lv = levelling(placed, ground, { level: first.level, earn });
+    const v = nextSpot(lv.work, near, skip);
+    if (!v) return { first, soil, strokes };
+    const r = terrain.stroke({ x: v.ix, z: v.iz, mode: v.mode, dt: 0.05, datum: lv.level, soil: earn ? soil : Infinity, blocked: (ix, iz) => !!ground.blocker(ix, iz) });
+    soil += r.soil;
+    if (!r.moved) skip.add(`${v.ix},${v.iz}`);
+    near = { x: v.ix, z: v.iz };
+    assert.ok(++strokes < 20000, 'it never got there');
+  }
+}
+
+test('level ground needs no levelling', () => {
+  const placed = place(PLANS[0], 0, 0, 0);
+  const { ground } = hillside(() => 2);
+  assert.equal(levelling(placed, ground).need, false);
+  // nor does a gentle slope the piers can take up
+  assert.equal(levelling(placed, hillside((x) => 2 + 0.02 * x).ground).need, false);
+});
+
+test('a hillside is levelled to one grade, and the cabin goes up on it', () => {
+  for (const earn of [false, true]) {
+    const placed = place(PLANS[0], 0, 0, 0);
+    const site = hillside((x, z) => 2 + 0.2 * x + 0.05 * z);
+    const { ground, terrain } = site;
+    assert.equal(survey(placed, (x, z) => ground.height(x, z)).ok, false, 'the footings could not reach one level as it was');
+    const lv = levelling(placed, ground, { earn });
+    assert.equal(lv.need, true);
+    assert.equal(lv.trouble, null);
+    assert.ok(lv.cut > 1 && lv.fill > 0.5, `cut ${lv.cut}, fill ${lv.fill}`);
+    const { first, soil } = levelSite(placed, site, earn);
+    // every vertex of the pad is on grade
+    for (const [ix, iz] of padNodes(placed.rect)) assert.ok(Math.abs(ground.height(ix, iz) - first.level) <= TOL + 1e-9, `${ix},${iz} is ${ground.height(ix, iz) - first.level} off grade`);
+    assert.equal(levelling(placed, ground, { earn }).need, false, 'and it needs no more');
+    // with soil to earn, the cut paid for the fill and there's some over
+    if (earn) assert.ok(soil > 0, `soil left: ${soil}`);
+    const B = make();
+    raise(B, placed, (x, z) => terrain.vertexHeight(x, z));
+    assert.ok(Math.abs(B.list[0].y0 - (first.level + PIER.first)) < TOL + 1e-9, 'the footings sit a pier above grade');
+  }
+  // earning the soil sets the grade lower: more cut than fill
+  const hs = [0, 1, 2, 3];
+  assert.ok(Math.abs(balance(hs) - 1.5) < 1e-9);
+  assert.ok(balance(hs, true) < 1.5);
+});
+
+test('the grade levelling began to is kept with the site', () => {
+  const site = { plan: PLANS[0], x: 3, z: -4, rot: 1, level: -5.5 };
+  assert.deepEqual(validSite(JSON.parse(JSON.stringify(site))), site);
+  assert.equal(validSite({ ...site, level: 'low' }).level, null);
+  assert.equal(validSite({ ...site, level: undefined }).level, null, 'a site saved before levelling');
+});
+
+test('once a footing is in, the grade is a pier below it', () => {
+  const placed = place(PLANS[0], 0, 0, 0);
+  const { ground } = hillside((x) => 2 + 0.2 * x);
+  const f = placed.footings[0];
+  const y0 = ground.height(f.x, f.z) + PIER.first;
+  const lv = levelling(placed, ground, { y0, built: new Set([`${f.x},${f.z}`]) });
+  assert.equal(lv.need, true);
+  assert.ok(Math.abs(lv.level - (y0 - PIER.first)) < 1e-9);
+});
+
+test("too steep, roots in the way or water, and it says so", () => {
+  const placed = place(PLANS[0], 0, 0, 0);
+  assert.match(levelling(placed, hillside((x) => 2 + 1.2 * x).ground).trouble, new RegExp(`too steep to level here: .* ${DIG.maxCut} m`));
+  // roots by a footing on the high side: the grade moves up to suit it...
+  const f = placed.footings.find((g) => g.x === placed.rect.x1);
+  const roots = hillside((x) => 2 + 0.2 * x, { blockers: [{ x: f.x + 0.5, z: f.z, dig: 1.2, what: 'a pine' }] });
+  const suited = levelling(placed, roots.ground);
+  assert.equal(suited.trouble, null);
+  assert.ok(roots.ground.height(f.x, f.z) - suited.level <= PIER.first - PIER.min + 1e-9, 'the footing by the tree is within a pier of grade');
+  // ...unless a footing already in on the low side has set it
+  const low = placed.footings.find((g) => g.x === placed.rect.x0);
+  const y0 = roots.ground.height(low.x, low.z) + PIER.first;
+  assert.match(levelling(placed, roots.ground, { y0, built: new Set([`${low.x},${low.z}`]) }).trouble, /a pine is in the way of levelling for a footing: clear it first/);
+  const pond = hillside((x) => 2 + 0.2 * x, { water: 3 });
+  assert.match(levelling(placed, pond.ground).trouble, /under water/);
+  // and a spot to work next is never one that wouldn't move
+  const lv = levelling(placed, hillside((x) => 2 + 0.2 * x).ground);
+  const skip = new Set(lv.work.map((v) => `${v.ix},${v.iz}`));
+  assert.equal(nextSpot(lv.work, { x: 0, z: 0 }, skip), null);
+  assert.equal(nextSpot(lv.work, { x: 0, z: 0 }).mode, 'dig', 'cut before fill');
 });
