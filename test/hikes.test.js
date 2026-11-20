@@ -16,10 +16,10 @@ import { Landform, packHeights, unpackHeights, packShore, unpackShore } from '..
 import { growWorld, LANDS } from '../src/world/lands.js';
 import { generateVegetation } from '../src/world/chunkGen.js';
 import { sampleFar } from '../src/hikes/farGrid.js';
-import { NO_WATER, LAND_REACH, LAND_DRY } from '../src/world/water.js';
+import { NO_WATER, LANDFORM_REACH, LANDFORM_DRY } from '../src/world/water.js';
 import { NET } from '../src/world/drainage.js';
 import { HIKES } from '../src/world/hikes.js';
-import { Lands, loadAll, reachOf } from '../src/world/landforms.js';
+import { Landforms, loadAll, reachOf } from '../src/world/landforms.js';
 import { tiffExif, jpegWith, heifWith } from './helpers/photos.js';
 
 const SEED = 20261119;
@@ -267,7 +267,7 @@ test('a hike is built from a photo, the land, the trails and the lakes', () => {
 
 for (const land of LANDS) test(`the world grows a hike: the real land, its trail, its lake${onLand(land)}`, () => {
   const gen = world([hike], land);
-  const L = gen.lands[0];
+  const L = gen.landforms[0];
   const at = (e, n) => [AT[0] + e * 0.2, AT[1] - n * 0.2];
   // the top is 600 real metres over the foot of the mountain: 120 m in the game
   const top = gen.height(...at(0, 0));
@@ -333,7 +333,7 @@ test('a hike by the sea has the sea, and is walked up to from the road', () => {
   near(coastal.trail.climb, (byTheSea(...toLL(0, 0)) - byTheSea(...toLL(1000, 0))) * 0.2, 3, 'climbing from it');
 
   const gen = world([coastal]);
-  const L = gen.lands[0];
+  const L = gen.landforms[0];
   const at = (e, n) => [AT[0] + e * 0.2, AT[1] - n * 0.2];
   const shore = (e, n) => L.shore(...at(e, n));
   near(shore(COAST_AT + 100, 300), -20, 0.6, 'a hundred metres out to sea (20 in the game)');
@@ -357,7 +357,7 @@ test('a hike by the sea has the sea, and is walked up to from the road', () => {
   const inland = world([hike]);
   inland.height(AT[0] - 1600 * 0.2, AT[1]);
   assert.equal(inland.water.foam, 0);
-  assert.ok(!inland.lands[0].sea);
+  assert.ok(!inland.landforms[0].sea);
 });
 
 // The same shore again, with water running to it, and a cove cut into it: a
@@ -416,7 +416,7 @@ test("a hike's streams are kept the way they flow, as far as its land goes", () 
 
 test('a real stream runs downhill all the way, into what the map says it runs into', () => {
   const gen = world([watered]);
-  const L = gen.lands[0];
+  const L = gen.landforms[0];
   const at = (e, n) => [AT[0] + e * 0.2, AT[1] - n * 0.2];
   const sea = L.offset;
   // no piece of any of them rises as it goes
@@ -476,7 +476,7 @@ test('a cove a few metres across is a cove: the shore is kept finer than the gro
   const sea = watered.lakes[0];
   assert.ok(sea.sea && sea.cell < watered.ground.cell / 2 && !sea.box, `on a grid of its own, ${sea.cell} m to the ground's ${watered.ground.cell}`);
   const gen = world([watered]);
-  const L = gen.lands[0];
+  const L = gen.landforms[0];
   const shore = (e, n) => L.shore(AT[0] + e * 0.2, AT[1] - n * 0.2);
   // the cove is 12 m across in the game, and 12 deep: less than two of the ground's cells
   near(shore(COAST_AT - COVE, 0), -COVE * 0.2, 0.5, 'in the middle of the cove, 6 m from its sides');
@@ -489,13 +489,13 @@ test('a cove a few metres across is a cove: the shore is kept finer than the gro
 
 test('seen from the land, the sea runs on to the horizon', () => {
   const gen = world([watered]);
-  const L = gen.lands[0];
+  const L = gen.landforms[0];
   const at = (e, n) => [AT[0] + e * 0.2, AT[1] - n * 0.2];
   assert.ok(L.openSea(...at(2600, 0)), 'out past the edge of the land, to the east');
   assert.ok(L.openSea(...at(6000, 2500)), 'and far out');
   assert.ok(!L.openSea(...at(-2600, 0)), 'not inland');
   assert.ok(!L.openSea(...at(1500, 0)), 'nor on the land itself, where the sea is its own');
-  assert.ok(!gen.lands.length || !world([hike]).lands[0].openSea(AT[0] + 600, AT[1]), 'a land with a lake has no sea');
+  assert.ok(!gen.landforms.length || !world([hike]).landforms[0].openSea(AT[0] + 600, AT[1]), 'a land with a lake has no sea');
   // the game's own ground out there is forest: it is only the far view that sees water
   gen.height(...at(2600, 0));
   assert.notEqual(gen.water.kind, 'lake');
@@ -555,7 +555,7 @@ for (const land of LANDS) test(`a hike leaves the water outside it alone${onLand
     }
   }
   // and once clear of the hike, the water on the ground is the same too
-  const L = withHike.lands[0];
+  const L = withHike.landforms[0];
   for (let k = 0; k < 96; k++) {
     const t = (k / 96) * Math.PI * 2;
     const x = L.cx + Math.cos(t) * (L.outer + 300);
@@ -601,8 +601,8 @@ for (const land of LANDS) test(`nothing past a hike's reach depends on its land$
   }
 });
 
-for (const land of LANDS) test(`no pond or lake of the forest's reaches further than LAND_REACH allows for${onLand(land)}`, () => {
-  // a basin gives way within its size, beach and LAND_DRY of real land, and
+for (const land of LANDS) test(`no pond or lake of the forest's reaches further than LANDFORM_REACH allows for${onLand(land)}`, () => {
+  // a basin gives way within its size, beach and LANDFORM_DRY of real land, and
   // shapes the ground for its size and beach again past that
   const net = world([], land).water.net;
   let most = 0;
@@ -617,7 +617,7 @@ for (const land of LANDS) test(`no pond or lake of the forest's reaches further 
     }
   }
   assert.ok(seen > 20, `${seen} ponds and lakes looked at`);
-  assert.ok(LAND_DRY + 2 * most <= LAND_REACH, `a basin reaches ${most.toFixed(1)} m: LAND_REACH needs ${(LAND_DRY + 2 * most).toFixed(1)}`);
+  assert.ok(LANDFORM_DRY + 2 * most <= LANDFORM_REACH, `a basin reaches ${most.toFixed(1)} m: LANDFORM_REACH needs ${(LANDFORM_DRY + 2 * most).toFixed(1)}`);
 });
 
 test('a hike splits into its card and its land, and back', () => {
@@ -631,24 +631,24 @@ test('a hike splits into its card and its land, and back', () => {
 test("a hike's land is fetched once, and only when something near it asks", async () => {
   const { card, land } = splitHike(hike);
   let fetched = 0;
-  const lands = new Lands([{ ...card, load: async () => (fetched++, { default: land }) }]);
+  const landforms = new Landforms([{ ...card, load: async () => (fetched++, { default: land }) }]);
   const arrived = [];
-  lands.on('land', (def) => arrived.push(def.id));
+  landforms.on('land', (def) => arrived.push(def.id));
   const reach = reachOf(card);
   const box = (x, z, s = 64) => [x, z, x + s, z + s];
-  assert.ok(lands.ready(...box(AT[0] + reach + 10, AT[1])), 'far off, nothing waits');
+  assert.ok(landforms.ready(...box(AT[0] + reach + 10, AT[1])), 'far off, nothing waits');
   assert.equal(fetched, 0, 'and nothing is fetched');
-  assert.ok(!lands.ready(...box(AT[0] + reach - 10, AT[1]), false), 'within reach it waits');
+  assert.ok(!landforms.ready(...box(AT[0] + reach - 10, AT[1]), false), 'within reach it waits');
   assert.equal(fetched, 0, 'but only fetches when asked to');
-  assert.ok(!lands.ready(...box(AT[0], AT[1])), 'on it, it waits');
-  await Promise.all([lands.ensure('made-up'), lands.ensure('made-up')]);
+  assert.ok(!landforms.ready(...box(AT[0], AT[1])), 'on it, it waits');
+  await Promise.all([landforms.ensure('made-up'), landforms.ensure('made-up')]);
   assert.equal(fetched, 1, 'fetched once');
   assert.deepEqual(arrived, ['made-up'], 'and said so once');
-  assert.ok(lands.ready(...box(AT[0], AT[1])), 'then it is ready');
-  assert.deepEqual(lands.defs.get('made-up'), hike, 'with the whole hike');
+  assert.ok(landforms.ready(...box(AT[0], AT[1])), 'then it is ready');
+  assert.deepEqual(landforms.defs.get('made-up'), hike, 'with the whole hike');
   // Whose reach a place is in is known from the cards alone, fetched or not:
   // what else is grown from the seed (the forest's old places) keeps off it
-  const cards = new Lands([{ ...card, load: async () => ({ default: land }) }]);
+  const cards = new Landforms([{ ...card, load: async () => ({ default: land }) }]);
   assert.equal(cards.reaches(...box(AT[0], AT[1])).id, 'made-up', 'on it');
   assert.equal(cards.reaches(...box(AT[0] + reach - 10, AT[1])).id, 'made-up', 'and as far as it changes the land');
   assert.equal(cards.reaches(...box(AT[0] + reach + 10, AT[1])), null, 'not beyond');
@@ -658,25 +658,25 @@ test("land that can't be fetched is asked for again, but not every frame", async
   const { card, land } = splitHike(hike);
   let tries = 0;
   let up = false;
-  const lands = new Lands([{ ...card, load: async () => (tries++, up ? { default: land } : Promise.reject(new Error('offline'))) }]);
+  const landforms = new Landforms([{ ...card, load: async () => (tries++, up ? { default: land } : Promise.reject(new Error('offline'))) }]);
   const failed = [];
-  lands.on('failed', (c) => failed.push(c.id));
+  landforms.on('failed', (c) => failed.push(c.id));
   const here = [AT[0], AT[1], AT[0] + 64, AT[1] + 64];
   const warn = console.warn;
   console.warn = () => {};
   try {
-    assert.ok(!lands.ready(...here));
-    await lands.ensure('made-up').catch(() => {});
-    for (let k = 0; k < 50; k++) lands.ready(...here); // fifty frames
+    assert.ok(!landforms.ready(...here));
+    await landforms.ensure('made-up').catch(() => {});
+    for (let k = 0; k < 50; k++) landforms.ready(...here); // fifty frames
     await new Promise((r) => setTimeout(r, 0));
     assert.equal(tries, 1, 'not asked again straight away');
     assert.deepEqual(failed, ['made-up'], 'and said so');
-    lands.failures.get('made-up').until = 0; // the wait is over
+    landforms.failures.get('made-up').until = 0; // the wait is over
     up = true;
-    lands.ready(...here);
-    await lands.ensure('made-up');
+    landforms.ready(...here);
+    await landforms.ensure('made-up');
     assert.equal(tries, 2);
-    assert.ok(lands.ready(...here), 'here at last');
+    assert.ok(landforms.ready(...here), 'here at last');
   } finally {
     console.warn = warn;
   }
@@ -740,7 +740,7 @@ test('hikes that overlap line up exactly, and stand on the same heights', () => 
   assert.deepEqual(placeB.datum, A.datum, 'B shares A’s heights');
   const B = buildHike({ id: 'b', name: 'B', photo: photoB, elevation: wave, at: placeB.at, datum: placeB.datum, ...opts }).def;
   const gen = world([A, B]);
-  const [LA, LB] = gen.lands;
+  const [LA, LB] = gen.landforms;
   // where both are real land, they say the same thing
   let worst = 0;
   for (let k = 0; k < 200; k++) {
@@ -751,7 +751,7 @@ test('hikes that overlap line up exactly, and stand on the same heights', () => 
   assert.ok(worst < 0.25, `the same ground ${worst.toFixed(3)} m apart`);
   // and adding B didn't move A
   const alone = world([A]);
-  near(gen.lands[0].offset, alone.lands[0].offset, 0, 'A stands where it stood');
+  near(gen.landforms[0].offset, alone.landforms[0].offset, 0, 'A stands where it stood');
 });
 
 // ── The hikes in the game ────────────────────────────────────────────────────

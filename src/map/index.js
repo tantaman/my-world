@@ -14,7 +14,7 @@ const PREFETCH_AFTER = 120; // metres walked before the map is drawn afresh arou
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player'];
 export function installMap(game) {
-  const { scene, chunks, player, input, hud, commands, save, structures, gen, lands } = game;
+  const { scene, chunks, player, input, hud, commands, save, structures, gen, landforms } = game;
 
   const marks = new MarkStore();
   const markers = new Markers(scene, (x, z) => chunks.heightAt(x, z));
@@ -22,8 +22,8 @@ export function installMap(game) {
   // Places other features put on the map (an old cabin, a dock): see places.js.
   const places = new Places();
   marks.findPlace = (id) => places.get(id);
-  const map = new MapView({ seed: gen.seed, land: gen.land, structures, hikes: gen.hikes, ready: (x0, z0, x1, z1, ask) => lands.ready(x0, z0, x1, z1, ask), marks, player, input, places });
-  lands.on('land', (def) => map.addHike(def));
+  const map = new MapView({ seed: gen.seed, land: gen.land, structures, hikes: gen.hikes, ready: (x0, z0, x1, z1, ask) => landforms.ready(x0, z0, x1, z1, ask), marks, player, input, places });
+  landforms.on('land', (def) => map.addHike(def));
   game.provide('marks', marks);
   game.provide('map', map);
 

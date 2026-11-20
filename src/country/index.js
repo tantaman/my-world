@@ -16,7 +16,7 @@
 
 import { LAND, DECK, MAX_COUNTRIES } from '../render/uniforms.js';
 import { COUNTRY, COUNTRIES } from '../world/country.js';
-import { nearestLand, deckHeight, weatherAt } from './here.js';
+import { nearestLandform, deckHeight, weatherAt } from './here.js';
 import { surf } from './surf.js';
 
 const EASE = 1.6; // 1/s: how quickly the weather comes over you
@@ -48,7 +48,7 @@ export function installCountry(game) {
     phase: 'world',
     update({ dt }) {
       const at = game.focus;
-      const land = nearestLand(gen.lands, at.x, at.z);
+      const land = nearestLandform(gen.landforms, at.x, at.z);
       if (land !== state.land) {
         state.land = land;
         state.here = land ? land.country : COUNTRY.forest;

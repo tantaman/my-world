@@ -8,10 +8,10 @@ const CLEARS_IN = 500;
 
 // The land (world/landform.js) whose edge is nearest (x, z), or null if
 // there are none. On one, that is the one you're on.
-export function nearestLand(lands, x, z) {
+export function nearestLandform(landforms, x, z) {
   let best = null;
   let bestD = Infinity;
-  for (const L of lands) {
+  for (const L of landforms) {
     const d = L.clearance(x, z);
     if (d < bestD) [best, bestD] = [L, d];
   }

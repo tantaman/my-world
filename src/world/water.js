@@ -62,14 +62,14 @@ const PLUNGE = 1.6;
 const BASIN_REGION = 2.5;
 const OPEN = { lake: 1, pond: 0.8 };
 // Running water fades out over this many metres before real land.
-export const LAND_DRY = 80;
+export const LANDFORM_DRY = 80;
 // How far (m) past a real place's outer edge it can still change the ground:
 // a pond or lake of the forest's gives way when its middle is within its
-// size, its beach and LAND_DRY of the edge, and shapes the ground for its
+// size, its beach and LANDFORM_DRY of the edge, and shapes the ground for its
 // size and beach again beyond that. On the land with the biggest lakes
 // (land2.js) the drainage network gives a basin at most 90 m and a beach of
 // 36 m, so 2 × 128 + 80, and a little (test/hikes.test.js checks every land).
-export const LAND_REACH = 340;
+export const LANDFORM_REACH = 340;
 // How far (m) past a real lake's shore it still shapes the ground.
 const LAKE_BLEND = 8;
 
@@ -186,7 +186,7 @@ export class Water {
     cw *= 1 + WIDTH_VARY * this.nWidth(px / WIDTH_WAVE, pz / WIDTH_WAVE);
     cw *= smoothstep(4, 30, this.gen.padClearance(x, z));
     // (a real place's own streams run on it; the forest's give way to it)
-    if (!s.real && this.gen.lands.length) cw *= smoothstep(0, LAND_DRY, this.gen.landClearance(x, z));
+    if (!s.real && this.gen.landforms.length) cw *= smoothstep(0, LANDFORM_DRY, this.gen.landformClearance(x, z));
     hit.d = d;
     hit.cw = cw;
     // a stream fades in at its spring, valley and all
@@ -269,7 +269,7 @@ export class Water {
   // A pond or lake of the forest's that would reach real land isn't there. It
   // still counts in the drainage network, so the water below it is the same.
   _givesWay(b) {
-    return this.gen.lands.length > 0 && this.gen.landClearance(b.x, b.z) < b.maxR + b.blend + LAND_DRY;
+    return this.gen.landforms.length > 0 && this.gen.landformClearance(b.x, b.z) < b.maxR + b.blend + LANDFORM_DRY;
   }
 
   // Shapes ground of natural height h at (x, z) around any water there, and
@@ -304,7 +304,7 @@ export class Water {
       if (this._hit(s, x, z, hit, true)) order.push(hit);
     }
     // the streams of real places, which run into their lakes and the sea
-    for (const L of this.gen.lands) {
+    for (const L of this.gen.landforms) {
       const real = L.streamsNear(x, z);
       if (!real.length) continue;
       lake = Math.min(lake, L.shore(x, z));
@@ -345,7 +345,7 @@ export class Water {
     }
 
     // the lakes of real places
-    for (const L of this.gen.lands) {
+    for (const L of this.gen.landforms) {
       if (L.weight(x, z) <= 0) continue;
       const u = L.shore(x, z);
       if (u > LAKE_BLEND) continue;
@@ -375,7 +375,7 @@ export class Water {
       if (!this._hit(s, x, z, hit, false) || hit.cw <= 0.05) continue;
       this._offer(NO_WATER, 0, hit.d - hit.cw, hit.river ? 'river' : 'stream', 0, 0, 0, 1);
     }
-    for (const L of this.gen.lands) {
+    for (const L of this.gen.landforms) {
       if (L.weight(x, z) <= 0) continue;
       const u = L.shore(x, z);
       if (u < LAKE_BLEND) this._offer(NO_WATER, 0, u, 'lake', 0, 0, 0, 1);
