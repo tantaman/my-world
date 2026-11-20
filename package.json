@@ -13,7 +13,8 @@
     "deploy": "npm run build && wrangler deploy",
     "test": "node --test \"test/*.test.js\"",
     "smoke": "npm run build && node test/smoke.mjs",
-    "together": "node test/together.mjs"
+    "together": "node test/together.mjs",
+    "hike": "node tools/hike.mjs"
   },
   "dependencies": {
     "three": "^0.187.0"

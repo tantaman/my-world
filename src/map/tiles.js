@@ -10,11 +10,13 @@ const MAX_TILES = 320;
 export const tileKey = (level, tx, tz) => `${level}:${tx}:${tz}`;
 
 export class MapTiles {
-  // land: which land the world is grown on (see world/lands.js)
-  constructor(seed, structures = [], land = 1) {
+  // land: which land the world is grown on (see world/lands.js);
+  // hikes: the real places set into it
+  constructor(seed, structures = [], land = 1, hikes = []) {
     this.seed = seed;
     this.land = land;
     this.structures = structures.map((s) => ({ x: s.x, z: s.z, radius: s.radius }));
+    this.hikes = hikes;
     this.cache = new Map(); // key -> { img }
     this.inFlight = new Set();
     this.wanted = []; // [{ key, level, tx, tz, pri }]
@@ -32,7 +34,7 @@ export class MapTiles {
           console.warn('map worker failed, rendering on the main thread', e.message);
           this._dropWorkers();
         };
-        w.postMessage({ type: 'init', seed, land, structures: this.structures });
+        w.postMessage({ type: 'init', seed, land, structures: this.structures, hikes });
         this.workers.push(w);
         this.busy.push(0);
       }
@@ -79,7 +81,7 @@ export class MapTiles {
     if (!w) return;
     this.inFlight.add(w.key);
     if (!this.local) {
-      const gen = growWorld(this.seed, this.structures, this.land);
+      const gen = growWorld(this.seed, this.structures, this.land, this.hikes);
       this.local = { gen, vegFor: createVegCache(gen, 48) };
     }
     const px = renderTile(this.local.gen, w.level, w.tx, w.tz, this.local.vegFor);

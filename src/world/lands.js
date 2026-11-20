@@ -15,8 +15,11 @@
 
 import { WorldGen } from './worldgen.js';
 import { Land2 } from './land2.js';
+import { withRealPlaces } from './realPlaces.js';
 
 const GROWN = { 1: WorldGen, 2: Land2 };
+// Each, with real places set into it (realPlaces.js).
+const PLACED = Object.fromEntries(Object.entries(GROWN).map(([n, Land]) => [n, withRealPlaces(Land)]));
 
 // Every land this build can grow, oldest first.
 export const LANDS = Object.keys(GROWN).map(Number);
@@ -29,7 +32,8 @@ export function landOf(v, otherwise = 1) {
   return GROWN[n] ? n : otherwise;
 }
 
-// -> the WorldGen for this seed, grown on this land.
-export function growWorld(seed, structures = [], land = 1) {
-  return new GROWN[landOf(land)](seed, structures);
+// -> the WorldGen for this seed, grown on this land, with these real places
+// (hikes: see landform.js) set into it.
+export function growWorld(seed, structures = [], land = 1, hikes = []) {
+  return new PLACED[landOf(land)](seed, structures, hikes);
 }

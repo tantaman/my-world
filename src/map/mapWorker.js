@@ -9,7 +9,7 @@ let vegFor = null;
 self.onmessage = (e) => {
   const m = e.data;
   if (m.type === 'init') {
-    gen = growWorld(m.seed, m.structures, m.land);
+    gen = growWorld(m.seed, m.structures, m.land, m.hikes);
     vegFor = createVegCache(gen);
     return;
   }

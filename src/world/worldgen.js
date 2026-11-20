@@ -7,6 +7,10 @@
 // first grown on, because a save is only what was changed from it — so what
 // this file grows must never change (see test/golden/). lands.js picks which
 // to grow.
+//
+// Real places can be set into any land (realPlaces.js, which grows from
+// whichever it is given). A land knows nothing of them, but for the few
+// things marked "real places" below, which answer for a land that has none.
 
 import { createSimplex2, fbm, smoothstep } from '../noise.js';
 import { Water } from './water.js';
@@ -17,6 +21,9 @@ export class WorldGen {
     this.seed = seed;
     this.land = 1;
     this._fields(n);
+    // The real places set into this land: none, unless realPlaces.js is
+    // grown from it.
+    this.lands = [];
 
     // Structures carve flat clearings. Their pad height is the natural
     // ground height at their centre.
@@ -146,6 +153,25 @@ export class WorldGen {
   naturalHeight(x, z, pm = this.pathMask(x, z)) {
     // Paths are a touch sunken and smoothed, like trodden earth.
     return this._baseHeight(x, z) + this._detailHeight(x, z) * (1 - pm * 0.9) - pm * 0.14;
+  }
+
+  // ── Real places ───────────────────────────────────────────────────────────
+  // What the water asks, which is routed over the forest's own land so that a
+  // real place can't send a river somewhere else (drainage.js). Here there
+  // are no real places, and the forest's land is all there is.
+  //   forestHeight()         broadHeight() of the forest's own land. A land's
+  //                          own workings ask this, never broadHeight(), which
+  //                          real places change
+  //   forestNaturalHeight()  naturalHeight() likewise
+  //   landClearance(x, z)    m past the edge of the nearest real place
+  forestHeight(x, z, minWavelength = 0) {
+    return this.broadHeight(x, z, minWavelength);
+  }
+  forestNaturalHeight(x, z) {
+    return this.naturalHeight(x, z);
+  }
+  landClearance() {
+    return 1e9;
   }
 
   height(x, z, pm = this.pathMask(x, z)) {

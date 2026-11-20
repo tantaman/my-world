@@ -137,6 +137,9 @@ export class PixelPipeline {
     this.levels = CONFIG.colorLevels;
     this.dither = 1;
     this.enabled = true;
+    // Where the fog closes in (m). Unset, it is where the loaded chunks end;
+    // something drawing further than that (a far view) may push it out.
+    this.fogFar = 0;
 
     this.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     const quadGeo = new THREE.PlaneGeometry(2, 2);
@@ -249,7 +252,7 @@ export class PixelPipeline {
     u.uOutline.value = this.outline;
     u.uLevels.value = this.levels;
     u.uDither.value = this.dither;
-    u.uFogFar.value = (CONFIG.viewRadius - 0.15) * CONFIG.chunkSize;
+    u.uFogFar.value = this.fogFar || (CONFIG.viewRadius - 0.15) * CONFIG.chunkSize;
     this.upscale.uniforms.uSoft.value = this.enabled ? this.softness : 1;
     this.upscale.uniforms.tLow.value = this.rtLow.texture;
 

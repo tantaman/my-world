@@ -22,7 +22,7 @@ export function installMap(game) {
   // Places other features put on the map (an old cabin, a dock): see places.js.
   const places = new Places();
   marks.findPlace = (id) => places.get(id);
-  const map = new MapView({ seed: gen.seed, land: gen.land, structures, marks, player, input, places });
+  const map = new MapView({ seed: gen.seed, land: gen.land, structures, hikes: gen.hikes, marks, player, input, places });
   game.provide('marks', marks);
   game.provide('map', map);
 
@@ -70,7 +70,7 @@ export function installMap(game) {
     check = performance.now() + 3000; // let the forest settle first
   });
   game.addSystem({
-    name: 'map-hud',
+    name: 'map-prefetch',
     phase: 'late',
     update({ now }) {
       if (now > check && !map.isOpen) {
@@ -80,8 +80,12 @@ export function installMap(game) {
           map.prefetch(drawnAt.x, drawnAt.z);
         }
       }
-      const m = marks.trackedMark();
-      hud.updateTrack(m && { id: m.id, label: markLabel(m), color: m.color, x: m.x, z: m.z }, player.pos, player.camYaw);
     },
+  });
+
+  // The mark or the place you're tracking: shown on the HUD ahead of anything else.
+  hud.guide(() => {
+    const m = marks.trackedMark();
+    return m && { id: m.id, label: markLabel(m), color: m.color, x: m.x, z: m.z };
   });
 }

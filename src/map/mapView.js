@@ -88,7 +88,7 @@ const TEMPLATE = /* html */ `
   </div>`;
 
 export class MapView {
-  constructor({ seed, land = 1, structures = [], marks, player, input, places = new Places() }) {
+  constructor({ seed, land = 1, structures = [], hikes = [], marks, player, input, places = new Places() }) {
     this.marks = marks;
     this.places = places;
     this.placeSel = null; // the place whose card is open
@@ -97,7 +97,7 @@ export class MapView {
     this.player = player;
     this.input = input;
     this.structures = structures;
-    this.tiles = new MapTiles(seed, structures, land);
+    this.tiles = new MapTiles(seed, structures, land, hikes);
     this.isOpen = false;
 
     this.stop = DEFAULT_STOP;

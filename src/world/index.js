@@ -17,6 +17,7 @@ import { createWaterMaterial } from './waterSurface.js';
 import { makePine, makeBroadleaf, makeBirch, makeBush, makeFern, makeRock, makeLog } from './models.js';
 import { STRUCTURES } from '../structures/index.js';
 import { placeStructures } from '../structures/loader.js';
+import { HIKES } from './hikes.js';
 
 const DAY_MINUTES = 24; // how long a full day takes when time flows
 const wrapHours = (h) => ((h % 24) + 24) % 24;
@@ -26,7 +27,8 @@ export const after = ['render'];
 export function installWorld(game) {
   const { scene, camera, commands, save } = game;
 
-  const gen = growWorld(CONFIG.seed, STRUCTURES, CONFIG.land);
+  // The forest a seed grows on its land, with the real hikes set into it.
+  const gen = growWorld(CONFIG.seed, STRUCTURES, CONFIG.land, HIKES);
   const materials = {
     terrain: createTerrainMaterial(),
     terrainShadow: createTerrainDepthMaterial(),

@@ -21,6 +21,7 @@ export function installHud(game) {
     update() {
       const { player, sky } = game;
       if (player && sky) hud.update(player.pos, player.camYaw, sky.hours);
+      if (player) hud.updateGuide(player.pos, player.camYaw);
     },
   });
 }
