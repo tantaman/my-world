@@ -364,10 +364,12 @@ export function splitHike(def) {
   const card = {};
   const land = {};
   for (const [k, v] of Object.entries(def)) (LAND_PARTS.includes(k) ? land : card)[k] = v;
-  // the card keeps the names of its lakes and streams, for the list of hikes
+  // The card keeps the names of its lakes and streams, for the list of hikes,
+  // each as { name }: so a card split again (the importer does that to the
+  // cards already there) comes out as it went in.
   card.lakes = (def.lakes || []).map((l) => ({ name: l.name, ...(l.sea ? { sea: true } : {}) }));
   const named = [...new Set((def.streams || []).map((s) => s.name).filter(Boolean))];
-  if (named.length) card.streams = named;
+  if (named.length) card.streams = named.map((name) => ({ name }));
   return { card, land };
 }
 

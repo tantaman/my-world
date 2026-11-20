@@ -28,7 +28,7 @@ export default async function ({ page, step, shot }) {
       // and on the shore: the nearest dry ground a few metres from the sea
       const p = { x: player.pos.x, z: player.pos.z };
       let shore = null;
-      for (let r = 6; r < 900 && !shore; r += 6) {
+      for (let r = 6; r < 2 * L.radius && !shore; r += 6) {
         for (let a = 0; a < 6.28 && !shore; a += 6 / r) {
           const [x, z] = [p.x + Math.cos(a) * r, p.z + Math.sin(a) * r];
           const u = L.shore(x, z);

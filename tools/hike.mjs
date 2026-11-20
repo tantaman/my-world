@@ -258,7 +258,7 @@ if (placed && placed.near) console.log(`  it meets ${placed.near.name}: placed e
 for (const note of placed ? placed.notes : []) console.log(`  note: ${note}`);
 if (def.trail) console.log(`  the walk: ${def.trail.name || 'a trail'}, ${def.trail.length} m, ${def.trail.climb < 0 ? `going down ${-def.trail.climb}` : `climbing ${def.trail.climb}`} m`);
 else console.log("  the photo wasn't taken on a trail; you'll arrive where it was taken");
-const flowing = card.streams || [];
+const flowing = (card.streams || []).map((s) => s.name);
 const unnamed = (def.streams || []).filter((s) => !s.name).length;
 const running = [...flowing, ...(unnamed ? [`${unnamed} unnamed stream${unnamed > 1 ? 's' : ''}`] : [])];
 console.log(`  water: ${[...def.lakes.map((l) => l.name || 'an unnamed lake'), ...running].join(', ') || 'none'}${def.beaches ? `; ${def.beaches.length} beach${def.beaches.length > 1 ? 'es' : ''}` : ''}`);
