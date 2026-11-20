@@ -98,3 +98,47 @@ test('any part of the network can be worked out on its own', () => {
   }
   assert.ok(NET.cell > 0);
 });
+
+test('nothing that reaches a spot is missed when shaping it', () => {
+  // Shaping a point only looks at the channels and lakes near its cell. Do it
+  // again with every one in a much wider window: the land must come out the
+  // same.
+  const seed = 20261119;
+  const quick = new WorldGen(seed, []);
+  const thorough = new WorldGen(seed, []);
+  const net = thorough.water.net;
+  const wide = new Map();
+  net.near = (ci, cj) => {
+    const key = `${ci},${cj}`;
+    if (wide.has(key)) return wide.get(key);
+    const segs = [];
+    const basins = [];
+    for (let j = cj - 9; j <= cj + 9; j++) {
+      for (let i = ci - 9; i <= ci + 9; i++) {
+        const n = net.node(i, j);
+        const s = net.segment(n);
+        if (s) segs.push(s);
+        const b = net.down(n) ? null : net.basin(n);
+        if (b) basins.push(b);
+      }
+    }
+    // the nearest first, as there's only room for so many
+    const C = NET.cell;
+    const d = (s) => Math.min(...[0, 1, 2, 3, 4].map((f) => Math.hypot(s.pts[Math.round((s.count * f) / 4) * 2] - (ci + 0.5) * C, s.pts[Math.round((s.count * f) / 4) * 2 + 1] - (cj + 0.5) * C)));
+    segs.sort((a, b) => d(a) - d(b));
+    const out = { segs, basins };
+    wide.set(key, out);
+    return out;
+  };
+  let wet = 0;
+  for (let z = -500; z <= 500; z += 7) {
+    for (let x = -500; x <= 500; x += 7) {
+      const a = quick.height(x, z);
+      const b = thorough.height(x, z);
+      assert.ok(Math.abs(a - b) < 1e-9, `at ${x},${z} the ground is ${a} one way and ${b} the other`);
+      assert.equal(quick.water.level, thorough.water.level, `at ${x},${z} the water stands differently`);
+      if (quick.water.region) wet++;
+    }
+  }
+  assert.ok(wet > 200);
+});
