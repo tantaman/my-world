@@ -22,11 +22,22 @@ export function withRealPlaces(Land) {
     constructor(seed, structures = [], hikes = []) {
       super(seed, structures);
       // Settled into the land around them before anything is asked of them.
-      this.hikes = hikes;
-      this.lands = hikes.map((def) => new Landform(def));
-      for (const L of this.lands) this._settle(L);
+      // More can come later (addHike), as their land is fetched.
+      this.hikes = [];
+      this.lands = [];
+      for (const def of hikes) this.addHike(def);
+    }
+
+    // A hike, whole (card and land: see landforms.js). Ask for nothing within
+    // its reach before it's here: what was grown there without it is wrong.
+    addHike(def) {
+      if (this.lands.some((L) => L.id === def.id)) return;
+      const L = new Landform(def);
+      this._settle(L);
+      this.lands.push(L);
+      this.hikes.push(def);
       // (a structure on real land stands on the real ground)
-      if (this.lands.length) for (const p of this.pads) p.y = this.naturalHeight(p.x, p.z);
+      for (const p of this.pads) p.y = this.naturalHeight(p.x, p.z);
     }
 
     // ── Footpaths ───────────────────────────────────────────────────────────

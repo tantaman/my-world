@@ -15,6 +15,10 @@ self.onmessage = (e) => {
     trunkRadius = m.trunkRadius;
     return;
   }
+  if (m.type === 'hike') {
+    gen.addHike(m.def);
+    return;
+  }
   if (m.type === 'chunk') {
     const t = generateTerrain(gen, m.cx, m.cz, m.step, size);
     const out = { type: 'chunk', id: m.id, lod: m.lod, terrain: t, veg: null };

@@ -5,18 +5,26 @@
 import { growWorld } from '../world/lands.js';
 import { TILE, renderTile, createVegCache } from './mapRender.js';
 
+// Past its own edges a tile reads a pixel of border, and the trees of every
+// 64 m chunk it touches (mapRender.js): what it's drawn from reaches this
+// much further (m), plus a pixel.
+const TILE_READS = 72;
+
 const MAX_TILES = 320;
 
 export const tileKey = (level, tx, tz) => `${level}:${tx}:${tz}`;
 
 export class MapTiles {
-  // land: which land the world is grown on (see world/lands.js);
-  // hikes: the real places set into it
-  constructor(seed, structures = [], land = 1, hikes = []) {
+  // land: which land the world is grown on (see world/lands.js).
+  // hikes: the hikes whose land is here already; addHike() brings more.
+  // ready(x0, z0, x1, z1, ask): whether all a square is drawn from is here
+  // (see world/landforms.js); a tile waits until it is.
+  constructor(seed, structures = [], land = 1, hikes = [], ready = () => true) {
     this.seed = seed;
     this.land = land;
     this.structures = structures.map((s) => ({ x: s.x, z: s.z, radius: s.radius }));
-    this.hikes = hikes;
+    this.hikes = [...hikes];
+    this.ready = ready;
     this.cache = new Map(); // key -> { img }
     this.inFlight = new Set();
     this.wanted = []; // [{ key, level, tx, tz, pri }]
@@ -58,10 +66,29 @@ export class MapTiles {
     return this.cache.has(tileKey(level, tx, tz));
   }
 
-  // Replaces the wish list. Nearest (lowest pri) first.
-  want(list) {
-    this.wanted = list.filter((w) => !this.cache.has(w.key) && !this.inFlight.has(w.key)).sort((a, b) => a.pri - b.pri);
+  // Replaces the wish list. Nearest (lowest pri) first. A tile near a hike
+  // whose land isn't here waits for it, and asks for it unless ask is false
+  // (drawing ahead of time shouldn't fetch land nobody has gone to see).
+  want(list, ask = true) {
+    this.wanted = list.filter((w) => !this.cache.has(w.key) && !this.inFlight.has(w.key) && this._ready(w, ask)).sort((a, b) => a.pri - b.pri);
     this.pump();
+  }
+
+  _ready(w, ask) {
+    const mpp = 2 ** w.level;
+    const span = TILE * mpp;
+    const x0 = w.tx * span;
+    const z0 = w.tz * span;
+    const m = TILE_READS + mpp;
+    return this.ready(x0 - m, z0 - m, x0 + span + m, z0 + span + m, ask);
+  }
+
+  // A hike's land has arrived: tiles are drawn with it from now on.
+  addHike(def) {
+    if (this.hikes.some((h) => h.id === def.id)) return;
+    this.hikes.push(def);
+    for (const w of this.workers) w.postMessage({ type: 'hike', def });
+    if (this.local) this.local.gen.addHike(def);
   }
 
   pump() {

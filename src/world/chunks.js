@@ -133,8 +133,11 @@ const SOURCE_SPREAD = 14;
 //                                    meshed: a listener may patch the buffers
 //   'vegetation'  (chunk)            a chunk's plants were just placed
 export class ChunkManager extends Emitter {
-  constructor(scene, gen, materials, models, structures = []) {
+  // ready(x0, z0, x1, z1): whether everything that square is grown from is
+  // here yet (see landforms.js); a chunk waits until it is.
+  constructor(scene, gen, materials, models, structures = [], { ready = () => true } = {}) {
     super();
+    this.ready = ready;
     this.scene = scene;
     this.gen = gen;
     this.materials = materials;
@@ -181,6 +184,12 @@ export class ChunkManager extends Emitter {
     }
     this.maxInFlight = this.workers.length * 2;
     this.rr = 0;
+  }
+
+  // A hike's land has arrived (landforms.js): the workers grow with it from now on.
+  // (The main thread's gen is told by whoever owns it.)
+  addHike(def) {
+    for (const w of this.workers) w.postMessage({ type: 'hike', def });
   }
 
   disableWorkers() {
@@ -340,6 +349,9 @@ export class ChunkManager extends Emitter {
         this.chunks.set(chunkKey(w.cx, w.cz), ch);
       }
       if (ch.reqLod === w.lod) continue; // already on its way
+      const x0 = w.cx * size;
+      const z0 = w.cz * size;
+      if (!this.ready(x0, z0, x0 + size, z0 + size)) continue; // a hike's land is on its way
 
       if (this.workers.length) {
         if (this.inFlight >= this.maxInFlight) break;

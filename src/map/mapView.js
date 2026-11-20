@@ -88,7 +88,7 @@ const TEMPLATE = /* html */ `
   </div>`;
 
 export class MapView {
-  constructor({ seed, land = 1, structures = [], hikes = [], marks, player, input, places = new Places() }) {
+  constructor({ seed, land = 1, structures = [], hikes = [], ready, marks, player, input, places = new Places() }) {
     this.marks = marks;
     this.places = places;
     this.placeSel = null; // the place whose card is open
@@ -97,7 +97,7 @@ export class MapView {
     this.player = player;
     this.input = input;
     this.structures = structures;
-    this.tiles = new MapTiles(seed, structures, land, hikes);
+    this.tiles = new MapTiles(seed, structures, land, hikes, ready);
     this.isOpen = false;
 
     this.stop = DEFAULT_STOP;
@@ -404,7 +404,7 @@ export class MapView {
   prefetch(x, z) {
     if (this.isOpen) return;
     this.dpr = window.devicePixelRatio || 1;
-    this.tiles.want(this._tileList(this.stop, x, z, innerWidth * this.dpr, innerHeight * this.dpr).list);
+    this.tiles.want(this._tileList(this.stop, x, z, innerWidth * this.dpr, innerHeight * this.dpr).list, false);
   }
 
   // ── drawing ───────────────────────────────────────────────────────────────
@@ -513,6 +513,13 @@ export class MapView {
       ctx.setLineDash([]);
       if (st.name) this._label(st.name, sx, sy + r + 3 * d, 'rgba(238, 240, 226, 0.85)');
     }
+  }
+
+  // A hike's land has arrived: draw with it, and ask again for the tiles
+  // that were waiting for it.
+  addHike(def) {
+    this.tiles.addHike(def);
+    this.viewKey = '';
   }
 
   // ── places ────────────────────────────────────────────────────────────────
