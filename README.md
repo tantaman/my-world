@@ -1,7 +1,8 @@
 # my-world
 
 An open-world forest you can wander through as a little explorer, seen from
-behind in third person. It's built with three.js. The art is pixelated but
+behind in third person. Streams run through it, the odd river winds along its
+valleys, and here and there a pond or a lake lies in a hollow. It's built with three.js. The art is pixelated but
 lit and shaded like a real scene, and the pixels are softened just enough
 that you can't quite tell whether it's pixel art trying to look real or a
 painting made of pixels.
@@ -74,8 +75,9 @@ to build in it with other people — see [Building together](#building-together)
 
 Press **M** (or tap *map*) for a top-down map of the forest. It's drawn from
 the same world description as the 3D view (`src/map/`), so it always matches
-what's there: meadows and woods, footpaths, rock, and hillshaded relief with
-contour lines. Zoomed in, every tree, bush and boulder is in its real place.
+what's there: meadows and woods, footpaths, rock, water, and hillshaded
+relief with contour lines. Zoomed out it keeps the rivers, lakes and ponds and
+lets the streams go. Zoomed in, every tree, bush and boulder is in its real place.
 Tiles are rendered in Web Workers and pre-rendered around you while you walk,
 so the map opens already drawn.
 
@@ -266,10 +268,16 @@ interact, so it fades in after your first click, key press or tap.
   chipmunk's chips, a bear blowing, a rattlesnake's buzz, crows, a red-tail's
   scream, a flock bursting up in a whirr of wings, bumblebees about your
   knees, and hooves when something big bolts past.
+- **Water** babbles: a broad rush under a few narrow resonances that hop from
+  pitch to pitch, rising as they go, like bubbles. It comes from where the
+  running water near you is, and roars more where it tumbles down a cascade.
+  Still water laps at the shore in slow swells, something small plops in now
+  and then, and from dusk the frogs start up.
 - **Footsteps** follow the stride of the walk and run animation. They
   change with the ground under you: packed earth and grit on paths, a swish
-  in grass, crackling leaf litter in the woods. They get sharper when you
-  run, and there's a thud when you land a jump.
+  in grass, crackling leaf litter in the woods, a slosh and a splash and
+  falling drops in water. They get sharper when you run, there's a thud when
+  you land a jump, and out of your depth each stroke sweeps through the water.
 
 - **Work** makes noise too. You'll hear the axe biting (deeper on a thick
   trunk), a tree creaking as it goes, then the crash and the crown thrashing
@@ -314,6 +322,36 @@ Example: `/?soft=0.3&px=5&time=7.5`
   These form a natural network of long trails and loops. Side trails fade in
   and out like deer paths. The ground along them is slightly sunken and
   smoothed, and trees keep their distance.
+- **Water** (`src/world/water.js`). Streams and rivers follow the
+  zero-isolines of warped noise, like the footpaths, so they wind and
+  meander and never dead-end; a slow mask decides which stretches carry water
+  at all, so they rise from a spring and fade out again. Lakes and ponds sit
+  on a sparse grid: each rolls downhill into a hollow and fills it to just
+  under the lowest point of its rim.
+  - **Levels.** A water surface has to be flat across and can't tilt much
+    along, but these hills run at 20% grades. So the level of running water
+    is read at the nearest point on its centreline, follows a smoothed version
+    of the landform (rivers smoother than streams) without ever standing above
+    the ground beside it, and is quantised into steps: still pools joined by
+    short ramps. On a stream those are little cascades with white water; on a
+    river, riffles. Where the land is higher than the water, the water cuts a
+    valley through it, wider the deeper it cuts.
+  - **The water itself** is meshed per chunk on the main thread from the
+    heights and the water grids the workers produce, so it follows your
+    digging. It's see-through, writes depth (so the fog and outlines treat it
+    as a surface), reflects the sky with a dark band where the trees across the
+    water would be (narrow water sees its banks, a stream in the woods sees
+    leaves), glints in the sun, ruffles in the wind, runs with the current, and
+    froths on cascades, along the shore and round your legs. Below it the bed
+    turns to silt and stones that darken, reds first, with depth.
+  - **By the water** trees and logs keep back from the bank, ferns come right
+    down to it, boulders stand in streams, and the grass gives way to a damp,
+    sandy edge. Reeds and bulrushes grow in the shallows of still water, and
+    lily pads, a few in flower, float further out.
+  - **In it** you wade, slower the deeper it gets; out of your depth you swim,
+    with your head and shoulders out (no running or jumping). The camera stays
+    above the surface, and footpaths cross streams and rivers at shallow fords.
+    Animals ford a shallow stream too, but go round anything deeper.
 - **Ecology.** A forest-density field opens into meadows full of wildflowers.
   A species field shifts the woods between conifers and broadleaf trees, with
   birches along the edges. Ferns grow where it's damp and shaded, and you'll
@@ -421,6 +459,8 @@ above the tool bar always says what a click would do, or why it can't.
 **Prepare the ground.**
 - **Shovel (3).** Hold **click** to dig and **right-click** to fill. Digging
   fills your soil pile and filling spends it, so cut and fill balance out.
+  Dig into the bank of a pond, lake or stream and the hole fills to the
+  water's level; fill the shallows in and the water gives way.
   The shovel strips the turf, clears undergrowth and pockets small stones.
   It won't dig among the roots of a standing tree, so fell it first, then
   hold **click** on the stump to grub it out.
@@ -435,7 +475,8 @@ above the tool bar always says what a click would do, or why it can't.
   stone pier (2 stones). The first footing starts a building. Every other
   footing must come up to the same level, and a pier only makes up about
   25 cm. On a slope you'll be told how many centimetres too high or too low
-  the ground is, so grade it first.
+  the ground is, so grade it first. Footings can't go under water: fill the
+  spot in first.
 - **Log wall (5) / timber (6).** Click a node to start a wall, then click
   another node along the same line to lay a log between them (up to 8 m).
   Click again to stack the next course on the same line, and **right-click**
@@ -473,7 +514,8 @@ clearing radius and a `build()` function that returns a three.js object. The
 world then:
 
 - flattens a pad at that spot, blending smoothly into the surrounding ground
-- keeps trees, rocks, logs and undergrowth out of the clearing
+- keeps trees, rocks, logs and undergrowth out of the clearing, and water
+  away from it
 - places your object there, with shadows on
 
 ```js

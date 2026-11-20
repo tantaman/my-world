@@ -27,6 +27,9 @@ const TREES = ['pine', 'broad', 'birch'];
 const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
 const _v = new THREE.Vector3();
 const _sphere = new THREE.Sphere();
+const _wet = { level: 0, depth: 0, flowX: 0, flowZ: 0, foam: 0 };
+// Animals ford a shallow stream but go round anything deeper.
+const WADE = 0.35;
 
 function segDist(px, pz, ax, az, bx, bz, out) {
   const ex = bx - ax;
@@ -317,6 +320,7 @@ export class Wildlife {
     const wl = this;
     const chunks = this.chunks;
     const gen = this.gen;
+    const deep = (x, z) => chunks.waterAt(x, z, _wet) && _wet.depth > WADE;
     return {
       dt: 0,
       time: 0,
@@ -345,8 +349,9 @@ export class Wildlife {
       offscreenPoint: (x, z, minD, maxD) => wl.offscreenPoint(x, z, minD, maxD),
       call: (kind, x, y, z, opts) => wl.sound && wl.sound.call(kind, x, y, z, opts),
       remove: (mesh) => wl.group.remove(mesh),
-      // a trunk or boulder in the way at (x, z)?
+      // a trunk or boulder (or deep water) in the way at (x, z)?
       blocked(x, z, r) {
+        if (deep(x, z)) return { x, z };
         let hit = null;
         chunks.forEachCollider(x, z, (cx, cz, cr) => {
           if (!hit && Math.hypot(cx - x, cz - z) < cr + r) hit = { x: cx, z: cz };
@@ -361,8 +366,27 @@ export class Wildlife {
         }
         return hit;
       },
-      // shove an animal back out of trunks, rocks and anything built
+      // shove an animal back out of trunks, rocks and anything built, and
+      // ease it back toward the shallows if it's found its way into deep water
       pushOut(e, r) {
+        if (deep(e.x, e.z)) {
+          let best = _wet.depth;
+          let bx = 0;
+          let bz = 0;
+          for (let k = 0; k < 8; k++) {
+            const a = (k / 8) * Math.PI * 2;
+            const px = e.x + Math.sin(a) * 1.5;
+            const pz = e.z + Math.cos(a) * 1.5;
+            const d = chunks.waterAt(px, pz, _wet) ? _wet.depth : -1;
+            if (d < best) {
+              best = d;
+              bx = Math.sin(a);
+              bz = Math.cos(a);
+            }
+          }
+          e.x += bx * 2.5 * this.dt;
+          e.z += bz * 2.5 * this.dt;
+        }
         chunks.forEachCollider(e.x, e.z, (cx, cz, cr) => {
           const dx = e.x - cx;
           const dz = e.z - cz;
@@ -461,7 +485,8 @@ export class Wildlife {
   }
 
   // A place for an arrival of this category: out of view (birds fly in, so
-  // their spot can be anywhere near), on open ground, off any building site.
+  // their spot can be anywhere near), on open ground, off any building site,
+  // and not in the water.
   findSpot(cat) {
     const C = CATEGORIES[cat];
     const p = this.player.pos;
@@ -472,6 +497,7 @@ export class Wildlife {
       const z = p.z + Math.cos(a) * d;
       if (cat !== 'bird' && this.inView(x, this.chunks.heightAt(x, z), z, 2.5)) continue;
       if (this.gen.padClearance(x, z) < 2) continue;
+      if (this.chunks.waterAt(x, z, _wet) && _wet.depth > -0.3) continue;
       if (this.ctx.blocked(x, z, 0.6)) continue;
       return { x, z };
     }

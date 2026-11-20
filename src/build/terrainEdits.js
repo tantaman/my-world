@@ -160,6 +160,8 @@ export class TerrainEdits {
       g.attributes.normal.needsUpdate = true;
       g.attributes.aGround.needsUpdate = true;
     }
+    // water finds its way into what you dig (and out of what you fill)
+    if (ch && ch.hasWater) this.chunks.updateWater(ch);
   }
 
   // ── Shovel work ───────────────────────────────────────────────────────────

@@ -44,6 +44,7 @@ const _d = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _ndc = new THREE.Vector2(0, 0);
 const _ray = new THREE.Raycaster();
+const _wet = { level: 0, depth: 0, flowX: 0, flowZ: 0, foam: 0 };
 
 export class Builder {
   // storeKey: where to keep the local copy, or null to keep none because the
@@ -335,6 +336,7 @@ export class Builder {
     const c = this.buildings.footingCandidate(x, z, ground);
     const node = { x, z, ground, y0: c.y0 ?? (c.b ? c.b.y0 : ground + PIER.first) };
     let bad = c.ok ? null : c.reason;
+    if (!bad && this.chunks.waterAt(x, z, _wet) && _wet.depth > -0.05) bad = "that's under water: fill it in first (shovel, right-click)";
     if (!bad && this.forest.stumpNear(x, z, 0.5)) bad = 'a stump is in the way';
     if (!bad && this.forest.treeNear(x, z, 0.9)) bad = 'a tree is in the way';
     if (!bad && !this.have('stone', 2)) bad = 'you need 2 stones (hands: pick some up)';

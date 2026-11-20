@@ -3,6 +3,7 @@
 // can be reused anywhere (workers, tools, tests).
 
 import { createSimplex2, fbm, smoothstep } from '../noise.js';
+import { Water } from './water.js';
 
 export class WorldGen {
   constructor(seed, structures = []) {
@@ -31,6 +32,11 @@ export class WorldGen {
       r: s.radius ?? 8,
       y: this.naturalHeight(s.x, s.z),
     }));
+
+    // Ponds, lakes, streams and rivers (see water.js). After each height()
+    // this.water describes the water at that spot: its level, which way it
+    // runs, how far it is to the shore.
+    this.water = new Water(this, seed);
   }
 
   // ── Footpaths ─────────────────────────────────────────────────────────────
@@ -117,7 +123,7 @@ export class WorldGen {
   }
 
   height(x, z, pm = this.pathMask(x, z)) {
-    let h = this.naturalHeight(x, z, pm);
+    let h = this.water.shape(x, z, this.naturalHeight(x, z, pm), pm);
     for (let i = 0; i < this.pads.length; i++) {
       const p = this.pads[i];
       const d = Math.hypot(x - p.x, z - p.z);
@@ -166,6 +172,8 @@ export class WorldGen {
         const x = x0 + Math.cos(a) * r;
         const z = z0 + Math.sin(a) * r;
         if (this.pathMask(x, z) > 0.97 && this.forest(x, z) > 0.45) {
+          this.height(x, z);
+          if (this.water.edge < 6) continue; // not with your feet in a stream
           // path direction: the direction around us that stays on the path
           let bestA = 0;
           let best = -1;
