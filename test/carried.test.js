@@ -129,3 +129,38 @@ test('nothing carrying you, nothing changes', () => {
   assert.ok(Math.abs(speed(p) - 2.2) < 0.05, 'a walk');
   assert.equal(p.flying, false);
 });
+
+test('aboard something that moves you, you go where it puts you, and the camera comes round with it', () => {
+  const { p, input } = make();
+  // a seat going round a 40 m circle at 10 m/s, facing the way it goes
+  let a = 0;
+  const seat = { x: 0, y: 3, z: 0, yaw: 0 };
+  p.aboard = {
+    place(out) {
+      out.x = Math.sin(a) * 40;
+      out.y = 3;
+      out.z = Math.cos(a) * 40 - 40;
+      out.yaw = a + Math.PI / 2;
+      Object.assign(seat, out);
+    },
+  };
+  input.held.add('forward').add('run');
+  input.tapJump();
+  const cam0 = p.camYaw - (Math.PI / 2 + 0);
+  for (let i = 0; i < 120; i++) {
+    a += (10 / 40) / 60;
+    p.update(1 / 60);
+  }
+  assert.ok(Math.hypot(p.pos.x - seat.x, p.pos.z - seat.z) < 1e-9 && p.pos.y === 3, 'it puts you where you sit, whatever your keys say');
+  assert.ok(Math.abs(p.yaw - seat.yaw) < 1e-9, 'facing the way it faces');
+  assert.equal(p.grounded, true);
+  assert.ok(Math.abs(Math.hypot(p.vel.x, p.vel.z) - 10) < 0.2, `going at its speed (${Math.hypot(p.vel.x, p.vel.z).toFixed(2)} m/s)`);
+  // the camera turned as far as it did, so you see the same side of the line
+  assert.ok(Math.abs(p.camYaw - Math.PI / 2 - cam0 - (a - (10 / 40) / 60)) < 0.02, 'the camera swung round with it');
+  assert.ok(Math.hypot(p.camTarget.x - p.pos.x, p.camTarget.z - p.pos.z) < 0.5, 'and keeps up with you');
+  // off again: your own feet
+  p.aboard = null;
+  input.held.clear();
+  run(p, 0.5);
+  assert.ok(p.pos.y < 3, 'stepped off, you come down to the ground');
+});

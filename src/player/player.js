@@ -6,7 +6,8 @@
 //
 // Something can carry you instead (player.carrier: a mount). Then it's its
 // speeds, its depth, its width and head room that count, and if it flies,
-// space climbs and shift stoops.
+// space climbs and shift stoops. Or you can be aboard something that goes
+// where it goes whatever you do (player.aboard: a train), and just sit.
 //
 // Under the ground, in a cave (world/spaces.js), its floor is what you stand
 // on, its walls and roof keep you in, and the camera keeps to its air.
@@ -140,6 +141,13 @@ export class Player extends Emitter {
     //                  are negative), and how high over the ground it goes (m)
     //   landing        set by its owner while it comes down to land
     this.carrier = null;
+    // Something you're aboard that moves you itself (a train), or null.
+    // Your keys don't move you while you're on it: each frame it says where
+    // you are, and the camera comes along and turns as it turns.
+    //   place(out)   fills out.x, out.y, out.z (where your feet are), out.yaw
+    this.aboard = null;
+    this._at = { x: 0, y: 0, z: 0, yaw: 0 };
+    this._rode = false;
     // carried through the air, and climbing (jump held, or tapped just now)
     this.flying = false;
     this.climbing = false;
@@ -208,6 +216,8 @@ export class Player extends Emitter {
     if (z) this.camDist = clamp(this.camDist * (z > 0 ? 1.12 : 1 / 1.12), 2.2, 16);
     if (input.isDown('turnLeft')) this.camYaw += dt * 1.8;
     if (input.isDown('turnRight')) this.camYaw -= dt * 1.8;
+    if (this.aboard) return this._ride(dt);
+    this._rode = false;
 
     // Camera-relative movement
     const axes = input.moveAxes();
@@ -461,6 +471,39 @@ export class Player extends Emitter {
     const z = this.camTarget.z + dir.z * t;
     if (this.spaces && this.spaces.air(x, y, z, CAVE_CAM.clear)) return true;
     return y >= this.world.heightAt(x, z) + 0.35;
+  }
+
+  // Aboard something that moves you: wherever it puts you, sitting still.
+  _ride(dt) {
+    const at = this._at;
+    this.aboard.place(at);
+    const dx = at.x - this.pos.x;
+    const dy = at.y - this.pos.y;
+    const dz = at.z - this.pos.z;
+    this.input.jumped(); // no jumping off: it's a long way down from a trestle
+    const turn = this._rode ? Math.atan2(Math.sin(at.yaw - this.yaw), Math.cos(at.yaw - this.yaw)) : 0;
+    // the camera comes along, and swings round the bends with you
+    this.camTarget.x += dx;
+    this.camTarget.y += dy;
+    this.camTarget.z += dz;
+    this.camYaw += turn;
+    const k = this._rode && Math.hypot(dx, dz) < 5 ? 1 / Math.max(dt, 1e-4) : 0;
+    this.vel.set(dx * k, dy * k, dz * k);
+    this.pos.set(at.x, at.y, at.z);
+    this.yaw = at.yaw;
+    this._rode = true;
+    this.turnRate = 0;
+    this.grounded = true;
+    this.flying = this.climbing = this.swimming = this.manual = false;
+    this.wade = 0;
+    this.current.x = this.current.z = 0;
+    this.underfoot = null;
+    this.space = null;
+    const root = this.character.root;
+    root.position.copy(this.pos);
+    root.rotation.y = this.yaw;
+    this.character.update(dt, 0, true, 0, 0);
+    this.updateCamera(dt, false);
   }
 
   updateCamera(dt, snap) {
