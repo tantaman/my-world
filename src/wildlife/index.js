@@ -1,7 +1,7 @@
 // The animals. Never saved or shared: each visitor meets their own.
 
 import { Wildlife } from './wildlife.js';
-import { SKY } from '../world/sky.js';
+import { SKY } from '../render/uniforms.js';
 
 export function installWildlife(game) {
   const { scene, camera, gen, chunks, solids, player, peers, sound, hud, sky } = game;

@@ -10,10 +10,8 @@
 import { buildBird, BirdAnim } from './birds.js';
 import { disposeAnimal } from './rig.js';
 import { clamp, lerp } from '../noise.js';
+import { rand, pick, wrapAngle as wrap } from '../core/geom.js';
 
-const rand = (a, b) => a + Math.random() * (b - a);
-const pick = (a) => a[Math.floor(Math.random() * a.length)];
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 // One bird's body in the air or on the ground.
 class Bird {

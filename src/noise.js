@@ -116,3 +116,10 @@ export function lerp(a, b, t) {
 export function clamp(x, lo, hi) {
   return x < lo ? lo : x > hi ? hi : x;
 }
+
+// A repeatable 0..1 from three numbers: "random" detail that is the same
+// every time for the same place (bark flecks, which way a tree leans).
+export function phash(x, y, z) {
+  const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
+  return s - Math.floor(s);
+}

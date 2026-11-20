@@ -8,13 +8,13 @@
 import * as THREE from 'three';
 import { RigBuilder, lin, at, ellipsoid } from './rig.js';
 import { clamp, lerp } from '../noise.js';
+import { rand } from '../core/geom.js';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _e = new THREE.Euler();
-const rand = (a, b) => a + Math.random() * (b - a);
 
 let beeGeo = null;
 function makeBeeGeometry() {

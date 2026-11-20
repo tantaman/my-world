@@ -6,7 +6,7 @@
 // attributes so instanced meshes can swap between them as you walk.
 
 import * as THREE from 'three';
-import { mulberry32, createSimplex2 } from '../noise.js';
+import { mulberry32, createSimplex2, phash } from '../noise.js';
 
 const _v = new THREE.Vector3(); // scratch for callbacks
 const _gv = new THREE.Vector3(); // builder-internal
@@ -19,11 +19,6 @@ const _p = new THREE.Vector3();
 const _c = new THREE.Color();
 
 const lin = (hex) => new THREE.Color(hex); // sRGB hex -> linear colour
-
-function phash(x, y, z) {
-  const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
-  return s - Math.floor(s);
-}
 
 class GeoBuilder {
   constructor() {

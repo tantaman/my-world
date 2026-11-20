@@ -268,6 +268,48 @@ class Flutter {
   }
 }
 
+// ── Classes of animal ──────────────────────────────────────────────────────
+// A species (species.js) says which class it is with `cls`; the class is what
+// knows how to put one in the world and run it. Most are the default, 'herd':
+// a four-legged mammal, alone or in a group. A new kind of creature — a fish,
+// a bat — is a class registered here from its own module.
+//
+// The factory is handed { wildlife, sp, spot, env, ctx, toward, player } and
+// returns an animal (or a group of them moving as one):
+//
+//   sp, kind        its species, and the species' key
+//   label           what to call it when you spot it ('a red fox'), if anything
+//   meshes          the three.js objects to add to (and take out of) the scene
+//   x, y, z         where it is: for spotting it, and for knowing it has gone
+//   done            true once it has left of its own accord
+//   leaving         true once it is on its way out, so it can be removed
+//                   when it is far enough off and out of sight
+//   update(ctx)     every frame; ctx is what an animal may ask about the world
+//                   (see _makeCtx: ground, nearest person, cover, calls...)
+//   dispose()       free its geometry
+const CLASSES = new Map();
+
+export function defineAnimalClass(name, make) {
+  CLASSES.set(name, make);
+}
+
+defineAnimalClass('flock', ({ wildlife, sp, spot, env, ctx }) => new Flock(wildlife, sp, spot, env, ctx));
+defineAnimalClass('flit', ({ wildlife, sp, spot, env, ctx }) => new Flit(wildlife, sp, spot, env, ctx));
+defineAnimalClass('soar', ({ wildlife, sp, spot, env, ctx }) => new Soar(wildlife, sp, spot, env, ctx));
+defineAnimalClass('owl', ({ wildlife, sp, spot, env, ctx }) => new Owl(wildlife, sp, spot, env, ctx));
+defineAnimalClass('crawler', ({ sp, spot, env, toward }) => new Serpent(sp, spot.x, spot.z, toward + rand(-1.5, 1.5), env));
+defineAnimalClass('bees', ({ sp, spot, ctx }) => new Bees(sp, spot.x, spot.z, ctx));
+defineAnimalClass('butterflies', ({ sp, spot, ctx }) => new Flutter(sp, spot.x, spot.z, ctx));
+defineAnimalClass('herd', ({ sp, spot, env, toward, player }) => {
+  // mammals head in toward where you are, but stop short of spooking:
+  // their first stop is a little beyond the distance they'd notice you
+  const n = sp.group(Math.random);
+  const stand = sp.notice * rand(1.05, 1.35);
+  const a = toward + Math.PI + rand(-0.9, 0.9);
+  const entry = { x: player.x + Math.sin(a) * stand, z: player.z + Math.cos(a) * stand };
+  return new Herd(sp, spot.x, spot.z, Math.atan2(entry.x - spot.x, entry.z - spot.z), n, env, entry);
+});
+
 // ── The manager ────────────────────────────────────────────────────────────
 export class Wildlife {
   // solids: built things animals have to go round (src/world/solids.js)
@@ -520,40 +562,10 @@ export class Wildlife {
   spawnAt(sp, spot, env = this.env(spot.x, spot.z)) {
     const p = this.player.pos;
     const ctx = this.ctx;
-    let e;
+    const make = CLASSES.get(sp.cls ?? 'herd');
+    if (!make) throw new Error(`species "${sp.kind}": no such class of animal "${sp.cls}"`);
     const toward = Math.atan2(p.x - spot.x, p.z - spot.z);
-    switch (sp.cls) {
-      case 'flock':
-        e = new Flock(this, sp, spot, env, ctx);
-        break;
-      case 'flit':
-        e = new Flit(this, sp, spot, env, ctx);
-        break;
-      case 'soar':
-        e = new Soar(this, sp, spot, env, ctx);
-        break;
-      case 'owl':
-        e = new Owl(this, sp, spot, env, ctx);
-        break;
-      case 'crawler':
-        e = new Serpent(sp, spot.x, spot.z, toward + rand(-1.5, 1.5), env);
-        break;
-      case 'bees':
-        e = new Bees(sp, spot.x, spot.z, ctx);
-        break;
-      case 'butterflies':
-        e = new Flutter(sp, spot.x, spot.z, ctx);
-        break;
-      default: {
-        // mammals head in toward where you are, but stop short of spooking:
-        // their first stop is a little beyond the distance they'd notice you
-        const n = sp.group(Math.random);
-        const stand = sp.notice * rand(1.05, 1.35);
-        const a = toward + Math.PI + rand(-0.9, 0.9);
-        const entry = { x: p.x + Math.sin(a) * stand, z: p.z + Math.cos(a) * stand };
-        e = new Herd(sp, spot.x, spot.z, Math.atan2(entry.x - spot.x, entry.z - spot.z), n, env, entry);
-      }
-    }
+    const e = make({ wildlife: this, sp, spot, env, ctx, toward, player: p });
     for (const m of e.meshes) this.group.add(m);
     this.entities.push(e);
     this.rested[sp.kind] = this.time + (sp.rest ?? CATEGORIES[sp.cat].rest) / Math.max(0.5, this.density);

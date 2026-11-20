@@ -7,7 +7,8 @@
 // left but the stump. Stumps stay until you grub them out with the shovel.
 
 import * as THREE from 'three';
-import { Mesher, addTrunk, addSlash, stumpGeometry, phash } from './geometry.js';
+import { Mesher, addTrunk, addSlash, stumpGeometry } from './geometry.js';
+import { phash } from '../noise.js';
 import { regionOf } from '../save/regions.js';
 import { TREE_KINDS, VEG_STRIDE } from '../world/flora.js';
 import { Emitter } from '../core/events.js';

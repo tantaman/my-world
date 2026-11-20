@@ -17,7 +17,8 @@
 
 import * as THREE from 'three';
 import { HALF, LOG_D, TIMBER_H, TIMBER_W, OVERHANG, PIER, MAX_SPAN, MAX_LEVEL, JOIN_RADIUS, ROOF, height, raise } from './constants.js';
-import { Mesher, addRoundLog, addTimber, addChink, addChalk, addFooting, addRoof, alongMatrix, phash } from './geometry.js';
+import { Mesher, addRoundLog, addTimber, addChink, addChalk, addFooting, addRoof, alongMatrix } from './geometry.js';
+import { phash } from '../noise.js';
 import { regionOf } from '../save/regions.js';
 
 const nk = (x, z) => `${x},${z}`;

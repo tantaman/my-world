@@ -192,6 +192,16 @@ export const SPECIES = {
 };
 for (const [k, s] of Object.entries(SPECIES)) s.kind = k;
 
+// Add a species from outside this file (a feature bringing its own animals).
+// `def` is an entry like the ones above; see the notes at the top for what
+// each field means, and wildlife.js for the classes of animal (`cls`).
+export function defineSpecies(kind, def) {
+  if (SPECIES[kind]) throw new Error(`species "${kind}" is already defined`);
+  if (!CATEGORIES[def.cat]) throw new Error(`species "${kind}": no such category "${def.cat}"`);
+  SPECIES[kind] = { ...def, kind };
+  return SPECIES[kind];
+}
+
 // Population per category at density 1: at most this many groups at once,
 // and on average one new arrival every `every` seconds while there's room.
 // `near`/`far`: how far away (m) they turn up — always out of view.

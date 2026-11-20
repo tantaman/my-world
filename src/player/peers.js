@@ -6,7 +6,7 @@
 // how fast they turned out to be moving, so they walk rather than teleport.
 
 import * as THREE from 'three';
-import { Character } from '../player/character.js';
+import { Character } from './character.js';
 import { Emitter } from '../core/events.js';
 
 const EASE = 9; // how hard a peer is pulled toward where they said they were

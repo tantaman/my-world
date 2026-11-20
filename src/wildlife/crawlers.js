@@ -6,10 +6,10 @@
 import * as THREE from 'three';
 import { RigBuilder, lin, at, along, ellipsoid, stick } from './rig.js';
 import { clamp, lerp } from '../noise.js';
+import { wrapAngle as wrap } from '../core/geom.js';
 
 const ss = THREE.MathUtils.smoothstep;
 const mix = (a, b, t) => new THREE.Color().copy(a).lerp(b, Math.min(1, Math.max(0, t)));
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 // A tube from z = 0 back to z = -len with a radius profile r(t), t = 0..1,
 // skinned across the spine bones.

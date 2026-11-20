@@ -1,10 +1,10 @@
 // The map (M), and the marks you leave on it: listed beside the map, tracked
 // on the HUD, and standing in the world as pennants.
 
-import { MarkStore, marksSave } from './marks.js';
+import { MarkStore, marksSave, markLabel } from './marks.js';
 import { MapView } from './mapView.js';
-import { Markers } from '../world/markers.js';
-import { SHARED } from '../world/materials.js';
+import { Markers } from './markers.js';
+import { SHARED } from '../render/uniforms.js';
 import { CONFIG } from '../config.js';
 
 const PREFETCH_EVERY = 2000; // ms between checks
@@ -74,7 +74,8 @@ export function installMap(game) {
           map.prefetch(drawnAt.x, drawnAt.z);
         }
       }
-      hud.updateTrack(marks.trackedMark(), player.pos, player.camYaw);
+      const m = marks.trackedMark();
+      hud.updateTrack(m && { id: m.id, label: markLabel(m), color: m.color, x: m.x, z: m.z }, player.pos, player.camYaw);
     },
   });
 }

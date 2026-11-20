@@ -6,7 +6,7 @@
 // for them to be in. What gets saved is registered by each feature as it
 // installs (game.save.register); see domains.js.
 
-import { Peers } from '../world/peers.js';
+import { Peers } from '../player/peers.js';
 import { SharePanel } from './sharePanel.js';
 import { standHeight } from '../player/player.js';
 
