@@ -9,7 +9,7 @@ import { makeAxe } from '../geometry.js';
 import { rayCircle } from '../aim.js';
 import { REACH } from '../constants.js';
 
-const SWING = { chop: 0.62, low: 0.66, hew: 0.8 }; // seconds a swing takes
+const SWING = { fell: 0.62, chop: 0.62, low: 0.66, hew: 0.8 }; // seconds a swing takes
 export const HEW = 0.5; // metres of log squared up per swing
 const CHIPS = 0xd8b27a;
 const LEAVES = 0x3a5a22;
@@ -118,7 +118,8 @@ export function swingAt(b, t) {
   if (t.type === 'tree') {
     const tree = t.tree;
     b.face(tree.x, tree.z);
-    b.swing('chop', SWING.chop, 0.6, () => {
+    // a standing trunk takes a level swing, bit first, at about waist height
+    b.swing('fell', SWING.fell, 0.6, () => {
       const sp = SPECIES[tree.kind];
       const P = b.player.pos;
       const dx = P.x - tree.x;
