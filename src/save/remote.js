@@ -4,6 +4,10 @@
 // and the whole element map gzipped. Changes normally go over the socket
 // (live.js); they come through here when the batch is large — a world's first
 // save — or when the socket is down.
+//
+// The server only lets in people it knows (see who.js): opening a world it
+// doesn't know you in fails with 401, and join() or signIn() put that right.
+// Who you are then rides along as a cookie the page never sees.
 
 import { decodeFrame } from './frame.js';
 
@@ -28,7 +32,10 @@ export async function openWorld(id) {
   } catch (err) {
     throw new WorldError(`could not reach the save server: ${err.message}`, 0);
   }
-  if (!res.ok) throw new WorldError(await errorMessage(res), res.status);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new WorldError((body && body.error) || `the save server said ${res.status}`, res.status, body);
+  }
   return readWorldFrame(new Uint8Array(await res.arrayBuffer()), id);
 }
 
@@ -45,14 +52,16 @@ export async function readWorldFrame(bytes, fallbackId) {
     seed: header.seed,
     name: header.name || '',
     gen: header.gen || 0,
+    you: header.you || '', // your name in this world
     visitor: header.visitor || {},
     elements,
   };
 }
 
-export async function createWorld({ seed, name, ops, visitor }) {
+// you: { name, password } — whoever makes a world is its first person.
+export async function createWorld({ seed, name, ops, visitor, you }) {
   const head = ops.slice(0, CHUNK);
-  const body = await pack({ name, ops: head, visitor });
+  const body = await pack({ name, ops: head, visitor, you });
   const got = await post(`${API}?seed=${seed}&name=${encodeURIComponent(name || '')}`, body);
   if (ops.length <= CHUNK) return { ...got, sentBytes: body.byteLength };
   const rest = await sendOps(got.id, { ops: ops.slice(CHUNK), visitor, name });
@@ -75,7 +84,17 @@ export async function sendOps(id, { ops = [], visitor, name }, { keepalive = fal
   return { ...(last || {}), sentBytes: bytes };
 }
 
+// Someone new to a world picks a name and a password. -> { name }
+export const join = (id, { name, password }) => post(`${API}/${encodeURIComponent(id)}/members`, plainJson({ name, password }));
+
+// Someone coming back. -> { name }
+export const signIn = (id, { name, password }) => post(`${API}/${encodeURIComponent(id)}/session`, plainJson({ name, password }));
+
+export const signOut = (id) => post(`${API}/${encodeURIComponent(id)}/session`, null, false, 'DELETE');
+
 // ── Plumbing ────────────────────────────────────────────────────────────────
+
+const plainJson = (payload) => new TextEncoder().encode(JSON.stringify(payload));
 
 async function pack(payload) {
   const raw = new TextEncoder().encode(JSON.stringify(payload));
@@ -87,13 +106,13 @@ async function pack(payload) {
   }
 }
 
-async function post(url, body, keepalive = false) {
+async function post(url, body, keepalive = false, method = 'POST') {
   const headers = { 'content-type': 'application/octet-stream' };
   // Not Content-Encoding: nothing in between should try to be helpful.
-  if (isGzip(body)) headers['x-world-codec'] = 'gzip';
+  if (body && isGzip(body)) headers['x-world-codec'] = 'gzip';
   let res;
   try {
-    res = await fetch(url, { method: 'POST', body, keepalive, headers });
+    res = await fetch(url, { method, body, keepalive, headers });
   } catch (err) {
     throw new WorldError(`could not reach the save server: ${err.message}`, 0);
   }
@@ -111,8 +130,3 @@ async function pipe(bytes, transform) {
 }
 
 const gunzip = async (bytes) => new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
-
-async function errorMessage(res) {
-  const body = await res.json().catch(() => null);
-  return (body && body.error) || `the save server said ${res.status}`;
-}

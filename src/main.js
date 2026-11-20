@@ -9,6 +9,7 @@ import { storage, KEYS } from './core/storage.js';
 import { Game } from './game/game.js';
 import { Settings } from './game/settings.js';
 import { WorldSave } from './save/worldSave.js';
+import { SignIn } from './save/signIn.js';
 import { installRender } from './render/index.js';
 import { installHud } from './ui/index.js';
 import { installWorld } from './world/index.js';
@@ -40,10 +41,11 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
 
 // ── Which world? ─────────────────────────────────────────────────────────────
 // ?w=<id> opens a world kept on the save server. Its seed lives inside the
-// save, so this has to be settled before the forest is grown from it. If it
-// can't be opened we fall through to an ordinary local world, and the save
-// says why.
-const save = new WorldSave({ storage });
+// save, so this has to be settled before the forest is grown from it. The
+// server lets in only people it knows, so a browser it doesn't know is asked
+// for a name and a password first. If the world can't be opened we fall
+// through to an ordinary local world, and the save says why.
+const save = new WorldSave({ storage, who: new SignIn() });
 if (CONFIG.worldId) loader.say('opening your world…');
 const opened = await save.open(CONFIG.worldId);
 if (opened) CONFIG.seed = opened.seed;

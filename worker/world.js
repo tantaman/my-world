@@ -15,6 +15,12 @@
 // very same thing, which is the right answer anyway.
 //
 // It also relays where everyone is standing, which is never stored.
+//
+// And it knows who is who. Everything but `meta` needs a sign-in (see
+// members.js): the first time, someone picks a name and a password; after
+// that a cookie says who they are. What is yours alone in a world — where
+// you stood, what you carried — is kept against your name, so whoever comes
+// back finds their own, not whatever the last person left.
 
 const MAX_OPS = 5000; // in one batch
 const MAX_KEY = 160;
@@ -27,15 +33,22 @@ const KEEP_COPIES = 20;
 const COPY_EVERY = 10 * 60 * 1000;
 const MAX_NAME = 80;
 const PEER_COLOURS = ['#d9b45a', '#d0563f', '#4f8fd6', '#3fb5a0', '#a46fd1', '#e08a4b', '#78c061'];
+const MAX_PEOPLE = 500; // names in one world
+const MAX_TRIES = 8; // wrong passwords in a row before a name is rested
+const REST = 5 * 60 * 1000; // ms a name is rested for after that
+const KEEP_SIGN_INS = 20; // per person: browsers they are signed in on
+const MAX_SIGN_IN = 4096; // bytes: a name and a password, as JSON
 
 import { encodeFrame } from '../src/save/frame.js';
+import { cleanName, nameKey, nameProblem, passwordProblem, NOT_SIGNED_IN } from '../src/save/who.js';
+import { hashPassword, checkPassword, newToken, tokenId, readCookie, sessionCookie, clearCookie, SESSION_LIFE } from './members.js';
 
 export class World {
   constructor(ctx, env) {
     this.ctx = ctx;
     this.env = env;
     this.sql = ctx.storage.sql;
-    this.live = new Map(); // ws -> { id, name, x, z, yaw, colour }
+    this.live = new Map(); // ws -> { id, member, name, x, z, yaw, colour }
     this.nextPeer = 1;
     ctx.blockConcurrencyWhile(async () => this.#schema());
   }
@@ -51,25 +64,43 @@ export class World {
       CREATE TABLE IF NOT EXISTS elements (r TEXT NOT NULL, k TEXT NOT NULL, v TEXT NOT NULL, PRIMARY KEY (r, k));
       CREATE TABLE IF NOT EXISTS ops (seq INTEGER PRIMARY KEY AUTOINCREMENT, gen INTEGER NOT NULL, body TEXT NOT NULL, at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS copies (gen INTEGER PRIMARY KEY, frame BLOB NOT NULL, bytes INTEGER NOT NULL, created_at INTEGER NOT NULL);
-      CREATE TABLE IF NOT EXISTS cache (one INTEGER PRIMARY KEY CHECK (one = 1), frame BLOB, gen INTEGER);
+      CREATE TABLE IF NOT EXISTS members (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, key TEXT NOT NULL UNIQUE, password TEXT NOT NULL,
+        visitor TEXT, tries INTEGER NOT NULL DEFAULT 0, rested_until INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, member INTEGER NOT NULL, created_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS packed (one INTEGER PRIMARY KEY CHECK (one = 1), part BLOB, gen INTEGER);
+      DROP TABLE IF EXISTS cache;
     `);
+    // (cache held whole frames, which carried one visitor's state for
+    // everyone; packed holds only the world, and each person's goes on top.)
   }
 
   // ── HTTP ──────────────────────────────────────────────────────────────────
   async fetch(request) {
     const url = new URL(request.url);
     const what = url.pathname.replace(/^\/+/, '');
-    const id = request.headers.get('x-world-id') || '';
+    // what the cookie needs: which world's path it is for, and whether the
+    // site is on https
+    const door = { id: request.headers.get('x-world-id') || '', secure: request.headers.get('x-world-https') === '1' };
 
-    if (what === 'live') return this.#join(request, url);
-    if (what === 'create') return this.#create(request, url, id);
+    if (what === 'create') return this.#create(request, url, door);
 
+    // Who is asking, if anyone. Before the world is read: this waits on a
+    // hash, and the world may move on meanwhile.
+    const you = await this.#you(request);
     const world = this.#world();
     if (!world) return fail(404, 'no world lives at that address');
 
-    if (what === 'open') return frameResponse(await this.#frame(world), world);
-    if (what === 'ops') return this.#take(request, world);
     if (what === 'meta') return json(200, this.#meta(world));
+    if (what === 'members') return this.#newMember(request, door);
+    if (what === 'session') return request.method === 'DELETE' ? this.#signOut(request, door) : this.#signIn(request, door);
+
+    // Everything else is for people the world knows.
+    if (what === 'live') return this.#arrive(request, url, world, you);
+    if (!you) return json(401, { error: 'say who you are to come in', world: world.name });
+    if (what === 'open') return frameResponse(await this.#frame(world, you), world);
+    if (what === 'ops') return this.#take(request, world, you);
     if (what === 'history') return json(200, { id: world.id, copies: this.#rows('SELECT gen, bytes, created_at FROM copies ORDER BY gen DESC') });
     if (what.startsWith('copy/')) {
       const gen = Number(what.slice(5));
@@ -80,34 +111,43 @@ export class World {
     return fail(404, 'no such endpoint');
   }
 
-  async #create(request, url, id) {
+  // Whoever makes a world is its first person: `you` in the body is the name
+  // and password they picked, and they come away signed in.
+  async #create(request, url, door) {
     if (this.#world()) return fail(409, 'that world already exists');
     const seed = int(url.searchParams.get('seed'));
     if (seed === null) return fail(400, 'a world needs a ?seed');
     const body = await this.#body(request);
     if (body.error) return fail(body.status, body.error);
+    const who = credentials(body.data.you);
+    const problem = nameProblem(who.name) || passwordProblem(who.password);
+    if (problem) return fail(400, problem);
+    const password = await hashPassword(who.password);
+    // hashing takes a moment, and other requests run meanwhile
+    if (this.#world()) return fail(409, 'that world already exists');
     const now = Date.now();
     this.sql.exec(
       'INSERT INTO world (one, id, seed, name, gen, created_at, updated_at) VALUES (1, ?, ?, ?, 0, ?, ?)',
-      id,
+      door.id,
       seed,
       clean(body.data.name),
       now,
       now,
     );
+    const member = this.#addMember(who.name, password, null, now);
     const world = this.#world();
-    const taken = this.#apply(world, body.data, null, now);
+    const taken = this.#apply(world, body.data, null, now, member.id);
     if (taken.error) return fail(400, taken.error);
-    return json(201, { id, seed, name: world.name, ...taken });
+    return json(201, { id: door.id, seed, name: world.name, you: member.name, ...taken }, { 'set-cookie': await this.#remember(member, door) });
   }
 
   // Ops over HTTP: the way a big first save goes out, and the way any save
   // goes out when the socket is down.
-  async #take(request, world) {
+  async #take(request, world, you) {
     if (request.method !== 'POST') return fail(405, 'only POST here');
     const body = await this.#body(request);
     if (body.error) return fail(body.status, body.error);
-    const taken = this.#apply(world, body.data, null, Date.now());
+    const taken = this.#apply(this.#world() || world, body.data, null, Date.now(), you.id);
     if (taken.error) return fail(400, taken.error);
     return json(200, { id: world.id, ...taken });
   }
@@ -128,6 +168,105 @@ export class World {
     }
   }
 
+  // ── Who is who ────────────────────────────────────────────────────────────
+  // Someone new picks a name and a password.
+  async #newMember(request, door) {
+    const who = await this.#signInBody(request);
+    if (who.error) return fail(who.status, who.error);
+    const problem = nameProblem(who.name) || passwordProblem(who.password);
+    if (problem) return fail(400, problem);
+    const taken = `someone here already goes by ${who.name} — if that's you, sign in`;
+    if (this.#member(who.name)) return fail(409, taken);
+    if (this.#count('members') >= MAX_PEOPLE) return fail(403, 'this world has as many people in it as it can hold');
+    const password = await hashPassword(who.password);
+    if (this.#member(who.name)) return fail(409, taken); // in the moment hashing took
+    // A world saved before there were names kept one note of "your own
+    // state" for everybody. The first person to give a name gets it: almost
+    // always whoever made the world, coming back to it.
+    const old = this.#count('members') === 0 ? this.#world().visitor : null;
+    const member = this.#addMember(who.name, password, old, Date.now());
+    if (old) this.sql.exec('UPDATE world SET visitor = NULL WHERE one = 1');
+    return json(201, { name: member.name }, { 'set-cookie': await this.#remember(member, door) });
+  }
+
+  // Someone coming back from another browser, or after signing out.
+  async #signIn(request, door) {
+    const who = await this.#signInBody(request);
+    if (who.error) return fail(who.status, who.error);
+    const member = this.#member(who.name);
+    if (!member) return fail(403, `nobody here goes by ${who.name || 'that name'} — new here? pick a name`);
+    const now = Date.now();
+    if (member.rested_until > now) {
+      const minutes = Math.ceil((member.rested_until - now) / 60000);
+      return fail(429, `too many wrong passwords for ${member.name} — try again in ${minutes} minute${minutes === 1 ? '' : 's'}`);
+    }
+    if (!(await checkPassword(who.password, member.password))) {
+      const tries = (this.#member(who.name)?.tries || 0) + 1;
+      const rest = tries >= MAX_TRIES;
+      this.sql.exec('UPDATE members SET tries = ?, rested_until = ? WHERE id = ?', rest ? 0 : tries, rest ? now + REST : 0, member.id);
+      return fail(403, `that isn't ${member.name}'s password`);
+    }
+    this.sql.exec('UPDATE members SET tries = 0, rested_until = 0 WHERE id = ?', member.id);
+    return json(200, { name: member.name }, { 'set-cookie': await this.#remember(member, door) });
+  }
+
+  async #signOut(request, door) {
+    const token = readCookie(request.headers.get('cookie'));
+    if (token) this.sql.exec('DELETE FROM sessions WHERE token = ?', await tokenId(token));
+    return json(200, { signedOut: true }, { 'set-cookie': clearCookie(door.id, door) });
+  }
+
+  // The person a request's cookie says it is, or null.
+  async #you(request) {
+    const token = readCookie(request.headers.get('cookie'));
+    if (!token) return null;
+    const row = this.#row(
+      'SELECT m.id, m.name, m.visitor, s.created_at AS since FROM sessions s JOIN members m ON m.id = s.member WHERE s.token = ?',
+      await tokenId(token),
+    );
+    return row && Date.now() - row.since < SESSION_LIFE ? row : null;
+  }
+
+  // Sign this browser in as `member`. -> the Set-Cookie header.
+  async #remember(member, door) {
+    const token = newToken();
+    const now = Date.now();
+    this.sql.exec('INSERT INTO sessions (token, member, created_at) VALUES (?, ?, ?)', await tokenId(token), member.id, now);
+    // the long-gone, and all but someone's most recent browsers
+    this.sql.exec('DELETE FROM sessions WHERE created_at < ?', now - SESSION_LIFE);
+    this.sql.exec(
+      'DELETE FROM sessions WHERE member = ? AND token NOT IN (SELECT token FROM sessions WHERE member = ? ORDER BY created_at DESC LIMIT ?)',
+      member.id,
+      member.id,
+      KEEP_SIGN_INS,
+    );
+    return sessionCookie(door.id, token, door);
+  }
+
+  #addMember(name, password, visitor, now) {
+    this.sql.exec('INSERT INTO members (name, key, password, visitor, created_at) VALUES (?, ?, ?, ?, ?)', name, nameKey(name), password, visitor, now);
+    return this.#member(name);
+  }
+
+  #member(name) {
+    return name ? this.#row('SELECT id, name, password, tries, rested_until FROM members WHERE key = ?', nameKey(name)) : null;
+  }
+
+  async #signInBody(request) {
+    if (request.method !== 'POST') return { status: 405, error: 'only POST here' };
+    const text = await request.text();
+    if (text.length > MAX_SIGN_IN) return { status: 413, error: 'that is too long for a name and a password' };
+    try {
+      return credentials(JSON.parse(text));
+    } catch {
+      return { status: 400, error: 'that sign-in is not readable' };
+    }
+  }
+
+  #count(table) {
+    return this.#row(`SELECT count(*) AS n FROM ${table}`).n;
+  }
+
   // ── The world ─────────────────────────────────────────────────────────────
   #world() {
     return this.#row('SELECT id, seed, name, gen, visitor, created_at, updated_at, copied_at FROM world WHERE one = 1');
@@ -139,8 +278,9 @@ export class World {
   }
 
   // Take a batch of ops: write them, number them, and hand them on.
-  // `from` is the socket they came in on, which doesn't need them back.
-  #apply(world, data, from, now) {
+  // `from` is the socket they came in on, which doesn't need them back;
+  // `member` is who sent them, whose own state (data.visitor) rides along.
+  #apply(world, data, from, now, member) {
     const ops = Array.isArray(data.ops) ? data.ops : [];
     if (ops.length > MAX_OPS) return { error: 'too many changes in one go' };
 
@@ -165,12 +305,12 @@ export class World {
       }
       this.sql.exec('INSERT INTO ops (gen, body, at) VALUES (?, ?, ?)', gen, JSON.stringify(clean), now);
       this.sql.exec('DELETE FROM ops WHERE seq <= (SELECT max(seq) FROM ops) - ?', KEEP_OPS);
-      this.sql.exec('DELETE FROM cache WHERE one = 1');
+      this.sql.exec('DELETE FROM packed WHERE one = 1');
     }
 
     const name = typeof data.name === 'string' ? clampName(data.name) : world.name;
-    const visitor = data.visitor !== undefined ? JSON.stringify(data.visitor) : world.visitor;
-    this.sql.exec('UPDATE world SET gen = ?, name = ?, visitor = ?, updated_at = ? WHERE one = 1', gen, name, visitor, now);
+    this.sql.exec('UPDATE world SET gen = ?, name = ?, updated_at = ? WHERE one = 1', gen, name, now);
+    if (member && data.visitor !== undefined) this.sql.exec('UPDATE members SET visitor = ? WHERE id = ?', JSON.stringify(data.visitor), member);
 
     if (clean.length) {
       this.#tell({ t: 'ops', gen, ops: clean }, from);
@@ -179,31 +319,37 @@ export class World {
     return { gen, took: clean.length };
   }
 
-  // Everything, as one frame: a small header and the whole element map gzipped.
-  async #frame(world) {
-    const cached = this.#row('SELECT frame, gen FROM cache WHERE one = 1');
-    if (cached && cached.gen === world.gen) return toBytes(cached.frame);
-
-    const regions = {};
-    for (const row of this.#rows('SELECT r, k, v FROM elements ORDER BY r')) {
-      (regions[row.r] || (regions[row.r] = {}))[row.k] = JSON.parse(row.v);
-    }
-    const part = await gzip(JSON.stringify(regions));
-    const frame = encodeFrame(
+  // Everything, as one frame: a small header — with your own state in it, if
+  // it is for you — and the whole element map gzipped.
+  async #frame(world, you = null) {
+    const part = await this.#packed(world);
+    return encodeFrame(
       {
         v: 3,
         id: world.id,
         seed: world.seed,
         name: world.name,
         gen: world.gen,
-        visitor: world.visitor ? JSON.parse(world.visitor) : null,
+        you: you ? you.name : '',
+        visitor: you && you.visitor ? JSON.parse(you.visitor) : null,
         codec: 'gzip',
         len: part.byteLength,
       },
       [part],
     );
-    this.sql.exec('INSERT INTO cache (one, frame, gen) VALUES (1, ?, ?) ON CONFLICT (one) DO UPDATE SET frame = excluded.frame, gen = excluded.gen', frame, world.gen);
-    return frame;
+  }
+
+  // The element map, gzipped, kept until the world next changes.
+  async #packed(world) {
+    const cached = this.#row('SELECT part, gen FROM packed WHERE one = 1');
+    if (cached && cached.gen === world.gen) return toBytes(cached.part);
+    const regions = {};
+    for (const row of this.#rows('SELECT r, k, v FROM elements ORDER BY r')) {
+      (regions[row.r] || (regions[row.r] = {}))[row.k] = JSON.parse(row.v);
+    }
+    const part = await gzip(JSON.stringify(regions));
+    this.sql.exec('INSERT INTO packed (one, part, gen) VALUES (1, ?, ?) ON CONFLICT (one) DO UPDATE SET part = excluded.part, gen = excluded.gen', part, world.gen);
+    return part;
   }
 
   async #keepCopy(gen, now) {
@@ -216,16 +362,21 @@ export class World {
   }
 
   // ── Everyone who is here ──────────────────────────────────────────────────
-  #join(request, url) {
+  #arrive(request, url, world, you) {
     if (request.headers.get('upgrade') !== 'websocket') return fail(426, 'open this one as a websocket');
-    const world = this.#world();
-    if (!world) return fail(404, 'no world lives at that address');
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
+    if (!you) {
+      // Not a hibernating socket: it is never one of the people here.
+      server.accept();
+      server.close(NOT_SIGNED_IN, 'say who you are to come in');
+      return new Response(null, { status: 101, webSocket: client });
+    }
     // Hibernation: the socket survives this object going to sleep.
     this.ctx.acceptWebSocket(server);
     const id = `p${this.nextPeer++}`;
-    server.serializeAttachment({ id, colour: PEER_COLOURS[(this.nextPeer - 2) % PEER_COLOURS.length] });
+    // the same colour for the same person, whichever browser they come in on
+    server.serializeAttachment({ id, member: you.id, name: you.name, colour: PEER_COLOURS[(you.id - 1) % PEER_COLOURS.length] });
     const since = int(url.searchParams.get('since'));
     server.send(JSON.stringify({ t: 'welcome', you: id, gen: world.gen, name: world.name, here: this.#here(server), ...this.#catchUp(world, since) }));
     return new Response(null, { status: 101, webSocket: client });
@@ -240,19 +391,20 @@ export class World {
       return;
     }
     const me = this.#peer(ws);
+    if (!me) return;
     if (msg.t === 'at') {
-      // Where someone is standing. Never stored, just passed on.
+      // Where someone is standing. Never stored, just passed on, under the
+      // name they signed in with.
       me.x = num(msg.x);
       me.z = num(msg.z);
       me.yaw = num(msg.yaw);
-      if (typeof msg.name === 'string') me.name = msg.name.slice(0, 40);
       this.#tell({ t: 'at', id: me.id, x: me.x, z: me.z, yaw: me.yaw, name: me.name, colour: me.colour }, ws);
       return;
     }
     if (msg.t === 'ops') {
       const world = this.#world();
       if (!world) return;
-      const took = this.#apply(world, msg, ws, Date.now());
+      const took = this.#apply(world, msg, ws, Date.now(), me.member);
       ws.send(JSON.stringify({ t: 'ack', for: msg.id ?? null, ...took }));
       return;
     }
@@ -272,13 +424,15 @@ export class World {
     this.webSocketClose(ws);
   }
 
-  // Identity survives hibernation in the socket's attachment; where someone is
+  // Who a socket is survives hibernation in its attachment; where someone is
   // standing does not, and doesn't need to — they say again within a moment.
+  // -> null for a socket nobody signed in on.
   #peer(ws) {
     let me = this.live.get(ws);
     if (!me) {
       const kept = ws.deserializeAttachment() || {};
-      this.live.set(ws, (me = { id: kept.id || `p${this.nextPeer++}`, colour: kept.colour || PEER_COLOURS[0], name: '', x: 0, z: 0, yaw: 0 }));
+      if (!kept.member) return null;
+      this.live.set(ws, (me = { id: kept.id || `p${this.nextPeer++}`, member: kept.member, name: kept.name || '', colour: kept.colour || PEER_COLOURS[0], x: 0, z: 0, yaw: 0 }));
     }
     return me;
   }
@@ -352,6 +506,8 @@ const int = (raw) => (raw === null || raw === '' || !Number.isInteger(Number(raw
 const num = (v) => (Number.isFinite(v) ? v : 0);
 const clampName = (raw) => (raw || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, MAX_NAME);
 const clean = clampName;
+// A name and a password, as sent: the name tidied, the password as typed.
+const credentials = (raw) => ({ name: cleanName(raw && raw.name), password: raw && typeof raw.password === 'string' ? raw.password : '' });
 
 async function gzip(text) {
   const bytes = new TextEncoder().encode(text);
@@ -382,7 +538,7 @@ const frameResponse = (bytes, world) =>
     },
   });
 
-const json = (status, data) =>
-  new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
+const json = (status, data, headers = {}) =>
+  new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers } });
 
 const fail = (status, error) => json(status, { error });

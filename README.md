@@ -106,7 +106,8 @@ them (handy for copying out).
 
 ## Building together
 
-Press **L** (or tap *save*) and the world gets an address of its own:
+Press **L** (or tap *save*), pick a name and a password for yourself, and the
+world gets an address of its own:
 
 ```
 https://your-site/?w=kxbbsjfw52
@@ -119,12 +120,43 @@ other's world within a moment: ground that moves, trees that come down, a log
 laid on a wall, a place marked on the map.
 
 The *save* button says where things stand — *live · 2*, *saving…*, *offline* —
-and **L** opens the panel with the link and a name for the world.
+and **L** opens the panel with the link, a name for the world, who is here,
+and *sign out*.
 
 What is the world's is shared: the ground, the felled trees, what is built,
 the fires, the marks, the name. What is yours stays yours — your materials, your grade
-stake, the hour you set. Where you are standing is passed on so people can see
-you, and never stored.
+stake, the hour you set, where you last stood. Where you are standing is
+passed on so people can see you, and never stored.
+
+### Who you are
+
+Nobody walks into a shared world as nobody. The first time someone opens the
+link they are asked for a **name and a password** — new ones, or the ones
+they picked before. Whoever saved the world picked theirs when they did.
+
+- **Coming back in the same browser** goes straight in: a cookie remembers
+  you, for a year or until you sign out.
+- **Coming back from another browser**, sign in with the same name and
+  password and you're back where you stopped, carrying what you carried.
+- **What is yours is kept under your name**, so a friend opening the link
+  starts at the beginning of the path with empty hands, not with yours.
+- **Others see your name**: in the panel (*sam and ana are here*) and on the
+  wire, where the server puts it, so it can't be borrowed.
+
+Names are per world, and `Sam` and `sam` are the same person. A password
+needs 6 or more characters, and there is no email and no reset: lose it and
+pick a new name. After 8 wrong passwords in a row a name rests for 5
+minutes.
+
+The server keeps only a salted PBKDF2-SHA256 hash of each password, and of
+each sign-in only the SHA-256 of a random token; the token itself lives in an
+`HttpOnly`, `SameSite=Strict` cookie scoped to the one world's path, `Secure`
+on https (`worker/members.js`). The rules for a name are in
+`src/save/who.js`, shared by the game and the server.
+
+A world saved before there were names opens the same way. The first person to
+pick a name in it gets the note of "your own state" it kept — almost always
+whoever made it, coming back.
 
 ### Why there is nothing to resolve
 
@@ -200,17 +232,26 @@ For local work, `npm run api` in one terminal and `npm run dev` in another;
 
 | | |
 |---|---|
-| `POST /api/worlds?seed=N&name=` | create → `{ id, gen }` |
-| `GET /api/worlds/:id` | the whole world, as a frame |
+| `POST /api/worlds?seed=N&name=` | create, with `you: { name, password }` in the body → `{ id, gen, you }`, signed in |
+| `POST /api/worlds/:id/members` | someone new: `{ name, password }` → `{ name }`, signed in |
+| `POST /api/worlds/:id/session` | sign in: `{ name, password }` → `{ name }` |
+| `DELETE /api/worlds/:id/session` | sign out |
+| `GET /api/worlds/:id/meta` | id, seed, name, generation, how big |
+| `GET /api/worlds/:id` | the whole world, as a frame, with your own state in it |
 | `POST /api/worlds/:id/ops` | changes, in bulk or when the socket is down |
 | `GET /api/worlds/:id/live` | the WebSocket everyone builds over |
-| `GET /api/worlds/:id/meta` | id, seed, name, generation, how big |
 | `GET /api/worlds/:id/history` | the whole copies still kept |
 | `GET /api/worlds/:id/revisions/:gen` | one of them, as a frame |
 
+Everything below `meta` needs a sign-in, and without one answers `401` with
+the world's name (`{ error, world }`), which is the game's cue to ask who you
+are. The socket can't answer a status the page could read, so it opens and
+closes again with code `4401`.
+
 A **frame** (`src/save/frame.js`) is the ASCII magic `MWLD`, a big-endian
 `u32` header length, a JSON header, then the parts — for a world, one gzipped
-blob of its elements by region.
+blob of its elements by region. The header says who it is for (`you`) and
+carries their own state (`visitor`).
 
 Over the socket, both ways:
 
@@ -218,7 +259,8 @@ Over the socket, both ways:
 → { "t": "ops", "id": 7, "ops": [ … ], "visitor": { … } }
 ← { "t": "ack", "for": 7, "gen": 92, "took": 46 }
 ← { "t": "ops", "gen": 93, "ops": [ … ] }        someone else's change
-↔ { "t": "at", "x": 12.5, "z": -40, "yaw": 1.2 } where someone is standing
+→ { "t": "at", "x": 12.5, "z": -40, "yaw": 1.2 } where you are standing
+← { "t": "at", "id": "p3", "name": "sam", … }     …and someone else, by name
 ← { "t": "welcome", "you": "p2", "gen": 93, "here": [ … ], "missed": [ … ] }
 ```
 
@@ -714,6 +756,11 @@ npm run smoke        # a play-through in a headless browser, about a minute
 npm run together     # two visitors in one world (run `npm run serve` first)
 ```
 
+`npm run together` puts a world on the server as one visitor, then has a
+second pick a name at the door, build alongside, and come back from a third
+browser by signing in — and checks that each finds their own things, not the
+other's.
+
 `npm test` pins the things other people's worlds depend on — that a seed
 grows the same land (`test/golden/`), that a save is spelled as it always was,
 that what is already in someone's browser still opens — along with the rules
@@ -824,8 +871,10 @@ src/
     live.js               the socket: changes and people, both ways
     frame.js              the wire format, shared with the Worker
     remote.js             gzip in the browser, and the calls to the server
-    sharePanel.js         the save panel (L): link, name, who's here
-    save.css              save panel styles
+    who.js                the rules for a name and a password, shared with the Worker
+    signIn.js             the door into a shared world: who are you?
+    sharePanel.js         the save panel (L): link, name, who's here, sign out
+    save.css              save panel and door styles
   wildlife/
     index.js              ← feature
     wildlife.js           who's about: arrivals, departures, what animals can sense
@@ -843,7 +892,8 @@ src/
     loader.js             places structures on their pads
 worker/
   index.js                the front door: mint an id, route to the world
-  world.js                a world's Durable Object — the only writer
+  world.js                a world's Durable Object — the only writer, and who is who
+  members.js              passwords kept as hashes, sign-ins as cookies
 test/
   *.test.js               npm test: world generation, saving, building, the game loop
   golden/                 recorded answers the code has to keep giving
@@ -854,8 +904,11 @@ test/
 Inside a world's own SQLite:
 
 ```
-world      seed, name, generation, your own state
+world      seed, name, generation
 elements   (region, key) -> value          the world itself
 ops        recent changes, for catching up after a blip
 copies     whole copies, kept now and then
+packed     the elements gzipped, until they next change
+members    name, password hash, their own state
+sessions   sign-ins: a token's SHA-256 -> who
 ```

@@ -4,13 +4,19 @@
 // (world.js), named after the world's id, and this routes to it. The object is
 // the single writer, which is what makes live building work — see world.js.
 //
-//   POST   /api/worlds?seed=N[&name=]        create          -> { id, gen }
-//   GET    /api/worlds/:id                   open            -> a world frame
-//   POST   /api/worlds/:id/ops               changes, in bulk or when offline
-//   GET    /api/worlds/:id/live              the WebSocket everyone builds over
+//   POST   /api/worlds?seed=N[&name=]        create          -> { id, gen, you }
+//   POST   /api/worlds/:id/members           someone new     -> { name }, signed in
+//   POST   /api/worlds/:id/session           sign in         -> { name }
+//   DELETE /api/worlds/:id/session           sign out
 //   GET    /api/worlds/:id/meta              is it there? how big?
-//   GET    /api/worlds/:id/history           the whole copies still kept
-//   GET    /api/worlds/:id/revisions/:gen    one of them, as a frame
+//   GET    /api/worlds/:id                   open            -> a world frame       ┐
+//   POST   /api/worlds/:id/ops               changes, in bulk or when offline       │ signed
+//   GET    /api/worlds/:id/live              the WebSocket everyone builds over     │ in
+//   GET    /api/worlds/:id/history           the whole copies still kept            │ only
+//   GET    /api/worlds/:id/revisions/:gen    one of them, as a frame                ┘
+//
+// Who is signed in is the world's business too (members.js); this only
+// says whether the site is on https, which decides how the cookie is set.
 
 export { World } from './world.js';
 
@@ -43,7 +49,7 @@ async function route(request, env, url) {
     return create(request, env, url);
   }
 
-  const m = path.match(/^\/api\/worlds\/([^/]+)(?:\/(live|ops|meta|history|revisions\/\d+))?$/);
+  const m = path.match(/^\/api\/worlds\/([^/]+)(?:\/(live|ops|meta|history|members|session|revisions\/\d+))?$/);
   if (!m) return fail(404, 'no such endpoint');
   const id = decodeURIComponent(m[1]).toLowerCase();
   if (!ID_RE.test(id)) return fail(400, 'that is not a world id');
@@ -53,9 +59,13 @@ async function route(request, env, url) {
     if (method !== 'GET') return notAllowed('GET');
     return send(env, id, 'open', request, url);
   }
-  if (tail === 'ops') {
+  if (tail === 'ops' || tail === 'members') {
     if (method !== 'POST') return notAllowed('POST');
-    return send(env, id, 'ops', request, url);
+    return send(env, id, tail, request, url);
+  }
+  if (tail === 'session') {
+    if (method !== 'POST' && method !== 'DELETE') return notAllowed('POST, DELETE');
+    return send(env, id, tail, request, url);
   }
   if (method !== 'GET') return notAllowed('GET');
   if (tail === 'live') return send(env, id, 'live', request, url);
@@ -83,6 +93,7 @@ function send(env, id, what, request, url, body) {
     body: body !== undefined ? body : request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
   });
   forward.headers.set('x-world-id', id);
+  forward.headers.set('x-world-https', url.protocol === 'https:' ? '1' : '0');
   return stub.fetch(forward);
 }
 
