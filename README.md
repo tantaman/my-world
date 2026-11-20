@@ -691,21 +691,22 @@ course, its roofs. Pick one, stake it out, and the hiker puts it up for you,
 piece by piece, with the same tools and the same rules as building by hand.
 
 - **Plan (9).** A ghost of the plan follows the crosshair, green where it
-  will go and red where it won't, and the prompt says why (ground off level,
-  a tree on a wall line, another building too close) and what it takes in
-  wood and stone. **Right-click** turns it a quarter. Press **9** again for
+  will go and red where it won't, and the prompt says why (too steep to
+  level, a tree on a wall line, another building too close) and what it
+  takes in wood, stone and levelling. **Right-click** turns it a quarter. Press **9** again for
   the next plan. Four come with the game: a small cabin, a cabin with
   windows, a two-room cabin and a hewn-timber hut.
 - **Click** to stake it out. The plan stays on the ground as a pale-blue
   ghost of whatever is still to go up, whatever tool you hold.
 - **Click** again (or press **B** with any tool in hand) and the hiker gets
-  on with it: walks round the site rather than through it, digs and sets
-  each footing, lays the logs a course at a time, cuts every notch with the
-  axe and raises the roof. It's no faster than you, and a small cabin takes
-  two or three minutes.
-- It stops and says why when it can't go on: out of logs or stones, the
-  ground too high or low for a footing, a tree in the way. Put it right and
-  **click** to carry on. Touch the controls and you have the hiker back
+  on with it: levels the site if it needs it, walks round the site rather
+  than through it, digs and sets each footing, lays the logs a course at a
+  time, cuts every notch with the axe and raises the roof. It's no faster
+  than you: a small cabin takes two or three minutes, and levelling a
+  hillside for it about another half minute.
+- It stops and says why when it can't go on: out of logs, stones or soil,
+  too steep to level, a tree in the way. Put it right and **click** to
+  carry on. Touch the controls and you have the hiker back
   (it pauses). Putting the plan tool down pauses it too.
 - **Right-click** twice pulls up the stakes. What is built stays built.
 
@@ -713,10 +714,24 @@ The site is saved with your other things, so it's there after a reload and
 the hiker picks up where it was. What is built is the world's, saved and
 shared like anything you build by hand.
 
-**Ground.** The foreman doesn't dig or fill yet, and these hills are steep:
-all of a plan's footings have to reach one level, and a pier only makes up
-about 25 cm. Look for the ghost to turn green, or grade the site yourself
-(shovel and **G**) and carry on.
+**Levelling.** All of a building's footings have to come up to one level,
+and a pier only makes up about 25 cm, so on these hills most sites need
+levelling first. If the footings can't all reach one level, or ground would
+stand above the sills, the hiker takes the shovel to it before setting any
+stone: a level pad under the footprint and a metre round it, cut and filled
+with the same spade strokes you'd make, clearing the undergrowth and
+pocketing small stones as it goes. The pad's grade sits a pier's height
+under the footings, where the cut pays for the fill: when you're gathering
+your own materials, a little lower, so it cuts before it fills and never
+runs short of soil, and keeps what's over. Until it's done, the ghost shows
+the grade as a sheet: ground poking through it is to be cut, and where it
+floats, filled.
+
+It can't level where a footing would need more than 1.6 m of cut or fill
+(the most a spade can move the ground), where roots or a boulder stop the
+spade at a footing, or where a levelled footing would be under water. The
+ghost goes red and the prompt says which; fell the tree, try another spot,
+or turn the plan.
 
 **Your own.** Aim the plan tool at a building you've put up and **click** to
 copy it down as a blueprint; doors, windows and all come with it, since
@@ -904,7 +919,7 @@ written from the same list, and two features wanting one key are warned about.
 
 ```bash
 npm test             # in Node, a second or so
-npm run smoke        # a play-through in a headless browser, about two minutes
+npm run smoke        # a play-through in a headless browser, two or three minutes
 npm run together     # two visitors in one world (run `npm run serve` first)
 ```
 
@@ -1023,9 +1038,10 @@ src/
   blueprints/
     index.js              ← feature: the plan tool, B, the site you staked out
     plan.js               what a blueprint is; putting one down; what to do next
+    grade.js              levelling a site: when, to what grade, which spot next
     plans.js              the blueprints that come with the game
     library.js            those, and the ones you copied, kept in this browser
-    foreman.js            building a staked-out site for you
+    foreman.js            levelling and building a staked-out site for you
     ghost.js              what's still to go up, drawn where it will stand
     tool.js               the plan tool (9)
   map/

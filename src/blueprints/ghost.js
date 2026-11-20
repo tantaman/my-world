@@ -1,6 +1,8 @@
 // What a blueprint looks like on the ground before it's built: a
 // translucent stand-in for every piece still to go up, at the level the
 // footings will come up to, with any footing the ground won't allow in red.
+// A site still to be levelled shows its grade as a sheet: ground poking
+// through it is to be cut, and where it floats, filled.
 //
 // One Ghost is the plan following the crosshair while you choose where to
 // put it (hidden every frame unless the tool shows it, like any preview); the
@@ -9,10 +11,12 @@
 import * as THREE from 'three';
 import { HALF, LOG_D, TIMBER_W, ROOF, height } from '../build/constants.js';
 import { Mesher, addRoof } from '../build/geometry.js';
-import { remaining, eaveOf } from './plan.js';
+import { remaining, eaveOf, grow } from './plan.js';
+import { PAD } from './grade.js';
 
 const FOOTING_W = 0.46; // m, as the footing tool's own ghost
 const LOG_ENDS = 0.15; // m a log's ghost runs past its end nodes
+const PAD_THICK = 0.03; // m, the sheet that shows the grade a site will be levelled to
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
@@ -29,13 +33,14 @@ function box(m, x, y, z, w, h, d) {
 //   ground   (x, z) -> height
 //   built    the building already standing on the site, or null
 //   trouble  'x,z' of footings the ground won't take
+//   pad      the grade the site will be levelled to, or null
 // -> { pieces, trouble }: BufferGeometry each (empty if there is nothing)
-export function ghostGeometry(placed, { y0, ground, built = null, trouble = new Set() }) {
+export function ghostGeometry(placed, { y0, ground, built = null, trouble = new Set(), pad = null }) {
   const left = remaining(placed, built);
   const ok = new Mesher();
   const bad = new Mesher();
   for (const { x, z } of left.footings) {
-    const g = ground(x, z);
+    const g = pad !== null ? pad : ground(x, z);
     const h = Math.max(0.05, y0 - g + 0.1);
     box(trouble.has(`${x},${z}`) ? bad : ok, x, g - 0.1 + h / 2, z, FOOTING_W, h, FOOTING_W);
   }
@@ -51,6 +56,10 @@ export function ghostGeometry(placed, { y0, ground, built = null, trouble = new 
   for (const r of left.roofs) {
     const roof = { ...r, eave: y0 + eaveOf(placed, r), axis: r.x1 - r.x0 >= r.z1 - r.z0 ? 'x' : 'z' };
     addRoof(ok, roof, ROOF.pitch, ROOF.overhang, 1);
+  }
+  if (pad !== null) {
+    const R = grow(placed.rect, PAD);
+    box(ok, (R.x0 + R.x1) / 2, pad, (R.z0 + R.z1) / 2, R.x1 - R.x0, PAD_THICK, R.z1 - R.z0);
   }
   const out = (m) => (m.empty ? new THREE.BufferGeometry() : m.build());
   return { pieces: out(ok), trouble: out(bad) };

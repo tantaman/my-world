@@ -6,13 +6,16 @@
 // It keeps the site (which plan is staked out where). While it's working,
 // each frame it:
 //   1. asks the plan what's next (plan.js nextJob): a notch to cut, a
-//      footing, the nearest log of the lowest course, a roof;
+//      footing, the nearest log of the lowest course, a roof. Before the
+//      footings, if they can't all reach one level or the ground stands
+//      above the sills, it levels the site first (grade.js);
 //   2. checks it can be done, here and now, with the tools' own checks
 //      (footingCheck, logCheck, roofCheck), and if not, stops and says why:
-//      the ground is off level, a tree is in the way, you're out of logs;
+//      too steep to level, a tree is in the way, you're out of logs;
 //   3. walks there, round the building rather than through it (Player.steer);
-//   4. does it: digs the footing, lays the log, swings the axe at the notch,
-//      raises the roof (digFooting, layLog, cutNotch, raiseRoof).
+//   4. does it: cuts or fills a spadeful towards grade, digs the footing,
+//      lays the log, swings the axe at the notch, raises the roof
+//      (spadeWork, digFooting, layLog, cutNotch, raiseRoof).
 // Touch the controls and you have the hiker back: it pauses.
 //
 // work() is called from the blueprint tool's own work() while that tool is in
@@ -24,12 +27,15 @@
 //   'done'    (name)   the last piece went in
 
 import { Emitter } from '../core/events.js';
+import { tenths } from '../build/inventory.js';
 import { JOIN_RADIUS, height } from '../build/constants.js';
 import { footingCheck, digFooting } from '../build/tools/footing.js';
 import { logCheck, layLog } from '../build/tools/wall.js';
 import { cutNotch } from '../build/tools/axe.js';
 import { roofCheck, raiseRoof } from '../build/tools/roof.js';
+import { spadeWork, digObstacles } from '../build/tools/shovel.js';
 import { normalize, place, findBuilding, survey, nextJob, progress, standAt, route, grow, inside } from './plan.js';
+import { levelling, nextSpot, siteGround, TOL } from './grade.js';
 
 const STAND_OFF = 1.2; // m outside the footprint that work is done from
 const KEEP_OFF = 0.9; // m the way round keeps clear of the footprint (walls, log ends)
@@ -41,28 +47,35 @@ const SIDESTEP = 1.6; // m to one side, to get round whatever is in the way
 const TRIES = 4; // sidesteps before giving up and asking for help
 // m from the work that will do, if where it's meant to be done from can't be
 // reached; a notch is cut from wherever you stand, if it's this close
-const REACH = { footing: 2.2, log: 4.5, notch: 2.6, roof: 6 };
+const REACH = { grade: 2.6, footing: 2.2, log: 4.5, notch: 2.6, roof: 6 };
+const SPADE = { near: 0.5, off: 1.5 }; // m: no nearer than this to the spot you're levelling; stand this far off it
+const STUCK = 1; // s of spade work without a spot moving before leaving it be
 const SETTLE = 0.35; // s squaring up to a log or a roof before setting it down
-const BREATHER = { footing: 0.4, log: 0.6, notch: 0.15, roof: 0.9 }; // s after each piece
+const BREATHER = { grade: 0.05, footing: 0.4, log: 0.6, notch: 0.15, roof: 0.9 }; // s after each piece
 
-// A site as it is saved (one of 'yours': see index.js). -> tidy, or null.
+// A site as it is saved (one of 'yours': see index.js). `level` is the grade
+// levelling began to, if it has, so it carries on to the same one.
+// -> tidy, or null.
 export function validSite(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const plan = normalize(raw.plan);
   if (!plan || !Number.isInteger(raw.x) || !Number.isInteger(raw.z)) return null;
-  return { plan, x: raw.x, z: raw.z, rot: Number.isInteger(raw.rot) ? ((raw.rot % 4) + 4) % 4 : 0 };
+  const rot = Number.isInteger(raw.rot) ? ((raw.rot % 4) + 4) % 4 : 0;
+  return { plan, x: raw.x, z: raw.z, rot, level: Number.isFinite(raw.level) ? raw.level : null };
 }
 
 export class Foreman extends Emitter {
   constructor({ player }) {
     super();
     this.player = player;
-    this.site = null; // { plan, x, z, rot }
+    this.site = null; // { plan, x, z, rot, level }
     this.placed = null; // the plan on the ground (plan.js place)
     this.state = 'idle'; // idle | working | paused
     this.why = ''; // why it stopped
     this.bad = false; // ...and whether that's a problem to fix (red)
     this.doing = ''; // what it's on, in words
+    this.levelling = false; // a pass of levelling is under way
+    this.skip = new Set(); // 'ix,iz' of spots levelling couldn't move
     this._reset();
   }
 
@@ -84,7 +97,8 @@ export class Foreman extends Emitter {
   }
 
   serialize() {
-    return this.site ? { plan: normalize(this.site.plan), x: this.site.x, z: this.site.z, rot: this.site.rot } : null;
+    const s = this.site;
+    return s ? { plan: normalize(s.plan), x: s.x, z: s.z, rot: s.rot, level: s.level } : null;
   }
 
   load(data) {
@@ -104,6 +118,7 @@ export class Foreman extends Emitter {
     this.state = 'working';
     this.why = '';
     this.bad = false;
+    this.skip.clear();
     this._reset();
     return true;
   }
@@ -120,6 +135,7 @@ export class Foreman extends Emitter {
     this.state = 'idle';
     this.why = '';
     this.bad = false;
+    this.levelling = false;
     this._release();
     this._hold(null);
   }
@@ -165,7 +181,12 @@ export class Foreman extends Emitter {
     const { b: at, clash } = this.building(b.buildings);
     if (clash) return this._stuck(b, `another building is closer than ${JOIN_RADIUS} m: its footings would join this one`);
     const first = at ? null : survey(this.placed, (x, z) => b.chunks.heightAt(x, z)).first;
-    const job = nextJob(this.placed, at, P.pos, first);
+    let job = nextJob(this.placed, at, P.pos, first);
+    if (job.type === 'footing') {
+      const grade = this._grade(b, at);
+      if (grade && grade.trouble) return this._stuck(b, grade.trouble);
+      if (grade) job = grade;
+    }
     if (job.type === 'done') {
       const name = this.site.plan.name;
       this.pullUp();
@@ -183,11 +204,48 @@ export class Foreman extends Emitter {
     return this._do(b, at, job, chk, dt);
   }
 
+  // ── Levelling ─────────────────────────────────────────────────────────────
+  // Before the footings: is there levelling to do? -> a 'grade' job (the
+  // next spot to bring to grade), { trouble } if it can't be levelled, or
+  // null to get on with the footings.
+  _grade(b, at) {
+    const site = this.site;
+    const built = new Set(at ? [...at.footings.values()].map((f) => `${f.x},${f.z}`) : []);
+    const lv = levelling(this.placed, siteGround(b, this.placed.rect), { y0: at ? at.y0 : null, level: site.level, built, earn: !b.creative });
+    if (!lv.need && !this.levelling) return null;
+    if (lv.need && lv.trouble) return { trouble: lv.trouble };
+    // keep at the spot in hand till it's done, or the nearest-and-worst
+    // would change its mind every step
+    const [ix, iz] = this.key && this.key.startsWith('g:') ? this.key.slice(2).split(':').map(Number) : [];
+    const v = lv.work.find((w) => w.ix === ix && w.iz === iz && !this.skip.has(`${ix},${iz}`)) || nextSpot(lv.work, this.player.pos, this.skip);
+    if (!v) {
+      // done, or nothing more a spade can do: the footings will say if that's not enough
+      this.levelling = false;
+      return null;
+    }
+    if (v.mode === 'fill' && !b.have('soil', 0.02)) return { trouble: `out of soil to level with (about ${tenths(lv.fill)} m³ more): dig some with the shovel` };
+    this.levelling = true;
+    if (site.level === null) {
+      site.level = lv.level;
+      this.emit('change');
+    }
+    return { type: 'grade', x: v.ix, z: v.iz, mode: v.mode, level: lv.level };
+  }
+
   // ── Getting there ─────────────────────────────────────────────────────────
   _begin(job, key) {
     this._reset();
     this.key = key;
     const P = this.player.pos;
+    if (job.type === 'grade') {
+      // nothing is built yet: stand a little off the spot, on the side you're on
+      const dx = P.x - job.x;
+      const dz = P.z - job.z;
+      const d = Math.hypot(dx, dz) || 1;
+      this.spot = { x: job.x + (dx / d) * SPADE.off, z: job.z + (dz / d) * SPADE.off };
+      this.path = [this.spot];
+      return;
+    }
     this.spot = standAt(job.x, job.z, this.placed.rect, STAND_OFF, P);
     this.path = route({ x: P.x, z: P.z }, this.spot, grow(this.placed.rect, KEEP_OFF));
   }
@@ -195,9 +253,11 @@ export class Foreman extends Emitter {
   // -> true once there
   _walk(b, job, dt) {
     const P = this.player.pos;
-    const near = workDistance(job, P) < REACH[job.type];
-    // a notch is cut from wherever you stand, if you're near enough already
+    const d0 = workDistance(job, P);
+    const near = d0 < REACH[job.type];
+    // a notch is cut, and a spot levelled, from wherever you stand, if you're near enough already
     if (job.type === 'notch' && near && !inside(P, grow(this.placed.rect, 0.3))) return this._arrive();
+    if (job.type === 'grade' && near && d0 > SPADE.near) return this._arrive();
     const target = this.path[0];
     const d = Math.hypot(target.x - P.x, target.z - P.z);
     const last = this.path.length === 1;
@@ -239,6 +299,17 @@ export class Foreman extends Emitter {
 
   // ── Doing it ──────────────────────────────────────────────────────────────
   _do(b, at, job, chk, dt) {
+    if (job.type === 'grade') {
+      this._hold('shovel');
+      const h = b.terrain.vertexHeight(job.x, job.z);
+      spadeWork(b, job.x, job.z, job.mode, dt, job.level, digObstacles(b, job.x, job.z).blocked);
+      const now = b.terrain.vertexHeight(job.x, job.z);
+      // stuck (a fill short of soil, a vertex at the most a spade can move it): leave it be
+      this.still = Math.abs(now - h) > 1e-4 ? 0 : this.still + dt;
+      if (this.still > STUCK) this.skip.add(`${job.x},${job.z}`);
+      if (Math.abs(now - job.level) <= TOL || this.still > STUCK) this.rest = BREATHER.grade;
+      return true;
+    }
     if (job.type === 'footing') {
       this._hold('shovel');
       if (digFooting(b, chk.node, chk.c, dt)) this.rest = BREATHER.footing;
@@ -289,11 +360,13 @@ export class Foreman extends Emitter {
     this.tries = 0;
     this.settle = 0;
     this.rest = 0;
+    this.still = 0;
   }
 }
 
 // Can the job be done, here and now? -> { reason, ...what doing it needs }
 function check(b, at, job) {
+  if (job.type === 'grade') return { reason: null };
   if (job.type === 'footing') return footingCheck(b, job.x, job.z);
   if (job.type === 'notch') return { reason: null };
   if (job.type === 'log') {
@@ -308,6 +381,7 @@ function check(b, at, job) {
 }
 
 function jobKey(j) {
+  if (j.type === 'grade') return `g:${j.x}:${j.z}`;
   if (j.type === 'notch') return `n:${j.L.axis}:${j.L.line}:${j.L.s0}:${j.L.k}:${j.n}`;
   if (j.type === 'log') return `l:${j.axis}:${j.line}:${j.s0}:${j.s1}:${j.k}`;
   if (j.type === 'roof') return `r:${j.x0}:${j.z0}:${j.x1}:${j.z1}`;
@@ -315,6 +389,7 @@ function jobKey(j) {
 }
 
 function describe(j) {
+  if (j.type === 'grade') return `levelling the site: ${j.mode === 'dig' ? 'cutting' : 'filling'}`;
   if (j.type === 'footing') return 'setting a footing';
   if (j.type === 'notch') return 'cutting a notch';
   if (j.type === 'log') return `laying a ${j.s1 - j.s0} m ${j.kind === 'log' ? 'log' : 'timber'}, course ${Math.floor(j.k / 2) + 1}`;

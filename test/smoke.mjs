@@ -547,7 +547,7 @@ try {
 
   const plot = await step('stake one out', async () => {
     // Move the crosshair about until the ghost is green, as you would: well
-    // clear of the cabin, on ground near enough level for the footings.
+    // clear of the cabin, on a slope it will have to level first.
     const found = await page.evaluate(async (m) => {
       const H = (x, z) => world.chunks.heightAt(x, z);
       const busy = (x, z) => T.plants(x, z, 5, ['pine', 'broad', 'birch']).length + T.plants(x, z, 3, ['rock']).length;
@@ -561,16 +561,17 @@ try {
             const x = x0 + dx;
             const z = z0 + dz;
             const hs = [H(x - 2, z - 1), H(x + 2, z - 1), H(x - 2, z + 2), H(x + 2, z + 2)];
-            if (Math.max(...hs) - Math.min(...hs) > 0.2 || busy(x, z + 0.5)) continue;
+            const fall = Math.max(...hs) - Math.min(...hs);
+            if (fall < 0.4 || fall > 0.9 || busy(x, z + 0.5)) continue;
             if (++tried > 40) return null;
             await T.aimGround(x, z, 7);
-            if (/^click stake out the /.test(T.prompt())) return { x, z, prompt: T.prompt() };
+            if (/^click stake out the .*levelling/.test(T.prompt())) return { x, z, prompt: T.prompt() };
           }
         }
       }
       return null;
     }, middle);
-    assert.ok(found, 'somewhere the first plan will go');
+    assert.ok(found, 'somewhere the first plan will go, once levelled');
     for (let i = 0; i < 4; i++) await page.evaluate(() => T.tap('alt')); // turned all the way round
     await page.evaluate(() => T.tap('use'));
     const site = await page.evaluate(() => world.blueprints.site());
@@ -584,7 +585,15 @@ try {
     const from = await page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z }));
     await key('KeyB');
     assert.equal(await page.evaluate(() => world.blueprints.foreman.state), 'working', 'B sets it going');
-    // the footings, then the first course with each crossing notched in
+    // it levels the site, sets the footings, then lays the first course with each crossing notched in
+    const levelled = await page.evaluate(() => T.until(() => /footing/.test(world.blueprints.foreman.doing), 90000));
+    assert.ok(levelled, `levelled (it says: "${await page.evaluate(() => T.prompt())}")`);
+    const pad = await page.evaluate(() => {
+      const f = world.blueprints.foreman;
+      return { level: f.site.level, off: Math.max(...f.placed.footings.map((p) => Math.abs(world.chunks.heightAt(p.x, p.z) - f.site.level))), moved: world.builder.terrain.map.size };
+    });
+    assert.ok(pad.level !== null && pad.moved > 0, 'the ground was moved to a grade');
+    assert.ok(pad.off <= 0.031, `every footing's ground is on grade (${pad.off} m off)`);
     const ok = await page.evaluate(() =>
       T.until(() => {
         const b = world.blueprints.foreman.building(world.builder.buildings).b;
@@ -602,7 +611,7 @@ try {
     const f = await page.evaluate(() => [world.blueprints.foreman.state, world.blueprints.foreman.why]);
     assert.deepEqual(f, ['paused', 'paused: you took over']);
     await shot('8-blueprint-started');
-    return { walked: walked > 2, paused: f[1] };
+    return { walked: walked > 2, paused: f[1], levelled: { moved: pad.moved, off: Math.round(pad.off * 100) } };
   });
 
   await page.evaluate(() => T.frames(120));

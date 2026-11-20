@@ -78,15 +78,18 @@ export function footingCheck(b, x, z) {
   const ground = b.chunks.heightAt(x, z);
   const c = b.buildings.footingCandidate(x, z, ground);
   const node = { x, z, ground, y0: c.y0 ?? (c.b ? c.b.y0 : ground + PIER.first) };
-  let reason = c.ok ? null : c.reason;
-  if (!reason && b.chunks.waterAt(x, z, _wet) && _wet.depth > -0.05) reason = "that's under water: fill it in first (shovel, right-click)";
-  if (!reason) {
-    const o = b.obstacles.near(x, z, 3).find((q) => q.footing && Math.hypot(q.x - x, q.z - z) < q.footing);
-    if (o) reason = `${o.what} is in the way`;
-  }
+  const reason = c.ok ? footingSpot(b, x, z) : c.reason;
   if (reason) return { node, c, reason };
   if (!b.have('stone', STONES)) return { node, c, short: true, reason: `you need ${STONES} stones (hands: pick some up)` };
   return { node, c, reason: null };
+}
+
+// Whatever but the lie of the land stops a footing at (x, z): water (unless
+// `water` is false), or something standing too close. -> why, or null
+export function footingSpot(b, x, z, { water = true } = {}) {
+  if (water && b.chunks.waterAt(x, z, _wet) && _wet.depth > -0.05) return "that's under water: fill it in first (shovel, right-click)";
+  const o = b.obstacles.near(x, z, 3).find((q) => q.footing && Math.hypot(q.x - x, q.z - z) < q.footing);
+  return o ? `${o.what} is in the way` : null;
 }
 
 // One frame of digging the footing at `node` (from footingCheck); the stones

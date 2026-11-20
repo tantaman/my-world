@@ -1,10 +1,11 @@
 // Blueprints: plans for buildings, staked out on the ground and put up for
-// you. A plan is the same pieces you'd build by hand (footings, logs a course
-// at a time, notches, roofs) and the foreman walks the hiker through them
-// with the same tools and rules. Where the ground or the wood won't let it,
+// you. A plan is the same pieces you'd build by hand (a levelled site,
+// footings, logs a course at a time, notches, roofs) and the foreman walks
+// the hiker through them with the same tools and rules. Where the ground or the wood won't let it,
 // it stops and says why; put it right and carry on.
 //
 //   plan.js      what a blueprint is; putting one on the ground; what's next
+//   grade.js     levelling a site first, when it needs it
 //   plans.js     the ones that come with the game
 //   library.js   those, and the ones you copy from your own buildings
 //   foreman.js   the site you staked out, and building it for you
@@ -29,6 +30,8 @@ import { Foreman, validSite } from './foreman.js';
 import { Ghost } from './ghost.js';
 import { blueprintTool } from './tool.js';
 import { capture, survey } from './plan.js';
+import { levelling, siteGround } from './grade.js';
+import { PIER } from '../build/constants.js';
 
 const RESURVEY = 0.5; // s between looks at the ground under a staked-out site
 
@@ -97,9 +100,11 @@ export function installBlueprints(game) {
     restore: (data) => foreman.load(data),
   });
 
-  // Draw what's left to go up, wherever you are and whatever you hold.
+  // Draw what's left to go up, wherever you are and whatever you hold: at
+  // the level the footings will come to, over the grade it will be levelled
+  // to if it still needs levelling, with red footings where it can't be.
   let looked = 0;
-  let level = null;
+  let view = null;
   game.addSystem({
     name: 'blueprints',
     phase: 'world',
@@ -110,19 +115,19 @@ export function installBlueprints(game) {
       }
       if (!foreman.site) {
         site.visible = false;
-        level = null;
+        view = null;
         return;
       }
       const { b } = foreman.building(buildings);
       looked -= dt;
-      if (!level || looked <= 0) {
-        level = survey(foreman.placed, ground, b ? b.y0 : null);
+      if (!view || looked <= 0) {
+        view = siteView(builder, foreman, b);
         looked = RESURVEY;
       }
-      const trouble = new Set(level.footings.filter((f) => !f.ok).map((f) => `${f.x},${f.z}`));
       const { x, z, rot, plan } = foreman.site;
       const built = b ? `${b.footings.size}:${b.logs.length}:${b.roofs.length}:${b.y0}` : '-';
-      site.draw(`${plan.name}|${x},${z},${rot}|${built}|${level.y0.toFixed(2)}|${[...trouble].join(' ')}`, foreman.placed, { y0: b ? b.y0 : level.y0, ground, built: b, trouble });
+      const pad = view.pad === null ? '-' : view.pad.toFixed(2);
+      site.draw(`${plan.name}|${x},${z},${rot}|${built}|${view.y0.toFixed(2)}|${pad}|${[...view.trouble].join(' ')}`, foreman.placed, { y0: b ? b.y0 : view.y0, ground, built: b, trouble: view.trouble, pad: view.pad });
       site.visible = true;
     },
   });
@@ -144,4 +149,19 @@ export function installBlueprints(game) {
     remove: (name) => library.remove(name),
     site: () => foreman.serialize(),
   });
+}
+
+// How the staked-out site stands, for drawing it. b: its building, if any.
+// -> { y0: the footings' level, pad: the grade still to level to, or null,
+//      trouble: 'x,z' of footings that can't reach y0 }
+function siteView(builder, foreman, b) {
+  const placed = foreman.placed;
+  const built = new Set(b ? [...b.footings.values()].map((f) => `${f.x},${f.z}`) : []);
+  const lv = levelling(placed, siteGround(builder, placed.rect), { y0: b ? b.y0 : null, level: foreman.site.level, built, earn: !builder.creative });
+  const levelled = lv.level !== null && !b;
+  const s = survey(placed, (x, z) => builder.chunks.heightAt(x, z), b ? b.y0 : levelled ? lv.level + PIER.first : null);
+  const left = (f) => !f.ok && !built.has(`${f.x},${f.z}`);
+  // off-level footings are only trouble if it can't be levelled
+  const trouble = new Set(lv.need && !lv.trouble ? [] : s.footings.filter(left).map((f) => `${f.x},${f.z}`));
+  return { y0: s.y0, pad: levelled && (lv.need || foreman.levelling) ? lv.level : null, trouble };
 }
