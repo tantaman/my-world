@@ -1,7 +1,8 @@
 // Third-person explorer: movement, simple physics, collision with trunks and
 // boulders, and an orbiting follow camera that stays out of the hillside.
-// In water you wade, slower the deeper it gets, and where it's too deep to
-// stand you swim: you float with your head and shoulders out.
+// In water you wade, slower the deeper it gets, and the current leans on you
+// the deeper you're in it; where it's too deep to stand you swim: you float
+// with your head and shoulders out, and running water carries you along.
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
@@ -18,6 +19,10 @@ const STEP_UP = 0.28;
 const BODY_H = 1.5; // head clearance (a little forgiving under door headers)
 // Water deeper than this floats you: you swim with your feet this far down.
 export const SWIM_DEPTH = 1.12;
+// How much of the current's speed it carries you at: wading in it up to your
+// knees (WADE_PUSH depth, m) and over, and swimming.
+const WADE_PUSH = [0.15, 0.9];
+const PUSH = { wade: 0.3, swim: 0.85 };
 const _dir = new THREE.Vector3();
 const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
 const _w = waterSample();
@@ -51,6 +56,9 @@ export class Player extends Emitter {
 
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
+    // the water here: how deep (m, 0 out of it) and which way it runs (m/s)
+    this.wade = 0;
+    this.current = { x: 0, z: 0 };
     this.yaw = 0; // facing; model faces +z when yaw = 0
     this.grounded = false;
     this.turnRate = 0;
@@ -139,15 +147,18 @@ export class Player extends Emitter {
     const inWater = this.world.waterAt(this.pos.x, this.pos.z, _w) && _w.depth > 0;
     const depth = inWater ? _w.depth : 0;
     this.wade = depth;
+    this.current.x = inWater ? _w.flowX : 0;
+    this.current.z = inWater ? _w.flowZ : 0;
     this.swimming = depth > SWIM_DEPTH;
     const drag = this.swimming ? 0.42 : 1 - 0.5 * smoothstep(0.12, 1.0, depth);
     const run = input.running() && !this.swimming;
     const speed = (run ? CONFIG.runSpeed : CONFIG.walkSpeed) * amount * (1 - this.busy * 0.85) * drag;
+    const push = this.swimming ? PUSH.swim : PUSH.wade * smoothstep(WADE_PUSH[0], WADE_PUSH[1], depth);
 
     const accel = this.grounded ? 11 : 2.5;
     const k = 1 - Math.exp(-accel * dt);
-    this.vel.x = lerp(this.vel.x, wx * speed, k);
-    this.vel.z = lerp(this.vel.z, wz * speed, k);
+    this.vel.x = lerp(this.vel.x, wx * speed + this.current.x * push, k);
+    this.vel.z = lerp(this.vel.z, wz * speed + this.current.z * push, k);
 
     if (this.grounded && input.jumped() && !this.swimming) {
       this.vel.y = CONFIG.jumpSpeed;

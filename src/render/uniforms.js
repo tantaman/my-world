@@ -27,5 +27,7 @@ export const SKY = {
   uTime: SHARED.uTime,
 };
 
-// How much the water around the player's legs is stirred up, 0..1.
-export const WADE = { uWade: { value: 0 } };
+// The water around the player's legs: how much it's stirred up (0..1), and
+// how fast it's going past them (m/s, x and z: the current less your own
+// way through it), which sets the wake.
+export const WADE = { uWade: { value: 0 }, uWadeFlow: { value: new THREE.Vector2() } };
