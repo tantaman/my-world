@@ -646,6 +646,12 @@ test("a hike's land is fetched once, and only when something near it asks", asyn
   assert.deepEqual(arrived, ['made-up'], 'and said so once');
   assert.ok(lands.ready(...box(AT[0], AT[1])), 'then it is ready');
   assert.deepEqual(lands.defs.get('made-up'), hike, 'with the whole hike');
+  // Whose reach a place is in is known from the cards alone, fetched or not:
+  // what else is grown from the seed (the forest's old places) keeps off it
+  const cards = new Lands([{ ...card, load: async () => ({ default: land }) }]);
+  assert.equal(cards.reaches(...box(AT[0], AT[1])).id, 'made-up', 'on it');
+  assert.equal(cards.reaches(...box(AT[0] + reach - 10, AT[1])).id, 'made-up', 'and as far as it changes the land');
+  assert.equal(cards.reaches(...box(AT[0] + reach + 10, AT[1])), null, 'not beyond');
 });
 
 test("land that can't be fetched is asked for again, but not every frame", async () => {
