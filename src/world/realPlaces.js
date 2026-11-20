@@ -110,20 +110,30 @@ export function withRealPlaces(Land) {
     }
 
     // Sets the real land at the height of the forest around it: the trailhead
-    // (or, failing one, the lowest of its rim) at the forest's average level
-    // just outside it.
+    // at the forest's average level just outside the hike. Hikes that overlap
+    // share one datum (landform.js), that of the first of them, so the same
+    // real height stands at the same height in each: a datum says whose ring
+    // and whose trailhead, and what real height its heights start from.
     _settle(L) {
+      const def = L.def;
+      const d = def.datum || this._ownDatum(L);
       const K = 64;
       let sum = 0;
-      let low = Infinity;
       for (let k = 0; k < K; k++) {
         const a = (k / K) * Math.PI * 2;
-        sum += this._baseHeight(L.cx + Math.cos(a) * L.outer, L.cz + Math.sin(a) * L.outer);
-        low = Math.min(low, L.raw(L.cx + Math.cos(a) * L.radius, L.cz + Math.sin(a) * L.radius));
+        sum += this._baseHeight(d.at[0] + Math.cos(a) * d.outer, d.at[1] + Math.sin(a) * d.outer);
       }
+      L.offset = sum / K - d.anchor + ((def.base || 0) - (d.base || 0)) * def.scale;
+    }
+
+    // For a hike that doesn't say: its own trailhead (or, failing one, the
+    // lowest of its rim), its own ring.
+    _ownDatum(L) {
       const t = L.trailhead;
-      const anchor = t ? L.raw(L.cx + t.x, L.cz + t.z) : low;
-      L.offset = sum / K - anchor;
+      let anchor = Infinity;
+      if (t) anchor = L.raw(L.cx + t.x, L.cz + t.z);
+      else for (let k = 0; k < 64; k++) anchor = Math.min(anchor, L.raw(L.cx + Math.cos((k / 64) * Math.PI * 2) * L.radius, L.cz + Math.sin((k / 64) * Math.PI * 2) * L.radius));
+      return { at: [L.cx, L.cz], outer: L.outer, anchor, base: L.def.base || 0 };
     }
 
     // A real place's clearings (where its photo was taken, its trailhead)

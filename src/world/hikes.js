@@ -13,5 +13,5 @@
 const hike = (card, load) => ({ ...card, load });
 
 export const HIKES = [
-  hike({"id":"mount-storm-king","name":"Mount Storm King","at":[0,-3200],"scale":0.2,"radius":800,"fade":200,"photo":{"lat":48.055397,"lon":-123.7734},"view":{"x":0,"z":0,"bearing":280.5,"hour":16.35},"trailhead":{"x":-249.5,"z":38.9,"yaw":2.763},"trail":{"name":"Mt. Storm King Trail","length":496,"climb":122},"trees":{"cover":0.9,"species":0.7},"lakes":[{"name":"Lake Crescent"}]}, () => import('./hikes/mount-storm-king.js')),
+  hike({"id":"mount-storm-king","name":"Mount Storm King","at":[27149.5,-1553.7],"scale":0.2,"radius":800,"fade":200,"photo":{"lat":48.055397,"lon":-123.7734},"base":153.82,"datum":{"at":[27149.5,-1553.7],"outer":1000,"anchor":11.822,"base":153.82},"view":{"x":0,"z":0,"bearing":280.5,"hour":16.35},"trailhead":{"x":-249.5,"z":38.9,"yaw":2.763},"trail":{"name":"Mt. Storm King Trail","length":496,"climb":122},"trees":{"cover":0.9,"species":0.7},"lakes":[{"name":"Lake Crescent"}]}, () => import('./hikes/mount-storm-king.js')),
 ];

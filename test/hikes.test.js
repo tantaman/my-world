@@ -11,6 +11,7 @@ import { decodePng, encodePng } from '../tools/hike/png.js';
 import { localFrame, tileXY, terrarium } from '../tools/hike/geo.js';
 import { parseOsm, trails, waters } from '../tools/hike/osm.js';
 import { buildHike, splitHike, simplify, signedDistance } from '../tools/hike/build.js';
+import { placeHike, project, ORIGIN } from '../tools/hike/place.js';
 import { packHeights, unpackHeights, packShore, unpackShore } from '../src/world/landform.js';
 import { WorldGen as Land1 } from '../src/world/worldgen.js';
 import { withRealPlaces } from '../src/world/realPlaces.js';
@@ -212,7 +213,7 @@ test('the world grows a hike: the real land, its trail, its lake', () => {
   // the trailhead stands at the level of the forest round the hike
   let sum = 0;
   for (let k = 0; k < 64; k++) sum += gen._baseHeight(L.cx + Math.cos((k / 64) * Math.PI * 2) * L.outer, L.cz + Math.sin((k / 64) * Math.PI * 2) * L.outer);
-  near(L.raw(L.cx + L.trailhead.x, L.cz + L.trailhead.z) + L.offset, sum / 64, 1e-6, 'settled');
+  near(L.raw(L.cx + L.trailhead.x, L.cz + L.trailhead.z) + L.offset, sum / 64, 1e-3, 'settled (its datum is kept to the millimetre)');
   // and nothing of the forest's own water is on it
   for (let z = -480; z <= 480; z += 40) {
     for (let x = -480; x <= 480; x += 40) {
@@ -389,12 +390,72 @@ test('the far view sees the lake from the top', () => {
   assert.ok(g.h[10 * 21 + 20] > level + 100, 'and the mountain over it');
 });
 
+// ── Where they go: where they are ────────────────────────────────────────────
+const haversine = (a, b) => {
+  const r = Math.PI / 180;
+  const h = Math.sin(((b.lat - a.lat) * r) / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(((b.lon - a.lon) * r) / 2) ** 2;
+  return 2 * 6371008.8 * Math.asin(Math.sqrt(h));
+};
+
+test('hikes lie as far apart as they really are, at their own scale', () => {
+  assert.deepEqual(project(ORIGIN.lat, ORIGIN.lon, 0.2).map((v) => v + 0), [0, 0], 'the middle of the world');
+  const stormKing = { lat: 48.0554, lon: -123.7734 };
+  const mailbox = { lat: 47.4676, lon: -121.6746 };
+  const [a, b] = [project(stormKing.lat, stormKing.lon, 0.2), project(mailbox.lat, mailbox.lon, 0.2)];
+  const game = Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.2;
+  const real = haversine(stormKing, mailbox);
+  assert.ok(Math.abs(game - real) / real < 0.01, `${Math.round(game)} m in the game for ${Math.round(real)} m in fact`);
+  assert.ok(b[0] > a[0] && b[1] > a[1], 'and in the same direction: east-south-east');
+  const card = { radius: 800, fade: 200, scale: 0.2 };
+  assert.throws(() => placeHike({ photo: ORIGIN, ...card }), /where everyone starts/);
+  assert.throws(() => placeHike({ photo: { lat: -33.87, lon: 151.21 }, ...card }), /further than the game can reach/); // Sydney
+  assert.ok(placeHike({ photo: { lat: 35.68, lon: 139.69 }, ...card }).far, 'Tokyo is in reach, a little blurred'); // ~7,700 km
+  const placed = placeHike({ photo: stormKing, ...card });
+  assert.deepEqual([placed.datum, placed.near, placed.far], [null, null, false], 'far from any other, it sets its own heights');
+});
+
+test('hikes that overlap line up exactly, and stand on the same heights', () => {
+  // A mountainside rolling for kilometres, and two photos 2 km apart on it
+  const wave = (lat, lon) => 600 + 240 * Math.sin(lat * 260) * Math.cos(lon * 170) + 90 * Math.sin(lat * 900 + lon * 400);
+  const opts = { radius: 2400, fade: 600, cell: 40, trails: [], waters: [] };
+  const photoA = { lat: 46.5, lon: -121.6, bearing: 90, hour: 12 };
+  const photoB = { lat: 46.512, lon: -121.585, bearing: 200, hour: 12 };
+  const placeA = placeHike({ photo: photoA, scale: 0.2, radius: 480, fade: 120 });
+  const A = buildHike({ id: 'a', name: 'A', photo: photoA, elevation: wave, at: placeA.at, ...opts }).def;
+  const placeB = placeHike({ photo: photoB, scale: 0.2, radius: 480, fade: 120 }, [splitHike(A).card]);
+  assert.equal(placeB.near.id, 'a', 'B is placed from A');
+  const [e, n] = localFrame(photoA.lat, photoA.lon).toEN(photoB.lat, photoB.lon);
+  near(placeB.at[0], A.at[0] + e * 0.2, 0.06, 'east of A by as much as it really is');
+  near(placeB.at[1], A.at[1] - n * 0.2, 0.06, 'and north');
+  assert.deepEqual(placeB.datum, A.datum, 'B shares A’s heights');
+  const B = buildHike({ id: 'b', name: 'B', photo: photoB, elevation: wave, at: placeB.at, datum: placeB.datum, ...opts }).def;
+  const gen = new WorldGen(SEED, [], [A, B]);
+  const [LA, LB] = gen.lands;
+  // where both are real land, they say the same thing
+  let worst = 0;
+  for (let k = 0; k < 200; k++) {
+    const x = (A.at[0] + B.at[0]) / 2 + ((k % 20) - 10) * 12;
+    const z = (A.at[1] + B.at[1]) / 2 + (Math.floor(k / 20) - 5) * 12;
+    worst = Math.max(worst, Math.abs(LA.raw(x, z) + LA.offset - (LB.raw(x, z) + LB.offset)));
+  }
+  assert.ok(worst < 0.25, `the same ground ${worst.toFixed(3)} m apart`);
+  // and adding B didn't move A
+  const alone = new WorldGen(SEED, [], [A]);
+  near(gen.lands[0].offset, alone.lands[0].offset, 0, 'A stands where it stood');
+});
+
 // ── The hikes in the game ────────────────────────────────────────────────────
-test('the hikes in the game keep their distance from each other and from where people start', () => {
+test('the hikes in the game are where they really are, and those that meet share their heights', () => {
   assert.equal(new Set(HIKES.map((h) => h.id)).size, HIKES.length, 'each has its own id');
   for (const h of HIKES) {
-    assert.ok(Math.hypot(...h.at) - h.radius - h.fade > 1500, `${h.id} is out in the world`);
-    for (const o of HIKES) if (o !== h) assert.ok(Math.hypot(h.at[0] - o.at[0], h.at[1] - o.at[1]) > h.radius + h.fade + o.radius + o.fade, `${h.id} and ${o.id} overlap`);
+    assert.ok(Math.hypot(...h.at) - h.radius - h.fade > 1500, `${h.id} is out in the world, clear of where people start`);
+    const [x, z] = project(h.photo.lat, h.photo.lon, h.scale);
+    assert.ok(Math.hypot(x - h.at[0], z - h.at[1]) < 400, `${h.id} is where it really is`);
+    assert.ok(h.datum && h.base !== undefined, `${h.id} says what its heights stand on`);
+    for (const o of HIKES) {
+      if (o === h || Math.hypot(h.at[0] - o.at[0], h.at[1] - o.at[1]) > h.radius + h.fade + o.radius + o.fade) continue;
+      assert.deepEqual(o.datum.at, h.datum.at, `${h.id} and ${o.id} overlap, so they share their heights`);
+    }
   }
 });
 

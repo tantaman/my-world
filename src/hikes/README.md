@@ -17,7 +17,7 @@ it put a picture of it:
 ```
 photo: 48.05540, -123.77340, looking 280°, at 16:21
 Mount Storm King → src/world/hikes/mount-storm-king.js (206 kB)
-  at 0, -3200 in the world: the real land for 800 m round the photo, at 1 : 5
+  at 27149.5, -1553.7 in the world, 136 km from the middle as the crow flies: the real land for 800 m round the photo, at 1 : 5
   the walk: Mt. Storm King Trail, 496 m, climbing 122 m
   lakes: Lake Crescent
 ```
@@ -45,12 +45,29 @@ the walk. Steep ground is bare rock, the rest is wooded (`--cover`,
 `--species`), and the spot the photo was taken from is kept clear of trees,
 with nothing growing in front of it to block the view.
 
-**Where it goes.** Each hike gets a spot of its own, out past 3 km from the
-middle of the world, clear of the others (`--at x,z` to choose). Like
-everything else a seed grows, it is part of the world description: a world
-built in near a hike keeps it there. Importing a hike again (`--force`)
-leaves it where it is, and `npm test` checks that hikes leave the rest of the
-world alone.
+**Where it goes.** Where it really is. The game world is the real world at
+the hikes' own scale, 1 : 5, so hikes lie as far apart, and in the same
+directions, as they do in fact: Mount Storm King is 27 km east of the middle
+of the world, and a hike 170 km east of it would be 34 km further on. The
+middle, where everyone starts and the forest is made up, is out in the
+Pacific, 70 km off the Olympic coast, so no real hike can land on it
+(`tools/hike/place.js`). Between hikes it's forest; the list (**K**) is the
+quick way across.
+
+Hikes close enough to overlap are the same land, and join: the second is
+placed from the first by the real distance between their photos, and stands
+on the first one's heights, so the same mountain is the same height in both
+and adding it moves nothing that was there. Two that each already stand on
+heights of their own get a step where a third joins them (the importer says
+so).
+
+It's good out to about 5,000 km from the middle (further, the ground's
+finer texture blurs a little; the GPU's floats run short) and goes no
+further than 10,000 km. `--at x,z` puts one somewhere else. Like everything
+else a seed grows, a hike is part of the world description: a world built in
+near one keeps it there, so once placed it stays put. Importing it again
+(`--force`) leaves it where it is, and `npm test` checks that hikes leave the
+rest of the world alone.
 
 **Where it's kept.** In the code, not on the save server. The save server
 only ever holds what people *change* in a world, and a hike is part of what
