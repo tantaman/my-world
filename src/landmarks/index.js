@@ -26,6 +26,7 @@ import { Sites, onPlan, planDiscs } from './sites.js';
 import { KINDS } from './kinds.js';
 import { buildSite } from './models.js';
 import { VEG_STRIDE } from '../world/flora.js';
+import { rayBox } from '../core/geom.js';
 
 const SHOW = 330; // m: sites this close are stood up in the world...
 const HIDE = 420; // ...and taken down again past this
@@ -38,9 +39,6 @@ const BOB_NEAR = 90; // m: boats closer than this ride the water
 // rock).
 const KEEP_BACK = { pine: 1.2, broad: 1.4, birch: 1.0, bush: 0.7, fern: 0.25, rock: 1.1, log: 2.4 };
 const SCALED = { rock: true, log: true };
-
-const _o = new THREE.Vector3();
-const _d = new THREE.Vector3();
 
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player', 'build', 'map'];
@@ -267,30 +265,4 @@ function corners(s, [x0, z0, x1, z1]) {
 
 function boxDist(b, x, z) {
   return Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.max(b[1] - z, 0, z - b[3]));
-}
-
-// Distance along a ray to a box ({ inv: world -> box, half }), or Infinity.
-// A ray that starts inside one isn't stopped by it.
-function rayBox(origin, dir, { inv, half }) {
-  _o.copy(origin).applyMatrix4(inv);
-  _d.copy(dir).transformDirection(inv);
-  let t0 = 0;
-  let t1 = Infinity;
-  for (let a = 0; a < 3; a++) {
-    const o = a === 0 ? _o.x : a === 1 ? _o.y : _o.z;
-    const d = a === 0 ? _d.x : a === 1 ? _d.y : _d.z;
-    const h = half[a];
-    if (Math.abs(d) < 1e-9) {
-      if (o < -h || o > h) return Infinity;
-      continue;
-    }
-    let u = (-h - o) / d;
-    let v = (h - o) / d;
-    if (u > v) [u, v] = [v, u];
-    if (u > t0) t0 = u;
-    if (v < t1) t1 = v;
-    if (t0 > t1) return Infinity;
-  }
-  const inside = Math.abs(_o.x) < half[0] && Math.abs(_o.y) < half[1] && Math.abs(_o.z) < half[2];
-  return inside ? Infinity : t0;
 }

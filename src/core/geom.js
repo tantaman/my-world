@@ -40,3 +40,39 @@ export const cellKey = (i, j) => (i + KEY_OFF) * KEY_SPAN + (j + KEY_OFF);
 
 // A scratch record for ChunkManager.waterAt(x, z, out).
 export const waterSample = () => ({ level: 0, depth: 0, flowX: 0, flowZ: 0, foam: 0 });
+
+// How far along a ray (origin, dir: anything with x, y, z) it meets a box
+// { inv, half }: `inv` takes the world into the box's frame (a Matrix4, read
+// through its elements) and `half` is its half-size there. Infinity if it
+// misses, or if the ray starts inside it: the camera, say, in a room, which
+// its walls shouldn't stop.
+export function rayBox(origin, dir, { inv, half }) {
+  const e = inv.elements;
+  const o = [
+    e[0] * origin.x + e[4] * origin.y + e[8] * origin.z + e[12],
+    e[1] * origin.x + e[5] * origin.y + e[9] * origin.z + e[13],
+    e[2] * origin.x + e[6] * origin.y + e[10] * origin.z + e[14],
+  ];
+  const dx = e[0] * dir.x + e[4] * dir.y + e[8] * dir.z;
+  const dy = e[1] * dir.x + e[5] * dir.y + e[9] * dir.z;
+  const dz = e[2] * dir.x + e[6] * dir.y + e[10] * dir.z;
+  const l = Math.hypot(dx, dy, dz) || 1;
+  const d = [dx / l, dy / l, dz / l];
+  let t0 = 0;
+  let t1 = Infinity;
+  for (let a = 0; a < 3; a++) {
+    const h = half[a];
+    if (Math.abs(d[a]) < 1e-9) {
+      if (o[a] < -h || o[a] > h) return Infinity;
+      continue;
+    }
+    let u = (-h - o[a]) / d[a];
+    let v = (h - o[a]) / d[a];
+    if (u > v) [u, v] = [v, u];
+    if (u > t0) t0 = u;
+    if (v < t1) t1 = v;
+    if (t0 > t1) return Infinity;
+  }
+  const inside = Math.abs(o[0]) < half[0] && Math.abs(o[1]) < half[1] && Math.abs(o[2]) < half[2];
+  return inside ? Infinity : t0;
+}

@@ -19,6 +19,8 @@
 //   glyph    7×7 rows of '#' and '.', drawn on its badge
 //   visited  whether you've been there
 //   shape    optional: polygons [[x, z], ...] in the world, drawn close up
+//   ground   optional: polygons of open ground it has (a town's street),
+//            drawn under its shapes at every zoom
 
 export const PLACE_COLOR = '#e9dfc0';
 

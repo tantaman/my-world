@@ -37,6 +37,7 @@ const SCALE_STEPS = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
 const BADGE = 11;
 const BADGE_FILL = { fresh: '#e9dfc0', visited: '#a99a76' };
 const SHAPE_FILL = 'rgba(74, 56, 36, 0.92)';
+const GROUND_FILL = 'rgba(176, 150, 108, 0.85)'; // a place's open ground: a town's street
 const SHAPES_FROM = 2.6; // device px per metre (per DPR) from which a place's shape is drawn
 const NEARBY = { r: 1500, n: 8 }; // places listed beside the map: within r m, at most n
 
@@ -579,6 +580,22 @@ export class MapView {
     const b = this.toWorld(W + pad, H + pad);
     const list = this.places.within(a.x, a.z, b.x, b.z);
     const ctx = this.ctx;
+    // its open ground, a town's street, at every zoom
+    ctx.save();
+    ctx.fillStyle = GROUND_FILL;
+    for (const place of list) {
+      for (const poly of place.ground || []) {
+        ctx.beginPath();
+        poly.forEach(([x, z], i) => {
+          const q = this.toScreen(x, z);
+          if (i) ctx.lineTo(q.sx, q.sy);
+          else ctx.moveTo(q.sx, q.sy);
+        });
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    ctx.restore();
     // close up, what stands there: a roof, a tent, a deck
     if (this.scale >= SHAPES_FROM * this.dpr) {
       ctx.save();
