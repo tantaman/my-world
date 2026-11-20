@@ -64,5 +64,6 @@ one's look is a function in `src/landmarks/models.js`.
 index.js              plugs it into the game: old places, stood up as you come near and on the map
 sites.js              where they are, grown from the seed: which kind, where it suits it
 kinds.js              the kinds, in one table: names, rarity, habitat, footprint, glyph
-models.js             what each looks like: cabins, a ruin, a tent, a well, a dock and boats
+models.js             what each looks like: cabins, a ruin, a tent, a well, a dock and boats;
+                      and the kit (piers, floors, steps, weathering) it lends to others
 ```

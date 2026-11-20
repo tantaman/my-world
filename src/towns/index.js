@@ -53,6 +53,9 @@ const _sphere = new THREE.Sphere();
 const _frustum = new THREE.Frustum();
 const _pv = new THREE.Matrix4();
 
+// The features this uses, so it is installed after them (game/features.js);
+// landmarks for its old places, which the towns keep clear of.
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks'];
 export function installTowns(game) {
   const { scene, camera, gen, chunks, grass, solids, player, builder, map, hud, save, sound, sky } = game;
   const towns = new Towns(gen, { start: player.start, sites: game.landmarks ? game.landmarks.sites : null });
