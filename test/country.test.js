@@ -9,8 +9,7 @@ import { MAX_COUNTRIES } from '../src/render/uniforms.js';
 import { FLORA, TREE_KINDS } from '../src/world/flora.js';
 import { SPECIES } from '../src/wildlife/species.js';
 import { SPECIES as TIMBER, treeName } from '../src/build/forestry.js';
-import { WorldGen as Land1 } from '../src/world/worldgen.js';
-import { withRealPlaces } from '../src/world/realPlaces.js';
+import { growWorld, LANDS } from '../src/world/lands.js';
 import { generateTerrain, generateSurface, generateVegetation, SURFACE_STRIDE } from '../src/world/chunkGen.js';
 import { sampleFar } from '../src/hikes/farGrid.js';
 import { localFrame } from '../tools/hike/geo.js';
@@ -18,10 +17,11 @@ import { buildHike, splitHike } from '../tools/hike/build.js';
 import { parseOsm, beaches } from '../tools/hike/osm.js';
 import { nearestLand, deckHeight, weatherAt } from '../src/country/here.js';
 
-// The first land with real places set into it, as lands.js grows every world.
-const WorldGen = withRealPlaces(Land1);
-
 const SEED = 20261119;
+// A world with these hikes set into it, on the first land unless another is asked for.
+const world = (hikes = [], land = 1) => growWorld(SEED, [], land, hikes);
+// ("on land 2", for a test's name)
+const onLand = (land) => (land > 1 ? `, on land ${land}` : '');
 const TRUNK = { pine: 0.3, broad: 0.4, birch: 0.2, bush: 0, fern: 0, rock: 0.7, log: 0, palm: 0.17, ironwood: 0.26, treefern: 0.2, silversword: 0 };
 
 test('every country says everything, in words the rest of the game knows', () => {
@@ -91,7 +91,7 @@ test('a hike says what kind of country it is, and keeps its beaches', () => {
   assert.equal(splitHike(def).card.country, 'lava coast', 'on its card, where the list and the far view can read it');
   assert.equal(def.beaches.length, 1);
   assert.ok(splitHike(def).land.beaches, 'the beach goes with its land');
-  const gen = new WorldGen(SEED, [], [def]);
+  const gen = world([def]);
   const L = gen.lands[0];
   assert.equal(L.country, COUNTRY['lava coast']);
   assert.ok(L.strand(...at(1480, 450)) < -1, 'on the beach');
@@ -107,7 +107,7 @@ test('the walk starts on top of the mountain: the mountain stands over the fores
   // The same island with its road run up to the summit. Stood level with the
   // forest, the top would leave the whole mountain in a pit.
   const summit = island({ roads: [[toLL(-30, -3000), toLL(-30, 3000)]], trails: [{ name: '', points: [toLL(-30, 0), toLL(-15, 0), toLL(0, 0)] }] });
-  const gen = new WorldGen(SEED, [], [summit]);
+  const gen = world([summit]);
   const L = gen.lands[0];
   const peak = L.raw(...at(0, 0));
   assert.ok(Math.abs(summit.trailhead.x) < 8, 'the walk does start at the top');
@@ -118,20 +118,20 @@ test('the walk starts on top of the mountain: the mountain stands over the fores
   assert.ok(peak + L.offset - forest > 150, `so the top is ${Math.round(peak + L.offset - forest)} m over the forest round it`);
   // a walk that starts at the foot still stands its start level with the forest
   const shore = island();
-  const foot = new WorldGen(SEED, [], [shore]).lands[0];
+  const foot = world([shore]).lands[0];
   assert.ok(Math.abs(shore.datum.anchor - foot.raw(foot.cx + shore.trailhead.x, foot.cz + shore.trailhead.z)) < 0.01);
 });
 
 test('the ground is made of what the country says, and the forest of what it always was', () => {
   const out = { bare: 9, sand: 9, land: 9, country: 9 };
-  const forest = new WorldGen(SEED, []);
+  const forest = world();
   assert.equal(forest.surface(40, 40, out), null);
   assert.deepEqual(out, { bare: 0, sand: 0, land: 0, country: 0 });
   assert.equal(forest.countryAt(40, 40), null);
   assert.equal(generateSurface(forest, 0, 0, 1, 64), null, 'and no chunk of it carries anything extra');
 
   // cinder: bare all over
-  const cinder = new WorldGen(SEED, [], [island({ country: 'cinder desert', trees: { cover: 0 } })]);
+  const cinder = world([island({ country: 'cinder desert', trees: { cover: 0 } })]);
   assert.equal(cinder.surface(...at(200, 200), out), COUNTRY['cinder desert']);
   assert.ok(out.bare > 0.9 && out.land === 1 && out.sand === 0 && out.country === COUNTRY['cinder desert'].id, JSON.stringify(out));
   // half way out through its edge, half of that; past it, none
@@ -142,7 +142,7 @@ test('the ground is made of what the country says, and the forest of what it alw
   assert.equal(cinder.countryAt(AT[0], AT[1] + 480 + 100), null);
 
   // a lava coast: grass and bare patches inland, black rock at the sea, sand on the beach
-  const lava = new WorldGen(SEED, [], [island({ country: 'lava coast' })]);
+  const lava = world([island({ country: 'lava coast' })]);
   let bare = 0;
   let n = 0;
   for (let e = -1500; e <= 500; e += 100) for (let nn = -1500; nn <= 1500; nn += 100, n++) bare += lava.surface(...at(e, nn), out) ? out.bare : 0;
@@ -164,9 +164,9 @@ test('the ground is made of what the country says, and the forest of what it alw
   assert.deepEqual([...s.subarray(skirt, skirt + 4)], [...s.subarray(5 * SURFACE_STRIDE, 5 * SURFACE_STRIDE + 4)]);
 });
 
-test('what grows is what grows there', () => {
+for (const land of LANDS) test(`what grows is what grows there${onLand(land)}`, () => {
   const count = (def, kinds) => {
-    const gen = new WorldGen(SEED, [], [def]);
+    const gen = world([def], land);
     const sum = Object.fromEntries(kinds.map((k) => [k, 0]));
     for (let dz = -3; dz <= 3; dz++) {
       for (let dx = -4; dx <= 1; dx++) {
@@ -196,6 +196,24 @@ test('what grows is what grows there', () => {
   assert.ok(forest.pine > 50 && forest.palm + forest.ironwood + forest.treefern + forest.silversword === 0);
 });
 
+test('what a land has high up stops at the edge of a real place', () => {
+  // The second land has a treeline, and snow above it (land2.js). The island
+  // stands 200 m over the sea, higher than either: but it is a tropical
+  // island, wooded to the top, and no snow lies on it.
+  const def = island({ country: 'cloud forest', trees: { cover: 0.85, species: -0.7 } });
+  const gen = world([def], 2);
+  const bare = world([], 2);
+  const [x, z] = at(-100, 0);
+  const h = gen.height(x, z);
+  assert.ok(h > gen.lands[0].offset + 150, `near the top (${h - gen.lands[0].offset} m over the sea)`);
+  assert.ok(bare.above(x, z, h) > 0.9 && bare.snow(x, z, h) > 0.9, 'the land itself would have that high up bare, under snow');
+  assert.deepEqual([gen.above(x, z, h), gen.snow(x, z, h), gen.groves(x, z)], [0, 0, 0], 'on the island, none of it');
+  assert.ok(gen.forest(x, z) > 0.5, `and it is wooded (${gen.forest(x, z)})`);
+  // out past the island's edge the land is the land again
+  const [ox, oz] = [AT[0], AT[1] + gen.lands[0].outer + 50];
+  assert.deepEqual([gen.above(ox, oz, 200), gen.snow(ox, oz, 200), gen.forest(ox, oz), gen.species(ox, oz)], [bare.above(ox, oz, 200), bare.snow(ox, oz, 200), bare.forest(ox, oz), bare.species(ox, oz)]);
+});
+
 test('a rocky shore keeps its cliff; a beach comes down to the water', () => {
   // The same island with a cliff at the sea: 30 real metres straight up.
   const cliff = (lat, lon) => {
@@ -203,7 +221,7 @@ test('a rocky shore keeps its cliff; a beach comes down to the water', () => {
     return e > COAST ? -20 : e > COAST - 60 ? 30 : cone(lat, lon) + 30;
   };
   const height = (country, e, n) => {
-    const gen = new WorldGen(SEED, [], [island({ elevation: cliff, country })]);
+    const gen = world([island({ elevation: cliff, country })]);
     return gen.height(...at(e, n)) - gen.lands[0].offset;
   };
   // 5 real m in from the water: one in the game
@@ -214,8 +232,8 @@ test('a rocky shore keeps its cliff; a beach comes down to the water', () => {
 });
 
 test('the weather is the country’s, as far as you are onto it', () => {
-  const cinder = new WorldGen(SEED, [], [island({ country: 'cinder desert', trees: { cover: 0 } })]);
-  const cloud = new WorldGen(SEED, [], [island({ country: 'cloud forest' })]);
+  const cinder = world([island({ country: 'cinder desert', trees: { cover: 0 } })]);
+  const cloud = world([island({ country: 'cloud forest' })]);
   const L = cinder.lands[0];
   assert.equal(nearestLand([], 0, 0), null);
   assert.equal(nearestLand(cinder.lands, 0, 0), L);
@@ -223,7 +241,7 @@ test('the weather is the country’s, as far as you are onto it', () => {
   const deck = deckHeight(L);
   const top = L.raw(...at(0, 0)) + L.offset;
   assert.ok(Math.abs(deck - top - (2250 - 1015) * 0.2) < 2, `${Math.round(deck - top)} m over a 1015 m top`);
-  assert.ok(Number.isNaN(deckHeight(new WorldGen(SEED, [], [island()]).lands[0])), 'the forest has none');
+  assert.ok(Number.isNaN(deckHeight(world([island()]).lands[0])), 'the forest has none');
   // under it, on the land: its cover, and (cinder desert: shade 0) the sun still out
   assert.deepEqual(weatherAt(L, ...AT, top), { cover: 0.97, haze: 0.35, overcast: 0 });
   const C = cloud.lands[0];
@@ -238,10 +256,10 @@ test('the weather is the country’s, as far as you are onto it', () => {
 });
 
 test('from far off the land is its own colour too', () => {
-  const gen = new WorldGen(SEED, [], [island({ country: 'cinder desert', trees: { cover: 0 } })]);
+  const gen = world([island({ country: 'cinder desert', trees: { cover: 0 } })]);
   const g = sampleFar(gen, AT[0] - 320, AT[1] - 320, 5, 160);
   assert.ok(g.bare[12] > 0.9 && g.land[12] === 1 && g.country[12] === COUNTRY['cinder desert'].id, 'bare cinder at the middle');
   assert.ok(g.forest[12] < 0, 'and nothing standing on it to raise a canopy');
-  const out = sampleFar(new WorldGen(SEED, []), 0, 0, 3, 100);
+  const out = sampleFar(world(), 0, 0, 3, 100);
   assert.deepEqual([...out.bare, ...out.land], new Array(18).fill(0));
 });

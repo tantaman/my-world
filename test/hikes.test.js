@@ -13,8 +13,7 @@ import { parseOsm, trails, waters, coastlines, roads, streams } from '../tools/h
 import { buildHike, splitHike, simplify, signedDistance, coastDistance, walkFromRoad } from '../tools/hike/build.js';
 import { placeHike, project, ORIGIN } from '../tools/hike/place.js';
 import { Landform, packHeights, unpackHeights, packShore, unpackShore } from '../src/world/landform.js';
-import { WorldGen as Land1 } from '../src/world/worldgen.js';
-import { withRealPlaces } from '../src/world/realPlaces.js';
+import { growWorld, LANDS } from '../src/world/lands.js';
 import { generateVegetation } from '../src/world/chunkGen.js';
 import { sampleFar } from '../src/hikes/farGrid.js';
 import { NO_WATER, LAND_REACH, LAND_DRY } from '../src/world/water.js';
@@ -23,10 +22,11 @@ import { HIKES } from '../src/world/hikes.js';
 import { Lands, loadAll, reachOf } from '../src/world/landforms.js';
 import { tiffExif, jpegWith, heifWith } from './helpers/photos.js';
 
-// The first land with real places set into it, as lands.js grows every world.
-const WorldGen = withRealPlaces(Land1);
-
 const SEED = 20261119;
+// A world with these hikes set into it, on the first land unless another is asked for.
+const world = (hikes = [], land = 1) => growWorld(SEED, [], land, hikes);
+// ("on land 2", for a test's name)
+const onLand = (land) => (land > 1 ? `, on land ${land}` : '');
 const TRUNK = { pine: 0.3, broad: 0.4, birch: 0.2, bush: 0, fern: 0, rock: 0.7, log: 0 };
 const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} is not within ${tol} of ${b}`);
 
@@ -265,8 +265,8 @@ test('a hike is built from a photo, the land, the trails and the lakes', () => {
   assert.deepEqual(JSON.parse(JSON.stringify(hike)), hike);
 });
 
-test('the world grows a hike: the real land, its trail, its lake', () => {
-  const gen = new WorldGen(SEED, [], [hike]);
+for (const land of LANDS) test(`the world grows a hike: the real land, its trail, its lake${onLand(land)}`, () => {
+  const gen = world([hike], land);
   const L = gen.lands[0];
   const at = (e, n) => [AT[0] + e * 0.2, AT[1] - n * 0.2];
   // the top is 600 real metres over the foot of the mountain: 120 m in the game
@@ -332,7 +332,7 @@ test('a hike by the sea has the sea, and is walked up to from the road', () => {
   near(coastal.trail.length, 1000 * 0.2, 2, 'and is the kilometre up from it');
   near(coastal.trail.climb, (byTheSea(...toLL(0, 0)) - byTheSea(...toLL(1000, 0))) * 0.2, 3, 'climbing from it');
 
-  const gen = new WorldGen(SEED, [], [coastal]);
+  const gen = world([coastal]);
   const L = gen.lands[0];
   const at = (e, n) => [AT[0] + e * 0.2, AT[1] - n * 0.2];
   const shore = (e, n) => L.shore(...at(e, n));
@@ -354,7 +354,7 @@ test('a hike by the sea has the sea, and is walked up to from the road', () => {
   assert.ok(rim > gen.water.level || !gen.water.region, 'dry land at the rim');
   for (let e = -2300; e <= 2300; e += 115) assert.ok(L.raw(...at(e, 200)) >= -0.01, 'no ground is left under sea level');
   // a lake in the hills has no surf
-  const inland = new WorldGen(SEED, [], [hike]);
+  const inland = world([hike]);
   inland.height(AT[0] - 1600 * 0.2, AT[1]);
   assert.equal(inland.water.foam, 0);
   assert.ok(!inland.lands[0].sea);
@@ -415,7 +415,7 @@ test("a hike's streams are kept the way they flow, as far as its land goes", () 
 });
 
 test('a real stream runs downhill all the way, into what the map says it runs into', () => {
-  const gen = new WorldGen(SEED, [], [watered]);
+  const gen = world([watered]);
   const L = gen.lands[0];
   const at = (e, n) => [AT[0] + e * 0.2, AT[1] - n * 0.2];
   const sea = L.offset;
@@ -463,7 +463,7 @@ test('a real stream runs downhill all the way, into what the map says it runs in
   gen.water.probe(...at(be, bn));
   assert.ok(gen.water.kind === 'stream' && gen.water.edge < 0, 'on the map');
   // and none of it is felt beyond the land
-  const plain = new WorldGen(SEED, []);
+  const plain = world();
   for (let k = 0; k < 96; k++) {
     const t = (k / 96) * Math.PI * 2;
     const [x, z] = [L.cx + Math.cos(t) * (L.outer + 300), L.cz + Math.sin(t) * (L.outer + 300)];
@@ -475,7 +475,7 @@ test('a real stream runs downhill all the way, into what the map says it runs in
 test('a cove a few metres across is a cove: the shore is kept finer than the ground', () => {
   const sea = watered.lakes[0];
   assert.ok(sea.sea && sea.cell < watered.ground.cell / 2 && !sea.box, `on a grid of its own, ${sea.cell} m to the ground's ${watered.ground.cell}`);
-  const gen = new WorldGen(SEED, [], [watered]);
+  const gen = world([watered]);
   const L = gen.lands[0];
   const shore = (e, n) => L.shore(AT[0] + e * 0.2, AT[1] - n * 0.2);
   // the cove is 12 m across in the game, and 12 deep: less than two of the ground's cells
@@ -488,14 +488,14 @@ test('a cove a few metres across is a cove: the shore is kept finer than the gro
 });
 
 test('seen from the land, the sea runs on to the horizon', () => {
-  const gen = new WorldGen(SEED, [], [watered]);
+  const gen = world([watered]);
   const L = gen.lands[0];
   const at = (e, n) => [AT[0] + e * 0.2, AT[1] - n * 0.2];
   assert.ok(L.openSea(...at(2600, 0)), 'out past the edge of the land, to the east');
   assert.ok(L.openSea(...at(6000, 2500)), 'and far out');
   assert.ok(!L.openSea(...at(-2600, 0)), 'not inland');
   assert.ok(!L.openSea(...at(1500, 0)), 'nor on the land itself, where the sea is its own');
-  assert.ok(!gen.lands.length || !new WorldGen(SEED, [], [hike]).lands[0].openSea(AT[0] + 600, AT[1]), 'a land with a lake has no sea');
+  assert.ok(!gen.lands.length || !world([hike]).lands[0].openSea(AT[0] + 600, AT[1]), 'a land with a lake has no sea');
   // the game's own ground out there is forest: it is only the far view that sees water
   gen.height(...at(2600, 0));
   assert.notEqual(gen.water.kind, 'lake');
@@ -515,15 +515,15 @@ test('land with no trees has none at all', () => {
   // The forest plants the odd tree even where it's thinnest. Above the tree
   // line there are none.
   const L = new Landform(coastal);
-  const bare = generateVegetation(new WorldGen(SEED, [], [coastal]), Math.floor(AT[0] / 64), Math.floor(AT[1] / 64), 64, TRUNK);
+  const bare = generateVegetation(world([coastal]), Math.floor(AT[0] / 64), Math.floor(AT[1] / 64), 64, TRUNK);
   assert.ok(L.forest(AT[0] + 40, AT[1] + 40) < -0.025);
   assert.deepEqual(['pine', 'broad', 'birch', 'log'].map((k) => bare.lists[k].length), [0, 0, 0, 0]);
-  const wooded = generateVegetation(new WorldGen(SEED, [], [hike]), Math.floor(AT[0] / 64), Math.floor(AT[1] / 64), 64, TRUNK);
+  const wooded = generateVegetation(world([hike]), Math.floor(AT[0] / 64), Math.floor(AT[1] / 64), 64, TRUNK);
   assert.ok(wooded.lists.pine.length + wooded.lists.broad.length + wooded.lists.birch.length > 0, 'where the same mountain, wooded, has plenty');
 });
 
 test('nothing grows where the photo was taken, nor in front of it', () => {
-  const gen = new WorldGen(SEED, [], [hike]);
+  const gen = world([hike]);
   const [vx, vz] = AT;
   for (const [cx, cz] of [[Math.floor(vx / 64) - 1, Math.floor(vz / 64)], [Math.floor(vx / 64), Math.floor(vz / 64)], [Math.floor(vx / 64), Math.floor(vz / 64) - 1]]) {
     const v = generateVegetation(gen, cx, cz, 64, TRUNK);
@@ -539,9 +539,9 @@ test('nothing grows where the photo was taken, nor in front of it', () => {
   }
 });
 
-test('a hike leaves the water outside it alone', () => {
-  const plain = new WorldGen(SEED, []);
-  const withHike = new WorldGen(SEED, [], [hike]);
+for (const land of LANDS) test(`a hike leaves the water outside it alone${onLand(land)}`, () => {
+  const plain = world([], land);
+  const withHike = world([hike], land);
   // the drainage network is worked out over the forest alone: the same, node
   // for node, so no river is rerouted and no lake raised anywhere
   const ci = Math.floor(AT[0] / NET.cell);
@@ -577,9 +577,9 @@ const fields = (gen, x, z) => {
   return [h, w.level, w.kind, w.edge, w.region, gen.pathMask(x, z), gen.pathEdge, gen.forest(x, z), gen.species(x, z), gen.padClearance(x, z)];
 };
 
-test("a hike's land added later grows the same world as one there from the start", () => {
-  const first = new WorldGen(SEED, [], [hike]);
-  const later = new WorldGen(SEED, []);
+for (const land of LANDS) test(`a hike's land added later grows the same world as one there from the start${onLand(land)}`, () => {
+  const first = world([hike], land);
+  const later = world([], land);
   later.height(AT[0], AT[1]); // grown a little without it first, as the forest round it would be
   later.addHike(hike);
   for (let z = -560; z <= 560; z += 35) {
@@ -587,9 +587,9 @@ test("a hike's land added later grows the same world as one there from the start
   }
 });
 
-test("nothing past a hike's reach depends on its land", () => {
-  const plain = new WorldGen(SEED, []);
-  const withHike = new WorldGen(SEED, [], [hike]);
+for (const land of LANDS) test(`nothing past a hike's reach depends on its land${onLand(land)}`, () => {
+  const plain = world([], land);
+  const withHike = world([hike], land);
   const reach = reachOf(hike);
   for (let k = 0; k < 160; k++) {
     const t = (k / 160) * Math.PI * 2;
@@ -601,10 +601,10 @@ test("nothing past a hike's reach depends on its land", () => {
   }
 });
 
-test("no pond or lake of the forest's reaches further than LAND_REACH allows for", () => {
+for (const land of LANDS) test(`no pond or lake of the forest's reaches further than LAND_REACH allows for${onLand(land)}`, () => {
   // a basin gives way within its size, beach and LAND_DRY of real land, and
   // shapes the ground for its size and beach again past that
-  const net = new WorldGen(SEED, []).water.net;
+  const net = world([], land).water.net;
   let most = 0;
   let seen = 0;
   for (let j = -30; j <= 30; j++) {
@@ -683,7 +683,7 @@ test("land that can't be fetched is asked for again, but not every frame", async
 });
 
 test('the far view sees the lake from the top', () => {
-  const gen = new WorldGen(SEED, [], [hike]);
+  const gen = world([hike]);
   const g = sampleFar(gen, AT[0] - 400, AT[1] - 200, 21, 20);
   let wet = 0;
   let level = NO_WATER;
@@ -739,7 +739,7 @@ test('hikes that overlap line up exactly, and stand on the same heights', () => 
   near(placeB.at[1], A.at[1] - n * 0.2, 0.06, 'and north');
   assert.deepEqual(placeB.datum, A.datum, 'B shares A’s heights');
   const B = buildHike({ id: 'b', name: 'B', photo: photoB, elevation: wave, at: placeB.at, datum: placeB.datum, ...opts }).def;
-  const gen = new WorldGen(SEED, [], [A, B]);
+  const gen = world([A, B]);
   const [LA, LB] = gen.lands;
   // where both are real land, they say the same thing
   let worst = 0;
@@ -750,7 +750,7 @@ test('hikes that overlap line up exactly, and stand on the same heights', () => 
   }
   assert.ok(worst < 0.25, `the same ground ${worst.toFixed(3)} m apart`);
   // and adding B didn't move A
-  const alone = new WorldGen(SEED, [], [A]);
+  const alone = world([A]);
   near(gen.lands[0].offset, alone.lands[0].offset, 0, 'A stands where it stood');
 });
 
@@ -769,9 +769,9 @@ test('the hikes in the game are where they really are, and those that meet share
   }
 });
 
-test('the hikes leave the rest of the world exactly as it was', async () => {
-  const plain = new WorldGen(SEED, []);
-  const withHikes = new WorldGen(SEED, [], await loadAll(HIKES));
+for (const land of LANDS) test(`the hikes leave the rest of the world exactly as it was${onLand(land)}`, async () => {
+  const plain = world([], land);
+  const withHikes = world(await loadAll(HIKES), land);
   for (let z = -600; z <= 600; z += 37) {
     for (let x = -600; x <= 600; x += 37) {
       const a = [plain.height(x, z), plain.water.level, plain.pathMask(x, z), plain.forest(x, z), plain.species(x, z), plain.padClearance(x, z)];
