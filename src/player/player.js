@@ -3,6 +3,10 @@
 // In water you wade, slower the deeper it gets, and the current leans on you
 // the deeper you're in it; where it's too deep to stand you swim: you float
 // with your head and shoulders out, and running water carries you along.
+//
+// Something can carry you instead (player.carrier: a mount). Then it's its
+// speeds, its depth, its width and head room that count, and if it flies,
+// space climbs and shift stoops.
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
@@ -27,21 +31,28 @@ export const SWIM_DEPTH = 1.12;
 // knees (WADE_PUSH depth, m) and over, and swimming.
 const WADE_PUSH = [0.15, 0.9];
 const PUSH = { wade: 0.3, swim: 0.85 };
+const EYE = 1.45; // m above your feet the camera looks at
+// Flying higher than this (m) over the ground, you're above the trunks.
+const TRUNK_CLEAR = 10;
+// A tap of jump in the air (a touch screen has no holding it) climbs for this long (s).
+const FLAP = 0.45;
 const _dir = new THREE.Vector3();
 const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
 const _w = waterSample();
 
 // Where someone at (x, z) stands: on the ground, or afloat in deep water.
 // world is the ChunkManager.
-export function standHeight(world, x, z) {
+// depth: how deep it has to be to float them (SWIM_DEPTH for someone on foot).
+export function standHeight(world, x, z, depth = SWIM_DEPTH) {
   const g = world.heightAt(x, z);
-  if (world.waterAt(x, z, _w) && _w.level - g > SWIM_DEPTH) return _w.level - SWIM_DEPTH;
+  if (world.waterAt(x, z, _w) && _w.level - g > depth) return _w.level - depth;
   return g;
 }
 
 // Emits:
 //   'footstep'  (run 0..1)       a heel came down
 //   'jump'      ()
+//   'takeoff'   ()               something carrying you took to the air
 //   'land'      (strength 0..1)
 export class Player extends Emitter {
   // world: the ChunkManager (heightAt, waterAt, forEachCollider)
@@ -96,12 +107,39 @@ export class Player extends Emitter {
     // `manual` says whether they moved you this frame.
     this.steer = null;
     this.manual = false;
+    // Something carrying you, or null on your own two feet. Player only
+    // needs to know how it moves, not what it is (its owner draws it):
+    //   walk, run      m/s on the ground (run: with shift)
+    //   swim, swimRun  m/s out of its depth (swimRun: with shift, if faster)
+    //   depth          deeper than this (m) it swims, feet this far under
+    //   jump           take-off speed (m/s), 0 if it can't
+    //   radius         how wide it is, to trunks and walls (m)
+    //   height         head room it needs, rider and all (m)
+    //   eye            how high above its feet the camera looks (m)
+    //   back           how much further back the camera sits to take it in (m)
+    //   agility        how quickly it gets up to speed (1/s)
+    //   turn           how quickly it turns the way it's going (1/s)
+    //   push           how much of the current carries it (0..1)
+    //   fly            null, or { cruise, fast, climb, glide, dive, ceiling,
+    //                  agility }: m/s along and up (glide and dive sink, so
+    //                  are negative), and how high over the ground it goes (m)
+    //   landing        set by its owner while it comes down to land
+    this.carrier = null;
+    // carried through the air, and climbing (jump held, or tapped just now)
+    this.flying = false;
+    this.climbing = false;
+    this._flap = 0;
+  }
+
+  // How far your feet are above the ground under them (m).
+  get height() {
+    return this.pos.y - this.groundAt(this.pos.x, this.pos.z);
   }
 
   // Ground height under (x, z) for feet at y: terrain or the top of something built.
   // (Which solid that was, if any, is left in this.groundSolid.)
   groundAt(x, z, y = Infinity) {
-    let g = standHeight(this.world, x, z);
+    let g = standHeight(this.world, x, z, this.carrier ? this.carrier.depth : SWIM_DEPTH);
     this.groundSolid = null;
     if (this.solids) {
       this.solids.forEachNear(x, z, 1, (s) => {
@@ -129,14 +167,19 @@ export class Player extends Emitter {
     this.vel.set(0, 0, 0);
     this.yaw = yaw;
     this.camYaw = camYaw;
-    this.camTarget.set(x, this.pos.y + 1.45, z);
+    this.camTarget.set(x, this.pos.y + this.eye, z);
     this.character.root.position.copy(this.pos);
     this.character.root.rotation.y = yaw;
     this.updateCamera(1 / 60, true);
   }
 
+  get eye() {
+    return this.carrier ? this.carrier.eye : EYE;
+  }
+
   update(dt) {
     const input = this.input;
+    const c = this.carrier;
     const look = input.consumeLook();
     const sens = 0.0026;
     this.camYaw -= look.x * sens;
@@ -160,7 +203,8 @@ export class Player extends Emitter {
     this.manual = wl > 1e-4;
     if (this.manual) this.hasMoved = true;
     // ...or, with your hands off the controls, wherever you're being walked
-    else if (this.steer) {
+    // (not while something carries you: your hands are on it)
+    else if (this.steer && !c) {
       const dx = this.steer.x - this.pos.x;
       const dz = this.steer.z - this.pos.z;
       const d = Math.hypot(dx, dz);
@@ -180,38 +224,74 @@ export class Player extends Emitter {
     // Standing on something built over it (a dock, a boat) you're out of it.
     const inWater = this.world.waterAt(this.pos.x, this.pos.z, _w) && _w.depth > 0 && !(this.underfoot && this.pos.y > _w.level);
     const depth = inWater ? _w.depth : 0;
-    this.wade = depth;
-    this.current.x = inWater ? _w.flowX : 0;
-    this.current.z = inWater ? _w.flowZ : 0;
-    this.swimming = depth > SWIM_DEPTH;
-    const drag = this.swimming ? 0.42 : 1 - 0.5 * smoothstep(0.12, 1.0, depth);
-    const run = running && !this.swimming;
-    const speed = (run ? CONFIG.runSpeed : CONFIG.walkSpeed) * amount * (1 - this.busy * 0.85) * drag;
-    const push = this.swimming ? PUSH.swim : PUSH.wade * smoothstep(WADE_PUSH[0], WADE_PUSH[1], depth);
+    const float = c ? c.depth : SWIM_DEPTH;
+    const F = c && c.fly;
+    this.flying = !!F && !this.grounded;
+    this.wade = this.flying ? 0 : depth;
+    this.current.x = inWater && !this.flying ? _w.flowX : 0;
+    this.current.z = inWater && !this.flying ? _w.flowZ : 0;
+    this.swimming = depth > float && !this.flying;
+    let speed;
+    let push;
+    if (c) {
+      if (this.flying) speed = (running ? F.fast : F.cruise) * amount;
+      else if (this.swimming) speed = (running && c.swimRun ? c.swimRun : c.swim) * amount;
+      else speed = (running ? c.run : c.walk) * amount * (1 - 0.5 * smoothstep(float * 0.15, float, depth));
+      push = this.flying ? 0 : this.swimming ? c.push : c.push * 0.35 * smoothstep(float * 0.15, float, depth);
+    } else {
+      const drag = this.swimming ? 0.42 : 1 - 0.5 * smoothstep(0.12, 1.0, depth);
+      const run = running && !this.swimming;
+      speed = (run ? CONFIG.runSpeed : CONFIG.walkSpeed) * amount * (1 - this.busy * 0.85) * drag;
+      push = this.swimming ? PUSH.swim : PUSH.wade * smoothstep(WADE_PUSH[0], WADE_PUSH[1], depth);
+    }
 
-    const accel = this.grounded ? 11 : 2.5;
+    const accel = this.flying ? F.agility : this.grounded ? (c ? c.agility : 11) : 2.5;
     const k = 1 - Math.exp(-accel * dt);
     this.vel.x = lerp(this.vel.x, wx * speed + this.current.x * push, k);
     this.vel.z = lerp(this.vel.z, wz * speed + this.current.z * push, k);
 
-    if (this.grounded && input.jumped() && !this.swimming) {
-      this.vel.y = CONFIG.jumpSpeed;
-      this.grounded = false;
-      this.emit('jump');
+    if (F) {
+      // jump takes to the air; in it, jump climbs, shift stoops, and
+      // otherwise it glides, slowly losing height
+      const tapped = input.jumped();
+      if (this.grounded && tapped) {
+        this.vel.y = F.climb;
+        this.grounded = false;
+        this.flying = true;
+        this.emit('takeoff');
+      } else if (this.flying && tapped) this._flap = FLAP;
+      this._flap = Math.max(0, this._flap - dt);
+      this.climbing = this.flying && !c.landing && (input.isDown('jump') || this._flap > 0);
+      if (this.flying) {
+        let vy = c.landing ? F.dive * 0.8 : this.climbing ? F.climb : running ? F.dive : F.glide;
+        const over = this.height - F.ceiling;
+        if (over > 0) vy = Math.min(vy, -over);
+        this.vel.y = lerp(this.vel.y, vy, 1 - Math.exp(-dt * 3));
+      } else this.vel.y -= CONFIG.gravity * dt;
+    } else {
+      const jump = c ? c.jump : CONFIG.jumpSpeed;
+      if (this.grounded && jump > 0 && input.jumped() && !this.swimming) {
+        this.vel.y = jump;
+        this.grounded = false;
+        this.emit('jump');
+      }
+      this.climbing = false;
+      this.vel.y -= CONFIG.gravity * dt;
     }
-    this.vel.y -= CONFIG.gravity * dt;
 
     // Integrate
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
     this.pos.y += this.vel.y * dt;
 
-    // Collide with trunks / boulders (circle push-out)
-    this.world.forEachCollider(this.pos.x, this.pos.z, (cx, cz, r) => {
+    // Collide with trunks / boulders (circle push-out), unless flying over them
+    const radius = c ? c.radius : PLAYER_RADIUS;
+    const above = this.flying && this.pos.y - this.world.heightAt(this.pos.x, this.pos.z) > TRUNK_CLEAR;
+    if (!above) this.world.forEachCollider(this.pos.x, this.pos.z, (cx, cz, r) => {
       const dx = this.pos.x - cx;
       const dz = this.pos.z - cz;
       const d = Math.hypot(dx, dz);
-      const min = r + PLAYER_RADIUS;
+      const min = r + radius;
       if (d < min && d > 1e-5) {
         const push = (min - d) / d;
         this.pos.x += dx * push;
@@ -229,12 +309,13 @@ export class Player extends Emitter {
 
     // Walls, footings, felled trunks: push out of anything that's not underfoot.
     if (this.solids) {
-      this.solids.forEachNear(this.pos.x, this.pos.z, 1.5, (s) => {
+      const head = c ? c.height : BODY_H;
+      this.solids.forEachNear(this.pos.x, this.pos.z, 1.2 + radius, (s) => {
         segDist(this.pos.x, this.pos.z, s.ax, s.az, s.bx, s.bz, _seg);
-        const min = s.r + PLAYER_RADIUS;
+        const min = s.r + radius;
         if (_seg.d >= min) return;
         const top = s.topA + (s.topB - s.topA) * _seg.t;
-        if (this.pos.y >= top - (s.step ?? STEP_UP) || this.pos.y + BODY_H < s.bottom) return;
+        if (this.pos.y >= top - (s.step ?? STEP_UP) || this.pos.y + head < s.bottom) return;
         const push = min - _seg.d;
         this.pos.x += _seg.nx * push;
         this.pos.z += _seg.nz * push;
@@ -274,7 +355,7 @@ export class Player extends Emitter {
         : Math.atan2(this.vel.x, this.vel.z);
       let d = target - this.yaw;
       d = Math.atan2(Math.sin(d), Math.cos(d));
-      const step = d * (1 - Math.exp(-dt * 12));
+      const step = d * (1 - Math.exp(-dt * (c ? c.turn : 12)));
       this.yaw += step;
       turn = step / Math.max(dt, 1e-4);
     }
@@ -283,9 +364,11 @@ export class Player extends Emitter {
     const root = this.character.root;
     root.position.copy(this.pos);
     root.rotation.y = this.yaw;
-    this.character.update(dt, hs, this.grounded, this.vel.y, this.turnRate);
+    // carried, the legs aren't walking (whatever carries you sits you on it)
+    if (c) this.character.update(dt, 0, true, 0, 0);
+    else this.character.update(dt, hs, this.grounded, this.vel.y, this.turnRate);
     // bob a little while swimming
-    if (this.swimming) root.position.y += Math.sin(this.character.time * 2.6) * 0.04;
+    if (this.swimming && !c) root.position.y += Math.sin(this.character.time * 2.6) * 0.04;
 
     this.updateCamera(dt, false);
   }
@@ -294,10 +377,10 @@ export class Player extends Emitter {
     const kT = snap ? 1 : 1 - Math.exp(-dt * 10);
     this.camTarget.x = lerp(this.camTarget.x, this.pos.x, kT);
     this.camTarget.z = lerp(this.camTarget.z, this.pos.z, kT);
-    this.camTarget.y = lerp(this.camTarget.y, this.pos.y + 1.45, snap ? 1 : 1 - Math.exp(-dt * 6));
+    this.camTarget.y = lerp(this.camTarget.y, this.pos.y + this.eye, snap ? 1 : 1 - Math.exp(-dt * 6));
 
     // Pull in if the hillside is between us and the camera.
-    let dist = this.camDist;
+    let dist = this.camDist + (this.carrier ? this.carrier.back : 0);
     const cp = Math.cos(this.camPitch);
     const dir = _dir.set(Math.sin(this.camYaw) * cp, Math.sin(this.camPitch), Math.cos(this.camYaw) * cp);
     for (let i = 1; i <= 8; i++) {

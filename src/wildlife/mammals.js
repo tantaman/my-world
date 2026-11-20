@@ -6,6 +6,8 @@
 // stockings, the pale rump of an elk), and the odd hero detail like antlers.
 //
 // Each species exports { dims, build(seed, variant) -> { mesh, sk, dims } }.
+// The parts they are made of are exported too, so a four-legged animal that
+// lives elsewhere (a horse, src/mounts/) is made the same way.
 
 import * as THREE from 'three';
 import { RigBuilder, lin, at, along, ellipsoid, limb, stick, cone } from './rig.js';
@@ -13,7 +15,7 @@ import { quadSkeleton } from './quadruped.js';
 
 const ss = THREE.MathUtils.smoothstep;
 // (a fresh colour each time, so mixes can nest)
-const mix = (a, b, t) => new THREE.Color().copy(a).lerp(b, Math.min(1, Math.max(0, t)));
+export const mix = (a, b, t) => new THREE.Color().copy(a).lerp(b, Math.min(1, Math.max(0, t)));
 function hash3(x, y, z) {
   const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
   return s - Math.floor(s);
@@ -25,7 +27,7 @@ function hash3(x, y, z) {
 //   prof: [[t, halfWidth, halfHeight, yCentre], ...] with t = 0 at the rump
 //   and 1 at the brisket; z0, z1: where those are, along the body (model z).
 // Skinned across the hips and the shoulders so the back flexes in a gallop.
-function torso(r, sk, d, o) {
+export function torso(r, sk, d, o) {
   const [ws, hs] = o.segs ?? [14, 12];
   const g = new THREE.SphereGeometry(1, ws, hs);
   g.rotateX(Math.PI / 2); // poles along z
@@ -63,7 +65,7 @@ function torso(r, sk, d, o) {
 
 // Legs: a muscle and a tapered limb above, a thin limb below, a joint knob,
 // and a foot (hoof or paw) on the foot bone.
-function legs(r, sk, o) {
+export function legs(r, sk, o) {
   for (const leg of Object.values(sk.legs)) {
     const s = leg.fore ? o.fore : o.hind;
     const col = s.color ?? o.color;
@@ -78,7 +80,7 @@ function legs(r, sk, o) {
   }
 }
 
-function hooves(color, rad, h) {
+export function hooves(color, rad, h) {
   return (r, leg) => {
     const g = new THREE.CylinderGeometry(rad * 0.75, rad, h, 6);
     g.translate(0, h / 2, rad * 0.25);
@@ -91,7 +93,7 @@ function paws(color, w, h, len) {
 }
 
 // A tail along its bones: tapered segments, optionally bushy in the middle.
-function tail(r, sk, o) {
+export function tail(r, sk, o) {
   const n = sk.tail.length;
   const seg = sk.tailSeg;
   for (let i = 0; i < n; i++) {
@@ -107,12 +109,12 @@ function tail(r, sk, o) {
   }
 }
 
-function eyes(r, head, x, y, z, rad, color = lin(0x0d0b0a)) {
+export function eyes(r, head, x, y, z, rad, color = lin(0x0d0b0a)) {
   r.mirror((side) => [head, ellipsoid(rad, rad, rad * 0.8, 6, 4), { matrix: at(side * x, y, z), color, grain: 0 }]);
 }
 
 // Ears on the ear bones: a flattened cone, pale inside.
-function ears(r, sk, o) {
+export function ears(r, sk, o) {
   sk.ears.forEach((ear, i) => {
     const side = i === 0 ? 1 : -1;
     const g = cone(o.w, o.len, 6);
@@ -142,7 +144,7 @@ function beam(r, bone, pts, rad, color, tines = []) {
 }
 
 // Tapered neck from the neck bone toward the head.
-function neck(r, sk, d, r0, r1, depth, color, extraZ = 0) {
+export function neck(r, sk, d, r0, r1, depth, color, extraZ = 0) {
   const n = d.neck;
   r.part(sk.neck, stick(r0, r1, 8), {
     matrix: along(0, -r0 * 0.3, -extraZ, 0, Math.cos(n.angle) * (n.len + r0 * 0.3), Math.sin(n.angle) * (n.len + r0 * 0.3) + extraZ, 1, depth),

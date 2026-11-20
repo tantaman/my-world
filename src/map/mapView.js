@@ -7,6 +7,16 @@
 //  scroll / pinch      zoom
 //  + −  arrows  C      zoom, pan, back to where you are
 //  M / Esc             close
+//
+// Other features can draw on it too, over the land and under you and the
+// marks: map.addLayer((pen) => ...), where pen is
+//   ctx              the canvas (device pixels)
+//   toScreen(x, z)   -> { sx, sy } where a spot in the world is on it
+//   scale            device pixels per metre
+//   dpr, unit        device pixels per CSS pixel; per map pixel at this zoom
+//   t                seconds the map has been open, for things that pulse
+//   W, H             the canvas size
+//   label(text, x, y, colour, align)   a word with a dark outline
 
 import './map.css';
 import { TILE, MIN_LEVEL, MAX_LEVEL } from './mapRender.js';
@@ -104,6 +114,33 @@ export class MapView {
     this.sprites = new Map();
     this.viewKey = '';
     this.t = 0;
+    this.layers = [];
+    const view = this;
+    this.pen = {
+      get ctx() {
+        return view.ctx;
+      },
+      get scale() {
+        return view.scale;
+      },
+      get dpr() {
+        return view.dpr;
+      },
+      get unit() {
+        return view.unit;
+      },
+      get t() {
+        return view.t;
+      },
+      get W() {
+        return view.W;
+      },
+      get H() {
+        return view.H;
+      },
+      toScreen: (x, z) => view.toScreen(x, z),
+      label: (text, x, y, color, align) => view._label(text, x, y, color, align),
+    };
 
     const root = document.createElement('div');
     root.id = 'map';
@@ -211,6 +248,11 @@ export class MapView {
   toggle() {
     if (this.isOpen) this.close();
     else this.open();
+  }
+
+  // Something more to draw on the map: draw(pen), every frame it is open.
+  addLayer(draw) {
+    this.layers.push(draw);
   }
 
   // ── view math ─────────────────────────────────────────────────────────────
@@ -401,6 +443,11 @@ export class MapView {
 
     this._boxes = [];
     this._drawStructures();
+    for (const layer of this.layers) {
+      this.ctx.save();
+      layer(this.pen);
+      this.ctx.restore();
+    }
     this._drawPlaces();
     this._drawTrackLine();
     this._drawPlayer();
