@@ -108,8 +108,8 @@ same world — the ground you moved, the trees you felled, what you built, the
 places you marked, where you were standing and the hour of the day.
 
 **Anyone with the link can walk in, and build.** That's the point of it, but
-it's worth knowing before you post one. The last 20 saves of each world are
-kept, so a flattened cabin can be fished back out (see
+it's worth knowing before you post one. A whole copy of each world is kept
+now and then — the last 20 — so a flattened cabin can be fished back out (see
 [The save API](#the-save-api)).
 
 Once a world is saved it saves itself: a few seconds after you change
@@ -117,22 +117,39 @@ something, and again when you leave the tab. The *save* button tells you where
 things stand — *saved*, *saving…*, *offline*, *clash* — and **L** opens the
 panel with the link, a name for the world, and a *save now* button.
 
-If two people build at once, the second save is refused rather than silently
-flattening the first. The panel then offers *keep mine* or *open theirs*. If
-the server can't be reached, the world keeps running and is held in this
-browser; the next save that gets through carries the work with it.
+If two people build at once, only the 64 m squares they *both* changed are in
+question: those are refused rather than silently flattened, and the panel
+offers *keep mine* or *open theirs* for them. Everything either person did
+elsewhere stands either way — two people working a few hundred metres apart
+never get in each other's way at all. If the server can't be reached, the
+world keeps running and is held in this browser; the next save that gets
+through carries the work with it.
 
 ### What a save actually holds
 
 The forest is procedural, grown from a seed, so a save doesn't store terrain
-or trees. It stores the seed and the **diff** — only what you changed. Digging
-out a 60 × 60 m building site (about 4,000 edited ground vertices) comes to
-61 kB of JSON, **8.6 kB** once gzipped. The cap is 1 MB compressed, which is a
-great deal of digging.
+or trees. It stores the seed and the **diff** — only what you changed.
 
-Snapshots are gzipped in the browser with `CompressionStream` and stored as
+And because what you change is spread over the map, it's stored that way:
+**one row per 64 m square**, which is the same grid the world streams on. Three
+scopes, because they're contested differently:
+
+| | | |
+|---|---|---|
+| **patches** | the ground, felled trees, buildings | one row per square, revision-checked |
+| **meta** | the marks | one blob, revision-checked |
+| **visitor** | materials, grade stake, where you stood, the hour | one blob, last write wins |
+
+That's what keeps two builders out of each other's way, and it's what keeps
+saves small. A world dug over 320 × 320 m — 59,000 edited ground vertices,
+961 kB of JSON — is 36 rows and 129 kB gzipped. Uploading it the first time
+costs 140 kB. **Every ordinary bit of digging after that costs 5.6 kB**,
+because only the square you dug in goes out.
+
+Each part is gzipped in the browser with `CompressionStream` and stored as
 those exact bytes, so the server never parses a world or spends a cycle
-compressing one.
+compressing one. A single save is capped at 1 MB, one square at 256 kB, and a
+whole world at 8 MB.
 
 ### Setting up the server
 
@@ -142,7 +159,7 @@ world is a row and the whole thing is one file you can back up.
 
 ```bash
 npm run db:create          # prints a database_id — paste it into wrangler.jsonc
-npm run db:migrate         # create the tables (add :local for development)
+npm run db:migrate         # run the migrations (npm run db:local for development)
 npm run deploy             # build the site and put both on Cloudflare
 ```
 
@@ -157,17 +174,44 @@ the browser.
 
 | | |
 |---|---|
-| `POST /api/worlds?seed=N&name=&codec=` | create → `{ id, rev }` |
-| `GET /api/worlds/:id` | the snapshot, as stored |
-| `PUT /api/worlds/:id?rev=N` | save, if nobody got there first |
-| `GET /api/worlds/:id/meta` | id, seed, name, rev, size — no snapshot |
-| `GET /api/worlds/:id/history` | the saves still kept |
-| `GET /api/worlds/:id/revisions/:rev` | one older save |
+| `POST /api/worlds?seed=N&name=` | create → `{ id, gen, patches, … }` |
+| `GET /api/worlds/:id` | the whole world, as a frame |
+| `PUT /api/worlds/:id` | save — what landed, and what didn't |
+| `GET /api/worlds/:id/meta` | id, seed, name, generation, row count, size |
+| `GET /api/worlds/:id/history` | the whole copies still kept |
+| `GET /api/worlds/:id/revisions/:gen` | one of them, as a frame |
 
-Every save carries the `rev` it was based on; a stale one gets 409 and the
-current revision back. `?force=1` overrides that, which is what *keep mine*
-does. To put a world back the way it was on an earlier save, fetch that
-revision and `PUT` it with `?force=1`.
+Bodies and world responses are **frames** (`src/save/frame.js`): the ASCII
+magic `MWLD`, a big-endian `u32` header length, a JSON header naming every
+part, then the parts end to end. Nothing in the middle ever opens a part.
+
+```json
+{ "v": 2, "seed": 20261119, "name": "Elm Hollow", "gen": 7,
+  "meta":    { "rev": 3, "codec": "gzip", "len": 412 },
+  "visitor": { "codec": "gzip", "len": 180 },
+  "patches": [ { "rx": 0, "rz": -1, "rev": 2, "codec": "gzip", "len": 1840 } ],
+  "drop":    [ { "rx": 2, "rz": 3, "rev": 4 } ] }
+```
+
+A save sends only the parts that moved, each carrying the revision it was
+based on, and `drop` for squares that emptied out. The reply says what landed
+and what was refused:
+
+```json
+{ "gen": 8, "patches": [ { "rx": 0, "rz": -1, "rev": 3 } ], "dropped": [],
+  "meta": null, "clashed": { "meta": null, "regions": [ { "rx": 5, "rz": 5, "rev": 9 } ] } }
+```
+
+**A partly-refused save still returns 200.** Squares are independent, so the
+rest of it lands; `clashed` names what didn't and where it now stands. Setting
+`"force": true` in the header overrides the checks, which is what *keep mine*
+does — and it only overrides the squares you're actually sending. To put a
+world back as it was, fetch a copy from `/revisions/:gen` and `PUT` it with
+`force`.
+
+A world saved before the split still opens: the server hands back a `v: 1`
+frame holding its single blob, and the first save rewrites it in the new
+layout.
 
 ## How the look works
 
@@ -402,8 +446,10 @@ src/
     index.js              ← register structures here
     loader.js             places structures on their pads
   save/
-    worldSave.js          when to save, clashes, the offline copy
+    worldSave.js          when to save, what moved, clashes, the offline copy
     snapshot.js           what a saved world is: seed + what you changed
+    regions.js            cutting a world into 64 m squares, and back again
+    frame.js              the wire format, shared with the Worker
     remote.js             gzip in the browser, and the calls to the server
     sharePanel.js         the save panel (L): link, name, clash
     save.css              save panel styles
@@ -411,4 +457,12 @@ src/
 worker/
   index.js                the save server (Cloudflare Worker)
   migrations/             D1 schema
+```
+
+A world's rows:
+
+```
+worlds     id, seed, name, generation, meta blob, visitor blob
+patches    (world, rx, rz) -> revision + the gzipped square
+revisions  whole copies, kept now and then
 ```

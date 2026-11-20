@@ -5,8 +5,9 @@
 // hold is everything you changed: the ground you moved, the trees you felled,
 // what you built, the places you marked, and where you were standing.
 //
-// Keep this honest in both directions — collect() and apply() are the only
-// places that know the shape of a save.
+// Keep this honest in both directions — this file and regions.js are the only
+// places that know the shape of a save. The game only ever handles a whole
+// snapshot; regions.js is what cuts one up for storage and puts it back.
 
 export const SNAPSHOT_VERSION = 1;
 
