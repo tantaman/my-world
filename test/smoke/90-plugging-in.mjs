@@ -41,7 +41,8 @@ export default async function ({ page, step, key, frames, made }) {
       await page.evaluate((i) => document.querySelectorAll('#hotbar .slot')[i - 1].dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })), n);
       await frames(3);
     }
-    assert.equal(await page.evaluate(() => T.tool()), n, n <= 10 ? 'the next number key picks it' : 'and it can be picked from the bar');
+    assert.equal(await page.evaluate(() => T.tool()), 'flag', n <= 10 ? 'the next number key picks it' : 'and it can be picked from the bar');
+    assert.equal(await page.evaluate(() => T.slot()), n, 'in a slot of its own');
     await page.evaluate((m) => T.aimGround(m.x - 6, m.z - 6, 3), middle);
     assert.equal(await page.evaluate(() => T.prompt()), 'click plant a flag', 'its prompt shows');
     await page.evaluate(() => T.tap('use'));

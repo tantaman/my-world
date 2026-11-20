@@ -24,7 +24,7 @@ it's let go of again after a minute without talking. Voice goes straight from
 browser to browser (WebRTC, one connection to each person). The save server
 only passes on the few small messages that set those connections up, and who
 is talking. Nothing is recorded or kept. Voices come through the game's sound,
-so **N** silences them too. They have buses of their own, so
+so turning the sound off (settings, **O**) silences them too. They have buses of their own, so
 `world.sound.volume('radio', 0.5)` turns the chatter down. Headphones help:
 browsers don't always cancel the echo of sound a page plays itself.
 

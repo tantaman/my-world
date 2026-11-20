@@ -8,7 +8,7 @@
 //   trains.js     the engines and their cars, wheels and rods; the smoke
 //   sound.js      chuff, clatter, hiss, brakes, the whistle; ballast underfoot
 //   onMap.js      the lines and the trains on the map
-//   panel.js      the stations to go to (the rail button, or Y)
+//   panel.js      the stations to go to (a tab beside the map, or Y)
 //
 // Like the old places and the caves, nothing about a line is saved and
 // nothing about the land changes for it: everyone in a world finds the same line, the trains
@@ -22,8 +22,9 @@
 //   - plants are kept off the track, grass off its bank, and building away
 //   - the bank, the trestles and the platforms are solids, to walk on
 //   - the stations are places on the map, and the lines and trains drawn on it
-//   - the rail button and Y: the stations to go to; beside a standing
-//     train, Y gets on, and at a station, Y gets off (player.aboard)
+//   - the stations tab beside the map, which Y opens: the stations to go to;
+//     beside a standing train, Y gets on, and at a station, Y gets off
+//     (player.aboard)
 //   - a layer of sound for the trains near you
 //
 // From the console:
@@ -51,7 +52,7 @@ const TRAINS_SHOW = 480; // m: trains this close are drawn
 const LOOK_EVERY = 0.5; // s between looks round for track to stand up
 const BUILD_MS = 4; // ms a frame spent standing track up, when there's some to do
 const REACH = 7000; // m round you whose stations the panel lists
-const PUMP_MS = [0.8, 6]; // ms a frame surveying lines further off: usually, and with the panel or the map open
+const PUMP_MS = [0.8, 6]; // ms a frame surveying lines further off: usually, and with the map open
 const PREFETCH_EVERY = 2; // s between asking for the lines round you
 const BOARD = 3.5; // m from the side of a car you can climb into it
 const STOOD = 0.25; // m/s: slower than this, a train is standing
@@ -413,14 +414,18 @@ export function installRailway(game) {
   }
 
   // ── Y: the stations, getting on and getting off ───────────────────────────
-  const panel = new StationPanel({ input, onPick: (id) => go(id) });
-  function openPanel() {
-    game.emit('panel', 'rail');
-    lines.prefetch(player.pos.x, player.pos.z, REACH);
-    refreshPanel();
-    panel.open();
-  }
-  game.on('panel', (which) => which !== 'rail' && panel.close());
+  // The stations are a tab beside the map.
+  const showing = () => map.isOpen && map.tab === 'rail';
+  const panel = new StationPanel({ onPick: (id) => go(id), showing, onClose: () => map.close() });
+  map.addTab({
+    id: 'rail',
+    label: 'stations',
+    el: panel.el,
+    shown() {
+      lines.prefetch(player.pos.x, player.pos.z, REACH);
+      refreshPanel();
+    },
+  });
   function press() {
     if (aboard) return void leave();
     const c = coachNear();
@@ -428,20 +433,10 @@ export function installRailway(game) {
       if (c.e.w.v < STOOD) return board(c.e, c.car, c.seat);
       return hud.flash('wait for it to stop at a station');
     }
-    if (panel.isOpen) panel.close();
-    else openPanel();
+    map.open('rail');
   }
   commands.add({ id: 'railway', keys: ['KeyY'], group: 'WANDER', label: 'railway: stations to go to · get on a train · get off', run: press });
 
-  // the rail button, beside the map's
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.id = 'rail-btn';
-  btn.textContent = 'rail';
-  btn.setAttribute('aria-label', 'Railway stations');
-  const corner = document.getElementById('corner');
-  if (corner) corner.insertBefore(btn, document.getElementById('map-btn'));
-  hud.button('rail-btn', () => (panel.isOpen ? panel.close() : openPanel()));
   // on a touch screen, a button to get on and off, when there's a train
   const act = document.createElement('button');
   act.type = 'button';
@@ -466,7 +461,7 @@ export function installRailway(game) {
       return false;
     }
     if (aboard) leave(true);
-    panel.close();
+    map.close();
     show(stationEntry(line, st));
     const spot = platformSpot(line, st);
     // looking along the platform, the track to one side: whichever way a
@@ -656,8 +651,8 @@ export function installRailway(game) {
         prefetchIn = PREFETCH_EVERY;
         lines.prefetch(at.x, at.z, REACH);
       }
-      if (lines.queue.size) lines.pump(panel.isOpen || map.isOpen ? PUMP_MS[1] : PUMP_MS[0]);
-      if (panel.isOpen) {
+      if (lines.queue.size) lines.pump(map.isOpen ? PUMP_MS[1] : PUMP_MS[0]);
+      if (showing()) {
         panelIn -= dt;
         if (panelIn <= 0) refreshPanel();
       }

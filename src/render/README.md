@@ -45,20 +45,22 @@ world's 4 km period (`glsl.js`), so nothing shifts when the origin does. The
 play-through walks to the far side of the Earth to check
 (`test/smoke/97-far-out.mjs`).
 
-## Keys
+## Settings
+
+On the settings panel (**O**, or *settings* in the corner), under *picture*:
 
 | | |
 |---|---|
-| **P** | pixel art on / off |
-| **[ ]** | pixel size |
-| **- =** | pixel softness (0 = hard pixels, 1 = smooth) |
-| **O** | silhouette outlines on / off |
-| **F** | fullscreen |
+| pixel art | on / off |
+| pixel size | screen pixels per art pixel: fitted to the screen, or 1 to 12 |
+| pixel softness | 0 = hard pixels, 1 = smooth |
+| outlines | silhouette outlines on / off |
+| fullscreen | where the browser has it |
 
 ## Files
 
 ```
-index.js              plugs it into the game: renderer, scene, camera, the look keys
+index.js              plugs it into the game: renderer, scene, camera, the picture's settings
 origin.js             where each frame is drawn from, so far-off places stay sharp
 pixelPipeline.js      low-res render → composite → soft-pixel upscale
 uniforms.js           shader uniforms everything shares: time, wind, sky

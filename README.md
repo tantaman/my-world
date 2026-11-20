@@ -72,8 +72,8 @@ See [Building together](src/save/README.md) to set the server up, or skip it
 | **Q / E** | turn the camera |
 | **scroll** | zoom |
 | **R** | back to the starting path |
-| **V** | stats (fps, draw calls, triangles) |
 | **H** or **?** | help |
+| **O** | settings: the picture, the hour, sound, frame stats |
 
 Those get you about. Everything else — the map, the tools, talking, riding —
 has its keys in its own README, in its folder under [`src/`](src/), and **H**
@@ -82,7 +82,8 @@ features bind, so it can't fall behind.
 
 On a phone or tablet, drag with your left thumb to walk (push it all the way
 to run), drag with your right thumb to look, and tap on the right to jump.
-Tap a tool in the bar at the bottom. The **use**, **alt** and **stake**
+Tap a tool in the bar at the bottom (a slot with pips holds a kit of tools: tap
+again for the next, or pick one from it). The **use**, **alt** and **stake**
 buttons on the right stand in for the mouse buttons and **G**, and in a shared
 world, hold **talk** or **radio** beside them to talk. Out of your depth, hold
 **dive** to go under; let go and you drift back up.
@@ -137,7 +138,7 @@ changes the order of the others. `world.features` in the console shows the
 order. It is also the order tools sit on the tool bar, keys are listed on the
 help panel and systems run within a phase, so a feature can name another for
 its place as well as for its things: blueprints comes after fires to keep the
-plan tool ninth.
+plan tool after the campfire.
 
 A feature's `index.js` is the only file in it that knows about the game as a
 whole. Everything else in the folder is ordinary classes and functions that
@@ -173,7 +174,7 @@ place in that order, not at the end:
 | `audio/soundscape.js` | a sound that plays all the time | `game.sound.addLayer({ build, update })` |
 | `audio/soundscape.js` | being shut in: the open air muffled, the rest echoing | `game.sound.setEnclosed(0..1)` |
 | `audio/soundscape.js` | everything heard as if through something | `game.sound.muffle(amount)` |
-| `build/builder.js` | a tool | `game.builder.register(tool)` |
+| `build/builder.js` | a tool, in a slot of its own or a kit it shares | `game.builder.register(tool)`, with `tool.kit` |
 | `build/builder.js` | hands too full for tools | `builder.idleWhile(fn)` |
 | `build/inventory.js` | a material to carry (`optional`: on the HUD only while you have some) | `game.builder.stock.define({ id, label, optional })` |
 | `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)` |
@@ -181,6 +182,7 @@ place in that order, not at the end:
 | `game/game.js` | something done every frame | `game.addSystem({ name, phase, update })` |
 | `game/settings.js` | a remembered preference | `game.settings.get / set` |
 | `map/mapView.js` | something drawn on the map | `map.addLayer((pen) => …)` |
+| `map/mapView.js` | a list of somewhere to go, beside the map | `game.map.addTab({ id, label, el, shown })`, `map.open(id)` |
 | `map/places.js` | a place on the map, to look up and track | `game.map.places.addSource({ within, get })` |
 | `player/character.js` | something the hiker holds up to the face | `character.addRaised(name, object, { stowed })`, `raise(name)` |
 | `player/character.js` | sitting astride what carries you | `character.seat({ spread, hang, lean })` |
@@ -197,6 +199,7 @@ place in that order, not at the end:
 | `ui/hud.js` | a button on the HUD | `game.hud.button(id, fn)` |
 | `ui/hud.js` | what a key would do here, whatever tool is in hand | `hud.cue({ html, progress })` |
 | `ui/hud.js` | somewhere the HUD points you to | `game.hud.guide(() => target)` |
+| `ui/hud.js` | a setting: a switch or a slider on the settings panel | `game.hud.setting({ id, group, label, get, set })` |
 | `wildlife/species.js` | a species | `defineSpecies(kind, def)` |
 | `wildlife/wildlife.js` | a new kind of creature altogether | `defineAnimalClass(name, make)` |
 | `wildlife/wildlife.js` | shooting at the animals, or startling them with a loud noise | `wildlife.aimed(o, d, far)`, `kill(hit)`, `startle(x, z, reach)` |
@@ -259,7 +262,7 @@ export function installFires(game) {
   const fires = new Fires({ scene, solids, sky });
   game.provide('fires', fires);                              // world.fires in the console
 
-  builder.register(campfireTool(fires, solids));             // key 8, on the tool bar
+  builder.register(campfireTool(fires, solids));             // on the tool bar: 5, the camp kit
   builder.obstacles.addSource((x, z, R, out) => {            // spades, walls, footings and roofs go round it
     for (const f of fires.list.values()) out.push({ x: f.x, z: f.z, what: 'a fire ring', dig: 1.05, wall: 0.55, footing: 1.15, roof: 0.5 });
   });
@@ -288,6 +291,7 @@ someone playing, and what each file in it is), its rules in
 — and `work(b, t, io)` — act on the buttons. The contract, and everything the
 bench hands a tool, is at the top of `src/build/builder.js`; the six that come
 with the game are in `src/build/tools/`; `hands.js` is the shortest to read.
+A tool that goes with others names their `kit`, and shares their slot and key.
 
 **Something saved** registers a *domain*: `collect()` and `restore(data)`
 for its plain-JSON state, and, if it is part of the world rather than yours
@@ -309,6 +313,8 @@ and if it has a voice, a `defineCall`. Four-legged mammals need nothing else.
 **A key** is `game.commands.add({ id, keys: ['KeyB'], group: 'LOOK', label:
 '…', run })`, from the feature that owns what it does. The help panel is
 written from the same list, and two features wanting one key are warned about.
+Something you set once and leave doesn't need a key: it's a switch or a
+slider on the settings panel, `game.hud.setting({ id, group, label, get, set })`.
 
 ### Checking it still works
 

@@ -41,17 +41,19 @@ export function inPage() {
   };
 }
 
-export default async function ({ page, step, key, frames, state, shot, open, made }) {
+export default async function ({ page, step, key, take, frames, state, shot, open, made }) {
   const { corners, middle } = made.cabin;
 
   await step('choose a blueprint', async () => {
-    await key('Digit9');
-    assert.equal(await page.evaluate(() => T.tool()), 9, 'the blueprint tool is in hand');
+    // the plan tool is a kit of its own: its key again moves on through the plans
+    const plan = `Digit${await page.evaluate(() => world.builder.slotOf('blueprint'))}`;
+    await key(plan);
+    assert.equal(await page.evaluate(() => T.tool()), 'blueprint', 'the blueprint tool is in hand');
     const plans = await page.evaluate(() => world.blueprints.list());
     assert.ok(plans.length >= 4, 'plans come with the game');
-    await key('Digit9');
-    assert.equal(await page.evaluate(() => world.blueprints.library.current.name), plans[1], '9 again: the next plan');
-    for (let i = 1; i < plans.length; i++) await key('Digit9');
+    await key(plan);
+    assert.equal(await page.evaluate(() => world.blueprints.library.current.name), plans[1], 'its key again: the next plan');
+    for (let i = 1; i < plans.length; i++) await key(plan);
     assert.equal(await page.evaluate(() => world.blueprints.library.current.name), plans[0], 'and round to the first');
     return { plans };
   });
@@ -143,7 +145,7 @@ export default async function ({ page, step, key, frames, state, shot, open, mad
     });
     assert.ok(!filled.failed, `a log of the plan went up: ${filled.failed}`);
     await key('KeyB');
-    assert.equal(await page.evaluate(() => T.tool()), 9, 'B picks the blueprint tool up');
+    assert.equal(await page.evaluate(() => T.tool()), 'blueprint', 'B picks the blueprint tool up');
     const done = await page.evaluate(() => T.until(() => !world.blueprints.site(), 90000));
     assert.ok(done, `it finished (it says: "${await page.evaluate(() => T.prompt())}")`);
     const b = await page.evaluate(() => {
@@ -184,7 +186,7 @@ export default async function ({ page, step, key, frames, state, shot, open, mad
     const sill = { name: 'A hewn sill', footings: [[0, 0], [4, 0]], logs: [['timber', 'x', 0, 0, 4, 0]], roofs: [] };
     const name = await page.evaluate((p) => world.blueprints.import(JSON.stringify(p)), sill);
     assert.equal(name, sill.name, 'a blueprint taken in from JSON');
-    await key('Digit9');
+    await take('blueprint');
     await page.evaluate((n) => world.blueprints.pick(n), name);
     const before = await state();
     assert.deepEqual([before.inv.log, before.inv.timber, before.inv.stone], [0, 0, 0], 'nothing in hand');

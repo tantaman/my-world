@@ -27,6 +27,7 @@ export function campfireTool(fires, solids) {
     id: 'fire',
     label: 'campfire',
     short: 'fire',
+    kit: 'camp',
 
     setup(b) {
       ghost = b.previews.ghost(new THREE.TorusGeometry(FIRE.ring, 0.08, 5, 18).rotateX(Math.PI / 2));

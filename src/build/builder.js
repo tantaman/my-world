@@ -9,6 +9,7 @@
 //
 //   {
 //     id: 'axe', label: 'axe', short: 'axe',   // short: its name on a narrow tool bar
+//     kit: 'cabin',           // optional: the kit it goes in (see Kits, below)
 //
 //     // Every frame: what would a click do, here, now?  -> null (nothing to
 //     // say), or { prompt, ok?, bad?, node?, ...whatever work() wants }.
@@ -53,14 +54,28 @@
 //   regrow(x, z, pad)                      the turf changed here
 //   flash(message)                         a word on the HUD
 //
+// ── Kits ────────────────────────────────────────────────────────────────────
+//
+// Tools that go together share a kit: the log wall, the timber wall and the
+// roof are the 'cabin'. A kit is one slot on the tool bar and one number key.
+// Pressing it takes up the tool last used from the kit; pressing it again,
+// with one of them in hand, moves on to the next. A tool with no kit is a kit
+// of its own, and a tool whose kit is already there joins the end of it. Kits
+// sit on the bar in the order their first tools were registered.
+//
+//   builder.kits     [{ id, label, tools, last }]   label: the kit's name, or
+//                    a lone tool's own; last: the tool it gives you next
+//   builder.pick(i)  the number key for the kit at i (from 0) was pressed
+//   builder.slotOf(id) -> the tool's number on the bar (from 1)
+//
 // While something else has the hiker's hands (builder.idleWhile(fn): riding,
 // say) the bench stands idle: no aiming, no work, no prompt, and the tool is
 // put away until it is over.
 //
 // Emits:
 //   'change'   ()        something about the world, or what you carry, changed
-//   'tools'    (tools)   the set of tools changed
-//   'select'   (tool)
+//   'tools'    (tools)   the set of tools (and so of kits) changed
+//   'select'   (tool)    picked, or picked again
 
 import * as THREE from 'three';
 import { Emitter } from '../core/events.js';
@@ -95,6 +110,7 @@ export class Builder extends Emitter {
     this.stock = inventory;
 
     this.tools = [];
+    this.kits = []; // see Kits, above
     this.current = null; // the tool in hand
     this.tgt = null; // what it would do right now
     this.act = null; // a swing in progress
@@ -118,6 +134,11 @@ export class Builder extends Emitter {
   register(tool) {
     if (this.tools.some((t) => t.id === tool.id)) throw new Error(`tool "${tool.id}" is already registered`);
     this.tools.push(tool);
+    const kit = tool.kit && this.kits.find((k) => k.id === tool.kit);
+    if (kit) {
+      kit.tools.push(tool);
+      kit.label = kit.id;
+    } else this.kits.push({ id: tool.kit || tool.id, label: tool.label, tools: [tool], last: tool });
     if (tool.held) this.player.character.addHeld(tool.held.name, tool.held.make(), tool.held);
     if (tool.setup) tool.setup(this);
     this.emit('tools', this.tools);
@@ -135,9 +156,28 @@ export class Builder extends Emitter {
     if (!tool) return;
     if (this.current && this.current !== tool && this.current.put) this.current.put(this);
     this.current = tool;
+    this.kitOf(tool).last = tool;
     this.player.character.setTool(tool.held && !this.idle ? tool.held.name : null);
     this.emit('select', tool);
     if (!quiet) this.flash(tool.label);
+  }
+
+  // The number key for kit i: the tool last used from it or, with one of
+  // its tools already in hand, the next.
+  pick(i) {
+    const kit = this.kits[i];
+    if (!kit) return;
+    const at = kit.tools.indexOf(this.current);
+    this.select((at < 0 ? kit.last : kit.tools[(at + 1) % kit.tools.length]).id);
+  }
+
+  kitOf(tool) {
+    return this.kits.find((k) => k.tools.includes(tool)) || null;
+  }
+
+  slotOf(id) {
+    const i = this.kits.findIndex((k) => k.tools.some((t) => t.id === id));
+    return i < 0 ? null : i + 1;
   }
 
   // ── Materials ─────────────────────────────────────────────────────────────

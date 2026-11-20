@@ -1,6 +1,7 @@
-// The railway: pick a station from the rail button's list and you're on its
-// platform; a train comes in, Y gets you on, it carries you to the next
-// station, and Y there gets you off onto its platform.
+// The railway: Y away from a train opens the stations beside the map; pick
+// one and you're on its platform; a train comes in, Y gets you on, it
+// carries you to the next station, and Y there gets you off onto its
+// platform.
 //
 // Needs: nothing in particular (a line within reach of wherever you are).
 // Leaves: you on a station's platform, the train you came on pulling out.
@@ -9,7 +10,8 @@ import assert from 'node:assert/strict';
 
 export default async function ({ page, step, key, frames, shot }) {
   await step('take the train', async () => {
-    await page.click('#rail-btn');
+    await key('KeyY');
+    assert.ok(await page.evaluate(() => world.map.isOpen && world.map.tab === 'rail'), 'Y opens the map on its stations');
     await page.waitForFunction(() => document.querySelectorAll('#rail-panel button[data-station]').length > 0, null, { timeout: 60000 });
     const id = await page.evaluate(() => document.querySelector('#rail-panel button[data-station]').dataset.station);
     await page.click(`#rail-panel button[data-station="${id}"]`);
@@ -18,9 +20,9 @@ export default async function ({ page, step, key, frames, shot }) {
     const there = await page.evaluate((id) => {
       const st = world.railway.lines.byId(id);
       const p = world.player.pos;
-      return { name: st.name, on: world.player.underfoot && world.player.underfoot.surface, d: +Math.hypot(p.x - st.x, p.z - st.z).toFixed(1), panel: world.railway.panel.isOpen };
+      return { name: st.name, on: world.player.underfoot && world.player.underfoot.surface, d: +Math.hypot(p.x - st.x, p.z - st.z).toFixed(1), map: world.map.isOpen };
     }, id);
-    assert.ok(there.on === 'boards' && there.d < 6 && !there.panel, `you are on the platform at ${there.name} (${JSON.stringify(there)})`);
+    assert.ok(there.on === 'boards' && there.d < 6 && !there.map, `you are on the platform at ${there.name} (${JSON.stringify(there)})`);
     // a train comes in (the clock is moved on, so the play-through doesn't wait)
     await page.evaluate((id) => world.railway.soon(id, 4), id);
     await page.waitForFunction((id) => world.railway.list(80).some((s) => s.id === id && s.due === 0), id, { timeout: 120000 });

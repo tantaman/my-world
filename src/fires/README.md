@@ -1,7 +1,8 @@
 # Campfires
 
 When it gets dark, ring a pit with stones and light a campfire. It's a tool
-like the others (see [Building](../build/README.md)): **8** on the tool bar.
+like the others (see [Building](../build/README.md)): **5** on the tool bar,
+the *camp* kit.
 
 - **Ring a pit.** Aim at the ground and hold **click** to scrape a shallow
   pit and ring it with 4 stones. It snaps to the grid like everything else.

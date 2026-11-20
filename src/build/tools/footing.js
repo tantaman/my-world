@@ -14,6 +14,7 @@ export const footing = {
   id: 'footing',
   label: 'footing',
   short: 'pier',
+  kit: 'earth',
   stake: true,
   grid: true,
 

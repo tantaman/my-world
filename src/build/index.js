@@ -27,7 +27,8 @@ import { footing } from './tools/footing.js';
 import { wallTool } from './tools/wall.js';
 import { roof } from './tools/roof.js';
 
-// The tool bar, in order: keys 1 to 9.
+// The tools, in order. Those that share a kit share a slot on the tool bar
+// and its number key (see Kits in builder.js).
 const TOOLS = [hands, axe, shovel, footing, wallTool('log', { label: 'log wall', short: 'log' }), wallTool('timber', { label: 'timber', short: 'hewn' }), roof];
 
 // The features this uses, so it is installed after them (game/features.js).
@@ -97,9 +98,9 @@ export function installBuild(game) {
   });
   game.provide('builder', builder);
 
-  builder.on('tools', (tools) => hud.buildTools(tools, (i) => builder.select(tools[i].id)));
+  builder.on('tools', () => hud.buildTools(builder.kits, { pick: (i) => builder.pick(i), choose: (id) => builder.select(id) }));
   builder.on('select', (tool) => {
-    hud.selectTool(builder.tools.indexOf(tool));
+    hud.selectTool(builder.slotOf(tool.id) - 1, tool);
     hud.showStake(!!tool.stake);
   });
   for (const tool of TOOLS) builder.register(tool);
@@ -116,13 +117,22 @@ export function installBuild(game) {
   });
 
   // ── Keys ──────────────────────────────────────────────────────────────────
-  // Tools take the number keys in the order they were registered, including
-  // any a later feature adds: 1 to 9, and 0 for the tenth, as on the keyboard.
+  // Kits take the number keys in the order they were made, including any a
+  // later feature adds: 1 to 9, and 0 for the tenth, as on the keyboard.
+  // Pressed again, a key moves on through its kit, and the bar shows what is
+  // in it.
   for (let i = 0; i < 10; i++) {
     const n = (i + 1) % 10;
-    commands.add({ id: `tool-${i + 1}`, keys: [`Digit${n}`, `Numpad${n}`], run: () => builder.tools[i] && builder.select(builder.tools[i].id) });
+    commands.add({
+      id: `tool-${i + 1}`,
+      keys: [`Digit${n}`, `Numpad${n}`],
+      run() {
+        builder.pick(i);
+        hud.showKit(i);
+      },
+    });
   }
-  commands.describe({ group: 'BUILD', help: () => `1 – ${builder.tools.length}`, label: 'pick a tool' });
+  commands.describe({ group: 'BUILD', help: () => `1 – ${builder.kits.length}`, label: 'pick a tool · again: the next in its kit' });
   commands.describe({ group: 'BUILD', help: 'click', label: 'use the tool (hold to keep going)' });
   commands.describe({ group: 'BUILD', help: 'right-click', label: 'second action · take down' });
   commands.add({ id: 'stake', keys: ['KeyG'], group: 'BUILD', label: 'set / pull up a grade stake', run: () => builder.toggleStake() });

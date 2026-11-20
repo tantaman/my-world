@@ -170,12 +170,14 @@ thicket is thick with shrubs, and a country with a treeline and a snow line
 has them at their real heights (`landform.js`). A hike can have a snow line
 of its own, where it lay when the photo was taken in winter.
 
-## Keys
+## Settings
+
+On the settings panel (**O**), under *time*:
 
 | | |
 |---|---|
-| **, .** | scrub the time of day |
-| **T** | let time flow (a full day takes 24 minutes) |
+| time of day | slide it to any hour |
+| let time flow | a full day takes 24 minutes |
 
 ## Files
 

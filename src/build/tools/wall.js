@@ -13,6 +13,7 @@ export function wallTool(kind, { label, short }) {
     id: kind,
     label,
     short,
+    kit: 'cabin', // with the roof: what a cabin is raised with
     grid: true,
     pending: null, // first node of a wall being laid { x, z }
 
@@ -36,7 +37,7 @@ export function wallTool(kind, { label, short }) {
       if (!this.pending) {
         if (b.dist(x, z) > REACH.build) return { prompt: 'too far away', far: true };
         const at = b.buildings.buildingFor(x, z);
-        if (!at) return { node, prompt: 'lay footings first (4), then run walls between them', bad: true };
+        if (!at) return { node, prompt: 'lay footings first, then run walls between them', bad: true };
         let txt = `<b>click</b> start a wall here`;
         if (removable && !b.buildings.canRemoveLog(removable.b, removable.piece)) txt += ' · <b>right-click</b> take this one down';
         return { type: 'start', ok: true, node, b: at, removable, prompt: txt };

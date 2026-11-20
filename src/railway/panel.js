@@ -1,54 +1,43 @@
-// The railway panel (the "rail" button, or Y away from a train): the
-// stations you could go to, nearest first, with which line each is on, how
-// far it is and which way, and when the next train is due there. Pick one
-// and you're on its platform.
+// The railway's stations, as a tab beside the map (M, then "stations"; or Y
+// away from a train): the stations you could go to, nearest first, with
+// which line each is on, how far it is and which way, and when the next train
+// is due there. Pick one and you're on its platform.
 //
-//   const panel = new StationPanel({ input, onPick: (id) => ... });
+//   const panel = new StationPanel({ onPick: (id) => ..., showing, onClose });
+//   panel.el           the list, for the map to show
 //   panel.show(rows)   rows: [{ id, name, line, far, way, due }], every
-//                      half second or so while it's open (the times count)
-//   panel.open() / close() / toggle(), panel.isOpen
+//                      half second or so while it's showing (the times count)
 //
-// While it's open it has the keyboard: Esc or Y closes it, 1–9 picks.
+// While it's showing (showing() is true) it has the number keys, 1–9 to
+// pick, and Y closes the map again (onClose), as Y opened it.
 
 import './railway.css';
 
 const TEMPLATE = /* html */ `
-  <div class="rail-head">
-    <h2>RAILWAY</h2>
-    <button type="button" data-act="close" aria-label="Close (Esc)">✕</button>
-  </div>
   <p class="rail-note">Go to a station, wait for a train, and <b>Y</b> beside it to get on.</p>
   <ol class="rail-list" aria-label="Stations"></ol>
   <p class="rail-more" hidden>surveying further…</p>
 `;
 
 export class StationPanel {
-  constructor({ input, onPick, parent = document.getElementById('hud') }) {
-    this.input = input;
+  constructor({ onPick, showing = () => false, onClose = () => {} }) {
     this.onPick = onPick;
-    this.isOpen = false;
-    const root = document.createElement('div');
-    root.id = 'rail-panel';
-    root.setAttribute('role', 'dialog');
-    root.setAttribute('aria-label', 'Railway stations');
-    root.setAttribute('aria-hidden', 'true');
-    root.innerHTML = TEMPLATE;
-    parent.appendChild(root);
-    this.root = root;
-    this.list = root.querySelector('.rail-list');
-    this.more = root.querySelector('.rail-more');
+    const el = document.createElement('div');
+    el.id = 'rail-panel';
+    el.innerHTML = TEMPLATE;
+    this.el = el;
+    this.list = el.querySelector('.rail-list');
+    this.more = el.querySelector('.rail-more');
     this._shown = '';
-    root.addEventListener('click', (e) => {
-      const b = e.target.closest('button');
-      if (!b) return;
-      if (b.dataset.act === 'close') this.close();
-      else if (b.dataset.station) this.onPick(b.dataset.station);
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-station]');
+      if (b) this.onPick(b.dataset.station);
     });
     addEventListener('keydown', (e) => {
-      if (!this.isOpen) return;
-      if (e.code === 'Escape' || e.code === 'KeyY') {
+      if (!showing() || (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA'))) return;
+      if (e.code === 'KeyY') {
         e.preventDefault();
-        this.close();
+        onClose();
         return;
       }
       const m = /^(Digit|Numpad)([1-9])$/.exec(e.code);
@@ -59,29 +48,6 @@ export class StationPanel {
         this.onPick(b.dataset.station);
       }
     });
-  }
-
-  open() {
-    if (this.isOpen) return;
-    this.isOpen = true;
-    this.input.setBlocked(true);
-    if (document.pointerLockElement) document.exitPointerLock?.();
-    this.root.classList.add('open');
-    this.root.setAttribute('aria-hidden', 'false');
-  }
-
-  close() {
-    if (!this.isOpen) return;
-    this.isOpen = false;
-    this.root.classList.remove('open');
-    this.root.setAttribute('aria-hidden', 'true');
-    this.input.setBlocked(false);
-    if (document.activeElement && this.root.contains(document.activeElement)) document.activeElement.blur();
-  }
-
-  toggle() {
-    if (this.isOpen) this.close();
-    else this.open();
   }
 
   // rows: [{ id, name, line, far, way, due, here }]; looking: whether there

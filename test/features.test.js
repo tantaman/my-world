@@ -32,7 +32,7 @@ test('adding a feature leaves the others in the order they were', () => {
 });
 
 test('coming after something for its place, not its things, works the same', () => {
-  // the plan tool is ninth on the tool bar because blueprints comes after fires
+  // the plan tool comes after the campfire on the tool bar because blueprints comes after fires
   const order = names(inOrder([feature('blueprints', 'build', 'fires'), feature('build'), feature('fires', 'build')]));
   assert.deepEqual(order, ['build', 'fires', 'blueprints']);
 });

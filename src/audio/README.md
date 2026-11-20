@@ -56,11 +56,11 @@ interact, so it fades in after your first click, key press or tap.
 
 Sound pauses when the tab is hidden. Add `?mute` to the URL to start silent.
 
-## Keys
+## Settings
 
 | | |
 |---|---|
-| **N** | sound on / off (also the *sound* button, bottom right) |
+| sound | on / off, on the settings panel (**O**) |
 
 ## Files
 

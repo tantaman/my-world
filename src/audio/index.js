@@ -13,7 +13,7 @@ const BANK_HIDES = 1.5;
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player'];
 export function installAudio(game) {
-  const { chunks, gen, sky, player, camera, hud, commands, settings } = game;
+  const { chunks, gen, sky, player, camera, hud, settings } = game;
 
   const sound = new Soundscape();
   const remembered = settings.get('sound', 'boolean');
@@ -50,15 +50,16 @@ export function installAudio(game) {
   player.on('land', (strength) => sound.footstep(surfaceHere(), 1, 'land', strength));
 
   // ── On and off ────────────────────────────────────────────────────────────
-  function toggle() {
-    sound.setEnabled(!sound.enabled);
-    hud.setSound(sound.enabled);
-    hud.flash(sound.enabled ? 'sound on' : 'sound off');
-    settings.set('sound', sound.enabled);
-  }
-  hud.setSound(sound.enabled);
-  hud.button('sound-btn', toggle);
-  commands.add({ id: 'sound', keys: ['KeyN'], group: 'LOOK', label: 'sound on / off', run: toggle });
+  hud.setting({
+    id: 'sound',
+    group: 'SOUND',
+    label: 'sound',
+    get: () => sound.enabled,
+    set(on) {
+      sound.setEnabled(on);
+      settings.set('sound', on);
+    },
+  });
 
   // ── The water you can hear ────────────────────────────────────────────────
   // How much of a source the land hides from the ear: the most the ground

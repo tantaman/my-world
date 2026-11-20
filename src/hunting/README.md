@@ -1,6 +1,6 @@
 # Hunting
 
-There's a rifle in your pack: **0** on the tool bar. Hunt game with it,
+There's a rifle in your pack: **7** on the tool bar. Hunt game with it,
 dress what you shoot for its meat, roast the meat on a spit over a
 [campfire](../fires/README.md), and eat it.
 
@@ -39,7 +39,7 @@ some: *raw meat* and *roast meat*, in cuts.
 
 | | |
 |---|---|
-| **0** | the rifle |
+| **7** | the rifle |
 | **click** | shoot · beside a kill, hold to dress it · beside a fire, put meat on to roast |
 | **hold right-click** | look through the scope · beside a fire, right-click takes the meat off |
 | **U** | eat something you've roasted |

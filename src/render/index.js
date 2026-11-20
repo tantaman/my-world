@@ -1,5 +1,5 @@
-// The picture: renderer, scene, camera and the pixel pipeline, and the keys
-// that change how it looks.
+// The picture: renderer, scene, camera and the pixel pipeline, and the
+// settings that change how it looks.
 //
 // The scene is in world coordinates, and so is everything the game does with
 // it. Only while a frame is being drawn is it slid to sit round an origin
@@ -13,8 +13,12 @@ import { Origin } from './origin.js';
 import { SHARED, DECK } from './uniforms.js';
 import { PERIOD } from './glsl.js';
 
+const PIXEL_MAX = 12; // screen pixels per art pixel, at the most
+
+// The features this uses, so it is installed after them (game/features.js).
+export const after = ['ui'];
 export function installRender(game) {
-  const { settings, commands } = game;
+  const { settings, hud } = game;
 
   const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -56,64 +60,64 @@ export function installRender(game) {
   addEventListener('resize', resize);
   resize();
 
-  const say = (msg) => game.hud && game.hud.flash(msg);
-  // for a pair of keys bound to one command: which way did it go?
-  const step = (up) => (game.input.wasPressed(up) ? 1 : -1);
-
-  commands.add({
+  // ── Settings ──────────────────────────────────────────────────────────────
+  hud.setting({
     id: 'pixel-art',
-    keys: ['KeyP'],
-    group: 'LOOK',
-    label: 'pixel art on / off',
-    run() {
-      pipeline.enabled = !pipeline.enabled;
+    group: 'PICTURE',
+    label: 'pixel art',
+    get: () => pipeline.enabled,
+    set(on) {
+      pipeline.enabled = on;
       pipeline.lowW = 0;
       resize();
-      say(pipeline.enabled ? 'pixel art on' : 'pixel art off');
     },
   });
-  commands.add({
+  hud.setting({
     id: 'pixel-size',
-    keys: ['BracketLeft', 'BracketRight'],
-    group: 'LOOK',
+    group: 'PICTURE',
     label: 'pixel size',
-    run() {
-      const cur = pipeline.pixelSize > 0 ? pipeline.pixelSize : Math.round(pipeline.currentPixelSize());
-      const next = THREE.MathUtils.clamp(cur + step('BracketRight'), 1, 12);
-      pipeline.setPixelSize(next);
-      say(`pixel size ${next}`);
+    min: 0, // fitted to the screen
+    max: PIXEL_MAX,
+    step: 1,
+    get: () => pipeline.pixelSize,
+    set(v) {
+      pipeline.setPixelSize(v);
       settings.set('pixelSize', pipeline.pixelSize);
     },
+    show: (v) => (v > 0 ? `${v}` : `fitted (${Math.round(pipeline.currentPixelSize())})`),
   });
-  commands.add({
+  hud.setting({
     id: 'pixel-softness',
-    keys: ['Minus', 'Equal'],
-    group: 'LOOK',
+    group: 'PICTURE',
     label: 'pixel softness',
-    run() {
-      pipeline.softness = THREE.MathUtils.clamp(pipeline.softness + step('Equal') * 0.1, 0, 1);
-      say(`softness ${pipeline.softness.toFixed(1)}`);
-      settings.set('softness', pipeline.softness);
+    min: 0,
+    max: 1,
+    step: 0.05,
+    get: () => pipeline.softness,
+    set(v) {
+      pipeline.softness = v;
+      settings.set('softness', v);
     },
+    show: (v) => v.toFixed(2),
   });
-  commands.add({
+  hud.setting({
     id: 'outlines',
-    keys: ['KeyO'],
-    group: 'LOOK',
+    group: 'PICTURE',
     label: 'outlines',
-    run() {
-      pipeline.outline = pipeline.outline > 0 ? 0 : CONFIG.outline;
-      say(pipeline.outline > 0 ? 'outlines on' : 'outlines off');
+    get: () => pipeline.outline > 0,
+    set(on) {
+      pipeline.outline = on ? CONFIG.outline : 0;
       settings.set('outline', pipeline.outline);
     },
   });
-  commands.add({
+  hud.setting({
     id: 'fullscreen',
-    keys: ['KeyF'],
-    group: 'LOOK',
+    group: 'PICTURE',
     label: 'fullscreen',
-    run() {
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+    can: () => !!document.fullscreenEnabled,
+    get: () => !!document.fullscreenElement,
+    set(on) {
+      if (on) document.documentElement.requestFullscreen?.().catch(() => {});
       else document.exitFullscreen?.();
     },
   });
