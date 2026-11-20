@@ -261,7 +261,7 @@ export function createWaterMaterial() {
           float ac = dot(toMe, vec2(-rd.y, rd.x));
           float arm = abs(abs(ac) - (0.2 + al * 0.36));
           float k = smoothstep(0.08, 0.9, rs) * uWade;
-          wake = step(0.0, al) * exp(-al * 0.55) * (1.0 - smoothstep(0.0, 0.1 + al * 0.06, arm)) * k;
+          wake = step(0.0, al) * exp(-al * 1.1) * (1.0 - smoothstep(0.0, 0.05 + al * 0.035, arm)) * k;
           bow = exp(-max(-al, 0.0) * 5.0) * step(al, 0.15) * (1.0 - smoothstep(0.18, 0.4, abs(ac))) * k;
           g += vec2(-rd.y, rd.x) * sign(ac) * wake * 0.25 - rd * bow * 0.2;
         }
