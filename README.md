@@ -1,8 +1,12 @@
 # my-world
 
 An open-world forest you can wander through as a little explorer, seen from
-behind in third person. Streams run down its valleys, join and grow into
-rivers, and gather in ponds and lakes in the hollows. It's built with
+behind in third person. Over a few kilometres it changes country: low lake
+country strung with ponds and lakes, rolling hills, and mountains with rock on
+their faces, a treeline, alpine meadows and snow on the tops; and its woods
+turn from dark conifer forest to birch groves to open parkland. Streams run
+down its valleys, join and grow into rivers, and gather in ponds and lakes in
+the hollows. It's built with
 three.js. The art is pixelated but lit and shaded like a real scene, and the
 pixels are softened just enough that you can't quite tell whether it's pixel
 art trying to look real or a painting made of pixels.
@@ -88,15 +92,16 @@ world, hold **talk** or **radio** beside them to talk.
 
 Your position, the time of day, your look settings and whether sound is on
 are remembered between visits. Add `?reset` to the URL to start fresh (your
-map marks are kept). To keep a world somewhere other than this browser — and
+map marks are kept). A world you made before the land got more varied is
+still there at `?land=1` (see [Lands](#lands)). To keep a world somewhere other than this browser — and
 to build in it with other people — see [Building together](#building-together).
 
 ## The map
 
 Press **M** (or tap *map*) for a top-down map of the forest. It's drawn from
 the same world description as the 3D view (`src/map/`), so it always matches
-what's there: meadows and woods, footpaths, rock, water, and hillshaded
-relief with contour lines. Zoomed out it keeps the rivers, lakes and ponds and
+what's there: meadows and woods, footpaths, rock, water, alpine ground and
+snow, and hillshaded relief with contour lines. Zoomed out it keeps the rivers, lakes and ponds and
 lets the streams go. Zoomed in, every tree, bush and boulder is in its real place.
 Tiles are rendered in Web Workers and pre-rendered around you while you walk,
 so the map opens already drawn.
@@ -256,8 +261,8 @@ race loses it on one element, not on your afternoon.
 
 ### What a save actually holds
 
-The forest is procedural, grown from a seed, so a save stores the seed and the
-**diff** — only what you changed. Elements are grouped into 64 m regions, the
+The forest is procedural, grown from a seed, so a save stores the seed, the
+[land](#lands) it was grown on, and the **diff** — only what you changed. Elements are grouped into 64 m regions, the
 same grid the world streams on.
 
 A world dug over 320 × 320 m is 59,000 elements in 37 regions, and costs 160 kB
@@ -308,6 +313,10 @@ costs bandwidth, which is why it is opt-in.
 > When water learned to run downhill, every seed grew different valleys. A
 > world saved before then opens on the new land, so what was built or dug in
 > it may now float above the ground or sit buried in it.
+>
+> When the land got more varied, it didn't happen again: that is a new
+> [land](#lands), and every world saved before it keeps the land it was built
+> on.
 
 ### The save API
 
@@ -423,8 +432,9 @@ interact, so it fades in after your first click, key press or tap.
   when they talk aloud, and through your radio when they're on it. See
   [Talking](#talking).
 - **Footsteps** follow the stride of the walk and run animation. They
-  change with the ground under you: packed earth and grit on paths, a swish
-  in grass, crackling leaf litter in the woods, a slosh and a splash and
+  change with the ground under you: packed earth and grit on paths and on
+  the stony ground above the trees, a swish in grass, crackling leaf litter
+  in the woods, a squeaky crunch in snow, a slosh and a splash and
   falling drops in water, a hollow knock on the boards of a dock or a cabin
   floor. They get sharper when you run, there's a thud when
   you land a jump, and out of your depth each stroke sweeps through the water.
@@ -450,6 +460,7 @@ Sound pauses when the tab is hidden. Add `?mute` to the URL to start silent.
 | `levels` | `36` | colour levels per channel before dithering |
 | `time` | `16.6` | starting hour of the day |
 | `seed` | `20261119` | a completely different world |
+| `land` | newest | which [land](#lands) a local world is grown on: `1` for the first |
 | `view` | `4` | chunks loaded in each direction (64 m each) |
 | `grass`, `grassDensity` | `40`, `7` | grass radius (m) and blades per m² |
 | `q=low` | | lighter preset for modest GPUs |
@@ -463,6 +474,28 @@ Example: `/?soft=0.3&px=5&time=7.5`
 
 ## The world
 
+- **Varied.** Over a few kilometres the country changes
+  (`src/world/land2.js`):
+  - **Lake country** lies low, in broad smooth hollows that each gather a lot
+    of water, so there's a pond or a lake in every other one, and the lakes are
+    the biggest anywhere (well over 100 m across). It's wetter, more open, and
+    the woods there are birch and broadleaf.
+  - **Hill country** rolls, as the whole forest once did.
+  - **Mountains** rise a hundred metres and more over their valleys, in ridges
+    sharp along the crests. The trees turn to conifers on the way up, grow
+    smaller and thin out to a treeline about 90 m up, and above it are alpine
+    meadows of thin, tawny turf, stones and big boulders, with a few low
+    shrubs, and snow lying on the tops from about 120 m. Rock shows on the
+    steep faces, no tree grows on a cliff, and the trails give out about where
+    the trees do.
+  - **Benches** step the land into level shelves with a rock face between
+    each and the next, here and there in the hills and mountains.
+
+  And over a kilometre or so the woods change, whatever the country: **dark
+  conifer forest**, thick, with ferns and fallen logs; **birch groves**; and
+  **open parkland**, where the meadows run together, the odd lone tree grows
+  big, and scrub grows in the open. You start on level ground among the
+  trees.
 - **Deterministic.** The same seed always produces the same hills, paths
   and trees. This matters because structures will be placed at fixed
   coordinates. The HUD shows your `x, z`, your heading and the time.
@@ -545,6 +578,28 @@ Example: `/?soft=0.3&px=5&time=7.5`
 
 From the browser console you can jump around with
 `await world.teleport(x, z)`.
+
+### Lands
+
+A save is only what was changed from what a seed grows, so changing how the
+forest grows would leave every cabin ever built floating over, or buried in,
+somebody's hillside. So when the way the forest grows changes, the change is
+a new **land**, and every world keeps the land it was first grown on
+(`src/world/lands.js`):
+
+| land | |
+|---|---|
+| 1 | rolling hills and mixed woods everywhere (`world/worldgen.js`) — every world saved before there was a second |
+| 2 | lake country, hills and mountains, benches, and different woods (`world/land2.js`) |
+
+New worlds are grown on the newest. A shared world says which land it is on
+in its save, beside its name (`land` → 2); one that says nothing is land 1,
+which is every world saved before lands were counted. A world that lives only
+in your browser is known by its seed and its land, so the world you built in
+before is still there, at `?land=1`; the first time you open the new land
+where one is kept, the game says so. What each land grows is pinned by
+`test/golden/` (land 2's files end in `-land2`), and never changes: something
+new goes in a land of its own.
 
 ## Wildlife
 
@@ -1003,9 +1058,10 @@ Each of those files opens with what the thing is and what it is handed.
 
 - *The forest is grown, not stored.* The same seed always grows the same
   land, so a save holds only what was changed. Anything that alters what a
-  seed grows (`world/worldgen.js`, `chunkGen.js`, `water.js`, `drainage.js`,
-  the order of `world/flora.js`) moves every saved cabin relative to its
-  hillside.
+  seed grows (`world/worldgen.js`, `land2.js`, `chunkGen.js`, `water.js`,
+  `drainage.js`, the order of `world/flora.js`) moves every saved cabin
+  relative to its hillside — so a change to how the forest grows is a new
+  [land](#lands), and the old ones keep growing as they did.
 - *A save is spelled once, for good.* Each system says how its share of a
   save is cut into elements (`t:120:-40`, `l:x:0:0:4:0`), next to the class
   that owns it. Worlds on the server are spelled that way now: add new kinds,
@@ -1096,7 +1152,7 @@ third browser by signing in — and checks that each finds their own things,
 not the other's.
 
 `npm test` pins the things other people's worlds depend on — that a seed
-grows the same land (`test/golden/`), that a save is spelled as it always was,
+grows the same land, on each land (`test/golden/`), that a save is spelled as it always was,
 that what is already in someone's browser still opens — along with the rules
 of building and the game loop. If one of the golden files stops matching, the
 code changed something it shouldn't have; only re-record
@@ -1144,7 +1200,9 @@ src/
     hud.js                coordinates, prompts, tool bar, help panel, buttons
   world/
     index.js              ← feature: the land, the sky, the hour
-    worldgen.js           pure world description: height, paths, forest, species
+    worldgen.js           pure world description: height, paths, forest, species (land 1)
+    land2.js              the second land: lake country, mountains, benches, kinds of woods
+    lands.js              which land a world is grown on; growWorld()
     drainage.js           where water runs and gathers: the drainage network
     water.js              streams, rivers, ponds and lakes on the ground, from that network
     flora.js              what grows, in one table
@@ -1229,6 +1287,7 @@ src/
   save/
     index.js              ← feature: other people, the panel, the key
     domains.js            what a save is made of: the registry every system adds to
+    land.js               which land a world is grown on, as it is saved
     worldSave.js          keeping a world: what moved, when it goes out
     local.js              a world that lives only in this browser
     regions.js            elements by 64 m region, and the changes between two sets

@@ -47,9 +47,14 @@ with the contract.
 ## What must not drift
 
 - **World generation is part of the save format.** A save is only the diff
-  from what a seed grows. `world/worldgen.js`, `chunkGen.js`, `water.js`,
-  `drainage.js`, `noise.js` and the order of `world/flora.js` are pinned by
-  `test/golden/`. If those tests fail, fix the code; do not re-record.
+  from what a seed grows. `world/worldgen.js`, `land2.js`, `chunkGen.js`,
+  `water.js`, `drainage.js`, `noise.js` and the order of `world/flora.js` are
+  pinned by `test/golden/`. If those tests fail, fix the code; do not
+  re-record. Every world keeps the *land* it was first grown on
+  (`world/lands.js`): to change how the forest grows, add a land (a class
+  grown from the newest, listed in `lands.js`, with golden files of its own)
+  and leave the old ones growing exactly as they did. Hooks the newer lands
+  need go into `WorldGen` as methods that change nothing on land 1.
   The old places in `landmarks/` are grown from the seed too, and never
   change the land or the plants: they stand on it as it is. Where they are
   is pinned in `test/golden/landmarks-*.json`, because the places people

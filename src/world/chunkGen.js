@@ -9,6 +9,11 @@
 //           (0..1: a stream in the woods is roofed by leaves, a lake isn't)
 // The water surface itself is meshed on the main thread from these and the
 // heights (waterSurface.js), so it can follow the digging.
+//
+// A land with high ground (a treeline and snow: see land2.js) also gets
+//   high    2 per vertex: how far above the trees (0..1), snow (0..1)
+//   hi      the same per vertex of the mesh, skirts included
+// which the land with none goes without.
 
 import { mulberry32, hash2i, smoothstep } from '../noise.js';
 import { VEG_STRIDE, VEG_KINDS } from './flora.js';
@@ -29,6 +34,7 @@ export function generateTerrain(gen, cx, cz, step, size) {
   const wLevel = new Float32Array(N * N);
   const wData = new Float32Array(N * N * WATER_STRIDE);
   const water = gen.water;
+  const high = gen.highGround ? new Float32Array(N * N * 2) : null;
   for (let gz = 0; gz < G; gz++) {
     for (let gx = 0; gx < G; gx++) {
       const x = x0 + (gx - 1) * step;
@@ -46,6 +52,11 @@ export function generateTerrain(gen, cx, cz, step, size) {
         wData[o + 2] = water.flowZ;
         wData[o + 3] = water.foam;
         wData[o + 4] = water.open;
+        if (high) {
+          const h = Hb[gz * G + gx];
+          high[k * 2] = gen.above(x, z, h);
+          high[k * 2 + 1] = gen.snow(x, z, h);
+        }
       }
     }
   }
@@ -56,6 +67,7 @@ export function generateTerrain(gen, cx, cz, step, size) {
   const nor = new Float32Array(vCount * 3);
   const gnd = new Float32Array(vCount * 2);
   const wat = new Float32Array(vCount * 2); // per vertex: water level, region
+  const hi = high ? new Float32Array(vCount * 2) : null;
   const heights = new Float32Array(N * N);
 
   for (let j = 0; j < N; j++) {
@@ -78,6 +90,10 @@ export function generateTerrain(gen, cx, cz, step, size) {
       gnd[k * 2 + 1] = forest[k];
       wat[k * 2] = wLevel[k];
       wat[k * 2 + 1] = wData[k * WATER_STRIDE];
+      if (hi) {
+        hi[k * 2] = high[k * 2];
+        hi[k * 2 + 1] = high[k * 2 + 1];
+      }
     }
   }
 
@@ -117,6 +133,10 @@ export function generateTerrain(gen, cx, cz, step, size) {
       gnd[v * 2 + 1] = gnd[src * 2 + 1];
       wat[v * 2] = wat[src * 2];
       wat[v * 2 + 1] = wat[src * 2 + 1];
+      if (hi) {
+        hi[v * 2] = hi[src * 2];
+        hi[v * 2 + 1] = hi[src * 2 + 1];
+      }
       v++;
     }
     for (let t = 0; t < n; t++) {
@@ -139,7 +159,9 @@ export function generateTerrain(gen, cx, cz, step, size) {
     }
   }
 
-  return { n, step, pos, nor, gnd, wat, idx, heights, paths, forest, wLevel, wData };
+  const out = { n, step, pos, nor, gnd, wat, idx, heights, paths, forest, wLevel, wData };
+  if (high) Object.assign(out, { high, hi });
+  return out;
 }
 
 // ── Vegetation ─────────────────────────────────────────────────────────────
@@ -151,6 +173,7 @@ export function generateTerrain(gen, cx, cz, step, size) {
 export { VEG_STRIDE, VEG_KINDS };
 
 export function generateVegetation(gen, cx, cz, size, trunkRadius) {
+  if (gen.land >= 2) return generateVegetation2(gen, cx, cz, size, trunkRadius);
   const x0 = cx * size;
   const z0 = cz * size;
   const rng = mulberry32(hash2i(cx, cz, gen.seed));
@@ -272,6 +295,181 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
       if (gen.pathEdge < 3) continue;
       if (gen.padClearance(x, z) < 4) continue;
       const tint = rng();
+      if (!dry(x, z, 3)) continue;
+      put('log', x, z, -0.12, r2 * Math.PI * 2, 0.8 + r3 * 0.5, tint);
+    }
+  }
+
+  const out = {};
+  for (const k of VEG_KINDS) out[k] = new Float32Array(lists[k]);
+  return { lists: out, colliders: new Float32Array(colliders) };
+}
+
+// ── Vegetation, on the second land ─────────────────────────────────────────
+// The same plants, laid out the same way, but they answer to the country they
+// grow in (see land2.js): whole stands of birch, lone big trees out in the
+// parkland, conifers stunted and thinning to nothing at the treeline, no
+// trees on the cliffs, boulders strewn above the trees and under the benches,
+// more ferns and fallen logs in the deep woods, scrub in the open.
+//
+// Every candidate draws all its random numbers before anything about the
+// place is asked, so what grows in one spot never moves what grows in another.
+
+// Gradient (rise over run) past which no tree takes root, and from which they
+// start to thin out.
+const CLIFF = 0.95;
+const STEEP = 0.6;
+// The most a bush's chance rises by just above the treeline (low shrubs).
+const SHRUBS = 0.075;
+
+function generateVegetation2(gen, cx, cz, size, trunkRadius) {
+  const x0 = cx * size;
+  const z0 = cz * size;
+  const rng = mulberry32(hash2i(cx, cz, gen.seed ^ 0x1a2d));
+  const lists = {};
+  for (const k of VEG_KINDS) lists[k] = [];
+  const colliders = [];
+
+  const water = gen.water;
+  let y = 0;
+  const dry = (x, z, clear) => {
+    y = gen.height(x, z);
+    return water.edge >= clear;
+  };
+  const put = (kind, x, z, yOff, yaw, s, tint, extra = 0) => {
+    lists[kind].push(x, y + yOff, z, yaw, s, tint, extra);
+  };
+  // rise over run, from the land without its small bumps
+  const steepness = (x, z) => {
+    const dx = gen.broadHeight(x + 1.5, z, 0) - gen.broadHeight(x - 1.5, z, 0);
+    const dz = gen.broadHeight(x, z + 1.5, 0) - gen.broadHeight(x, z - 1.5, 0);
+    return Math.hypot(dx, dz) / 3;
+  };
+
+  // Trees on a jittered grid
+  const cell = 4.2;
+  const cells = Math.floor(size / cell);
+  for (let j = 0; j < cells; j++) {
+    for (let i = 0; i < cells; i++) {
+      const x = x0 + (i + rng()) * cell;
+      const z = z0 + (j + rng()) * cell;
+      const r1 = rng();
+      const r2 = rng();
+      const r3 = rng();
+      const r4 = rng();
+      const r5 = rng();
+      const r6 = rng();
+      const r7 = rng();
+      const tint = rng();
+      const f = gen.forest(x, z);
+      if (r1 > f * 0.8 + 0.02) continue;
+      gen.pathMask(x, z);
+      if (gen.pathEdge < 1.3 + r5 * 1.8) continue;
+      if (gen.padClearance(x, z) < 2.5) continue;
+      const st = steepness(x, z);
+      if (st > CLIFF || (st > STEEP && r7 < (st - STEEP) / (CLIFF - STEEP))) continue;
+
+      const sp = gen.species(x, z);
+      const pineW = smoothstep(-0.3, 0.3, sp);
+      const birchW = Math.max(0, 1 - Math.abs(f - 0.4) * 2.4) * 0.5 + (1 - pineW) * 0.06 + gen.groves(x, z);
+      let kind;
+      if (r2 < birchW) kind = 'birch';
+      else kind = r3 < pineW ? 'pine' : 'broad';
+      let s = kind === 'pine' ? 0.68 + r4 * 0.62 : kind === 'broad' ? 0.75 + r4 * 0.5 : 0.75 + r4 * 0.45;
+      if (!dry(x, z, 1.4 + r5 * 1.6)) continue;
+      // a lone tree in the open grows big; one near the treeline, small
+      s *= 1 + smoothstep(0.3, 0.05, f) * 0.35;
+      s *= 1 - gen.above(x, z, y) * 0.55;
+      put(kind, x, z, -0.1, r6 * Math.PI * 2, s, tint);
+      colliders.push(x, z, trunkRadius[kind] * s + 0.08);
+    }
+  }
+
+  // Understory: ferns where it's damp and shaded, bushes along edges and out
+  // in the parkland, a few low shrubs above the trees
+  const uc = 2.7;
+  const ucells = Math.floor(size / uc);
+  for (let j = 0; j < ucells; j++) {
+    for (let i = 0; i < ucells; i++) {
+      const x = x0 + (i + rng()) * uc;
+      const z = z0 + (j + rng()) * uc;
+      const r1 = rng();
+      const r2 = rng();
+      const r3 = rng();
+      const r4 = rng();
+      const tint = rng();
+      const f = gen.forest(x, z);
+      const m = gen.moisture(x, z);
+      const wd = gen.woods(x, z);
+      const deep = smoothstep(0.15, 0.55, wd);
+      const park = smoothstep(-0.3, -0.62, wd);
+      const fernP = f * smoothstep(0.35, 0.75, m) * 0.55 * (1 + deep * 0.6);
+      let bushP = (0.06 + Math.max(0, 1 - Math.abs(f - 0.45) * 2.5) * 0.22) * (0.5 + f * 0.5) + park * (1 - f) * 0.07;
+      if (r1 > fernP + bushP + SHRUBS) continue; // nothing, however high up
+      gen.pathMask(x, z);
+      if (gen.pathEdge < 0.35 + r4) continue;
+      if (gen.padClearance(x, z) < 1) continue;
+      const fern = r1 < fernP;
+      if (!dry(x, z, fern ? 0.45 : 0.9 + r4 * 0.5)) continue;
+      // up high only shrubs, and those only just above the trees
+      const ab = gen.above(x, z, y);
+      if (ab > 0) {
+        if (fern) continue;
+        bushP += ab * (1 - ab) * 4 * SHRUBS;
+        if (gen.snow(x, z, y) > 0.3) continue;
+      }
+      if (!fern && r1 > fernP + bushP) continue;
+      if (fern) put('fern', x, z, -0.05, r2 * Math.PI * 2, 0.8 + r3 * 0.7, tint);
+      else put('bush', x, z, -0.15, r2 * Math.PI * 2, (0.7 + r3 * 0.9) * (1 - ab * 0.4), tint);
+    }
+  }
+
+  // Rocks: mostly small, the odd boulder; boulder fields above the trees, in
+  // the mountains, and under the benches
+  const rc = 10;
+  const rcells = Math.floor(size / rc);
+  for (let j = 0; j < rcells; j++) {
+    for (let i = 0; i < rcells; i++) {
+      const x = x0 + (i + rng()) * rc;
+      const z = z0 + (j + rng()) * rc;
+      const r1 = rng();
+      const r2 = rng();
+      const r3 = rng();
+      const r4 = rng();
+      const tint = rng();
+      const c = gen.country(x, z);
+      if (r1 > 0.26 + c.mtn * 0.3 + c.bench * 0.18) continue;
+      let s = 0.3 + r2 * r2 * r2 * 2.6;
+      gen.pathMask(x, z);
+      if (gen.pathEdge < s * 1.1 + 0.2) continue;
+      if (gen.padClearance(x, z) < s + 1) continue;
+      dry(x, z, 0);
+      // out in the open high up, big ones
+      s *= 1 + gen.above(x, z, y) * 0.3;
+      const still = water.kind === 'lake' || water.kind === 'pond';
+      if (water.edge < 0 && water.region && (still ? water.edge < -1.5 : water.level - y > s * 0.9)) continue;
+      put('rock', x, z, -0.28 * s, r3 * Math.PI * 2, s, tint, r4);
+      if (s > 0.55) colliders.push(x, z, s * 0.85);
+    }
+  }
+
+  // Fallen logs in the woods, most in the deep woods
+  const lc = 16;
+  const lcells = Math.floor(size / lc);
+  for (let j = 0; j < lcells; j++) {
+    for (let i = 0; i < lcells; i++) {
+      const x = x0 + (i + rng()) * lc;
+      const z = z0 + (j + rng()) * lc;
+      const r1 = rng();
+      const r2 = rng();
+      const r3 = rng();
+      const tint = rng();
+      const f = gen.forest(x, z);
+      if (r1 > f * 0.22 * (1 + smoothstep(0.15, 0.55, gen.woods(x, z)) * 0.9)) continue;
+      gen.pathMask(x, z);
+      if (gen.pathEdge < 3) continue;
+      if (gen.padClearance(x, z) < 4) continue;
+      if (steepness(x, z) > STEEP) continue;
       if (!dry(x, z, 3)) continue;
       put('log', x, z, -0.12, r2 * Math.PI * 2, 0.8 + r3 * 0.5, tint);
     }

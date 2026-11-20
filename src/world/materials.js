@@ -5,7 +5,9 @@ import { SHARED } from '../render/uniforms.js';
 // ── Terrain ────────────────────────────────────────────────────────────────
 // The ground colour is computed per pixel from world position: meadow grass,
 // leaf litter and moss under the trees, packed dirt on the paths, bare rock on
-// steep slopes. At low resolution this reads as hand-placed pixel texture.
+// steep slopes, and, on a land with high ground, thin turf and stones above
+// the trees and snow on the tops. At low resolution this reads as
+// hand-placed pixel texture.
 // Under water it turns to silt, pebbles and cobbles, darkening (reds first)
 // with depth, with the light netted over it by the ripples, and a damp band
 // and a little beach along the shore.
@@ -19,8 +21,10 @@ export function createTerrainMaterial() {
         `#include <common>
         attribute vec2 aGround;
         attribute vec2 aWater; // water level, region (1 where water may stand)
+        attribute vec2 aHigh; // how far above the trees, snow (0..1 each)
         varying vec2 vGround;
         varying vec2 vWater;
+        varying vec2 vHigh;
         varying vec3 vWorldPos;
         varying vec3 vWorldNormal;`,
       )
@@ -29,6 +33,7 @@ export function createTerrainMaterial() {
         `#include <fog_vertex>
         vGround = aGround;
         vWater = aWater;
+        vHigh = aHigh;
         vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
         vWorldNormal = normalize(mat3(modelMatrix) * objectNormal);`,
       );
@@ -38,11 +43,29 @@ export function createTerrainMaterial() {
         `#include <common>
         varying vec2 vGround;
         varying vec2 vWater;
+        varying vec2 vHigh;
         varying vec3 vWorldPos;
         varying vec3 vWorldNormal;
         uniform float uTime;
         ${NOISE_GLSL}
         ${GROUND_GLSL}
+        // Above the trees: thin, tawny turf among stones. Snow on top of that
+        // where it lies, in drifts, but not on the cliffs.
+        vec3 highGround(vec3 col, vec2 wp, vec2 high, float slope) {
+          if (high.x + high.y < 0.001) return col;
+          float n1 = vnoise(wp * 0.45 + 21.0);
+          float n2 = vnoise(wp * 2.3 - 8.0);
+          float n3 = vnoise(wp * 0.12 - 3.0);
+          float gentle = 1.0 - smoothstep(0.3, 0.45, slope + (n1 - 0.5) * 0.12);
+          vec3 turf = mix(vec3(0.085, 0.105, 0.04), vec3(0.15, 0.135, 0.075), smoothstep(0.35, 0.75, n1));
+          vec3 stone = vec3(0.17, 0.165, 0.15) * (0.8 + 0.4 * n2);
+          turf = mix(turf, stone, smoothstep(0.55, 0.8, n2 + (1.0 - n3) * 0.15) * 0.85);
+          col = mix(col, turf, clamp(high.x * 1.3 - 0.15 + (n3 - 0.5) * 0.5, 0.0, 1.0) * gentle);
+          float lie = clamp(high.y * 1.6 - 0.3 + (n3 - 0.5) * 0.9 + (n1 - 0.5) * 0.25, 0.0, 1.0);
+          lie *= 1.0 - smoothstep(0.26, 0.4, slope + (n2 - 0.5) * 0.08);
+          vec3 snow = vec3(0.6, 0.62, 0.66) * (0.93 + 0.1 * n2);
+          return mix(col, snow, lie);
+        }
         // Round stones, one at most to a cell: how far into the nearest one p
         // is (0 at its middle, 1 at its edge), and a number of its own.
         float pebble(vec2 p, float size, out float id) {
@@ -78,6 +101,7 @@ export function createTerrainMaterial() {
         '#include <color_fragment>',
         `#include <color_fragment>
         diffuseColor.rgb = groundColor(vWorldPos.xz, vGround.x, vGround.y, 1.0 - vWorldNormal.y);
+        diffuseColor.rgb = highGround(diffuseColor.rgb, vWorldPos.xz, vHigh, 1.0 - vWorldNormal.y);
         if (vWater.y > 0.01) {
           vec2 wp = vWorldPos.xz;
           float wd = vWater.x - vWorldPos.y; // depth under the water surface
@@ -113,7 +137,7 @@ export function createTerrainMaterial() {
         }`,
       );
   };
-  mat.customProgramCacheKey = () => 'terrain-v3';
+  mat.customProgramCacheKey = () => 'terrain-v4';
   return mat;
 }
 

@@ -5,11 +5,15 @@
 // is on a visitor's machine. Changing the spelling of a key forgets whatever
 // was under the old one.
 
+// A world that is only local is known by its seed and, past the first land
+// (see world/lands.js), the land it is grown on: 20261119, 20261119:land2.
+export const localWorld = (seed, land = 1) => (land > 1 ? `${seed}:land${land}` : `${seed}`);
+
 export const KEYS = {
   settings: 'my-world:settings', // look and sound settings
   state: 'my-world:state', // where you stood and the hour, for a world that is only local
-  build: (seed) => `my-world:build:${seed}`, // what you changed in a local world
-  marks: (seed) => `my-world:marks:${seed}`, // your map marks in a local world
+  build: (seed, land) => `my-world:build:${localWorld(seed, land)}`, // what you changed in a local world
+  marks: (seed, land) => `my-world:marks:${localWorld(seed, land)}`, // your map marks in a local world
   world: (id) => `my-world:world:${id}`, // this browser's copy of a world on the save server
   blueprints: 'my-world:blueprints', // blueprints you copied from your buildings, for every world
 };

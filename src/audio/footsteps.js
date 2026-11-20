@@ -1,6 +1,6 @@
 // Footsteps follow the stride of the walk and run animation, and change with
 // the ground under you: packed earth and grit on paths, a swish in grass,
-// crackling leaf litter in the woods, a slosh and a splash and falling drops
+// crackling leaf litter in the woods, a squeaky crunch in snow, a slosh and a splash and falling drops
 // in water. They get sharper when you run, there's a thud when you land a
 // jump, and out of your depth each stroke sweeps through the water.
 //
@@ -118,6 +118,18 @@ defineSurface('litter', {
     const grains = 7 + Math.floor(rand(0, 6) + run * 4);
     for (let i = 0; i < grains; i++) {
       noise(s.white, t + rand(0, 0.13), 0.015, [['bandpass', rand(2000, 5000), 2.5]], rand(0.15, 0.5) * sharp, 0.001, rand(0.004, 0.012));
+    }
+  },
+});
+
+// Snow: packed down underfoot in a soft, squeaky crunch.
+defineSurface('snow', {
+  thump: 0.45,
+  step({ s, t, run, sharp, noise }) {
+    noise(s.pink, t, 0.3, [['bandpass', 1100, 1.1]], 0.55 * sharp, 0.02, 0.13 + run * 0.02);
+    const grains = 10 + Math.floor(rand(0, 6) + run * 5);
+    for (let i = 0; i < grains; i++) {
+      noise(s.white, t + 0.01 + (i / grains) * rand(0.09, 0.13), 0.012, [['bandpass', rand(1400, 2600), 4]], rand(0.12, 0.3) * sharp, 0.001, rand(0.005, 0.01));
     }
   },
 });

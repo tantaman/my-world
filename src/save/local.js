@@ -9,19 +9,22 @@
 //   marks   my-world:marks:<seed>   { v: 1, marks, tracked }      (survives ?clearbuild)
 //   state   my-world:state          { seed, x, z, yaw, camYaw, camPitch, hours }
 //
+// A world grown on a land past the first (world/lands.js) is another world:
+// its seed is written <seed>:land<n> in those keys, and state carries `land`.
+//
 // A new domain lands in `build` under its own id without anything here
 // changing. `state` is the odd one out — it predates the rest, is not per
 // seed, and keeps the player's fields flat — so it is spelled out below.
 
-import { KEYS } from '../core/storage.js';
+import { KEYS, localWorld } from '../core/storage.js';
 
 const CHANGE_LULL = 1500; // ms after a change before it is written
 const STATE_EVERY = 2000; // ms between notes of where you are standing
 
 const STATE = {
-  pack: (parts, seed) => ({ seed, ...(parts.player || {}), hours: parts.hours }),
-  unpack(raw, seed) {
-    if (!raw || raw.seed !== seed) return null;
+  pack: (parts, seed, land) => ({ seed, ...(land > 1 && { land }), ...(parts.player || {}), hours: parts.hours }),
+  unpack(raw, seed, land) {
+    if (!raw || raw.seed !== seed || (raw.land || 1) !== land) return null;
     const { x, z, yaw, camYaw, camPitch } = raw;
     return { player: { x, z, yaw, camYaw, camPitch }, hours: raw.hours };
   },
@@ -30,10 +33,11 @@ const STATE = {
 export class LocalStore {
   // fresh: ?reset — don't pick up where you were standing
   // clear: ?clearbuild — forget what was built and changed
-  constructor({ domains, storage, seed, fresh = false, clear = false }) {
+  constructor({ domains, storage, seed, land = 1, fresh = false, clear = false }) {
     this.domains = domains;
     this.storage = storage;
     this.seed = seed;
+    this.land = land;
     this.fresh = fresh;
     this.clear = clear;
     this.enabled = true;
@@ -49,9 +53,21 @@ export class LocalStore {
 
   keyFor(bundle) {
     if (bundle === 'state') return KEYS.state;
-    if (bundle === 'build') return KEYS.build(this.seed);
-    if (bundle === 'marks') return KEYS.marks(this.seed);
-    return `my-world:${bundle}:${this.seed}`;
+    if (bundle === 'build') return KEYS.build(this.seed, this.land);
+    if (bundle === 'marks') return KEYS.marks(this.seed, this.land);
+    return `my-world:${bundle}:${localWorld(this.seed, this.land)}`;
+  }
+
+  // The land, other than this one, that this browser holds a world of this
+  // seed grown on — something built, or marked — or 0. Only asked when this
+  // one holds nothing yet.
+  elsewhere(lands) {
+    if (this.storage.get(KEYS.build(this.seed, this.land)) || this.storage.get(KEYS.marks(this.seed, this.land))) return 0;
+    for (const land of lands) {
+      if (land === this.land) continue;
+      if (this.storage.get(KEYS.build(this.seed, land)) || this.storage.get(KEYS.marks(this.seed, land))) return land;
+    }
+    return 0;
   }
 
   // -> a state: everything this browser remembers about this seed's world.
@@ -61,7 +77,7 @@ export class LocalStore {
     for (const bundle of this.bundles()) {
       if (bundle === 'state' && this.fresh) continue;
       const raw = this.storage.get(this.keyFor(bundle));
-      const parts = bundle === 'state' ? STATE.unpack(raw, this.seed) : raw && raw.v === 1 ? raw : null;
+      const parts = bundle === 'state' ? STATE.unpack(raw, this.seed, this.land) : raw && raw.v === 1 ? raw : null;
       if (!parts) continue;
       for (const d of this.domains.list) if (d.local === bundle && parts[d.id] !== undefined) state[d.id] = parts[d.id];
     }
@@ -73,7 +89,7 @@ export class LocalStore {
     for (const bundle of this.bundles()) {
       if (only && bundle !== only) continue;
       const parts = this.domains.collect((d) => d.local === bundle);
-      this.storage.set(this.keyFor(bundle), bundle === 'state' ? STATE.pack(parts, this.seed) : { v: 1, ...parts });
+      this.storage.set(this.keyFor(bundle), bundle === 'state' ? STATE.pack(parts, this.seed, this.land) : { v: 1, ...parts });
     }
   }
 

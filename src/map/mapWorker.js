@@ -1,6 +1,6 @@
 // Web Worker: renders map tiles off the main thread.
 
-import { WorldGen } from '../world/worldgen.js';
+import { growWorld } from '../world/lands.js';
 import { renderTile, createVegCache } from './mapRender.js';
 
 let gen = null;
@@ -9,7 +9,7 @@ let vegFor = null;
 self.onmessage = (e) => {
   const m = e.data;
   if (m.type === 'init') {
-    gen = new WorldGen(m.seed, m.structures);
+    gen = growWorld(m.seed, m.structures, m.land);
     vegFor = createVegCache(gen);
     return;
   }
