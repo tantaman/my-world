@@ -2,7 +2,8 @@
 //
 // One connection per person to the world's Durable Object. Changes go up as
 // ops and come straight back down from everyone else; where people are
-// standing goes both ways and is never stored.
+// standing goes both ways and is never stored, and so does anything else
+// people here say to each other (say(), on a channel of its own).
 //
 // This is deliberately thin. There is no prediction to reconcile here: the
 // builder already applies your own edits the moment you swing, the object is
@@ -19,7 +20,7 @@ const RETRY = [500, 1000, 2000, 4000, 8000, 15000];
 export class Live {
   constructor({ id, handlers }) {
     this.id = id;
-    this.on = handlers; // { ops, at, gone, here, reopen, state, denied }
+    this.on = handlers; // { ops, at, gone, here, say, reopen, state, denied }
     this.ws = null;
     this.me = null;
     this.gen = 0;
@@ -64,6 +65,15 @@ export class Live {
   // ever true for an instant anyway. (Who you are, the object knows already.)
   at(x, z, yaw) {
     if (this.connected) this.ws.send(JSON.stringify({ t: 'at', x, z, yaw }));
+  }
+
+  // Something for the others here, on a channel (`ch`), to everyone or to one
+  // of them by id; the object says who it came from. Never stored, and
+  // dropped if the socket is down. -> whether it went.
+  say(ch, body, to = null) {
+    if (!this.connected) return false;
+    this.ws.send(JSON.stringify(to ? { t: 'say', ch, to, body } : { t: 'say', ch, body }));
+    return true;
   }
 
   #connect() {
@@ -133,6 +143,7 @@ export class Live {
       return;
     }
     if (msg.t === 'at') return this.on.at?.(msg);
+    if (msg.t === 'say') return this.on.say?.(msg);
     if (msg.t === 'gone') return this.on.gone?.(msg.id);
     if (msg.t === 'reopen') return this.on.reopen?.();
   }

@@ -19,5 +19,11 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["World"] }],
 
+  // Talking works with STUN alone for most people. To relay voices for those
+  // who can't reach each other directly, give the Worker a Cloudflare TURN
+  // key: its id here, and its API token as a secret
+  // (`npx wrangler secret put TURN_KEY_API_TOKEN`). See worker/ice.js.
+  //   "vars": { "TURN_KEY_ID": "..." },
+
   "observability": { "enabled": true }
 }
