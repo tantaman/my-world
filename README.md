@@ -346,7 +346,7 @@ src/
   core/
     events.js             Emitter: on / emit, in place of single callback slots
     storage.js            this browser's memory, and every key kept in it
-    geom.js               plan-view geometry and chance that several systems share
+    geom.js               plan-view geometry, a ray against a box, and chance that several systems share
     format.js             how numbers are written for people
   game/
     game.js               the Game: what features share, and the frame's phases

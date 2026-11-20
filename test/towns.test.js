@@ -14,6 +14,7 @@ import { Towns, CELL, bodyOf, OPEN } from '../src/towns/towns.js';
 import { KINDS, KIND_IDS, BUILDINGS } from '../src/towns/kinds.js';
 import { buildLot, buildStreet } from '../src/towns/buildings.js';
 import { Townsfolk, lookOf, buildPerson } from '../src/towns/people.js';
+import { layoutCave, cellOf } from '../src/caves/sites.js';
 import { mulberry32 } from '../src/noise.js';
 import { matchesGolden } from './helpers/golden.js';
 
@@ -107,6 +108,29 @@ for (const { on, gen, all, sites } of WORLDS) {
       const street = t.lots.filter((l) => Math.abs(l.u) <= t.len / 2 && !OPEN[l.type]);
       assert.ok(street.length >= 4, `${t.id}: a street of buildings (${street.length})`);
     }
+  });
+
+  test(`none stands in the mouth of a cave${on}`, () => {
+    let near = 0;
+    for (const t of all.slice(0, 12)) {
+      const [c0, r0] = cellOf(t.box[0] - 30, t.box[1] - 30);
+      const [c1, r1] = cellOf(t.box[2] + 30, t.box[3] + 30);
+      for (let cz = r0; cz <= r1; cz++) {
+        for (let cx = c0; cx <= c1; cx++) {
+          const cave = layoutCave(gen, cx, cz);
+          if (!cave) continue;
+          near++;
+          const m = cave.mouth;
+          // the lip, and a few steps either side of the way in
+          for (const k of [-3, 0, 3, m.portal]) {
+            const x = m.x + m.ux * k;
+            const z = m.z + m.uz * k;
+            assert.ok(!onPlan(t, x, z, m.w + 1, t.plan), `${t.id} keeps out of ${cave.id}`);
+          }
+        }
+      }
+    }
+    assert.ok(near > 0, 'there are caves near towns to keep out of');
   });
 
   test(`the cells are big enough to keep a town in${on}`, () => {

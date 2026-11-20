@@ -12,7 +12,8 @@
 // level enough to stand it on a foundation; a lot that isn't is left empty.
 // The trees and stones in its way are hidden as it comes into view, the way
 // a felled tree is (see index.js). A town keeps clear of the old places, of
-// where people first arrive, and of the hand-placed structures.
+// the mouths of the caves (where the hillside is cut open), of where people
+// first arrive, and of the hand-placed structures.
 //
 // No three.js in here: the tests read it, and the map asks it what to label.
 //
@@ -44,6 +45,8 @@
 import { mulberry32, hash2i } from '../noise.js';
 import { Sites, toWorld } from '../landmarks/sites.js';
 import { SURNAMES } from '../landmarks/kinds.js';
+import { layoutCave, cellOf } from '../caves/sites.js';
+import { segDist } from '../core/geom.js';
 import { KINDS, KIND_IDS, STYLES, BUILDINGS, NAMES } from './kinds.js';
 
 export const CELL = 1000; // m, the side of the square each town has to itself
@@ -63,9 +66,11 @@ const STREET_GRADE = 0.24; // ...and the steepest stretch of it, rise over run
 const STREET_DRY = 5; // m from water the street keeps
 const LOT_DRY = 4; // ...and a building
 const OLD_PLACES = 4; // m between a lot and an old place (landmarks)
+const CAVE_MOUTH = 8; // m between a town and the cutting at a cave's mouth
 const MIN_LOTS = { western: 6, village: 5, creepy: 4 }; // lots along the street a town needs
 const CLEAR_ROUND = 7; // m of woods cleared round a town that clears it all
 const SALT = 0x7041e;
+const _seg = { d: 0, t: 0, nx: 0, nz: 0 };
 
 // Where a person stands to talk to a building (in its own frame): out in front
 // of the steps or the gate.
@@ -79,6 +84,7 @@ export class Towns extends Sites {
     this.size = CELL;
     this.spill = SPILL;
     this.sites = sites || new Sites(gen, { start });
+    this.caves = new Map(); // "cx:cz" -> the mouth of the cave in that square, or null
   }
 
   // The town with this id, or null.
@@ -300,6 +306,8 @@ export class Towns extends Sites {
         if (v === 0) mid = h;
       }
       if (prev !== null && Math.abs(mid - prev) > STREET_GRADE * STEP) return false;
+      toWorld(t, u, 0, p);
+      if (this._nearMouth(p.x, p.z, t.half)) return false;
       prev = mid;
       lo = Math.min(lo, mid);
       hi = Math.max(hi, mid);
@@ -331,6 +339,9 @@ export class Towns extends Sites {
       hi = Math.max(hi, h);
     }
     if (hi - lo > B.slope) return false;
+    // nor in the mouth of a cave
+    at(0, 0);
+    if (this._nearMouth(p.x, p.z, Math.hypot(w, d) / 2)) return false;
     // the old places: none on or right beside it
     let x0 = Infinity;
     let z0 = Infinity;
@@ -348,6 +359,28 @@ export class Towns extends Sites {
       if (s.box[0] < x1 + m && s.box[2] > x0 - m && s.box[1] < z1 + m && s.box[3] > z0 - m) return false;
     }
     return true;
+  }
+
+  // Whether anything within r of (x, z) comes near the cutting at the mouth
+  // of a cave (caves/sites.js): its lip and the way in.
+  _nearMouth(x, z, r) {
+    const [c0, r0] = cellOf(x - r - 40, z - r - 40);
+    const [c1, r1] = cellOf(x + r + 40, z + r + 40);
+    for (let cz = r0; cz <= r1; cz++) {
+      for (let cx = c0; cx <= c1; cx++) {
+        const k = `${cx}:${cz}`;
+        let m = this.caves.get(k);
+        if (m === undefined) {
+          const cave = layoutCave(this.gen, cx, cz);
+          this.caves.set(k, (m = cave ? cave.mouth : null));
+        }
+        if (!m) continue;
+        const reach = m.portal + 3;
+        segDist(x, z, m.x - m.ux * 3, m.z - m.uz * 3, m.x + m.ux * reach, m.z + m.uz * reach, _seg);
+        if (_seg.d < r + m.w + CAVE_MOUTH) return true;
+      }
+    }
+    return false;
   }
 }
 
