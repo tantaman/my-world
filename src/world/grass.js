@@ -34,7 +34,7 @@ const LILY_HEART = new THREE.Color(0.95, 0.75, 0.15);
 
 const _tip = new THREE.Color();
 const _c = new THREE.Color();
-const _g = { h: 0, path: 0, forest: 0, wRegion: 0, wLevel: NO_WATER, wSpeed: 0 };
+const _g = { h: 0, path: 0, forest: 0, above: 0, snow: 0, wRegion: 0, wLevel: NO_WATER, wSpeed: 0 };
 
 // Depth of water over the ground in _g (> 0 under water), or −99 if none.
 const waterDepth = () => (_g.wRegion > 0.3 && _g.wLevel > NO_WATER * 0.5 ? _g.wLevel - _g.h : -99);
@@ -192,12 +192,14 @@ export class Grass {
       // none under water, and thinning out on the damp edge of the bank
       const wd = waterDepth();
       const bank = wd > -0.4 ? smoothstep(-0.03, -0.3, wd) : 1;
-      let density = (0.26 + meadow * 0.74) * (1 - onPath * 0.97) * bank;
+      // above the trees it's short and thin, and none grows through the snow
+      const high = 1 - _g.above * 0.45;
+      let density = (0.26 + meadow * 0.74) * (1 - onPath * 0.97) * bank * high * (1 - smoothstep(0.15, 0.5, _g.snow));
       if (r1 > density) continue;
       if (kept.length && bare(ox + lx, oz + lz)) continue;
 
       const edgeShort = 1 - smoothstep(0.1, 0.45, _g.path) * 0.6;
-      const h = (0.22 + r2 * 0.32) * (0.6 + meadow * 0.75) * edgeShort;
+      const h = (0.22 + r2 * 0.32) * (0.6 + meadow * 0.75) * edgeShort * high;
       const w = 0.08 + r3 * 0.07;
       const yaw = r4 * Math.PI * 2;
       const sx = Math.cos(yaw);
@@ -211,6 +213,7 @@ export class Grass {
       _tip.copy(C_TIP);
       if (r6 > 0.8) _tip.lerp(C_TIP_DRY, (r6 - 0.8) * 5 * meadow);
       else if (r6 < 0.3) _tip.lerp(C_TIP_LUSH, 0.7);
+      if (_g.above > 0) _tip.lerp(C_TIP_DRY, _g.above * 0.5);
       _tip.multiplyScalar(0.82 + r2 * 0.36);
       const mid = C_ROOT.clone().lerp(_tip, 0.6);
       gPath = 0;

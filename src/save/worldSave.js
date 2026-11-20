@@ -35,6 +35,8 @@ import { Live } from './live.js';
 import { createWorld, openWorld, sendOps, join, signIn, signOut, WorldError } from './remote.js';
 import { Emitter } from '../core/events.js';
 import { KEYS } from '../core/storage.js';
+import { LANDS } from '../world/lands.js';
+import { landSave, landIn } from './land.js';
 
 // Wall-clock, not frame time: the render loop clamps its dt to 50 ms, so below
 // 20 fps accumulated frame time runs behind the clock.
@@ -64,6 +66,7 @@ export class WorldSave extends Emitter {
     this.local = null; // this browser's copy of a world with no address (see begin)
     this.id = null;
     this.seed = 0;
+    this.land = 1; // which land the world is grown on (see world/lands.js)
     this.gen = 0;
     this.name = '';
     this.status = 'local'; // local | live | saved | saving | offline | full | gone | out
@@ -86,7 +89,8 @@ export class WorldSave extends Emitter {
     this.toldAt = 0;
     this.diffCost = 0; // ms the last look over the world took
 
-    // The world's name is the one thing in a save that belongs to no system.
+    // The world's name and its land are the two things in a save that belong
+    // to no system.
     this.domains.register({
       id: 'name',
       scope: 'world',
@@ -104,6 +108,10 @@ export class WorldSave extends Emitter {
         return { take: (region, kind, rest, v) => void (name = v), done: () => name };
       },
     });
+
+    // Which land the world is grown on goes up with a new world, beside the
+    // name (see land.js).
+    this.domains.register({ ...landSave, collect: () => this.land, restore: () => {} });
   }
 
   // A system's share of the save. See domains.js for what a domain is.
@@ -137,9 +145,10 @@ export class WorldSave extends Emitter {
   }
 
   // ── Opening ───────────────────────────────────────────────────────────────
-  // Resolves before the world is built, because the seed lives in the save.
+  // Resolves before the world is built, because the seed and the land live in
+  // the save.
   // Never throws: a world that won't open leaves the game to start a fresh one.
-  // -> { id, seed, name, offline?, recovered? }, or null for a local world.
+  // -> { id, seed, land, name, offline?, recovered? }, or null for a local world.
   // What was saved is handed out later, by restore(), once every system has
   // registered its domain.
   async open(id) {
@@ -171,7 +180,7 @@ export class WorldSave extends Emitter {
     const yours = held.length && cached.visitor && cached.you === remote.you ? cached.visitor : remote.visitor;
     this._adopt(id, { ...remote, pending: held }, remote.seed, yours);
     this._set('saved', held.length ? 'picking up where you left off' : greeting);
-    return { id, seed: this.seed, name: this.name, recovered: held.length > 0 };
+    return { id, seed: this.seed, land: this.land, name: this.name, recovered: held.length > 0 };
   }
 
   // The world couldn't be opened. -> what open() resolves to.
@@ -190,7 +199,7 @@ export class WorldSave extends Emitter {
     if (cached && cached.elements) {
       this._adopt(id, cached, cached.seed, cached.visitor);
       this._set('offline', err.message);
-      return { id, seed: this.seed, name: this.name, offline: true };
+      return { id, seed: this.seed, land: this.land, name: this.name, offline: true };
     }
     this._set('offline', err.message);
     return null;
@@ -228,17 +237,27 @@ export class WorldSave extends Emitter {
     this.opened = seen;
     const name = seen.get(LOOSE) && seen.get(LOOSE).get('name');
     this.name = typeof name === 'string' ? name.slice(0, 80) : '';
+    this.land = landIn(seen);
     if (this.pending.size) this.dirty = true;
     tidyUrl();
   }
 
-  // The world is about to be built from `seed`. A world without an address is
-  // kept in this browser; `fresh` (?reset) and `clear` (?clearbuild) say how
-  // much of that to pick up.
-  begin({ seed, fresh = false, clear = false }) {
+  // The world is about to be built from `seed`, on `land`. A world without
+  // an address is kept in this browser; `fresh` (?reset) and `clear`
+  // (?clearbuild) say how much of that to pick up. `chosen`: the land was
+  // asked for (?land), rather than the newest by default.
+  begin({ seed, land = 1, fresh = false, clear = false, chosen = false }) {
     this.seed = this.seed || seed;
-    this.local = new LocalStore({ domains: this.domains, storage: this.storage, seed, fresh, clear });
-    if (this.id) this.local.disable();
+    if (!this.id) this.land = land;
+    this.local = new LocalStore({ domains: this.domains, storage: this.storage, seed, land: this.land, fresh, clear });
+    if (this.id) {
+      this.local.disable();
+      return;
+    }
+    // What this browser kept of this seed's world before the land changed is
+    // still here, under the land it was grown on: say where.
+    const was = chosen || this.detail ? 0 : this.local.elsewhere(LANDS);
+    if (was) this.detail = `the forest has grown anew · what you made before is at ?land=${was}`;
   }
 
   // Hand every domain what was saved: from the server's copy of the world, or
@@ -545,12 +564,12 @@ function dropParam(key) {
   history.replaceState(null, '', u);
 }
 
-// A saved world carries its own seed, and starting it fresh is not something
+// A saved world carries its own seed and land, and starting it fresh is not something
 // you want a reload to do by accident, so those params go once a world is open.
 function tidyUrl() {
   const u = new URL(location.href);
   let changed = false;
-  for (const key of ['seed', 'reset', 'clearbuild']) {
+  for (const key of ['seed', 'land', 'reset', 'clearbuild']) {
     if (u.searchParams.has(key)) {
       u.searchParams.delete(key);
       changed = true;

@@ -17,6 +17,10 @@ const low = params.get('q') === 'low';
 export const CONFIG = {
   // The world is generated from this seed. Changing it gives a whole new forest.
   seed: num('seed', 20261119),
+  // ...on this land (see world/lands.js): ?land=1 grows a world that is only
+  // local the way every world was grown at first. 0 = the newest. A saved
+  // world carries its own seed and land.
+  land: num('land', 0),
 
   // Terrain streaming
   chunkSize: 64, // meters per chunk side

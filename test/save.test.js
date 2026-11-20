@@ -7,6 +7,7 @@ import { SaveDomains } from '../src/save/domains.js';
 import { diffElements, applyOps, cloneElements, regionOf, LOOSE } from '../src/save/regions.js';
 import { matchesGolden } from './helpers/golden.js';
 import { makeDomains, plain, fromPlain } from './helpers/saved.js';
+import { landIn } from '../src/save/land.js';
 import { NAME, BUILD, MARKS, PLAYER, HOURS } from './fixtures/save.js';
 
 // Everything, by domain: what domains.collect() hands back in the game.
@@ -40,7 +41,24 @@ test('elements put back together are the world that was taken apart', () => {
   assert.deepEqual(back.forest.stumps.length, 2);
   assert.equal(back.buildings.length, 2);
   assert.deepEqual([...back.marks].sort((a, b) => (a.id < b.id ? -1 : 1)), MARKS.marks);
-  assert.deepEqual(Object.keys(back).sort(), ['buildings', 'fires', 'forest', 'marks', 'name', 'terrain'], 'only what is the world’s is in the elements');
+  assert.deepEqual(Object.keys(back).sort(), ['buildings', 'fires', 'forest', 'land', 'marks', 'name', 'terrain'], 'only what is the world’s is in the elements');
+});
+
+test('a world grown on a later land says so beside its name, and one that says nothing is land 1', () => {
+  const domains = makeDomains();
+  // every world saved before lands were counted, and every world on land 1
+  const before = domains.toElements(state());
+  assert.equal(before.get(LOOSE).has('land'), false, 'land 1 is never written down');
+  assert.equal(domains.fromElements(before).land, 1);
+  assert.equal(landIn(before), 1);
+  // one grown on the second land
+  const later = domains.toElements({ ...state(), land: 2 });
+  assert.equal(later.get(LOOSE).get('land'), 2);
+  assert.equal(domains.fromElements(later).land, 2);
+  assert.equal(landIn(later), 2);
+  // a land this build has never heard of is grown as the first
+  assert.equal(landIn(new Map([[LOOSE, new Map([['land', 99]])]])), 1);
+  assert.equal(landIn(new Map()), 1);
 });
 
 test('what is yours travels beside the world, spelled as it always was', () => {
@@ -100,7 +118,7 @@ test('a save that is not a save is tidied, not trusted', () => {
   assert.deepEqual(tidy, { terrain: [], forest: null, buildings: [], marks: [] });
   assert.deepEqual(domains.validate(null), {});
   // nothing in the elements at all
-  assert.deepEqual(domains.fromElements(new Map()), { name: '', terrain: [], forest: { removed: {}, stumps: [], felled: [] }, buildings: [], fires: [], marks: [] });
+  assert.deepEqual(domains.fromElements(new Map()), { name: '', land: 1, terrain: [], forest: { removed: {}, stumps: [], felled: [] }, buildings: [], fires: [], marks: [] });
   // a building's pieces with nowhere to stand don't make a building
   const orphan = new Map([['0,0', new Map([['l:x:20:10:14:0', ['10:20', 'log', []]]])]]);
   assert.deepEqual(domains.fromElements(orphan).buildings, []);

@@ -2,7 +2,7 @@
 // aren't available, on the main thread a tile per frame) and kept as
 // ImageBitmaps / canvases, least-recently-used first out.
 
-import { WorldGen } from '../world/worldgen.js';
+import { growWorld } from '../world/lands.js';
 import { TILE, renderTile, createVegCache } from './mapRender.js';
 
 const MAX_TILES = 320;
@@ -10,8 +10,10 @@ const MAX_TILES = 320;
 export const tileKey = (level, tx, tz) => `${level}:${tx}:${tz}`;
 
 export class MapTiles {
-  constructor(seed, structures = []) {
+  // land: which land the world is grown on (see world/lands.js)
+  constructor(seed, structures = [], land = 1) {
     this.seed = seed;
+    this.land = land;
     this.structures = structures.map((s) => ({ x: s.x, z: s.z, radius: s.radius }));
     this.cache = new Map(); // key -> { img }
     this.inFlight = new Set();
@@ -30,7 +32,7 @@ export class MapTiles {
           console.warn('map worker failed, rendering on the main thread', e.message);
           this._dropWorkers();
         };
-        w.postMessage({ type: 'init', seed, structures: this.structures });
+        w.postMessage({ type: 'init', seed, land, structures: this.structures });
         this.workers.push(w);
         this.busy.push(0);
       }
@@ -77,7 +79,7 @@ export class MapTiles {
     if (!w) return;
     this.inFlight.add(w.key);
     if (!this.local) {
-      const gen = new WorldGen(this.seed, this.structures);
+      const gen = growWorld(this.seed, this.structures, this.land);
       this.local = { gen, vegFor: createVegCache(gen, 48) };
     }
     const px = renderTile(this.local.gen, w.level, w.tx, w.tz, this.local.vegFor);

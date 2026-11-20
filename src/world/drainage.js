@@ -52,6 +52,9 @@ export const LAKE = { acc: 30, accFull: 260, r: [22, 60], depth: [2.5, 5.5] };
 // Chance a sink with too little catchment for a pond holds one anyway: a
 // spring in a hollow.
 const SPRING_POND = 0.35;
+// A pond or lake keeps its shore at most about a third of this many cells'
+// width (or of the way to the next hollow, if that's nearer) from its middle.
+const ROOM = 1.4;
 
 const TAU = Math.PI * 2;
 const OFFS = [
@@ -308,15 +311,20 @@ export class Drainage {
     s.basin = null;
     if (this.down(s)) return null;
     const acc = s.acc;
-    if (acc < POND.acc && s.r > SPRING_POND) return null;
     const g = this.gen;
-    const P = acc >= LAKE.acc ? LAKE : POND;
+    // A land may make more of its still water in some country than others
+    // (stillWater(x, z) -> { pond, lake, room }, shaped like POND, LAKE, ROOM).
+    const own = g.stillWater ? g.stillWater(s.x, s.z) : null;
+    const pond = own ? own.pond : POND;
+    const lake = own ? own.lake : LAKE;
+    if (acc < pond.acc && s.r > SPRING_POND) return null;
+    const P = acc >= lake.acc ? lake : pond;
     const rng = mulberry32(hash2i(s.i, s.j, (this.seed ^ 0xba51) >>> 0));
     const f = smoothstep(P.acc, P.accFull, acc);
     let R0 = P.r[0] + (P.r[1] - P.r[0]) * f * (0.75 + 0.25 * rng());
     // room for the land round it, and for any other sink's water
     const C = NET.cell;
-    let room = 1.4 * C;
+    let room = (own ? own.room : ROOM) * C;
     for (let dj = -3; dj <= 3; dj++) {
       for (let di = -3; di <= 3; di++) {
         if (!di && !dj) continue;
@@ -352,7 +360,7 @@ export class Drainage {
     }
     if (g.padClearance(x, z) < maxR + 30) return null;
     const depth = P.depth[0] + (P.depth[1] - P.depth[0]) * f;
-    const b = { x, z, R0, amp, ph, depth, maxR, level: 0, blend: 0, kind: P === LAKE ? 'lake' : 'pond', node: s };
+    const b = { x, z, R0, amp, ph, depth, maxR, level: 0, blend: 0, kind: P === lake ? 'lake' : 'pond', node: s };
     // Fill it to just under the lowest point of its rim, and no higher than
     // the streams running into it.
     let rimMin = Infinity;
