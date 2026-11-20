@@ -92,7 +92,9 @@ don't edit the same lines:
   keeps it in place. `test/hikes.test.js` checks they leave the rest of the
   world exactly as it was. The drainage network reads the forest's own land
   (`forestHeight`, `forestNaturalHeight`), never a hike's, so a hike can't
-  reroute water outside it.
+  reroute water outside it. A hike's land is fetched when it's needed
+  (`world/landforms.js`): anything that grows the world somewhere new (chunks,
+  map tiles, the far view) asks `lands.ready(box)` first and waits.
 - Values put into or taken out of the element record must be copies
   (`own()` in `save/regions.js` does this for domains that go through the
   registry).

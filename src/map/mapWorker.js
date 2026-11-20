@@ -13,6 +13,10 @@ self.onmessage = (e) => {
     vegFor = createVegCache(gen);
     return;
   }
+  if (m.type === 'hike') {
+    gen.addHike(m.def);
+    return;
+  }
   if (m.type === 'tile') {
     const px = renderTile(gen, m.level, m.tx, m.tz, vegFor);
     self.postMessage({ type: 'tile', key: m.key, px }, [px.buffer]);

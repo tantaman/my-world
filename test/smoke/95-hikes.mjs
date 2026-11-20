@@ -29,12 +29,18 @@ export default async function ({ page, step, key, frames, shot }) {
       await page.click(`#hikes li[data-hike="${h.id}"] [data-act="${at}"]`);
       await frames(3);
     };
+    // its land is fetched the first time: wait to be there, and for the forest round it
+    const arrive = (to) =>
+      page.evaluate((p) => T.until(() => Math.hypot(world.player.pos.x - p.x, world.player.pos.z - p.z) < 1 && world.game.chunks.isFullyLoaded(), 60000), to);
+    const before = await page.evaluate(() => world.hikes.list()[0].land);
+    assert.ok(!before, "a hike's land isn't fetched until you go near it");
     await pick('trailhead');
-    await page.evaluate(() => T.until(() => world.game.chunks.isFullyLoaded(), 60000));
+    await arrive(h.trailhead);
     const start = await where();
     near(start, h.trailhead, 'trailhead goes to the trailhead');
     assert.match(start.track, new RegExp(h.name), 'and the HUD points the way to the view');
     await pick('view');
+    await arrive(h.view);
     const drawn = await page.evaluate(() => T.until(() => world.hikes.list()[0].farView && world.game.chunks.isFullyLoaded(), 90000));
     assert.ok(drawn, 'the far view is drawn');
     await frames(60);

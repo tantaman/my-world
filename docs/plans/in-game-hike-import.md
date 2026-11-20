@@ -1,7 +1,8 @@
 # Plan: importing a hike from inside the game
 
 Status: **planned, not built.** Written against `095b782` (hikes from the
-command line, and the hikes list on K). Nothing here has been started.
+command line, and the hikes list on K). Since then, fetching a hike's land
+when it's needed (`src/world/landforms.js`) has built part of step 2; see there.
 
 ## What we want
 
@@ -76,19 +77,23 @@ stored in. Proposed spelling (new kinds only; nothing existing changes):
 
 ### 2. The world takes a hike after it has been built
 
-Today `WorldGen` is handed its hikes when it is made (`installWorld`), and
-the chunk, map and far-view workers are handed them once, when each starts.
-A saved world's hikes are only known at `save.restore()`, which runs after
-the features are installed, and a hike can also arrive mid-game (yours, or
-someone else's over the socket).
+**Partly built** with the lazy land: `WorldGen.addHike(def)`; the
+`{ type: 'hike', def }` message to the chunk, map and far-view workers; and
+`lands.ready(box)`, which the chunks, map tiles and far view ask before
+growing anything within a hike's reach, so a hike that's known about is
+never grown without. The water's caches need no clearing: the drainage
+network no longer looks at hikes at all. Left to do: a hike that nobody knew
+about until mid-game (an import, or someone else's over the socket) can
+arrive where things are grown already, so it needs `removeHike(id)`,
+`{ type: 'unhike', id }` and the regrowing below. Making a world's own hikes
+known to `Lands` as cards at `restore()` covers the rest.
 
 - `WorldGen.addHike(def)` / `removeHike(id)`: make and settle the
-  `Landform`, and clear the water's lake and pond caches (`water.lakes`,
-  `water.ponds`), since a basin cached before may now be too close. Both are
-  only caches, and recompute the same.
+  `Landform`. (Built: `addHike`.)
 - The chunk workers, map workers and far-view worker each get
   `{ type: 'hike', def }` / `{ type: 'unhike', id }`. Workers take messages
   in order, so a chunk asked for after the message is grown with it.
+  (Built: `hike`.)
 - **Regrowing.** `ChunkManager.regrow(x0, z0, x1, z1)`: dispose the chunks
   in the box (`disposeChunk`) so `update()` asks for them afresh. `MapTiles`
   needs a `forget(box)` that drops cached tiles and bumps `epoch` for any in

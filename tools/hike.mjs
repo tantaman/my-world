@@ -34,7 +34,7 @@ import { readPhoto } from './hike/exif.js';
 import { decodePng, encodePng } from './hike/png.js';
 import { localFrame, tileXY, terrarium, metresPerDegree } from './hike/geo.js';
 import { parseOsm, mergeOsm, trails, waters, peaks, incompleteWaters } from './hike/osm.js';
-import { buildHike, DEFAULTS } from './hike/build.js';
+import { buildHike, splitHike, DEFAULTS } from './hike/build.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HIKES_DIR = path.join(ROOT, 'src/world/hikes');
@@ -208,22 +208,29 @@ else at = freeSpot(existing.filter((h) => h.id !== id), outer);
 
 // ── Build it ─────────────────────────────────────────────────────────────────
 const { def, preview } = buildHike({ id, name, photo, elevation, trails: ts, waters: ws, at, ...opt });
-const module = `// ${def.name}: a hike, as \`npm run hike\` imported it from a photo taken on it.
-// Re-import it rather than edit it here (see src/world/landform.js for what
-// the parts are).
+const { card, land } = splitHike(def);
+const module = `// The land of ${def.name}, as \`npm run hike\` imported it from a photo taken
+// there: fetched the first time it's needed (src/world/landforms.js). Its card is
+// in src/world/hikes.js. Re-import it rather than edit it here (see
+// src/world/landform.js for what the parts are).
 //
 // The shape of the land: AWS Terrain Tiles (USGS 3DEP and others).
 // Trails and lakes: © OpenStreetMap contributors, under the ODbL.
 
-export default ${JSON.stringify(def)};
+export default ${JSON.stringify(land)};
 `;
 fs.writeFileSync(path.join(HIKES_DIR, `${id}.js`), module);
-writeRegistry(already ? existing.map((h) => h.id) : [...existing.map((h) => h.id), id]);
+// the others as they were (read whole, from before cards had a list of
+// their own, or as cards), this one new or in its old place
+const cards = existing.map(({ load, ...h }) => splitHike(h).card);
+if (already) cards[cards.findIndex((c) => c.id === id)] = card;
+else cards.push(card);
+writeRegistry(cards);
 
 const previewFile = flags.preview || path.join(os.tmpdir(), `hike-${id}.png`);
 fs.writeFileSync(previewFile, encodePng(preview.width, preview.height, preview.rgb));
 
-console.log(`\n${def.name} → src/world/hikes/${id}.js (${Math.round(module.length / 1024)} kB)`);
+console.log(`\n${def.name} → src/world/hikes/${id}.js (${Math.round(module.length / 1024)} kB, fetched when it's needed)`);
 console.log(`  at ${def.at[0]}, ${def.at[1]} in the world: the real land for ${Math.round(def.radius)} m round the photo, at 1 : ${Math.round(1 / def.scale)}`);
 if (def.trail) console.log(`  the walk: ${def.trail.name || 'a trail'}, ${def.trail.length} m, climbing ${def.trail.climb} m`);
 else console.log("  the photo wasn't taken on a trail; you'll arrive where it was taken");
@@ -249,19 +256,24 @@ function freeSpot(others, r) {
   }
 }
 
-function writeRegistry(ids) {
-  const camel = (s) => s.replace(/-(\w)/g, (_, c) => c.toUpperCase()).replace(/^(\d)/, '_$1');
+function writeRegistry(cards) {
   const text = `// Real hikes, set into the forest (see landform.js). Each was imported from a
-// photo by \`npm run hike\`, which also lists it here. To take one out, delete
-// its line here and its file in hikes/.
+// photo by \`npm run hike\`, which writes this file. To take one out, delete
+// its entry here and its file in hikes/.
+//
+// Each is here as a card: what it is and where, a few hundred bytes. Its land
+// (the heights, the lakes, the trails: about 200 kB) is in hikes/<id>.js,
+// fetched the first time it's needed, not when the game starts (landforms.js).
 //
 // Where a hike sits is part of the world description, like the hills: a
 // world someone has built in near one remembers it there. Re-importing keeps
 // it where it is.
 
-${ids.map((i) => `import ${camel(i)} from './hikes/${i}.js';`).join('\n')}
+const hike = (card, load) => ({ ...card, load });
 
-export const HIKES = [${ids.map(camel).join(', ')}];
+export const HIKES = [
+${cards.map((c) => `  hike(${JSON.stringify(c)}, () => import('./hikes/${c.id}.js')),`).join('\n')}
+];
 `;
   fs.writeFileSync(REGISTRY, text);
 }

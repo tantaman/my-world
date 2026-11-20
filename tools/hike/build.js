@@ -170,6 +170,19 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
   return { def, preview: preview(H, n, cell, lakeCells, lines, route) };
 }
 
+// A hike as it's kept (see src/world/landforms.js): its card, small, listed in
+// src/world/hikes.js and always loaded; and its land, in a file of its own,
+// fetched the first time it's needed. { ...card, ...land } is the hike again.
+export const LAND_PARTS = ['ground', 'lakes', 'paths'];
+export function splitHike(def) {
+  const card = {};
+  const land = {};
+  for (const [k, v] of Object.entries(def)) (LAND_PARTS.includes(k) ? land : card)[k] = v;
+  // the card keeps the lakes' names, for the list of hikes
+  card.lakes = (def.lakes || []).map((l) => ({ name: l.name }));
+  return { card, land };
+}
+
 const round = (v, f) => (v === null || v === undefined ? null : Math.round(v * f) / f + 0); // + 0: no -0
 
 // ── Geometry ─────────────────────────────────────────────────────────────────

@@ -14,6 +14,10 @@
 //     map names them.
 //   - From up there you can see the whole of it (farView.js).
 //
+// It works from the hikes' cards (what and where each one is: world/landforms.js),
+// which are always here. A hike's land is fetched the first time anything
+// near it is grown; going to one waits for it.
+//
 // From the console: world.hikes.list(), await world.hikes.go('mount-storm-king', 'view')
 
 import { CONFIG } from '../config.js';
@@ -42,26 +46,28 @@ const SIGN = ['.......', '.####..', '.#####.', '.####..', '...#...', '...#...', 
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player', 'map'];
 export function installHikes(game) {
-  const { scene, gen, chunks, player, hud, commands, pipeline, camera, sky, map, input } = game;
-  const lands = gen.lands;
+  const { scene, gen, lands, chunks, player, hud, commands, pipeline, camera, sky, map, input } = game;
+  const cards = lands.cards;
   const deg = (b) => (b * Math.PI) / 180;
-  const real = (L, m) => formatDistance(m / L.def.scale);
+  const real = (c, m) => formatDistance(m / c.scale);
+  const outer = (c) => c.radius + c.fade;
 
   // ── Where things are ─────────────────────────────────────────────────────
   // { x, z, yaw, camYaw } for 'trailhead' or 'view'
-  function spot(L, at) {
+  function spot(c, at) {
     if (at === 'view') {
-      const v = L.world(L.view);
+      const v = c.view;
       const b = v.bearing === null || v.bearing === undefined ? null : deg(v.bearing);
+      const [x, z] = [c.at[0] + v.x, c.at[1] + v.z];
       // facing along the bearing, with the camera behind looking the same way
-      return b === null ? { x: v.x, z: v.z, yaw: 0 } : { x: v.x, z: v.z, yaw: Math.PI - b, camYaw: -b };
+      return b === null ? { x, z, yaw: 0 } : { x, z, yaw: Math.PI - b, camYaw: -b };
     }
-    const t = L.world(L.trailhead);
-    return { x: t.x, z: t.z, yaw: t.yaw };
+    const t = c.trailhead;
+    return { x: c.at[0] + t.x, z: c.at[1] + t.z, yaw: t.yaw };
   }
 
   // the hike whose land you're on
-  const onHike = (x, z) => lands.find((L) => L.weight(x, z) > 0) || null;
+  const onHike = (x, z) => cards.find((c) => Math.hypot(x - c.at[0], z - c.at[1]) < outer(c)) || null;
 
   // ── On the map ───────────────────────────────────────────────────────────
   // Where each hike starts and where its photo was taken are places on the
@@ -79,55 +85,70 @@ export function installHikes(game) {
     scene.add(object);
     landmarks.push({ object, x, z });
   };
-  for (const L of lands) {
-    const v = spot(L, 'view');
-    const b = deg(L.view.bearing ?? 0);
-    stand(makeCairn(hash2i(Math.round(L.cx), Math.round(L.cz), CONFIG.seed)), v.x - Math.cos(b) * CAIRN_ASIDE, v.z - Math.sin(b) * CAIRN_ASIDE);
+  for (const c of cards) {
+    const v = spot(c, 'view');
+    const b = deg(c.view.bearing ?? 0);
+    stand(makeCairn(hash2i(Math.round(c.at[0]), Math.round(c.at[1]), CONFIG.seed)), v.x - Math.cos(b) * CAIRN_ASIDE, v.z - Math.sin(b) * CAIRN_ASIDE);
     // beside the start of the trail, its arrow pointing at it, so you see it
     // face on as you arrive
-    const t = spot(L, 'trailhead');
+    const t = spot(c, 'trailhead');
     const sign = makeSignpost();
     sign.rotation.y = t.yaw - Math.PI / 2;
     stand(sign, t.x + Math.cos(t.yaw) * SIGN_ASIDE, t.z - Math.sin(t.yaw) * SIGN_ASIDE);
-    const trail = L.def.trail && L.def.trail.name;
-    spots.push({ id: `hike:${L.id}:view`, x: v.x, z: v.z, name: L.name, kind: 'view', note: 'where the photo was taken', glyph: PEAK });
-    spots.push({ id: `hike:${L.id}:trailhead`, x: t.x, z: t.z, name: trail || `${L.name} trailhead`, kind: 'trailhead', note: `where the walk up ${L.name} begins`, glyph: SIGN });
+    const trail = c.trail && c.trail.name;
+    spots.push({ id: `hike:${c.id}:view`, x: v.x, z: v.z, name: c.name, kind: 'view', note: 'where the photo was taken', glyph: PEAK });
+    spots.push({ id: `hike:${c.id}:trailhead`, x: t.x, z: t.z, name: trail || `${c.name} trailhead`, kind: 'trailhead', note: `where the walk up ${c.name} begins`, glyph: SIGN });
   }
 
   // ── Going there ──────────────────────────────────────────────────────────
+  // Once its land is here, so you land on the real ground and not the
+  // forest's guess at it.
   const frame = () => new Promise((r) => requestAnimationFrame(r));
   let arrivedOn = null; // the hike you were last told you were on
-  function go(L, at) {
-    const s = spot(L, at);
+  let going = 0; // the latest trip asked for: an earlier one still waiting gives way
+  async function go(c, at) {
+    const trip = ++going;
+    if (!lands.has(c.id)) {
+      hud.flash(`${c.name} · on the way…`);
+      try {
+        await lands.ensure(c.id);
+      } catch {
+        hud.flash(`couldn't fetch ${c.name} · try again`);
+        return false;
+      }
+      if (trip !== going) return false;
+    }
+    const s = spot(c, at);
     player.spawn(s.x, s.z, s.yaw, s.camYaw);
-    arrivedOn = L;
-    makeFar(L);
+    arrivedOn = c;
+    makeFar(c);
     if (at === 'view') {
       player.camPitch = VIEW_PITCH;
-      if (Number.isFinite(L.view.hour)) sky.hours = L.view.hour;
-      hud.flash(`${L.name} · where the photo was taken`);
+      if (Number.isFinite(c.view.hour)) sky.hours = c.view.hour;
+      hud.flash(`${c.name} · where the photo was taken`);
     } else {
-      const t = L.def.trail;
-      hud.flash(t ? `${L.name} · ${t.name || 'the trail'}: ${real(L, t.length)}, ${real(L, t.climb)} up` : L.name);
+      const t = c.trail;
+      hud.flash(t ? `${c.name} · ${t.name || 'the trail'}: ${real(c, t.length)}, ${real(c, t.climb)} up` : c.name);
     }
+    return true;
   }
 
   // ── The list ─────────────────────────────────────────────────────────────
   // In the real world's metres, the way you'd describe the hike.
   const panel = new HikesPanel({
-    hikes: lands.map((L) => ({
-      id: L.id,
-      name: L.name,
-      trail: L.def.trail ? L.def.trail.name : '',
-      length: L.def.trail ? L.def.trail.length / L.def.scale : 0,
-      climb: L.def.trail ? L.def.trail.climb / L.def.scale : 0,
-      lakes: L.lakes.map((l) => l.name).filter(Boolean),
+    hikes: cards.map((c) => ({
+      id: c.id,
+      name: c.name,
+      trail: c.trail ? c.trail.name : '',
+      length: c.trail ? c.trail.length / c.scale : 0,
+      climb: c.trail ? c.trail.climb / c.scale : 0,
+      lakes: (c.lakes || []).map((l) => l.name).filter(Boolean),
     })),
     input,
-    onGo: (id, at) => go(lands.find((L) => L.id === id), at),
+    onGo: (id, at) => go(cards.find((c) => c.id === id), at),
     here: () => {
-      const L = onHike(player.pos.x, player.pos.z);
-      return L ? L.id : null;
+      const c = onHike(player.pos.x, player.pos.z);
+      return c ? c.id : null;
     },
   });
   game.provide('hikes', panel);
@@ -137,7 +158,7 @@ export function installHikes(game) {
     panel.toggle();
   };
   game.on('panel', (which) => which !== 'hikes' && panel.close());
-  if (lands.length) {
+  if (cards.length) {
     commands.add({ id: 'hikes', keys: ['KeyK'], group: 'WANDER', label: 'hikes · go to one', run: toggle });
     hud.button('hikes-btn', toggle);
     const btn = document.getElementById('hikes-btn');
@@ -146,22 +167,31 @@ export function installHikes(game) {
 
   // On a hike, the HUD points to where the photo was taken.
   hud.guide(() => {
-    const L = onHike(player.pos.x, player.pos.z);
-    if (!L) return null;
-    const v = spot(L, 'view');
-    return { id: `hike:${L.id}`, label: L.name, color: GUIDE_COLOR, x: v.x, z: v.z };
+    const c = onHike(player.pos.x, player.pos.z);
+    if (!c) return null;
+    const v = spot(c, 'view');
+    return { id: `hike:${c.id}`, label: c.name, color: GUIDE_COLOR, x: v.x, z: v.z };
   });
 
   // ── The far view ─────────────────────────────────────────────────────────
+  // Made once the land it takes in is here: the hike's own, and any other
+  // hike's within reach of it. Until then, asking for it sends for that land.
   const far = new FarView(scene);
   const asked = new Set();
   let worker = null;
-  function makeFar(L) {
-    if (far.has(L.id) || asked.has(L.id)) return;
-    asked.add(L.id);
-    const half = L.outer + FAR_MARGIN;
+  lands.on('land', (def) => {
+    if (worker) worker.postMessage({ type: 'hike', def });
+  });
+  // The ground near it waits for its land: say why, rather than leave a gap.
+  lands.on('failed', (c) => hud.flash(`can't fetch ${c ? c.name : 'a hike'} yet · trying again (or reload the page)`));
+  function makeFar(c) {
+    if (far.has(c.id) || asked.has(c.id)) return;
+    const half = outer(c) + FAR_MARGIN;
+    const [x0, z0] = [c.at[0] - half, c.at[1] - half];
+    if (!lands.ready(x0, z0, x0 + 2 * half, z0 + 2 * half)) return;
+    asked.add(c.id);
     const n = Math.round((2 * half) / FAR_STEP) + 1;
-    const job = { type: 'far', id: L.id, x0: L.cx - half, z0: L.cz - half, n, step: FAR_STEP };
+    const job = { type: 'far', id: c.id, x0, z0, n, step: FAR_STEP };
     if (!worker && worker !== false) {
       try {
         worker = new Worker(new URL('./farWorker.js', import.meta.url), { type: 'module' });
@@ -181,8 +211,8 @@ export function installHikes(game) {
     }
     if (worker) worker.postMessage(job);
     else {
-      far.add(L.id, sampleFar(gen, job.x0, job.z0, job.n, job.step));
-      asked.delete(L.id);
+      far.add(c.id, sampleFar(gen, job.x0, job.z0, job.n, job.step));
+      asked.delete(c.id);
     }
   }
 
@@ -193,10 +223,10 @@ export function installHikes(game) {
     update({ dt }) {
       const at = game.focus;
       far.update(at);
-      for (const L of lands) {
-        const d = L.clearance(at.x, at.z);
-        if (d < FAR_MAKE) makeFar(L);
-        else if (d > FAR_DROP) far.remove(L.id);
+      for (const c of cards) {
+        const d = Math.hypot(at.x - c.at[0], at.z - c.at[1]) - outer(c);
+        if (d < FAR_MAKE) makeFar(c);
+        else if (d > FAR_DROP) far.remove(c.id);
       }
 
       // As far as there's land drawn in every direction, the air is clear.
@@ -206,9 +236,9 @@ export function installHikes(game) {
       pipeline.fogFar = fog > base + 1 ? fog : 0;
 
       // Walking onto a hike, you're told which.
-      const L = onHike(at.x, at.z);
-      if (L && L !== arrivedOn) hud.flash(L.name);
-      arrivedOn = L;
+      const c = onHike(at.x, at.z);
+      if (c && c !== arrivedOn) hud.flash(c.name);
+      arrivedOn = c;
 
       // Landmarks stand on the ground, wherever it has been dug.
       for (const m of landmarks) {
@@ -220,23 +250,24 @@ export function installHikes(game) {
   Object.assign(game.api, {
     hikes: {
       list: () =>
-        lands.map((L) => ({
-          id: L.id,
-          name: L.name,
-          trailhead: spot(L, 'trailhead'),
-          view: spot(L, 'view'),
-          trail: L.def.trail,
-          farView: far.has(L.id),
+        cards.map((c) => ({
+          id: c.id,
+          name: c.name,
+          trailhead: spot(c, 'trailhead'),
+          view: spot(c, 'view'),
+          trail: c.trail,
+          land: lands.has(c.id),
+          farView: far.has(c.id),
         })),
       // Resolves once you're there, the forest has streamed in and the far
       // view is drawn.
       async go(id, at = 'trailhead') {
-        const L = lands.find((h) => h.id === id);
-        if (!L) throw new Error(`no hike called ${id}: try world.hikes.list()`);
-        go(L, at);
+        const c = cards.find((h) => h.id === id);
+        if (!c) throw new Error(`no hike called ${id}: try world.hikes.list()`);
+        if (!(await go(c, at))) throw new Error(`couldn't get to ${c.name}`);
         do await frame();
-        while (!chunks.isFullyLoaded() || !far.has(L.id));
-        const s = spot(L, at);
+        while (!chunks.isFullyLoaded() || !far.has(c.id));
+        const s = spot(c, at);
         player.spawn(s.x, s.z, s.yaw, s.camYaw);
         if (at === 'view') player.camPitch = VIEW_PITCH;
         for (let i = 0; i < 4; i++) {

@@ -52,13 +52,24 @@ built in near a hike keeps it there. Importing a hike again (`--force`)
 leaves it where it is, and `npm test` checks that hikes leave the rest of the
 world alone.
 
-**Where it's kept.** In the code, not on the save server: the import writes
-`src/world/hikes/<id>.js` and lists it in `src/world/hikes.js`. The save
-server only ever holds what people *change* in a world, and a hike is part
-of what every world grows, like its hills, so it ships with the game itself.
-That means every world, saved or not, on every seed, has every hike, in the
-same place. `npm run dev` shows a new one straight away; for anyone else to
-walk it, commit it and deploy (`npm run deploy`).
+**Where it's kept.** In the code, not on the save server. The save server
+only ever holds what people *change* in a world, and a hike is part of what
+every world grows, like its hills, so it ships with the game itself: every
+world, saved or not, on every seed, has every hike, in the same place.
+`npm run dev` shows a new one straight away; for anyone else to walk it,
+commit it and deploy (`npm run deploy`).
+
+The import writes two things. A *card* in `src/world/hikes.js`, a few
+hundred bytes saying what the hike is and where, which the game loads at the
+start, so the list and the map know every hike. And the hike's *land* (the
+heights, lakes and trails, about 200 kB) in `src/world/hikes/<id>.js`, which
+the build keeps in a file of its own and the game only fetches the first
+time something near it is grown: when you walk within a kilometre or so, go
+there from the list, or open the map over it (`src/world/landforms.js`). So
+more hikes cost the start of the game almost nothing. Nothing within reach
+of a hike, its own land and the 260 m past it where the forest's water gives
+way, is grown until its land has come; the chunks, the map and the far view
+each wait for it.
 
 | option | default | |
 |---|---|---|
@@ -70,7 +81,7 @@ walk it, commit it and deploy (`npm run deploy`).
 | `--lat --lon --bearing --hour` | from the photo | for a photo that doesn't say |
 
 Downloads are kept in `node_modules/.cache/hike`. To take a hike out, delete
-its line in `src/world/hikes.js` and its file. From the console:
+its entry in `src/world/hikes.js` and its file. From the console:
 `world.hikes.list()` and `await world.hikes.go('mount-storm-king', 'view')`.
 
 Elevation: AWS Terrain Tiles (USGS 3DEP and others). Trails and lakes: ©
