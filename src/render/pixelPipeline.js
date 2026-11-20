@@ -134,7 +134,7 @@ export class PixelPipeline {
     this.outline = CONFIG.outline;
     this.levels = CONFIG.colorLevels;
     this.dither = 1;
-    this.enabled = true;
+    this.enabled = CONFIG.pixelArt;
 
     this.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     const quadGeo = new THREE.PlaneGeometry(2, 2);
