@@ -10,10 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "serve": "npm run build && wrangler dev",
-    "deploy": "npm run build && wrangler deploy",
-    "db:create": "wrangler d1 create my-world",
-    "db:migrate": "wrangler d1 migrations apply my-world --remote",
-    "db:local": "wrangler d1 migrations apply my-world --local"
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "three": "^0.187.0"

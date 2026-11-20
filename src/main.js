@@ -17,6 +17,7 @@ import { placeStructures } from './structures/loader.js';
 import { MarkStore } from './map/marks.js';
 import { MapView } from './map/mapView.js';
 import { Markers } from './world/markers.js';
+import { Peers } from './world/peers.js';
 import { Builder } from './build/builder.js';
 import { WorldSave } from './save/worldSave.js';
 import { SharePanel } from './save/sharePanel.js';
@@ -112,8 +113,9 @@ markers.sync(marks.list());
 marks.subscribe(() => markers.sync(marks.list()));
 const map = new MapView({ seed: CONFIG.seed, structures: STRUCTURES, marks, player, input });
 
-// ── Saving ─────────────────────────────────────────────────────────────────
-worldSave.attach({ gen, builder, marks, player, sky });
+// ── Saving, and everyone else in this world ────────────────────────────────
+const peers = new Peers(scene, (x, z) => chunks.heightAt(x, z));
+worldSave.attach({ gen, builder, marks, player, sky, peers, me: '' });
 const share = new SharePanel({ save: worldSave, input, hud });
 hud.onSaveToggle = () => share.toggle();
 const openMap = () => {
@@ -294,6 +296,7 @@ function loop(now) {
   sky.update(player.pos, camera.position);
   particles.update(player.pos, player.pos.y);
   markers.update(now / 1000, SHARED.uWind.value, player.pos);
+  peers.update(dt);
   sound.update(dt, {
     hours: sky.hours,
     night: SKY.uNight.value,
@@ -332,8 +335,8 @@ function loop(now) {
     } else hud.setDebug('');
   }
 
-  // A world on the server saves itself a few seconds after you change
-  // something; where you're standing and the hour ride along with it.
+  // A world on the server sends what you change within a moment, and tells
+  // everyone else in it where you are standing.
   worldSave.tick();
   saveTimer += dt;
   if (saveTimer > 2) {
@@ -358,6 +361,7 @@ window.world = {
   gen,
   builder,
   save: worldSave,
+  peers,
   sound,
   marks,
   map,

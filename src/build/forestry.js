@@ -347,6 +347,18 @@ export class Forestry {
     return false;
   }
 
+  // Take someone else's version of the forest: drop what we have standing in
+  // for it and build theirs. Plants removed from the generated forest only
+  // ever accumulate, so re-hiding is enough — nothing has to come back.
+  adopt(data) {
+    for (const f of [...this.felled.values()]) this.removeFelled(f);
+    for (const s of [...this.stumps.values()]) this.removeStump(s);
+    this.removed.clear();
+    this.load(data);
+    for (const ch of this.chunks.chunks.values()) this.hideRemoved(ch);
+    this.dirty = false;
+  }
+
   // ── Persistence ───────────────────────────────────────────────────────────
   serialize() {
     const removed = {};

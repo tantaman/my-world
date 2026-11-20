@@ -117,6 +117,14 @@ export class MarkStore {
     return this.tracked ? this.get(this.tracked) : null;
   }
 
+  // Take someone else's version of the marks.
+  adopt(data) {
+    this.marks = ((data && data.marks) || []).filter((m) => m && Number.isFinite(m.x) && Number.isFinite(m.z));
+    const want = data && data.tracked;
+    this.tracked = this.marks.some((m) => m.id === want) ? want : null;
+    this._changed();
+  }
+
   subscribe(fn) {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);

@@ -122,7 +122,8 @@
       }
       #corner button:hover { color: var(--ink); }
       #corner button[aria-pressed='false'] { opacity: 0.6; }
-      #corner button[data-state='saved'] { color: var(--accent); }
+      #corner button[data-state='saved'], #corner button[data-state='live'] { color: var(--accent); }
+      #corner button[data-state='live'] { border-color: var(--accent); }
       #corner button[data-state='saving'] { color: var(--ink); }
       #corner button[data-state='offline'], #corner button[data-state='conflict'],
       #corner button[data-state='full'], #corner button[data-state='gone'] { color: #f0b49a; border-color: #a2654d; }

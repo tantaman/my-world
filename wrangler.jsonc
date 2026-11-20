@@ -12,16 +12,12 @@
     "not_found_handling": "none"
   },
 
-  // Replace database_id with the one `npm run db:create` prints. Local
-  // development uses its own SQLite file under .wrangler/ and ignores it.
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "my-world",
-      "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "worker/migrations"
-    }
-  ],
+  // A world lives in its own Durable Object, which holds it in its own SQLite.
+  // Nothing else stores a world, so there is no database to create first.
+  "durable_objects": {
+    "bindings": [{ "name": "WORLD", "class_name": "World" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["World"] }],
 
   "observability": { "enabled": true }
 }
