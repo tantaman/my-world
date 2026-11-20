@@ -38,6 +38,8 @@ export class Player {
     this.world = world; // ChunkManager (heightAt, forEachCollider)
     this.input = input;
     this.character = new Character();
+    // Feet find the ground under each of them (terrain, or a sill underfoot).
+    this.character.groundAt = (x, z) => this.groundAt(x, z, this.pos.y + 0.02);
     scene.add(this.character.root);
 
     this.pos = new THREE.Vector3();
