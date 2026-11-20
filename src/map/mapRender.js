@@ -156,11 +156,11 @@ export function renderTile(gen, level, tx, tz, vegFor) {
           if (wet > 0) WA[k] = 1;
           WD[k] = Math.max(0, wet);
         } else {
-          water.probe(x, z);
+          water.probe(x, z, H[gz * G + gx]);
           if (water.kind !== 'stream' || level < 3) {
             const e = water.kind === 'stream' ? water.edge - mpp * 0.15 : water.edge;
             WA[k] = Math.max(0, Math.min(1, 0.5 - e / mpp));
-            WD[k] = water.kind === 'lake' ? Math.min(4, -water.edge * 0.15) : 0.5;
+            WD[k] = water.kind === 'lake' || water.kind === 'sea' ? Math.min(4, -water.edge * 0.15) : 0.5;
           }
         }
         PM[k] = pm;

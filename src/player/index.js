@@ -20,6 +20,9 @@ export function installPlayer(game) {
   input.on('touch', () => hud.showTouchActions());
   input.bindButton(document.getElementById('act-use'), 'use');
   input.bindButton(document.getElementById('act-alt'), 'alt');
+  // on a touch screen, a button to dive with, there while you're out of your depth
+  const diveBtn = document.getElementById('act-dive');
+  input.bindButton(diveBtn, 'dive');
 
   // Where the path starts, and where you appear when the world opens: there,
   // unless a save remembers where you were standing. Under the ground (in a
@@ -50,6 +53,8 @@ export function installPlayer(game) {
   commands.describe({ group: 'WANDER', help: 'W A S D', label: 'walk' });
   commands.describe({ group: 'WANDER', help: 'shift', label: 'run' });
   commands.describe({ group: 'WANDER', help: 'space', label: 'jump' });
+  commands.describe({ group: 'WANDER', help: 'shift · space', label: 'out of your depth: dive · come up' });
+  commands.describe({ group: 'WANDER', help: 'W · mouse', label: 'under water, swim where you look' });
   commands.describe({ group: 'WANDER', help: 'mouse · Q E', label: 'look around' });
   commands.describe({ group: 'WANDER', help: 'scroll', label: 'zoom' });
   commands.add({
@@ -70,11 +75,13 @@ export function installPlayer(game) {
     update({ dt }) {
       player.update(dt);
       game.focus.copy(player.pos); // the world streams in around you
+      const canDive = player.swimming && !player.carrier;
+      if (diveBtn && diveBtn.hidden === canDive) diveBtn.hidden = !canDive;
       if (player.hasMoved) hud.hideHint();
       SHARED.uPlayer.value.copy(player.pos);
       // ripples and froth around your legs, more when you're moving
       const speed = Math.hypot(player.vel.x, player.vel.z);
-      const wade = player.wade > 0.02 ? Math.min(1, player.wade * 3) * (0.35 + 0.65 * Math.min(1, speed / 2)) : 0;
+      const wade = player.wade > 0.02 && player.under < 0.8 ? Math.min(1, player.wade * 3) * (0.35 + 0.65 * Math.min(1, speed / 2)) : 0;
       WADE.uWade.value += (wade - WADE.uWade.value) * (1 - Math.exp(-dt * 4));
       // the water going past your legs: the current, less your own way through it
       WADE.uWadeFlow.value.set(player.current.x - player.vel.x, player.current.z - player.vel.z);

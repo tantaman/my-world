@@ -24,6 +24,8 @@
 // Everything goes out through a *bus* — 'ambience', 'effects', 'wildlife',
 // and any other name you ask for ('music') — each with its own level, so
 // kinds of sound can be turned up and down independently: sound.volume(bus, v).
+// And all of it can be dulled at once, as if heard through something
+// (sound.muffle(amount): under water, say).
 //
 // How shut in the listener is (setEnclosed: 0 out in the forest, 1 deep in a
 // cave) muffles the open air — the ambience and wildlife buses, and the
@@ -43,6 +45,11 @@ import { weather } from './layers/weather.js';
 import { crickets } from './layers/crickets.js';
 import { birds } from './layers/birds.js';
 import { water, pondLife } from './layers/water.js';
+
+// Fully muffled, nothing above about this many Hz gets through, and what
+// does is this much quieter.
+const MUFFLE_HZ = 380;
+const MUFFLE_QUIET = 0.4;
 
 // What plays unless told otherwise, in the order it is built and updated.
 const LAYERS = [weather, crickets, birds, water, pondLife];
@@ -66,6 +73,7 @@ export class Soundscape {
     this.env = { night: 0, forest: 0.5, birdActivity: 0 };
     this.listener = null;
     this.enclosed = 0;
+    this.muffled = 0;
     this._unlock = () => this.unlock();
     this._events = ['pointerdown', 'keydown', 'touchend', 'click'];
     if (typeof window !== 'undefined') {
@@ -138,7 +146,13 @@ export class Soundscape {
     this.master = ctx.createGain();
     this.master.gain.value = 0;
     this.master.gain.setTargetAtTime(this.enabled ? this.level : 0, t + 0.05, this.offline ? 0.05 : 1.5);
-    this.master.connect(this.comp);
+    // (see muffle())
+    this.dull = ctx.createBiquadFilter();
+    this.dull.type = 'lowpass';
+    this.dull.Q.value = 0.5;
+    this.dullLevel = ctx.createGain();
+    this.master.connect(this.dull).connect(this.dullLevel).connect(this.comp);
+    this.muffle(this.muffled, 0);
 
     // The open air, through a filter that closes when you're shut in.
     this.outside = ctx.createBiquadFilter();
@@ -217,6 +231,23 @@ export class Soundscape {
     this.outside.frequency.setTargetAtTime(20000 * Math.pow(ENCLOSED.muffle / 20000, e), t, 0.15);
     this.outsideGain.gain.setTargetAtTime(1 - (1 - ENCLOSED.quiet) * e, t, 0.15);
     this.roomSend.gain.setTargetAtTime(ENCLOSED.echo * e, t, 0.15);
+  }
+
+  // Everything heard as if through something: 0 not at all .. 1 as if from
+  // under water. Remembered if there's no sound yet.
+  muffle(amount, glide = 0.06) {
+    this.muffled = amount;
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const f = 20000 * Math.pow(MUFFLE_HZ / 20000, amount);
+    const v = 1 - MUFFLE_QUIET * amount;
+    if (glide > 0) {
+      this.dull.frequency.setTargetAtTime(f, t, glide);
+      this.dullLevel.gain.setTargetAtTime(v, t, glide);
+    } else {
+      this.dull.frequency.value = f;
+      this.dullLevel.gain.value = v;
+    }
   }
 
   // ── Layers ───────────────────────────────────────────────────────────────

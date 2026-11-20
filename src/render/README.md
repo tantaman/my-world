@@ -9,7 +9,10 @@ Everything is generated in code. There are no textures or model files.
    - darkens pixels on depth discontinuities, giving soft pixel-art outlines
      around silhouettes
    - adds height fog that takes its colour from the sky behind it, so far
-     hills melt into the horizon and valleys hold more mist
+     hills melt into the horizon and valleys hold more mist; or, with the
+     camera under water, the water's own: reds going first with depth,
+     green in a lake and blue in the sea, and light coming down in slanting
+     shafts (see [Under the water](../underwater/README.md))
    - applies filmic (ACES) tone mapping and a gentle grade: cool shadows,
      warm highlights
    - applies an ordered Bayer dither onto a slightly reduced palette, which

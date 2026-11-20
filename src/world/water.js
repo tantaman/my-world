@@ -29,10 +29,14 @@
 // forest's own water keeps out of them: the drainage network is worked out
 // over the forest's land alone, so it is the same with or without them, and
 // its channels and basins give way where real land begins.
+//
+// In a land with a sea (sea.js) the sea stands wherever the land lies below
+// its level. Rivers run out into it, and only ever deepen its bed.
 
 import { createSimplex2, smoothstep } from '../noise.js';
 import { Drainage, NET, basinRadius, channelSize } from './drainage.js';
-import { LAKE_REGION } from './landform.js';
+import { LAKE_REGION, seaSurf } from './landform.js';
+import { SHORE_BAND } from './sea.js';
 
 // Level reported where there's no water at all.
 export const NO_WATER = -1e4;
@@ -72,6 +76,12 @@ export const LANDFORM_DRY = 80;
 export const LANDFORM_REACH = 340;
 // How far (m) past a real lake's shore it still shapes the ground.
 const LAKE_BLEND = 8;
+// The sea may stand (if you dig) where the land is less than this (m) above it.
+const SEA_REGION = 1;
+// How steep (rise per m) the shore is taken to be where it isn't worked out.
+const SEA_SLOPE = 0.12;
+// The surf runs this far (m) up the beach from the water's edge.
+const SURF_UP = 6;
 
 // Pools joined by ramps: the level, quantised into steps.
 function quantise(w, step, ramp) {
@@ -111,7 +121,7 @@ export class Water {
   //   region  1 where water may stand: in it, and just past the bank (a hole
   //           dug there fills up to the level). 0 elsewhere.
   //   edge    metres to the nearest shore; negative in the water
-  //   kind    'river' | 'stream' | 'lake' | 'pond' | '' for the nearest water
+  //   kind    'river' | 'stream' | 'lake' | 'pond' | 'sea' | '' for the nearest water
   //   flowX, flowZ  the current (m/s); 0 in still water
   //   foam    0..1, white water on cascades
   //   open    0..1 how open the sky is over it: a stream in the woods runs
@@ -251,8 +261,11 @@ export class Water {
   // ── Still water ───────────────────────────────────────────────────────────
   _carveBasin(b, u, R, h) {
     if (u < 0) {
-      // shelving gently from the shore, then down to the deep middle
-      const T = b.level - b.depth * (1 - Math.exp(-(-u + 0.15) / (R * 0.28)));
+      // shelving gently from the shore, then down to the deep middle; or in
+      // a deep lake, out over a shelf and then steeply down to the floor
+      const T = b.shelf
+        ? b.level - b.shelf * (1 - Math.exp(-(-u + 0.15) / 2.5)) - (b.depth - b.shelf) * smoothstep(R * 0.1, R * 0.75, -u)
+        : b.level - b.depth * (1 - Math.exp(-(-u + 0.15) / (R * 0.28)));
       return Math.min(h, T) + (T - Math.min(h, T)) * smoothstep(-R * 0.3, 0, u);
     }
     // a beach that rises gently, then meets the land
@@ -263,6 +276,26 @@ export class Water {
       if (out < floor) out = floor;
     }
     return out;
+  }
+
+  // ── The sea ───────────────────────────────────────────────────────────────
+  // Does a real place hold the land at (x, z) entirely? Its own lakes and sea
+  // are what stand there, not the forest's sea; round its edge, where it
+  // fades into the forest, the forest's sea may meet it.
+  _realLand(x, z) {
+    for (const L of this.gen.landforms) if (L.weight(x, z) >= 1) return true;
+    return false;
+  }
+
+  // How far (m) it is to the shore from (x, z), where the land is u m above
+  // the sea (negative out in it): across the slope of the land, near the
+  // shore; further off, near enough.
+  _seaEdge(x, z, u) {
+    if (u <= -SHORE_BAND || u >= SHORE_BAND) return u / SEA_SLOPE;
+    const g = this.gen;
+    const h0 = g.forestHeight(x, z, 0);
+    const slope = Math.hypot(g.forestHeight(x + 1.5, z, 0) - h0, g.forestHeight(x, z + 1.5, 0) - h0) / 1.5;
+    return u / Math.max(slope, 0.02);
   }
 
   // ── Public ────────────────────────────────────────────────────────────────
@@ -280,6 +313,14 @@ export class Water {
     const near = this.net.near(Math.floor(x / C), Math.floor(z / C));
 
     let lake = 1e9;
+    const sea = this.gen.sea;
+    if (sea && h - sea.level < SHORE_BAND && !this._realLand(x, z)) {
+      const u = h - sea.level;
+      lake = this._seaEdge(x, z, u);
+      // (white where it breaks, and a chop further out: the foam that says
+      // it's the sea, to whoever hears the surf and draws the water)
+      this._offer(sea.level, u < SEA_REGION ? 1 : 0, lake, 'sea', 0, 0, lake < SURF_UP ? seaSurf(lake) : 0, 1);
+    }
     for (const b of near.basins) {
       if (this._givesWay(b)) continue;
       const dx = x - b.x;
@@ -358,11 +399,17 @@ export class Water {
   }
 
   // Just where the water is (edge, kind), without levels or shaping: cheap
-  // enough for drawing the map zoomed out.
-  probe(x, z) {
+  // enough for drawing the map zoomed out. broad: the land there without its
+  // bumps, if the caller has it (gen.forestHeight), for the sea's shore.
+  probe(x, z, broad = null) {
     this.clear();
     const C = NET.cell;
     const near = this.net.near(Math.floor(x / C), Math.floor(z / C));
+    const sea = this.gen.sea;
+    if (sea && !this._realLand(x, z)) {
+      const u = (broad ?? this.gen.forestHeight(x, z, NET.routeWave)) - sea.level;
+      if (u < SHORE_BAND) this._offer(NO_WATER, 0, u / SEA_SLOPE, 'sea', 0, 0, 0, 1);
+    }
     for (const b of near.basins) {
       if (this._givesWay(b)) continue;
       const dx = x - b.x;

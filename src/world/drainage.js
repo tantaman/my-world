@@ -26,6 +26,11 @@
 // rises and falls again, the water keeps its level and cuts a valley through
 // the rise rather than climbing it.
 //
+// In a land with a sea (sea.js), a node below the sea's level is the sea: the
+// water that gets there goes no further, and it stands at the sea's level.
+// Nothing on land stands its water lower than that, so rivers come down to
+// the sea and run out into it.
+//
 // Water.shape() (water.js) turns this into channels, pools and cascades, and
 // carves the land around them.
 
@@ -50,6 +55,17 @@ export const NET = {
 //   depth   range (m) at the deepest point, likewise
 export const POND = { acc: 3, accFull: 30, r: [6, 14], depth: [1.0, 1.7] };
 export const LAKE = { acc: 30, accFull: 260, r: [22, 60], depth: [2.5, 5.5] };
+// Lakes that go deep, on a land that has them (its stillWater() lake
+// carries this as `deep`; see land3.js). Most are tarns that shelve out from
+// the shore a little way and then drop away steeply to a floor far below:
+//   chance   of a lake being one
+//   depth    range (m) at the deepest point, by catchment as above
+//   shelf    how deep (m) the shelf is before the drop
+//   deeper   and the rest are this many times as deep as they'd otherwise be
+export const DEEP = { chance: 0.7, depth: [14, 38], shelf: 1.6, deeper: 2 };
+// On a land with a sea, a hollow whose lake would stand less than this (m)
+// above the sea is open to the sea, and holds none of its own.
+const SEA_LAKE = 0.4;
 // Chance a sink with too little catchment for a pond holds one anyway: a
 // spring in a hollow.
 const SPRING_POND = 0.35;
@@ -96,7 +112,14 @@ export class Drainage {
   constructor(gen, seed) {
     this.gen = gen;
     this.seed = seed;
+    // the sea's level, on a land with a sea (else null)
+    this.seaLevel = gen.sea ? gen.sea.level : null;
     this.reset();
+  }
+
+  // Is n out in the sea?
+  isSea(n) {
+    return this.seaLevel !== null && n.e < this.seaLevel;
   }
 
   reset() {
@@ -139,6 +162,7 @@ export class Drainage {
       acc: 0,
       lvl: undefined,
       basin: undefined,
+      toSea: false, // a hollow open to the sea, holding no lake of its own
     };
     this.nodes.set(k, n);
     return n;
@@ -147,6 +171,7 @@ export class Drainage {
   // The neighbour that falls away most steeply, or null for a sink.
   down(n) {
     if (n.down !== undefined) return n.down;
+    if (this.isSea(n)) return (n.down = null);
     let best = null;
     let bs = 0;
     for (const [di, dj] of OFFS) {
@@ -188,7 +213,7 @@ export class Drainage {
   outlet(s) {
     if (s.out !== undefined) return s.out;
     s.out = null;
-    if (this.down(s)) return null;
+    if (this.down(s) || this.isSea(s)) return null;
     const R = NET.flood;
     const seen = new Set([s.k]);
     const heap = [];
@@ -291,7 +316,10 @@ export class Drainage {
       }
       n.acc = a;
       const b = this.down(n) ? null : this.basin(n, low);
-      const own = b ? b.level : n.e - channelMargin(a);
+      let own = b ? b.level : n.e - channelMargin(a);
+      // by the sea: the sea, and nothing on land below it (a hollow open to
+      // the sea is the sea's too)
+      if (this.seaLevel !== null) own = this.isSea(n) || n.toSea ? this.seaLevel : Math.max(this.seaLevel, own);
       n.lvl = Math.min(own, low);
     }
   }
@@ -314,7 +342,7 @@ export class Drainage {
       return s.basin;
     }
     s.basin = null;
-    if (this.down(s)) return null;
+    if (this.down(s) || this.isSea(s)) return null;
     const acc = s.acc;
     const g = this.gen;
     // A land may make more of its still water in some country than others
@@ -364,8 +392,20 @@ export class Drainage {
       }
     }
     if (g.padClearance(x, z, false) < maxR + 30) return null;
-    const depth = P.depth[0] + (P.depth[1] - P.depth[0]) * f;
-    const b = { x, z, R0, amp, ph, depth, maxR, level: 0, blend: 0, kind: P === lake ? 'lake' : 'pond', node: s };
+    let depth = P.depth[0] + (P.depth[1] - P.depth[0]) * f;
+    // A land whose lakes go deep says so (lake.deep, shaped like DEEP): out
+    // over a shelf, then steeply down. shelf is 0 for one that shelves all
+    // the way.
+    let shelf = 0;
+    if (P.deep) {
+      const D = P.deep;
+      const d = rng();
+      if (d < D.chance) {
+        depth = D.depth[0] + (D.depth[1] - D.depth[0]) * (0.3 + 0.7 * f) * (0.55 + (0.45 * d) / D.chance);
+        shelf = D.shelf;
+      } else depth *= D.deeper;
+    }
+    const b = { x, z, R0, amp, ph, depth, shelf, maxR, level: 0, blend: 0, kind: P === lake ? 'lake' : 'pond', node: s };
     // Fill it to just under the lowest point of its rim, and no higher than
     // the streams running into it.
     let rimMin = Infinity;
@@ -378,6 +418,10 @@ export class Drainage {
       if (hn > rimMax) rimMax = hn;
     }
     const level = Math.min(rimMin - 0.25, lowUp - 0.05);
+    if (this.seaLevel !== null && level < this.seaLevel + SEA_LAKE) {
+      s.toSea = true;
+      return null;
+    }
     b.level = level;
     b.blend = Math.min(36, Math.max(7, (rimMax - level) * 2.4));
     s.basin = b;
