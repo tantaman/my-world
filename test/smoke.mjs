@@ -660,7 +660,7 @@ try {
     });
     assert.ok(!filled.failed, `a log of the plan went up: ${filled.failed}`);
     await key('KeyB');
-    assert.equal(await page.evaluate(() => T.tool()), 8, 'B picks the blueprint tool up');
+    assert.equal(await page.evaluate(() => T.tool()), 9, 'B picks the blueprint tool up');
     const done = await page.evaluate(() => T.until(() => !world.blueprints.site(), 90000));
     assert.ok(done, `it finished (it says: "${await page.evaluate(() => T.prompt())}")`);
     const b = await page.evaluate(() => {
