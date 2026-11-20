@@ -24,8 +24,8 @@ npm run build      # static site in dist/
 
 The game is a static site and runs on its own; `npm run api` adds the save
 server, which lets a world live at a URL. `npm run dev` proxies `/api` to it.
-See [Saving a world](#saving-a-world) to set the server up, or skip it — the
-forest doesn't mind.
+See [Building together](#building-together) to set the server up, or skip it
+— the forest doesn't mind.
 
 ## Controls
 
@@ -39,7 +39,7 @@ forest doesn't mind.
 | **scroll** | zoom |
 | **R** | back to the starting path |
 | **M** | map: pan, zoom, and mark places (also the *map* button, bottom right) |
-| **L** | save this world and get a link to it (also the *save* button) |
+| **L** | save this world, and get a link others can build in with you |
 | **1 – 7** | tools: hands, axe, shovel, footing, log wall, timber, roof |
 | **click** (while looking) | use the tool, hold to keep working |
 | **right-click** | the tool's second action, or take a piece down |
@@ -62,8 +62,8 @@ buttons on the right stand in for the mouse buttons and **G**.
 
 Your position, the time of day, your look settings and whether sound is on
 are remembered between visits. Add `?reset` to the URL to start fresh (your
-map marks are kept). To keep a world somewhere other than this browser, see
-[Saving a world](#saving-a-world).
+map marks are kept). To keep a world somewhere other than this browser — and
+to build in it with other people — see [Building together](#building-together).
 
 ## The map
 
@@ -95,7 +95,7 @@ Esc on a brand-new mark you haven't named throws it away. Marks are kept in
 `localStorage` per seed, and from the console `world.marks.list()` returns
 them (handy for copying out).
 
-## Saving a world
+## Building together
 
 Press **L** (or tap *save*) and the world gets an address of its own:
 
@@ -104,114 +104,113 @@ https://your-site/?w=kxbbsjfw52
 ```
 
 Open that link from any browser, on any machine, and you walk back into the
-same world — the ground you moved, the trees you felled, what you built, the
-places you marked, where you were standing and the hour of the day.
+same world. **And anyone else who opens it is in there with you** — you can
+see each other walking around, and what either of you changes shows up in the
+other's world within a moment: ground that moves, trees that come down, a log
+laid on a wall, a place marked on the map.
 
-**Anyone with the link can walk in, and build.** That's the point of it, but
-it's worth knowing before you post one. A whole copy of each world is kept
-now and then — the last 20 — so a flattened cabin can be fished back out (see
-[The save API](#the-save-api)).
+The *save* button says where things stand — *live · 2*, *saving…*, *offline* —
+and **L** opens the panel with the link and a name for the world.
 
-Once a world is saved it saves itself: a few seconds after you change
-something, and again when you leave the tab. The *save* button tells you where
-things stand — *saved*, *saving…*, *offline*, *clash* — and **L** opens the
-panel with the link, a name for the world, and a *save now* button.
+What is the world's is shared: the ground, the felled trees, what is built,
+the marks, the name. What is yours stays yours — your materials, your grade
+stake, the hour you set. Where you are standing is passed on so people can see
+you, and never stored.
 
-If two people build at once, only the 64 m squares they *both* changed are in
-question: those are refused rather than silently flattened, and the panel
-offers *keep mine* or *open theirs* for them. Everything either person did
-elsewhere stands either way — two people working a few hundred metres apart
-never get in each other's way at all. If the server can't be reached, the
-world keeps running and is held in this browser; the next save that gets
-through carries the work with it.
+### Why there is nothing to resolve
+
+Everything you can change is one **element** with a key every machine works
+out the same way — a ground vertex, a removed plant, a stump, a felled tree, a
+footing, a log, a roof, a mark:
+
+```
+t:120:-40      the ground vertex at (120, -40)
+l:x:0:0:4:0    the log running along x at line 0, from 0 to 4, course 0
+m:k3f9x1       a mark
+```
+
+A change is one of those taking a value, and it travels on its own:
+
+```json
+{ "r": "0,-1", "k": "t:120:-40", "v": [-0.42, 1] }
+```
+
+The world's Durable Object is the only thing that writes, so the order it
+takes changes in **is** the order. Two people digging the same hole both get
+their way, vertex by vertex. The only thing that can be lost is the older of
+two writes to the very same element — which is the right answer anyway.
+
+So there is no prediction to reconcile and nothing to roll back. Your own
+edits are already on the screen the moment you swing; a change that loses a
+race loses it on one element, not on your afternoon.
 
 ### What a save actually holds
 
-The forest is procedural, grown from a seed, so a save doesn't store terrain
-or trees. It stores the seed and the **diff** — only what you changed.
+The forest is procedural, grown from a seed, so a save stores the seed and the
+**diff** — only what you changed. Elements are grouped into 64 m regions, the
+same grid the world streams on.
 
-And because what you change is spread over the map, it's stored that way:
-**one row per 64 m square**, which is the same grid the world streams on. Three
-scopes, because they're contested differently:
+A world dug over 320 × 320 m is 59,000 elements in 37 regions, and costs 160 kB
+to put up the first time. **An ordinary bit of digging after that is 46
+changes and about 2 kB**, whatever the world has grown to.
 
-| | | |
-|---|---|---|
-| **patches** | the ground, felled trees, buildings | one row per square, revision-checked |
-| **meta** | the marks | one blob, revision-checked |
-| **visitor** | materials, grade stake, where you stood, the hour | one blob, last write wins |
+Changes are found by *diffing*, not by instrumenting every swing of the axe:
+a few times a second the world is reduced to its elements and compared with
+what the server is known to hold. Nothing can be forgotten that way. It costs
+about 2.5 ms on an ordinary world and 34 ms on that 320 m one, so how long it
+took sets how often it happens — a huge world sends a little less often rather
+than stuttering.
 
-That's what keeps two builders out of each other's way, and it's what keeps
-saves small. A world dug over 320 × 320 m — 59,000 edited ground vertices,
-961 kB of JSON — is 36 rows and 129 kB gzipped. Uploading it the first time
-costs 140 kB. **Every ordinary bit of digging after that costs 5.6 kB**,
-because only the square you dug in goes out.
-
-Each part is gzipped in the browser with `CompressionStream` and stored as
-those exact bytes, so the server never parses a world or spends a cycle
-compressing one. A single save is capped at 1 MB, one square at 256 kB, and a
-whole world at 8 MB.
+If the connection goes, the world keeps running; what you do is held in this
+browser and goes out when it comes back.
 
 ### Setting up the server
 
-The save server is a [Cloudflare Worker](worker/index.js) over a
-[D1](https://developers.cloudflare.com/d1/) database — D1 is SQLite, so a
-world is a row and the whole thing is one file you can back up.
+Each world lives in its own [Durable
+Object](https://developers.cloudflare.com/durable-objects/), which holds it in
+its own SQLite. There is no database to create first:
 
 ```bash
-npm run db:create          # prints a database_id — paste it into wrangler.jsonc
-npm run db:migrate         # run the migrations (npm run db:local for development)
-npm run deploy             # build the site and put both on Cloudflare
+npm run deploy
 ```
 
-For local work, `npm run db:local` sets up a SQLite file under `.wrangler/`,
-then `npm run api` in one terminal and `npm run dev` in another. `npm run
-serve` runs the built site and the API together, the way they're deployed.
+For local work, `npm run api` in one terminal and `npm run dev` in another;
+`npm run serve` runs the built site and the API together, the way they deploy.
+
+> Worlds saved under the earlier layout — one row per world in D1 — are not
+> carried over. Nothing was deleted; if you made one, its rows are still in
+> that D1 database.
 
 ### The save API
 
-A world is bytes to the server; everything that understands a world happens in
-the browser.
-
 | | |
 |---|---|
-| `POST /api/worlds?seed=N&name=` | create → `{ id, gen, patches, … }` |
+| `POST /api/worlds?seed=N&name=` | create → `{ id, gen }` |
 | `GET /api/worlds/:id` | the whole world, as a frame |
-| `PUT /api/worlds/:id` | save — what landed, and what didn't |
-| `GET /api/worlds/:id/meta` | id, seed, name, generation, row count, size |
+| `POST /api/worlds/:id/ops` | changes, in bulk or when the socket is down |
+| `GET /api/worlds/:id/live` | the WebSocket everyone builds over |
+| `GET /api/worlds/:id/meta` | id, seed, name, generation, how big |
 | `GET /api/worlds/:id/history` | the whole copies still kept |
 | `GET /api/worlds/:id/revisions/:gen` | one of them, as a frame |
 
-Bodies and world responses are **frames** (`src/save/frame.js`): the ASCII
-magic `MWLD`, a big-endian `u32` header length, a JSON header naming every
-part, then the parts end to end. Nothing in the middle ever opens a part.
+A **frame** (`src/save/frame.js`) is the ASCII magic `MWLD`, a big-endian
+`u32` header length, a JSON header, then the parts — for a world, one gzipped
+blob of its elements by region.
 
-```json
-{ "v": 2, "seed": 20261119, "name": "Elm Hollow", "gen": 7,
-  "meta":    { "rev": 3, "codec": "gzip", "len": 412 },
-  "visitor": { "codec": "gzip", "len": 180 },
-  "patches": [ { "rx": 0, "rz": -1, "rev": 2, "codec": "gzip", "len": 1840 } ],
-  "drop":    [ { "rx": 2, "rz": 3, "rev": 4 } ] }
+Over the socket, both ways:
+
+```
+→ { "t": "ops", "id": 7, "ops": [ … ], "visitor": { … } }
+← { "t": "ack", "for": 7, "gen": 92, "took": 46 }
+← { "t": "ops", "gen": 93, "ops": [ … ] }        someone else's change
+↔ { "t": "at", "x": 12.5, "z": -40, "yaw": 1.2 } where someone is standing
+← { "t": "welcome", "you": "p2", "gen": 93, "here": [ … ], "missed": [ … ] }
 ```
 
-A save sends only the parts that moved, each carrying the revision it was
-based on, and `drop` for squares that emptied out. The reply says what landed
-and what was refused:
-
-```json
-{ "gen": 8, "patches": [ { "rx": 0, "rz": -1, "rev": 3 } ], "dropped": [],
-  "meta": null, "clashed": { "meta": null, "regions": [ { "rx": 5, "rz": 5, "rev": 9 } ] } }
-```
-
-**A partly-refused save still returns 200.** Squares are independent, so the
-rest of it lands; `clashed` names what didn't and where it now stands. Setting
-`"force": true` in the header overrides the checks, which is what *keep mine*
-does — and it only overrides the squares you're actually sending. To put a
-world back as it was, fetch a copy from `/revisions/:gen` and `PUT` it with
-`force`.
-
-A world saved before the split still opens: the server hands back a `v: 1`
-frame holding its single blob, and the first save rewrites it in the new
-layout.
+A client that blinked sends `?since=<gen>` and is given what it missed; one
+that has been away too long is told to open the world again instead. A whole
+copy of each world is kept at most every ten minutes, last 20, so a flattened
+cabin isn't gone for good.
 
 ## How the look works
 
@@ -446,23 +445,27 @@ src/
     index.js              ← register structures here
     loader.js             places structures on their pads
   save/
-    worldSave.js          when to save, what moved, clashes, the offline copy
+    worldSave.js          what moved, when it goes out, the offline copy
     snapshot.js           what a saved world is: seed + what you changed
-    regions.js            cutting a world into 64 m squares, and back again
+    regions.js            a world as keyed elements, grouped by 64 m region
+    live.js               the socket: changes and people, both ways
+    apply.js              folding someone else's changes into the live world
     frame.js              the wire format, shared with the Worker
     remote.js             gzip in the browser, and the calls to the server
-    sharePanel.js         the save panel (L): link, name, clash
+    sharePanel.js         the save panel (L): link, name, who's here
     save.css              save panel styles
+  world/peers.js          everyone else, drawn and eased between messages
   ui/hud.js               coordinates, tracked mark, hints, help
 worker/
-  index.js                the save server (Cloudflare Worker)
-  migrations/             D1 schema
+  index.js                the front door: mint an id, route to the world
+  world.js                a world's Durable Object — the only writer
 ```
 
-A world's rows:
+Inside a world's own SQLite:
 
 ```
-worlds     id, seed, name, generation, meta blob, visitor blob
-patches    (world, rx, rz) -> revision + the gzipped square
-revisions  whole copies, kept now and then
+world      seed, name, generation, your own state
+elements   (region, key) -> value          the world itself
+ops        recent changes, for catching up after a blip
+copies     whole copies, kept now and then
 ```

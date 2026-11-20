@@ -38,28 +38,19 @@ const TEMPLATE = /* html */ `
       <button type="button" data-act="now">save now</button>
     </div>
     <div class="share-status" data-el="status" aria-live="polite"></div>
-    <div class="share-clash" data-when="clash" hidden>
-      <p data-el="clash-why">Someone else saved this world while you were building.</p>
-      <div class="share-actions">
-        <button type="button" data-act="mine">keep mine</button>
-        <button type="button" data-act="theirs">open theirs</button>
-      </div>
-      <p class="share-note">Only the places you both changed are in question.
-      Everything they did elsewhere stands either way.</p>
-    </div>
-    <p class="share-note">Anyone with this link can walk in — and build. The
-    world is kept in 64 m squares, so two people working apart never get in
-    each other's way, and a whole copy is kept now and then — the last 20 — so
-    a flattened cabin isn't gone for good.</p>
+    <p class="share-note">Anyone with this link can walk in — and build,
+    alongside you. You'll see each other, and what either of you changes shows
+    up in the other's world within a moment. A whole copy is kept now and then
+    — the last 20 — so a flattened cabin isn't gone for good.</p>
   </div>`;
 
 // What the corner button says, and what the panel reports underneath.
 const STATES = {
   local: { button: 'save', line: 'Not saved yet.', tone: '' },
   saving: { button: 'saving…', line: 'Saving…', tone: '' },
+  live: { button: 'live', line: 'Live.', tone: 'good' },
   saved: { button: 'saved', line: 'Saved.', tone: 'good' },
   offline: { button: 'offline', line: "Can't reach the save server — still trying.", tone: 'bad' },
-  conflict: { button: 'clash', line: 'Two versions of some of this world.', tone: 'bad' },
   full: { button: 'too big', line: 'This world is too big to save.', tone: 'bad' },
   gone: { button: 'gone', line: 'This world is no longer on the server.', tone: 'bad' },
 };
@@ -124,7 +115,8 @@ export class SharePanel {
     const save = this.save;
     const state = STATES[save.status] || STATES.local;
     const online = save.online;
-    this.hud.setSave(online ? state.button : 'save', save.status);
+    const here = save.here;
+    this.hud.setSave(online ? `${state.button}${here ? ` · ${here}` : ''}` : 'save', save.status);
 
     this.panes.new.hidden = online;
     this.panes.saved.hidden = !online;
@@ -134,16 +126,11 @@ export class SharePanel {
     const url = save.url();
     if (this.el.url.value !== url) this.el.url.value = url;
 
-    const clash = save.status === 'conflict';
-    this.panes.clash.hidden = !clash;
-    // In a clash the box below carries the explanation, so don't say it twice.
-    if (clash && save.detail) this.el['clash-why'].textContent = `${capitalise(save.detail)}.`;
-
-    const unsaved = save.dirty && save.status !== 'saving';
-    const line = unsaved && (save.status === 'saved' || save.status === 'local') ? 'Not saved yet.' : state.line;
-    const detail = clash ? '' : save.detail;
+    const waiting = save.dirty || (save.pending && save.pending.size);
+    const line = waiting && (save.status === 'saved' || save.status === 'local') ? 'Not saved yet.' : state.line;
+    const who = here ? ` ${here} other${here === 1 ? '' : 's'} here.` : '';
     this.el.status.className = `share-status ${state.tone}`;
-    this.el.status.innerHTML = `<b>${line}</b>${detail ? ` ${escapeHtml(detail)}` : ''}`;
+    this.el.status.innerHTML = `<b>${line}</b>${who}${save.detail ? ` ${escapeHtml(save.detail)}` : ''}`;
   }
 
   async _onClick(e) {
@@ -152,12 +139,10 @@ export class SharePanel {
     const which = act.dataset.act;
     if (which === 'close') return this.close();
     if (which === 'copy') return this._copy();
-    if (which === 'theirs') return this.save.theirs();
     if (which === 'now') {
       this.save.touch();
       return this._guard(act, () => this.save.flush(), 'saved');
     }
-    if (which === 'mine') return this._guard(act, () => this.save.takeOver(), 'yours is the one');
     if (which === 'publish') {
       return this._guard(
         act,
@@ -177,7 +162,7 @@ export class SharePanel {
     button.disabled = true;
     try {
       await run();
-      if (this.save.status !== 'offline' && this.save.status !== 'conflict') this.hud.flash(done);
+      if (this.save.status !== 'offline') this.hud.flash(done);
       else if (this.save.detail) this.hud.flash(this.save.detail);
     } catch (err) {
       this.hud.flash(err && err.message ? err.message : 'that did not save');
@@ -217,7 +202,5 @@ export class SharePanel {
     }
   }
 }
-
-const capitalise = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);

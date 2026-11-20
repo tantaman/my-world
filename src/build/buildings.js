@@ -505,6 +505,16 @@ export class Buildings {
     return best;
   }
 
+  // Take someone else's version of what's been built. There are only ever a
+  // handful of buildings, so putting them all up again is cheaper than working
+  // out which courses moved.
+  adopt(list) {
+    for (const b of this.list) this._dispose(b);
+    this.list.length = 0;
+    this.load(list);
+    this.dirty = false;
+  }
+
   // ── Persistence ───────────────────────────────────────────────────────────
   serialize() {
     return this.list.map((b) => ({

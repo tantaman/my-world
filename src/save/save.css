@@ -130,16 +130,6 @@
 #share .share-status.good b {
   color: var(--accent);
 }
-#share .share-clash {
-  margin-top: 9px;
-  padding: 9px 10px;
-  border: 1px solid #a2654d;
-  background: rgba(162, 101, 77, 0.12);
-}
-#share .share-clash p {
-  margin-bottom: 8px;
-  color: #f0c7b4;
-}
 #share .share-note {
   margin: 10px 0 0;
   font-size: 10.5px;

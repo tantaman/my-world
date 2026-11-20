@@ -251,6 +251,22 @@ export class TerrainEdits {
     }
   }
 
+  // Take someone else's version of one vertex. Returns the step the loaded
+  // chunks have to take to match it, for applyLive. d = null means the vertex
+  // went back to how the ground was grown.
+  adopt(ix, iz, d, c) {
+    const key = K(ix, iz);
+    const e = this.map.get(key);
+    const to = d === null ? 0 : d;
+    const dd = to - (e ? e.d : 0);
+    if (d === null) this.map.delete(key);
+    else if (e) {
+      e.d = d;
+      e.c = c;
+    } else this.map.set(key, { x: ix, z: iz, d, c });
+    return { ix, iz, dd, c: c || 0 };
+  }
+
   // ── Persistence ───────────────────────────────────────────────────────────
   serialize() {
     const out = [];
