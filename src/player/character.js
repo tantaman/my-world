@@ -53,7 +53,7 @@ const _pose = { sh: 0, el: 0, tool: 0, sp: 0, inw: 0, drop: 0 };
 // shoulder's pitch (sh), twist (tw) and swing inward (inw), the elbow, and the
 // wrist (bent, and rolled so what is held stands upright). In the chest's frame, which the head rides on too, so the hand stays
 // at the mouth however the body leans.
-const RAISED = { sh: -0.9, tw: -0.91, inw: 0.07, el: -2.13, wrist: -0.13, roll: 0.8 };
+const RAISED = { sh: -1.02, tw: -0.82, inw: -0.06, el: -2.105, wrist: -0.05, roll: 0.68 };
 const IN_HAND = 0.35; // how far up the arm is when the hand has hold of it
 function samplePose(keys, p, out) {
   let i = 0;
