@@ -33,7 +33,7 @@ const LILY_HEART = new THREE.Color(0.95, 0.75, 0.15);
 
 const _tip = new THREE.Color();
 const _c = new THREE.Color();
-const _g = { h: 0, path: 0, forest: 0, above: 0, snow: 0, wRegion: 0, wLevel: NO_WATER, wSpeed: 0, wFoam: 0 };
+const _g = { h: 0, path: 0, forest: 0, above: 0, snow: 0, wRegion: 0, wLevel: NO_WATER, wSpeed: 0, wFoam: 0, bare: 0, sand: 0, land: 0 };
 
 // Depth of water over the ground in _g (> 0 under water), or −99 if none.
 const waterDepth = () => (_g.wRegion > 0.3 && _g.wLevel > NO_WATER * 0.5 ? _g.wLevel - _g.h : -99);
@@ -163,16 +163,19 @@ export class Grass {
     const col = [];
     const blade = [];
     const gnd = [];
+    const land = []; // how far each grows in a real place's own country (its green is that country's)
     const idx = [];
     let v = 0;
 
     let gPath = 0;
     let gForest = 0;
+    let gLand = 0;
     const vert = (x, y, z, c, rx, ry, rz, hf) => {
       pos.push(x, y, z);
       col.push(c.r, c.g, c.b);
       blade.push(rx, ry, rz, hf);
       gnd.push(gPath, gForest);
+      land.push(gLand);
       return v++;
     };
 
@@ -193,7 +196,9 @@ export class Grass {
       const bank = wd > -0.4 ? smoothstep(-0.03, -0.3, wd) : 1;
       // above the trees it's short and thin, and none grows through the snow
       const high = 1 - _g.above * 0.45;
-      let density = (0.26 + meadow * 0.74) * (1 - onPath * 0.97) * bank * high * (1 - smoothstep(0.15, 0.5, _g.snow));
+      // and none on bare ground or a beach, where a real place has them
+      const soil = (1 - smoothstep(0.3, 0.7, _g.bare)) * (1 - smoothstep(0.2, 0.6, _g.sand));
+      let density = (0.26 + meadow * 0.74) * (1 - onPath * 0.97) * bank * soil * high * (1 - smoothstep(0.15, 0.5, _g.snow));
       if (r1 > density) continue;
       if (kept.length && bare(ox + lx, oz + lz)) continue;
 
@@ -217,6 +222,7 @@ export class Grass {
       const mid = C_ROOT.clone().lerp(_tip, 0.6);
       gPath = 0;
       gForest = _g.forest;
+      gLand = _g.land;
 
       const a = vert(lx - sx * w * 0.5, y0, lz - sz * w * 0.5, C_ROOT, lx, y0, lz, 0);
       const b = vert(lx + sx * w * 0.5, y0, lz + sz * w * 0.5, C_ROOT, lx, y0, lz, 0);
@@ -367,6 +373,7 @@ export class Grass {
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     geo.setAttribute('aBlade', new THREE.Float32BufferAttribute(blade, 4));
     geo.setAttribute('aGround', new THREE.Float32BufferAttribute(gnd, 2));
+    geo.setAttribute('aLand', new THREE.Float32BufferAttribute(land, 1));
     const nor = new Float32Array(v * 3);
     for (let i = 0; i < v; i++) nor[i * 3 + 1] = 1; // lit like the ground beneath
     geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));

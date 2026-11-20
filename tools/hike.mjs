@@ -19,6 +19,9 @@
 //   --cell 30         spacing of the heights
 //   --cover 0.85      how thickly wooded, 0..1
 //   --species 0.6     -1 broadleaf .. 1 conifers
+//   --country "…"     what kind of country it is (src/world/country.js): what
+//                     the ground is made of, what grows and lives there, what
+//                     the sky does. Unsaid, it's forest like the rest
 //   --at x,z          where in the game world (game metres; default: where it
 //                     really is, at the same scale, from the middle of the world
 //                     out in the Pacific off the Olympic coast: see hike/place.js)
@@ -35,9 +38,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readPhoto } from './hike/exif.js';
 import { decodePng, encodePng } from './hike/png.js';
 import { localFrame, tileXY, terrarium, metresPerDegree } from './hike/geo.js';
-import { parseOsm, mergeOsm, trails, waters, coastlines, roads, peaks, incompleteWaters } from './hike/osm.js';
+import { parseOsm, mergeOsm, trails, waters, coastlines, roads, beaches, peaks, incompleteWaters } from './hike/osm.js';
 import { buildHike, splitHike, DEFAULTS } from './hike/build.js';
 import { placeHike } from './hike/place.js';
+import { COUNTRY } from '../src/world/country.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HIKES_DIR = path.join(ROOT, 'src/world/hikes');
@@ -61,6 +65,10 @@ if (files.length !== 1) {
   process.exit(1);
 }
 const num = (k, d) => (flags[k] !== undefined ? Number(flags[k]) : d);
+if (flags.country !== undefined && !COUNTRY[flags.country]) {
+  console.error(`There is no country called "${flags.country}". There is: ${Object.keys(COUNTRY).join(', ')}.`);
+  process.exit(1);
+}
 
 // ── The photo ────────────────────────────────────────────────────────────────
 let photo = { lat: null, lon: null, bearing: null, hour: null };
@@ -82,6 +90,7 @@ const opt = {
   fade: num('fade', DEFAULTS.fade),
   cell: num('cell', DEFAULTS.cell),
   trees: { cover: num('cover', DEFAULTS.trees.cover), species: num('species', DEFAULTS.trees.species) },
+  country: flags.country || null,
 };
 
 // ── Fetching, kept ───────────────────────────────────────────────────────────
@@ -217,7 +226,7 @@ else {
 }
 
 // ── Build it ─────────────────────────────────────────────────────────────────
-const { def, preview } = buildHike({ id, name, photo, elevation, trails: ts, waters: ws, coast, roads: roads(osm), at, datum, ...opt });
+const { def, preview } = buildHike({ id, name, photo, elevation, trails: ts, waters: ws, coast, roads: roads(osm), beaches: beaches(osm), at, datum, ...opt });
 const { card, land } = splitHike(def);
 const module = `// The land of ${def.name}, as \`npm run hike\` imported it from a photo taken
 // there: fetched the first time it's needed (src/world/landforms.js). Its card is
@@ -246,7 +255,8 @@ if (placed && placed.near) console.log(`  it meets ${placed.near.name}: placed e
 for (const note of placed ? placed.notes : []) console.log(`  note: ${note}`);
 if (def.trail) console.log(`  the walk: ${def.trail.name || 'a trail'}, ${def.trail.length} m, ${def.trail.climb < 0 ? `going down ${-def.trail.climb}` : `climbing ${def.trail.climb}`} m`);
 else console.log("  the photo wasn't taken on a trail; you'll arrive where it was taken");
-console.log(`  water: ${def.lakes.map((l) => l.name || 'an unnamed lake').join(', ') || 'none'}`);
+console.log(`  water: ${def.lakes.map((l) => l.name || 'an unnamed lake').join(', ') || 'none'}${def.beaches ? `; ${def.beaches.length} beach${def.beaches.length > 1 ? 'es' : ''}` : ''}`);
+if (def.country) console.log(`  country: ${def.country}`);
 console.log(`  a picture of it: ${previewFile}`);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

@@ -164,6 +164,12 @@ export class WorldGen {
   //                          real places change
   //   forestNaturalHeight()  naturalHeight() likewise
   //   landClearance(x, z)    m past the edge of the nearest real place
+  // And what whoever draws the ground asks: what it is made of where a real
+  // place has its own kind of country (country.js).
+  //   surface(x, z, out)     fills out.bare, out.sand and out.land (0..1 each)
+  //                          and returns the country: here nothing, and null
+  //   countryAt(x, z)        the country a plant there grows in, or null in
+  //                          the forest
   forestHeight(x, z, minWavelength = 0) {
     return this.broadHeight(x, z, minWavelength);
   }
@@ -172,6 +178,15 @@ export class WorldGen {
   }
   landClearance() {
     return 1e9;
+  }
+  surface(x, z, out) {
+    out.bare = 0;
+    out.sand = 0;
+    out.land = 0;
+    return null;
+  }
+  countryAt() {
+    return null;
   }
 
   height(x, z, pm = this.pathMask(x, z)) {

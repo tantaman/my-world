@@ -57,6 +57,11 @@ starts with the contract.
   with `game.origin.place`; in a shader, get position for patterns from
   `worldXZ()` and use `wnoise`/`wave` (`src/render/glsl.js`), never
   `modelMatrix` alone.
+- What a real place looks like is its country, one entry in
+  `src/world/country.js` (ground, plants, sky, animals), named on the hike's
+  card. Add or tune a country there, not in the shaders or the placement
+  rules; those only read the table. In the forest none of it applies, and
+  must not: the golden tests grow the forest.
 - Import direction: `core` ← `render` ← `world` ← features. `world/` does
   not import from feature folders.
 
@@ -80,7 +85,9 @@ don't edit the same lines:
   from what a seed grows. `world/worldgen.js`, `land2.js`, `chunkGen.js`,
   `water.js`, `drainage.js`, `noise.js` and the order of `world/flora.js` are
   pinned by `test/golden/`. If those tests fail, fix the code; do not
-  re-record. Every world keeps the *land* it was first grown on
+  re-record. (A new plant appended to `flora.js` adds entries to the
+  vegetation files: ask first, then add only those, leaving every existing
+  entry as it is.) Every world keeps the *land* it was first grown on
   (`world/lands.js`): to change how the forest grows, add a land (a class
   grown from the newest, listed in `lands.js`, with golden files of its own)
   and leave the old ones growing exactly as they did. Hooks the newer lands

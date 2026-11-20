@@ -22,6 +22,10 @@
 //                   (negative in the water) over part of the same grid, packed
 //                   by packShore(). The sea is one of them, marked `sea`: it
 //                   breaks along its shore and nothing grows in it
+//   beaches         [{ x, z, w, h, cell, shore }]: each beach, as the signed
+//                   distance to its edge (negative on it) over a w × h grid
+//                   of its own, `cell` apart from (x, z) relative to `at`,
+//                   packed by packShore()
 //   paths           [[x, z, x, z, ...], ...]: the footpaths, relative to `at`
 //   view            { x, z, bearing, hour }: where the photo was taken from,
 //                   which way it looked (degrees clockwise from north) and when
@@ -30,6 +34,9 @@
 //                   nothing stands on it at all, as above the tree line) and
 //                   with what (-1 broadleaf .. 1 conifers), before slope and
 //                   clearings thin it out
+//   country         what kind of country it is, by name (country.js): what
+//                   its ground is made of, what grows and lives there, what
+//                   its sky does. Unsaid, it is forest like the rest
 //   base            the real height (m) the heights are measured up from
 //   datum           { at, outer, anchor, base }: what sets its heights in the
 //                   world. The first hike in a part of the world is its own
@@ -41,6 +48,7 @@
 // WorldGen settles it (`offset`) by its datum.
 
 import { smoothstep } from '../noise.js';
+import { countryOf } from './country.js';
 
 // The trodden tread of a trail, and the bench it is cut into the hillside as.
 export const TRAIL_HALF = 0.9; // m, half the tread
@@ -174,9 +182,11 @@ export class Landform {
     this.half = ((g.n - 1) / 2) * g.cell;
     this.h = unpackHeights(g.heights, g.n);
     this.lakes = (def.lakes || []).map((l) => ({ name: l.name, sea: !!l.sea, level: l.level, box: l.box, d: unpackShore(l.shore) }));
+    this.beaches = (def.beaches || []).map((b) => ({ ...b, d: unpackShore(b.shore) }));
     this.view = def.view;
     this.trailhead = def.trailhead;
     this.trees = { cover: 0.85, species: 0.6, ...def.trees };
+    this.country = countryOf(def.country);
     this._bucketPaths(def.paths || []);
     // set by WorldGen.settle(): added to every height
     this.offset = 0;
@@ -332,6 +342,34 @@ export class Landform {
     return best;
   }
 
+  // Signed metres to the edge of the nearest beach the map has here
+  // (negative on it). SHORE_FAR if there's none near.
+  strand(x, z) {
+    let best = SHORE_FAR;
+    for (const b of this.beaches) {
+      const gx = (x - this.cx - b.x) / b.cell;
+      const gz = (z - this.cz - b.z) / b.cell;
+      if (gx < 0 || gz < 0 || gx > b.w - 1 || gz > b.h - 1) continue;
+      const i = Math.min(b.w - 2, Math.floor(gx));
+      const j = Math.min(b.h - 2, Math.floor(gz));
+      const u = gx - i;
+      const v = gz - j;
+      const k = j * b.w + i;
+      const D = b.d;
+      const d = (D[k] * (1 - u) + D[k + 1] * u) * (1 - v) + (D[k + b.w] * (1 - u) + D[k + b.w + 1] * u) * v;
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  // How far the shore at (x, z) is a beach, 0..1: all of it in country whose
+  // land comes down gently to the water; where the land meets the sea as it
+  // really does, only where the map has a beach.
+  beachy(x, z) {
+    if (this.country.shore !== 'rock') return 1;
+    return this.beaches.length ? 1 - smoothstep(-1, 3, this.strand(x, z)) : 0;
+  }
+
   // How churned up the sea is u metres from its shore (negative in the
   // water): white where it breaks, a chop further out.
   surf(u) {
@@ -340,7 +378,9 @@ export class Landform {
 
   // The ground near a lake whose shore is u metres away (negative in the
   // water), given the ground h there and the lake's level (both absolute).
-  lakeBed(u, h, level) {
+  // beach: 0..1, how far the shore there is a beach (see beachy()); where it
+  // isn't, the land is left to meet the water as steeply as it does.
+  lakeBed(u, h, level, beach = 1) {
     if (u < 0) {
       const T = level - LAKE_DEPTH * (1 - Math.exp(-(-u + 0.15) / LAKE_SHELF));
       return Math.min(h, T) + (T - Math.min(h, T)) * smoothstep(-LAKE_SHELF, 0, u);
@@ -348,6 +388,8 @@ export class Landform {
     // a beach that rises gently, then meets the land
     const T = level + 0.22 * smoothstep(0, 2, u) + 0.07 * u;
     let out = T + (h - T) * smoothstep(0, BEACH, u);
+    // a rocky shore: the real ground, down to a ledge at the water
+    if (beach < 1) out += (Math.max(h, level + 0.3 + 0.5 * smoothstep(0, 1.5, u)) - out) * (1 - beach);
     if (u < LAKE_REGION + 2) {
       const floor = level + 0.2 * smoothstep(0, 1.2, u) - 0.3 * Math.max(0, u - LAKE_REGION) ** 2;
       if (out < floor) out = floor;

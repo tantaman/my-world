@@ -544,7 +544,11 @@ export class Wildlife {
       const spot = this.findSpot(cat);
       if (!spot) continue;
       const env = this.env(spot.x, spot.z);
+      // a real place has its own animals (world/country.js): no bears on an island
+      const country = this.gen.countryAt(spot.x, spot.z);
+      const lives = country && country.animals;
       for (const s of kinds) {
+        if (lives && !lives.includes(s.kind)) continue;
         const w = s.abundance * Math.max(0, s.habitat(env)) * ACTIVE[s.active](hours);
         if (w > 0.001) {
           options.push({ s, spot, env, w });

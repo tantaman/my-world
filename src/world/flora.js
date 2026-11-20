@@ -4,6 +4,10 @@
 // The order is the order plants are placed in, which is part of what a seed
 // means: append new kinds, never reorder. A new kind also needs a model
 // (models.js) and a rule for where it grows (chunkGen.js).
+//
+// The first seven are the forest's own. The rest grow only in other kinds of
+// country (country.js), which say which of them stand where the forest would
+// have put a tree, a fern or a bush.
 
 export const FLORA = {
   //        a tree?      drawn out to this chunk LOD   casts a shadow
@@ -14,6 +18,10 @@ export const FLORA = {
   fern: { tree: false, maxLod: 0, shadow: false },
   rock: { tree: false, maxLod: 2, shadow: true },
   log: { tree: false, maxLod: 1, shadow: true },
+  palm: { tree: true, maxLod: 2, shadow: true },
+  ironwood: { tree: true, maxLod: 2, shadow: true },
+  treefern: { tree: false, maxLod: 1, shadow: true },
+  silversword: { tree: false, maxLod: 1, shadow: false },
 };
 
 export const VEG_KINDS = Object.keys(FLORA);

@@ -27,6 +27,7 @@ import { ChunkManager } from '../src/world/chunks.js';
 import { WorldGen } from '../src/world/worldgen.js';
 import { createVegetationMaterial } from '../src/world/materials.js';
 import { makePine, makeBroadleaf, makeBirch, makeBush, makeFern, makeRock, makeLog } from '../src/world/models.js';
+import { makePalm, makeIronwood, makeTreeFern, makeSilversword } from '../src/world/modelsIsland.js';
 import { CONFIG } from '../src/config.js';
 import { layoutCave, cellOf } from '../src/caves/sites.js';
 import { buildCave, finish } from '../src/caves/build.js';
@@ -246,7 +247,7 @@ test('the land far away is drawn from its own corner', () => {
   // a chunk: its ground, and every plant on it
   const warn = console.warn;
   console.warn = () => {}; // no Web Workers here: it says so, and grows the chunk itself
-  const models = { pine: makePine(11), broad: makeBroadleaf(23), birch: makeBirch(37), bush: makeBush(41), fern: makeFern(53), rock: makeRock(67), log: makeLog(71) };
+  const models = { pine: makePine(11), broad: makeBroadleaf(23), birch: makeBirch(37), bush: makeBush(41), fern: makeFern(53), rock: makeRock(67), log: makeLog(71), palm: makePalm(81), ironwood: makeIronwood(83), treefern: makeTreeFern(85), silversword: makeSilversword(87) };
   const materials = { terrain: null, water: null, vegetation: createVegetationMaterial() };
   const chunks = new ChunkManager(scene, new WorldGen(CONFIG.seed, []), materials, models);
   console.warn = warn;

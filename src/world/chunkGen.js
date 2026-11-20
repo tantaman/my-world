@@ -17,6 +17,7 @@
 
 import { mulberry32, hash2i, smoothstep } from '../noise.js';
 import { VEG_STRIDE, VEG_KINDS } from './flora.js';
+import { pick } from './country.js';
 
 export const WATER_STRIDE = 5;
 
@@ -164,12 +165,54 @@ export function generateTerrain(gen, cx, cz, step, size) {
   return out;
 }
 
+// ── What the ground is made of ─────────────────────────────────────────────
+// Where a real place has its own kind of country (country.js), three numbers
+// for each vertex of the terrain generateTerrain() makes for the same chunk,
+// in the same order (the grid, then the skirts): how bare the ground is, how
+// sandy, and how far it is that country's ground at all (WorldGen.surface).
+// null for a chunk that is all forest, which is nearly all of them.
+export const SURFACE_STRIDE = 3;
+export function generateSurface(gen, cx, cz, step, size) {
+  const x0 = cx * size;
+  const z0 = cz * size;
+  const mid = size / 2;
+  // (corner to corner, a chunk reaches 0.71 of its side from its middle)
+  if (!gen.lands.some((L) => L.clearance(x0 + mid, z0 + mid) < size * 0.75)) return null;
+  const n = Math.round(size / step);
+  const N = n + 1;
+  const S = SURFACE_STRIDE;
+  const out = new Float32Array((N * N + 4 * N) * S);
+  const at = { bare: 0, sand: 0, land: 0 };
+  let any = false;
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      gen.surface(x0 + i * step, z0 + j * step, at);
+      const o = (j * N + i) * S;
+      out[o] = at.bare;
+      out[o + 1] = at.sand;
+      out[o + 2] = at.land;
+      if (at.land > 0) any = true;
+    }
+  }
+  if (!any) return null;
+  // the skirts, as generateTerrain lays them out
+  let v = N * N;
+  for (const e of [(t) => t, (t) => n * N + t, (t) => t * N, (t) => t * N + n]) {
+    for (let t = 0; t < N; t++, v++) for (let c = 0; c < S; c++) out[v * S + c] = out[e(t) * S + c];
+  }
+  return out;
+}
+
 // ── Vegetation ─────────────────────────────────────────────────────────────
 // Lists are packed as [x, y, z, yaw, scale, tint, extra] per instance.
 //
 // Plants are known by where they stand (felling one saves its position), so
 // every candidate draws its random numbers whether or not it's planted: a
 // stream through one corner of a chunk mustn't move every tree after it.
+//
+// The rules are the forest's. A real place with its own kind of country
+// (country.js) keeps them for where a thing grows and how thickly, and says
+// what the thing is: a palm where the forest would have stood an oak.
 export { VEG_STRIDE, VEG_KINDS };
 
 export function generateVegetation(gen, cx, cz, size, trunkRadius) {
@@ -217,8 +260,14 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
       let kind;
       if (r2 < birchW) kind = 'birch';
       else kind = r3 < pineW ? 'pine' : 'broad';
-      const s = kind === 'pine' ? 0.68 + r4 * 0.62 : kind === 'broad' ? 0.75 + r4 * 0.5 : 0.75 + r4 * 0.45;
+      let s = kind === 'pine' ? 0.68 + r4 * 0.62 : kind === 'broad' ? 0.75 + r4 * 0.5 : 0.75 + r4 * 0.45;
+      const country = gen.countryAt(x, z);
+      if (country && country.trees) {
+        kind = pick(country.trees, r3);
+        s = 0.75 + r4 * 0.5;
+      }
       const tint = rng();
+      if (!kind) continue;
       if (!dry(x, z, 1.4 + r5 * 1.6)) continue;
       put(kind, x, z, -0.1, r6 * Math.PI * 2, s, tint);
       colliders.push(x, z, trunkRadius[kind] * s + 0.08);
@@ -247,6 +296,21 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
       const tint = rng();
       // ferns like it damp, right down to the bank
       if (!dry(x, z, r1 < fernP ? 0.45 : 0.9 + r4 * 0.5)) continue;
+      const country = gen.countryAt(x, z);
+      if (country && country.under) {
+        // what stands there instead, if anything
+        const kind = pick(country.under[r1 < fernP ? 'fern' : 'bush'], tint);
+        if (!kind) continue;
+        if (kind !== 'fern' && kind !== 'bush') {
+          const sc = 0.8 + r3 * 0.6;
+          put(kind, x, z, -0.05, r2 * Math.PI * 2, sc, tint);
+          if (trunkRadius[kind]) colliders.push(x, z, trunkRadius[kind] * sc + 0.05);
+          continue;
+        }
+        if (kind === 'fern') put('fern', x, z, -0.05, r2 * Math.PI * 2, 0.8 + r3 * 0.7, tint);
+        else put('bush', x, z, -0.15, r2 * Math.PI * 2, 0.7 + r3 * 0.9, tint);
+        continue;
+      }
       if (r1 < fernP) put('fern', x, z, -0.05, r2 * Math.PI * 2, 0.8 + r3 * 0.7, tint);
       else put('bush', x, z, -0.15, r2 * Math.PI * 2, 0.7 + r3 * 0.9, tint);
     }
@@ -263,7 +327,8 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
       const r2 = rng();
       const r3 = rng();
       const r4 = rng();
-      if (r1 > 0.26) continue;
+      const country = gen.countryAt(x, z);
+      if (r1 > (country ? country.rocks : 0.26)) continue;
       const s = 0.3 + r2 * r2 * r2 * 2.6;
       gen.pathMask(x, z);
       if (gen.pathEdge < s * 1.1 + 0.2) continue;
@@ -314,6 +379,9 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
 //
 // Every candidate draws all its random numbers before anything about the
 // place is asked, so what grows in one spot never moves what grows in another.
+//
+// A real place with its own kind of country says what grows on it here too,
+// as on the first land.
 
 // Gradient (rise over run) past which no tree takes root, and from which they
 // start to thin out.
@@ -376,6 +444,13 @@ function generateVegetation2(gen, cx, cz, size, trunkRadius) {
       if (r2 < birchW) kind = 'birch';
       else kind = r3 < pineW ? 'pine' : 'broad';
       let s = kind === 'pine' ? 0.68 + r4 * 0.62 : kind === 'broad' ? 0.75 + r4 * 0.5 : 0.75 + r4 * 0.45;
+      // on a real place with its own kind of country, what grows there
+      const real = gen.countryAt(x, z);
+      if (real && real.trees) {
+        kind = pick(real.trees, r3);
+        s = 0.75 + r4 * 0.5;
+      }
+      if (!kind) continue;
       if (!dry(x, z, 1.4 + r5 * 1.6)) continue;
       // a lone tree in the open grows big; one near the treeline, small
       s *= 1 + smoothstep(0.3, 0.05, f) * 0.35;
@@ -400,7 +475,9 @@ function generateVegetation2(gen, cx, cz, size, trunkRadius) {
       const tint = rng();
       const f = gen.forest(x, z);
       const m = gen.moisture(x, z);
-      const wd = gen.woods(x, z);
+      // (a real place is wooded as it really is, whatever woods are round it)
+      const real = gen.countryAt(x, z);
+      const wd = real ? 0 : gen.woods(x, z);
       const deep = smoothstep(0.15, 0.55, wd);
       const park = smoothstep(-0.3, -0.62, wd);
       const fernP = f * smoothstep(0.35, 0.75, m) * 0.55 * (1 + deep * 0.6);
@@ -419,6 +496,20 @@ function generateVegetation2(gen, cx, cz, size, trunkRadius) {
         if (gen.snow(x, z, y) > 0.3) continue;
       }
       if (!fern && r1 > fernP + bushP) continue;
+      if (real && real.under) {
+        // what stands there instead, if anything
+        const kind = pick(real.under[fern ? 'fern' : 'bush'], tint);
+        if (!kind) continue;
+        if (kind !== 'fern' && kind !== 'bush') {
+          const sc = 0.8 + r3 * 0.6;
+          put(kind, x, z, -0.05, r2 * Math.PI * 2, sc, tint);
+          if (trunkRadius[kind]) colliders.push(x, z, trunkRadius[kind] * sc + 0.05);
+          continue;
+        }
+        if (kind === 'fern') put('fern', x, z, -0.05, r2 * Math.PI * 2, 0.8 + r3 * 0.7, tint);
+        else put('bush', x, z, -0.15, r2 * Math.PI * 2, 0.7 + r3 * 0.9, tint);
+        continue;
+      }
       if (fern) put('fern', x, z, -0.05, r2 * Math.PI * 2, 0.8 + r3 * 0.7, tint);
       else put('bush', x, z, -0.15, r2 * Math.PI * 2, (0.7 + r3 * 0.9) * (1 - ab * 0.4), tint);
     }
@@ -438,7 +529,8 @@ function generateVegetation2(gen, cx, cz, size, trunkRadius) {
       const r4 = rng();
       const tint = rng();
       const c = gen.country(x, z);
-      if (r1 > 0.26 + c.mtn * 0.3 + c.bench * 0.18) continue;
+      const real = gen.countryAt(x, z);
+      if (r1 > (real ? real.rocks : 0.26 + c.mtn * 0.3 + c.bench * 0.18)) continue;
       let s = 0.3 + r2 * r2 * r2 * 2.6;
       gen.pathMask(x, z);
       if (gen.pathEdge < s * 1.1 + 0.2) continue;

@@ -114,6 +114,16 @@ export function waters(osm) {
   return out;
 }
 
+// Beaches: [[[lat, lon], ...], ...], the outline of each.
+export function beaches(osm) {
+  const out = [];
+  for (const w of osm.ways.values()) {
+    if (w.tags.natural !== 'beach' || w.refs.length < 4 || w.refs[0] !== w.refs[w.refs.length - 1]) continue;
+    out.push(coords(osm, w.refs));
+  }
+  return out;
+}
+
 // The coast: [[[lat, lon], ...], ...], each a line with the land on its left
 // as you go along it. Ways that follow on from one another are joined, so a
 // corner where two meet is a corner of one line (an islet comes out closed).

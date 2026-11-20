@@ -160,6 +160,49 @@ export function withRealPlaces(Land) {
       return f;
     }
 
+    // What the ground is made of at (x, z), where a real place has its own
+    // kind of country (country.js). Fills out.bare and out.sand (0..1: how
+    // much of it is bare ground, and beach) and out.land (0..1: how far it is
+    // that country's ground and not the forest's), and returns the country,
+    // or null in the forest, where all three are 0.
+    surface(x, z, out) {
+      out.bare = 0;
+      out.sand = 0;
+      out.land = 0;
+      let country = null;
+      for (const L of this.lands) {
+        const w = L.weight(x, z);
+        if (w <= out.land) continue;
+        const g = L.country.ground;
+        // bare in patches, the size of a clearing, unless it's all bare or none is
+        let bare = g.barren;
+        if (bare > 0) bare += this.nMoist(x * 0.031 + 5, z * 0.031 - 3) * 1.3 * Math.min(bare, 1 - bare);
+        // a beach where the map has one; else the rock the sea breaks on, and
+        // above it, or a strand all along it
+        let sand = L.beaches.length ? 1 - smoothstep(-0.5, 2.5, L.strand(x, z)) : 0;
+        if (g.shelf > 0 || L.country.shore === 'beach') {
+          const u = L.shore(x, z);
+          if (L.sea) {
+            if (g.shelf > 0) bare = Math.max(bare, 1 - smoothstep(g.shelf * 0.45, g.shelf, u));
+            else sand = Math.max(sand, 1 - smoothstep(2, 5, u));
+          }
+        }
+        bare *= 1 - sand;
+        out.bare = Math.max(0, Math.min(1, bare)) * w;
+        out.sand = sand * w;
+        out.land = w;
+        country = L.country;
+      }
+      return country;
+    }
+
+    // The country a plant at (x, z) grows in, if it isn't the forest: a real
+    // place's, on its own ground and half way out through where it gives way.
+    countryAt(x, z) {
+      for (const L of this.lands) if (L.weight(x, z) > 0.5) return L.country;
+      return null;
+    }
+
     species(x, z) {
       let s = super.species(x, z);
       for (const L of this.lands) {

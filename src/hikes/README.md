@@ -56,6 +56,28 @@ tree line, with nothing standing on it at all), and the spot the photo was
 taken from is kept clear of trees, with nothing growing in front of it to
 block the view.
 
+**What kind of country it is.** Not everywhere is a northern forest. A hike
+says what kind of country it's in (`--country "cinder desert"`), and that
+decides what its ground is made of, what grows and lives there, and what the
+sky over it is doing, each as one entry in one table
+(`src/world/country.js`):
+
+| country | ground | what grows | sky |
+|---|---|---|---|
+| *(unsaid)*, `temperate rainforest` | the forest's own | pines, oaks, birches, ferns | clear |
+| `cloud forest` | lush green, red clay paths | broadleaves over ferns and tree ferns | the ridge tops in cloud, flat light under it |
+| `tropical coast` | cinder cliffs, black lava at the water, beaches where the map has them | ironwoods, broadleaves, coconut palms | fair-weather cloud |
+| `cinder desert` | bare cinder, red and grey | nothing but the odd silversword | clear thin air, over a sea of cloud |
+| `lava coast` | wind-cropped grass and red dirt down to a black rock shelf | a few ironwoods, low bushes | overcast |
+
+The cloud is a layer at its real height, so you can be under it or over it:
+walk up through it and it closes round you. A rocky shore keeps its cliffs
+where a gentle one would be given a beach. Animals that don't live there
+(bears, on an island) don't turn up. The map and the far view take the
+country's colours too. A walk that starts on top of its mountain (a summit
+you drive to) stands the mountain over the forest round it, where otherwise
+the start of the walk is level with it.
+
 **Where it goes.** Where it really is. The game world is the real world at
 the hikes' own scale, 1 : 5, so hikes lie as far apart, and in the same
 directions, as they do in fact: Mount Storm King is 27 km east of the middle

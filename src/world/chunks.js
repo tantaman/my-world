@@ -13,7 +13,7 @@
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import { generateTerrain, generateVegetation, VEG_KINDS, VEG_STRIDE, WATER_STRIDE as WS } from './chunkGen.js';
+import { generateTerrain, generateSurface, generateVegetation, VEG_KINDS, VEG_STRIDE, WATER_STRIDE as WS, SURFACE_STRIDE as SS } from './chunkGen.js';
 import { buildWaterGeometry } from './waterSurface.js';
 import { NO_WATER } from './water.js';
 import { FLORA } from './flora.js';
@@ -62,6 +62,8 @@ class Chunk {
     this.nor = null;
     this.gnd = null;
     this.high = null; // above the trees, snow (see chunkGen.js), on a land with high ground
+    // what the ground is made of, where a real place says (chunkGen.js); null in the forest
+    this.surface = null;
     this.disposed = false;
   }
 
@@ -245,6 +247,15 @@ export class ChunkManager extends Emitter {
       out.wSpeed = 0;
       out.wFoam = 0;
     }
+    if (ch.surface) {
+      out.bare = ch.sampleGrid(ch.surface, x, z, SS, 0);
+      out.sand = ch.sampleGrid(ch.surface, x, z, SS, 1);
+      out.land = ch.sampleGrid(ch.surface, x, z, SS, 2);
+    } else {
+      out.bare = 0;
+      out.sand = 0;
+      out.land = 0;
+    }
     return true;
   }
 
@@ -370,9 +381,10 @@ export class ChunkManager extends Emitter {
       } else {
         if (performance.now() - t0 > budgetMs) break;
         const terrain = generateTerrain(this.gen, ch.cx, ch.cz, CONFIG.lodSteps[w.lod], size);
+        const surface = generateSurface(this.gen, ch.cx, ch.cz, CONFIG.lodSteps[w.lod], size);
         const veg = ch.vegRequested ? null : generateVegetation(this.gen, ch.cx, ch.cz, size, this.trunkRadius);
         ch.vegRequested = true;
-        this.applyChunk(ch, w.lod, terrain, veg);
+        this.applyChunk(ch, w.lod, terrain, veg, surface);
       }
     }
     if (satisfied) this.pending = false;
@@ -385,18 +397,18 @@ export class ChunkManager extends Emitter {
     this.inFlight = Math.max(0, this.inFlight - 1);
     if (!ch || ch.disposed) return;
     if (ch.reqLod === m.lod) ch.reqLod = -1;
-    this.applyChunk(ch, m.lod, m.terrain, m.veg);
+    this.applyChunk(ch, m.lod, m.terrain, m.veg, m.surface);
     this.pending = true;
   }
 
-  applyChunk(ch, lod, terrain, veg) {
-    this.applyTerrain(ch, lod, terrain);
+  applyChunk(ch, lod, terrain, veg, surface = null) {
+    this.applyTerrain(ch, lod, terrain, surface);
     if (veg) this.applyVegetation(ch, veg);
     this.applyVegLod(ch);
   }
 
   // ── Terrain ──────────────────────────────────────────────────────────────
-  applyTerrain(ch, lod, t) {
+  applyTerrain(ch, lod, t, surface = null) {
     this.emit('terrain', ch, t);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(t.pos, 3));
@@ -404,6 +416,9 @@ export class ChunkManager extends Emitter {
     geo.setAttribute('aGround', new THREE.BufferAttribute(t.gnd, 2));
     geo.setAttribute('aWater', new THREE.BufferAttribute(t.wat, 2));
     geo.setAttribute('aHigh', new THREE.BufferAttribute(t.hi || noHigh(t.wat.length), 2));
+    // (left off in the forest, where the shader reads it as nothing)
+    if (surface) geo.setAttribute('aLand', new THREE.BufferAttribute(surface, SS));
+    ch.surface = surface;
     geo.setIndex(new THREE.BufferAttribute(t.idx, 1));
     geo.computeBoundingSphere();
 

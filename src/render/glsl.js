@@ -133,8 +133,19 @@ float wfbm4(vec2 wp, float f, vec2 off) {
 // Ground albedo from where it is in the world (worldXZ) + masks. Shared by
 // the terrain and the grass so blades grow seamlessly out of the ground they
 // stand on. (requires NOISE_GLSL, WORLD_GLSL and WORLD_NOISE_GLSL)
+//
+// land is what a real place says of its own ground (world/country.js): how
+// bare (x) and how sandy (y) it is here, and how far it is that country's
+// ground at all (z). The colours are the country's, in the LAND uniforms
+// (uniforms.js). In the forest land is zero, and none of them shows.
 export const GROUND_GLSL = /* glsl */ `
-vec3 groundColor(vec2 wp, float pathM, float forestM, float slope) {
+uniform vec3 uTint;
+uniform vec3 uDirt;
+uniform vec3 uRock;
+uniform vec3 uBareA;
+uniform vec3 uBareB;
+uniform vec3 uSand;
+vec3 groundColor(vec2 wp, float pathM, float forestM, float slope, vec3 land) {
   float n1 = wnoise(wp, 0.33);
   float n2 = wnoise(wp, 1.6, vec2(13.0));
   float n3 = wfbm4(wp, 0.045, vec2(-7.0));
@@ -147,6 +158,7 @@ vec3 groundColor(vec2 wp, float pathM, float forestM, float slope) {
   vec3 meadow = mix(grassA, grassB, smoothstep(0.45, 0.8, n3) * 0.75);
   meadow = mix(meadow, grassC, smoothstep(0.55, 0.85, n1) * 0.6);
   meadow *= 0.82 + 0.32 * n2;
+  meadow *= mix(vec3(1.0), uTint, land.z);
 
   // forest floor: leaf litter, needles and moss
   vec3 litter = vec3(0.080, 0.056, 0.028);
@@ -161,8 +173,8 @@ vec3 groundColor(vec2 wp, float pathM, float forestM, float slope) {
 
   // footpath: packed earth, the odd pebble, worn grassy edges
   float pm = pathM + (n2 - 0.5) * 0.38 + (n4 - 0.5) * 0.18;
-  vec3 dirt = vec3(0.200, 0.135, 0.075);
-  vec3 dirtDark = vec3(0.115, 0.078, 0.045);
+  vec3 dirt = mix(vec3(0.200, 0.135, 0.075), uDirt, land.z);
+  vec3 dirtDark = dirt * 0.58;
   vec3 dirtc = mix(dirt, dirtDark, smoothstep(0.35, 0.8, n2) * 0.7);
   float pebCells = cellsIn(8.0);
   vec2 pq = wp * (pebCells / PERIOD) + vec2(wnoise(wp, 3.0), wnoise(wp, 3.0, vec2(7.0))) * 2.0;
@@ -172,9 +184,22 @@ vec3 groundColor(vec2 wp, float pathM, float forestM, float slope) {
   col = mix(col, col * 0.62 + dirtDark * 0.3, edge);
   col = mix(col, dirtc, smoothstep(0.45, 0.6, pm));
 
+  // the country's own bare ground (cinder, lava, clay), in patches where
+  // it's only partly bare, speckled, and stony here and there. Where it is
+  // all bare it is the first of the country's two colours, with drifts of
+  // the second; a patch among the grass is the second
+  float bareM = smoothstep(0.34, 0.62, land.x + (n2 - 0.5) * 0.42 * (1.0 - land.x));
+  float first = smoothstep(0.7, 1.0, land.x) * (1.0 - 0.8 * smoothstep(0.38, 0.68, n3 + (n1 - 0.5) * 0.3));
+  vec3 bare = mix(uBareB, uBareA, first) * (0.72 + 0.4 * n4 + 0.16 * n2);
+  bare = mix(bare, bare * 1.5 + 0.02, peb * 0.6);
+  col = mix(col, bare, bareM);
+
   // rock on steep slopes
-  vec3 rock = vec3(0.16, 0.155, 0.145) * (0.75 + 0.5 * n2);
+  vec3 rock = mix(vec3(0.16, 0.155, 0.145), uRock, land.z) * (0.75 + 0.5 * n2);
   col = mix(col, rock, smoothstep(0.30, 0.45, slope + (n1 - 0.5) * 0.12));
+
+  // a beach
+  col = mix(col, uSand * (0.82 + 0.3 * n4), smoothstep(0.25, 0.7, land.y + (n2 - 0.5) * 0.2));
 
   return col;
 }

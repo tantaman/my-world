@@ -224,7 +224,7 @@ export function campfireTool(fires, solids) {
   // Scrape the turf off, pick the undergrowth and loose stones out of the
   // way, dish the floor a little and set the stones round it.
   function makePit(b, x, z) {
-    b.chunks.forEachPlant(x, z, FIRE.ring + 0.6, ['bush', 'fern', 'log', 'rock'], (c, kind, k, px, py, pz, s) => {
+    b.chunks.forEachPlant(x, z, FIRE.ring + 0.6, ['bush', 'fern', 'log', 'rock', 'treefern', 'silversword'], (c, kind, k, px, py, pz, s) => {
       if (kind === 'rock') {
         if (s > LIFTABLE) return;
         b.gain('stone', stonesIn(s));

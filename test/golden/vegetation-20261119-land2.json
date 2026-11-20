@@ -147,6 +147,34 @@
      0.8711614012718201,
      0
     ]
+   },
+   "palm": {
+    "n": 0,
+    "sum": 0,
+    "min": 0,
+    "max": 0,
+    "at": []
+   },
+   "ironwood": {
+    "n": 0,
+    "sum": 0,
+    "min": 0,
+    "max": 0,
+    "at": []
+   },
+   "treefern": {
+    "n": 0,
+    "sum": 0,
+    "min": 0,
+    "max": 0,
+    "at": []
+   },
+   "silversword": {
+    "n": 0,
+    "sum": 0,
+    "min": 0,
+    "max": 0,
+    "at": []
    }
   },
   "colliders": {
@@ -307,6 +335,34 @@
      0.17791379988193512,
      0
     ]
+   },
+   "palm": {
+    "n": 0,
+    "sum": 0,
+    "min": 0,
+    "max": 0,
+    "at": []
+   },
+   "ironwood": {
+    "n": 0,
+    "sum": 0,
+    "min": 0,
+    "max": 0,
+    "at": []
+   },
+   "treefern": {
+    "n": 0,
+    "sum": 0,
+    "min": 0,
+    "max": 0,
+    "at": []
+   },
+   "silversword": {
+    "n": 0,
+    "sum": 0,
+    "min": 0,
+    "max": 0,
+    "at": []
    }
   },
   "colliders": {
@@ -445,6 +501,34 @@
      0.45125025510787964,
      0
     ]
+   },
+   "palm": {
+    "n": 0,
+    "sum": 0,
+    "min": 0,
+    "max": 0,
+    "at": []
+   },
+   "ironwood": {
+    "n": 0,
+    "sum": 0,
+    "min": 0,
+    "max": 0,
+    "at": []
+   },
+   "treefern": {
+    "n": 0,
+    "sum": 0,
+    "min": 0,
+    "max": 0,
+    "at": []
+   },
+   "silversword": {
+    "n": 0,
+    "sum": 0,
+    "min": 0,
+    "max": 0,
+    "at": []
    }
   },
   "colliders": {

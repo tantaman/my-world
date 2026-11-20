@@ -3,7 +3,8 @@
 // 1. The scene is rendered at low resolution (a few hundred lines tall) into
 //    an HDR target with a depth texture.
 // 2. A composite pass, still at low resolution, adds depth-based outlines on
-//    silhouettes, height fog that melts into the sky, filmic tone mapping,
+//    silhouettes, height fog that melts into the sky, a layer of cloud where
+//    the country has one (see DECK in uniforms.js), filmic tone mapping,
 //    colour grading and ordered dithering onto a slightly reduced palette.
 // 3. An upscale pass blows the art pixels up to the screen with a tunable
 //    "soft pixel" filter: hard enough to read as pixel art, soft enough that
@@ -11,8 +12,10 @@
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import { SKY } from './uniforms.js';
-import { SKY_GLSL, SKY_UNIFORMS_GLSL } from './glsl.js';
+import { SKY, DECK } from './uniforms.js';
+import { NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL } from './glsl.js';
+
+const FOG_DENSITY = 0.0021; // per metre at the height of the eye, in the forest's air
 
 const FS_VERT = /* glsl */ `
 varying vec2 vUv;
@@ -41,7 +44,26 @@ uniform float uFogDensity;
 uniform float uFogHeight;
 uniform float uFogFar;
 uniform float uFogTint;
+uniform float uDeck;
+uniform float uDeckCover;
+uniform vec2 uDeckMid;
 varying vec2 vUv;
+${NOISE_GLSL}
+
+// The layer of cloud. It is a sheet at uDeck, pushed up and down by its own
+// billows; this is how much cloud there is where a ray from the eye meets it
+// (xy: where, measured from the middle of the land it lies over; t: how far
+// along the ray), and how high the billow stands there, 0..1, in tall.
+const float DECK_BILLOW = 14.0; // m, crest to trough
+const float DECK_THICK = 16.0; // m either side of it that you're in cloud
+float deckAt(vec2 p, float t, out float tall) {
+  vec2 drift = vec2(uTime * 0.9, uTime * 0.35);
+  float n = fbm4((p + drift) * 0.0031) * 0.72 + fbm4((p - drift * 0.6) * 0.0113 + 7.0) * 0.28;
+  // far off there's no telling one billow from the next
+  n = mix(n, 0.5, smoothstep(2500.0, 9000.0, t));
+  tall = n;
+  return smoothstep(0.0, 0.3, n - (1.0 - uDeckCover) * 0.75);
+}
 
 float viewZ(float d) { return -perspectiveDepthToViewZ(d, uNear, uFar); }
 
@@ -64,6 +86,11 @@ void main() {
   vec3 col = texture2D(tColor, vUv).rgb;
   float d = texture2D(tDepth, vUv).x;
   bool sky = d >= 0.99999;
+  // the ray through this pixel, and how far along it the scene is
+  vec4 vp = uProjInv * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+  vp.xyz /= vp.w;
+  vec3 rd = normalize(mat3(uCamWorld) * vp.xyz);
+  float dist = sky ? 1.0e6 : length(vp.xyz);
 
   if (!sky) {
     float z = viewZ(d);
@@ -77,10 +104,6 @@ void main() {
     col *= 1.0 - edge * uOutline;
 
     // Height fog with sun in-scattering, coloured by the sky behind it.
-    vec4 vp = uProjInv * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
-    vp.xyz /= vp.w;
-    float dist = length(vp.xyz);
-    vec3 rd = normalize(mat3(uCamWorld) * vp.xyz);
     float b = uFogHeight;
     float ry = abs(rd.y) < 1e-3 ? 1e-3 : rd.y;
     float fogAmt = uFogDensity * exp(-uCamPos.y * b) * (1.0 - exp(-dist * ry * b)) / (ry * b);
@@ -88,6 +111,36 @@ void main() {
     fog = max(fog, smoothstep(uFogFar * 0.55, uFogFar, dist));
     vec3 frd = normalize(vec3(rd.x, clamp(rd.y, 0.0, 0.08), rd.z));
     col = mix(col, skyGradient(frd) * uFogTint, clamp(fog, 0.0, 1.0));
+  }
+
+  // The layer of cloud: whatever lies past it along the ray is behind it.
+  if (uDeckCover > 0.003) {
+    float up = uDeck - uCamPos.y; // how far over the eye it lies (under it, if negative)
+    float sunUp = clamp(uSunDir.y * 4.0 + 0.3, 0.0, 1.0);
+    vec3 bright = mix(uHorizon * 1.05, vec3(0.92, 0.94, 0.98) * (0.25 + 0.75 * sunUp) + uSunColor * 0.22, 0.75) * (1.0 - 0.8 * uNight);
+    vec3 dim = mix(uZenith, uHorizon, 0.55) * 0.62 + vec3(0.03) * (1.0 - uNight);
+    float ry = abs(rd.y) < 1.0e-4 ? 1.0e-4 : rd.y;
+    float t = up / ry;
+    if (t > 0.0) {
+      vec2 eye = uCamPos.xz - uDeckMid;
+      float tall;
+      float cov = deckAt(eye + rd.xz * t, t, tall);
+      // meet it again where the billow stands, so near ones have a shape
+      t = (up + (tall - 0.5) * DECK_BILLOW) / ry;
+      if (t > 0.0) {
+        cov = deckAt(eye + rd.xz * t, t, tall);
+        // from over it: lit crests, blue hollows. From under: its grey base.
+        vec3 c = up < 0.0 ? mix(dim, bright, smoothstep(0.3, 0.8, tall)) : mix(dim * 0.95, bright * 0.7, smoothstep(0.35, 0.9, tall) * 0.5);
+        // towards the horizon it goes off into the haze
+        vec3 hz = skyGradient(normalize(vec3(rd.x, 0.02, rd.z)));
+        c = mix(c, mix(c, hz, 0.75), smoothstep(3000.0, 14000.0, t));
+        col = mix(col, c, cov * smoothstep(0.0, 22.0, dist - t));
+      }
+    }
+    // and in it, you see nothing much
+    float here = deckAt(uCamPos.xz - uDeckMid, 0.0, t);
+    float inIt = (1.0 - smoothstep(DECK_THICK * 0.35, DECK_THICK, abs(up))) * here;
+    col = mix(col, mix(dim, bright, 0.45), inIt * (1.0 - exp(-dist / 16.0)));
   }
 
   // Filmic tone map + grade
@@ -140,6 +193,8 @@ export class PixelPipeline {
     // Where the fog closes in (m). Unset, it is where the loaded chunks end;
     // something drawing further than that (a far view) may push it out.
     this.fogFar = 0;
+    // How thick the air is, 1 being the forest's: a country may say (world/country.js).
+    this.haze = 1;
 
     this.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     const quadGeo = new THREE.PlaneGeometry(2, 2);
@@ -147,6 +202,7 @@ export class PixelPipeline {
     this.composite = new THREE.ShaderMaterial({
       uniforms: {
         ...SKY,
+        ...DECK,
         tColor: { value: null },
         tDepth: { value: null },
         uRes: { value: new THREE.Vector2() },
@@ -159,7 +215,7 @@ export class PixelPipeline {
         uOutline: { value: this.outline },
         uLevels: { value: this.levels },
         uDither: { value: 1 },
-        uFogDensity: { value: 0.0021 },
+        uFogDensity: { value: FOG_DENSITY },
         uFogHeight: { value: 0.03 },
         uFogFar: { value: 250 },
         uFogTint: { value: FOG_TINT },
@@ -253,6 +309,7 @@ export class PixelPipeline {
     u.uLevels.value = this.levels;
     u.uDither.value = this.dither;
     u.uFogFar.value = this.fogFar || (CONFIG.viewRadius - 0.15) * CONFIG.chunkSize;
+    u.uFogDensity.value = FOG_DENSITY * this.haze;
     this.upscale.uniforms.uSoft.value = this.enabled ? this.softness : 1;
     this.upscale.uniforms.tLow.value = this.rtLow.texture;
 

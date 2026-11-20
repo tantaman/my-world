@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, GROUND_GLSL, wave } from '../render/glsl.js';
-import { SHARED } from '../render/uniforms.js';
+import { SHARED, LAND } from '../render/uniforms.js';
 import { CUTS, CUT_GLSL, SHRINK, RIM } from './cuts.js';
 
 // A shader here that needs to know where in the world something is asks
@@ -26,6 +26,7 @@ export function createTerrainMaterial() {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = SHARED.uTime;
     shader.uniforms.uOrigin = SHARED.uOrigin;
+    Object.assign(shader.uniforms, LAND);
     Object.assign(shader.uniforms, CUTS);
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -34,9 +35,11 @@ export function createTerrainMaterial() {
         attribute vec2 aGround;
         attribute vec2 aWater; // water level, region (1 where water may stand)
         attribute vec2 aHigh; // how far above the trees, snow (0..1 each)
+        attribute vec3 aLand; // what a real place's ground is made of (zero in the forest: see groundColor)
         varying vec2 vGround;
         varying vec2 vWater;
         varying vec2 vHigh;
+        varying vec3 vLand;
         varying vec3 vWorldPos;
         varying vec3 vWorldNormal;`,
       )
@@ -46,6 +49,7 @@ export function createTerrainMaterial() {
         vGround = aGround;
         vWater = aWater;
         vHigh = aHigh;
+        vLand = aLand;
         vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
         vWorldNormal = normalize(mat3(modelMatrix) * objectNormal);`,
       );
@@ -56,6 +60,7 @@ export function createTerrainMaterial() {
         varying vec2 vGround;
         varying vec2 vWater;
         varying vec2 vHigh;
+        varying vec3 vLand;
         varying vec3 vWorldPos;
         varying vec3 vWorldNormal;
         uniform float uTime;
@@ -128,7 +133,7 @@ export function createTerrainMaterial() {
         '#include <color_fragment>',
         `#include <color_fragment>
         vec2 wp = worldXZ(vWorldPos);
-        diffuseColor.rgb = groundColor(wp, vGround.x, vGround.y, 1.0 - vWorldNormal.y);
+        diffuseColor.rgb = groundColor(wp, vGround.x, vGround.y, 1.0 - vWorldNormal.y, vLand);
         diffuseColor.rgb = highGround(diffuseColor.rgb, wp, vHigh, 1.0 - vWorldNormal.y);
         if (cutF < ${RIM.toFixed(3)} + 1.0) {
           // broken rock round a hole in the ground, ragged at its edge
@@ -278,6 +283,7 @@ export function createGrassMaterial() {
     shader.uniforms.uPlayer = SHARED.uPlayer;
     shader.uniforms.uGrassRadius = SHARED.uGrassRadius;
     shader.uniforms.uOrigin = SHARED.uOrigin;
+    Object.assign(shader.uniforms, LAND);
     Object.assign(shader.uniforms, CUTS);
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -285,7 +291,9 @@ export function createGrassMaterial() {
         `#include <common>
         attribute vec4 aBlade; // xyz = root (local), w = height fraction
         attribute vec2 aGround; // x = path (-1 = flower), y = forest
+        attribute float aLand; // how far it grows in a real place's own country (see groundColor)
         varying vec2 vGround;
+        varying float vLand;
         varying vec2 vRootW; // where the root is in the world (worldXZ)
         uniform float uTime;
         uniform float uWind;
@@ -303,6 +311,7 @@ export function createGrassMaterial() {
           float hf = aBlade.w;
           vec3 wroot = (modelMatrix * vec4(root, 1.0)).xyz; // as drawn, like uPlayer
           vGround = aGround;
+          vLand = aLand;
           vRootW = worldXZ(wroot);
           float dist = distance(wroot.xz, uPlayer.xz);
           float fade = 1.0 - smoothstep(uGrassRadius * 0.6, uGrassRadius, dist);
@@ -327,6 +336,7 @@ export function createGrassMaterial() {
         '#include <common>',
         `#include <common>
         varying vec2 vGround;
+        varying float vLand;
         varying vec2 vRootW;
         ${NOISE_GLSL}
         ${WORLD_GLSL}
@@ -338,7 +348,7 @@ export function createGrassMaterial() {
         `#include <color_fragment>
         // blades take the colour of the ground they grow from; vertex colour
         // carries root-to-tip shading. Flowers keep their own colour.
-        if (vGround.x > -0.5) diffuseColor.rgb *= groundColor(vRootW, 0.0, vGround.y * 0.55, 0.0);`,
+        if (vGround.x > -0.5) diffuseColor.rgb *= groundColor(vRootW, 0.0, vGround.y * 0.55, 0.0, vec3(0.0, 0.0, vLand));`,
       )
       .replace(
         '#include <normal_fragment_begin>',
