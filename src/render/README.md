@@ -26,6 +26,22 @@ ground they stand on. Trees and bushes have baked vertex-colour shading and
 spherical "canopy" normals so their foliage shades like a soft volume. They
 also sway in the wind, and grass parts around your feet.
 
+**Nothing big goes to the graphics card.** The game thinks in world
+coordinates, in JavaScript's 64-bit numbers, everywhere, and the world is
+thousands of kilometres across (the hikes lie where they really are). The
+card works in 32-bit floats, which a thousand kilometres out can't tell 6 cm
+apart: far from the middle that smeared the ground's texture, crumpled trunks
+and striped the shadows. So each frame is drawn from an origin near the
+camera (`origin.js`): the scene is slid there while it is drawn and slid back
+after, and the game never knows. What the slide can't do for you is three
+habits. Geometry is built round its own mesh and the *mesh* is put in the
+world, never a mesh at zero holding world positions. A uniform that is a
+place is registered with `game.origin.place`. And a shader that draws a
+pattern from position asks `worldXZ()` and uses the noise that repeats on the
+world's 4 km period (`glsl.js`), so nothing shifts when the origin does. The
+play-through walks to the far side of the Earth to check
+(`test/smoke/97-far-out.mjs`).
+
 ## Keys
 
 | | |
@@ -40,7 +56,8 @@ also sway in the wind, and grass parts around your feet.
 
 ```
 index.js              plugs it into the game: renderer, scene, camera, the look keys
+origin.js             where each frame is drawn from, so far-off places stay sharp
 pixelPipeline.js      low-res render → composite → soft-pixel upscale
 uniforms.js           shader uniforms everything shares: time, wind, sky
-glsl.js               shared GLSL: noise, sky gradient, ground colour
+glsl.js               shared GLSL: noise, patterns over the world, sky, ground colour
 ```

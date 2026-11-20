@@ -114,6 +114,35 @@ where one is kept, the game says so. What each land grows is pinned by
 `test/golden/` (land 2's files end in `-land2`), and never changes: something
 new goes in a land of its own.
 
+## Real places
+
+Real land can be set into the world: a mountain you've climbed, brought in
+from a photo you took on it (see [Hikes](../hikes/README.md)). Inside one the
+ground, its trails, its lakes, its streams and its woods are the real ones,
+at 1 : 5, and over a fade the forest takes over again round its edge
+(`landform.js`).
+
+A real place is set into whichever land the world is grown on, and no land
+knows about it. `realPlaces.js` is grown *from* the land (it is a class that
+extends whichever land it is given) and wraps what the land says: the height
+is the land's until you are on real ground, the woods are the land's until
+you are in the real ones. So a new land gets the hikes for nothing, and
+grown bare, as the golden tests grow it, a land is exactly itself. The one
+thing asked of a land is that its own workings ask `forestHeight()` rather
+than `broadHeight()`, which real places change: the water, for one, is
+routed over the forest's own land, so a real place can't send a river
+somewhere else.
+
+Each hike is a small *card* that is always here (`hikes.js`: what it is and
+where) and its *land*, a file of a couple of hundred kB that is fetched the
+first time something near it is grown (`landforms.js`). Nothing within reach
+of one grows until its land has come.
+
+What a real place looks like is its **country**: one entry in one table
+(`country.js`) that says what its ground is made of, what grows and lives
+there, what its sky is doing and what its trees are called. The forest is
+one country among them, and looks the way it always has.
+
 ## Keys
 
 | | |
@@ -130,7 +159,13 @@ land2.js              the second land: lake country, mountains, benches, kinds o
 lands.js              which land a world is grown on; growWorld()
 drainage.js           where water runs and gathers: the drainage network
 water.js              streams, rivers, ponds and lakes on the ground, from that network
+landform.js           a piece of real land (a hike): its heights, trails, lakes, streams
+realPlaces.js         a land with real places set into it: grown from any land, wraps what it says
+hikes.js              the hikes in the game, as cards (written by npm run hike)
+hikes/                each one's land (fetched when needed)
+landforms.js          which hikes' land is here yet; nothing near one grows before it is
 flora.js              what grows, in one table
+country.js            the kinds of country, in one table: ground, plants, sky, animals, names
 chunkGen.js           pure chunk generation (terrain buffers, vegetation lists)
 chunkWorker.js        Web Worker wrapper around chunkGen
 chunks.js             streaming, LOD, meshes, collision + height + water queries
@@ -139,6 +174,7 @@ solids.js             built things you bump into and stand on
 spaces.js             places under the ground you can be in (caves): floor, walls, roof
 cuts.js               holes in the ground, where something else stands in for it
 models.js             procedural trees, bushes, ferns, rocks, logs
+modelsIsland.js       and other countries': palm, ironwood, tree fern, silversword
 grass.js              grass blades, wildflowers, reeds and lilies near the player
 materials.js          terrain / vegetation / grass shader hooks
 sky.js                sky dome, clouds, stars, sun/moon, time-of-day palettes; how much

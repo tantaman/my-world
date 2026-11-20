@@ -32,7 +32,9 @@ near a footpath, with its door turned to the path; a hunting cabin, the edge
 of the woods with open ground to look out over; a tent, open ground within
 reach of water; a well, a meadow near a path; a dock, the shore of a pond or
 a lake, deep enough at the end for a boat; a canoe, a river bank or a shore.
-None is put within 150 m of where you first arrive.
+None is put within 150 m of where you first arrive, and none stands on a real
+place brought in from a photo (see [Hikes](../hikes/README.md)), which has
+what is really there.
 
 **Nothing about the land changes for them.** A save is the difference from
 what a seed grows (see [What a save actually holds](../save/README.md#what-a-save-actually-holds)),

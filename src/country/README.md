@@ -11,6 +11,11 @@ place its weather comes over you: its layer of cloud, at its real height, so
 you can be under it or above it; how thick its air is; how much sun gets
 through. In the forest it has nothing to do.
 
+Where a real place has a sea, you hear it break on the shore: one wave after
+another gathers with a low rumble, breaks in a wash and runs up the shore
+hissing before it drains away, a few seconds apart and no two the same size.
+It's heard from where the white water is, and fades as you walk inland.
+
 From the console: `world.country.name`.
 
 ## Files

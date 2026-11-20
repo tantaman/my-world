@@ -105,12 +105,19 @@ don't edit the same lines:
 - **Hikes are part of the world description too**, where each one is. Don't
   move one (`at`), change its `datum`, or edit its files by hand: re-import
   with `--force`, which keeps it in place. Hikes go where they really are
-  (`tools/hike/place.js`), and ones that overlap share a datum. `test/hikes.test.js` checks they leave the rest of the
-  world exactly as it was. The drainage network reads the forest's own land
-  (`forestHeight`, `forestNaturalHeight`), never a hike's, so a hike can't
-  reroute water outside it. A hike's land is fetched when it's needed
-  (`world/landforms.js`): anything that grows the world somewhere new (chunks,
-  map tiles, the far view) asks `lands.ready(box)` first and waits.
+  (`tools/hike/place.js`), and ones that overlap share a datum.
+  `test/hikes.test.js` checks, on every land, that they leave the rest of the
+  world exactly as it was. They are set into whichever land a world is grown
+  on by `world/realPlaces.js`, which is grown from the land and wraps what it
+  says: put what real places need there, not in a land. A land's own workings
+  ask `forestHeight()`, never `broadHeight()`, and the drainage network reads
+  the forest's own land (`forestHeight`, `forestNaturalHeight`), never a
+  hike's, so a hike can't reroute water outside it. A hike's land is fetched
+  when it's needed (`world/landforms.js`): anything that grows the world
+  somewhere new (chunks, map tiles, the far view) asks
+  `landforms.ready(box)` first and waits, and anything else grown from the
+  seed keeps off a hike's reach (`landforms.reaches(box)`), as the old places
+  do.
 - Values put into or taken out of the element record must be copies
   (`own()` in `save/regions.js` does this for domains that go through the
   registry).
