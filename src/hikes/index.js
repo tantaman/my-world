@@ -5,9 +5,9 @@
 // out in the world (world/hikes.js lists them; world/landform.js is how the
 // world grows them). This feature is the part you play:
 //
-//   - K takes you to a hike's trailhead; K again, to the spot the photo was
-//     taken from, facing the way it looked, at the hour it was taken; again,
-//     on to the next hike.
+//   - K (or the hikes button) lists them all (hikesPanel.js): go to one's
+//     trailhead, or straight to the spot its photo was taken from, facing
+//     the way it looked, at the hour it was taken.
 //   - On a hike, the HUD points the way to that spot (unless you're
 //     following a mark of your own).
 //   - A signpost stands at the trailhead and a cairn at the view, and the
@@ -22,6 +22,7 @@ import { hash2i } from '../noise.js';
 import { FarView, FAR_CLIP } from './farView.js';
 import { sampleFar } from './farGrid.js';
 import { makeCairn, makeSignpost } from './landmarks.js';
+import { HikesPanel } from './hikesPanel.js';
 
 const FAR_MARGIN = 700; // m of the forest round a hike that its far view takes in
 const FAR_STEP = 16; // m between the far view's heights
@@ -29,7 +30,6 @@ const FAR_MAKE = 1500; // m past a hike's edge: nearer than this its far view is
 const FAR_DROP = 2500; // …and further than this, let go
 const FOG_SHORT = 80; // m: the fog closes in this far short of the far view's edge
 const FOG_EASE = 1.2; // 1/s: how quickly the fog follows
-const AT_STOP = 25; // m: standing this near a trailhead or a view, K goes on to the next
 const VIEW_PITCH = 0.18; // rad: the camera looks out, a little down, as a photo does
 const CAIRN_ASIDE = 1.4; // m to the left of where the photo was taken
 const SIGN_ASIDE = 1.6; // m to the side of the trail where it starts
@@ -42,7 +42,7 @@ const SIGN = ['.......', '.####..', '.#####.', '.####..', '...#...', '...#...', 
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player', 'map'];
 export function installHikes(game) {
-  const { scene, gen, chunks, player, hud, commands, pipeline, camera, sky, map } = game;
+  const { scene, gen, chunks, player, hud, commands, pipeline, camera, sky, map, input } = game;
   const lands = gen.lands;
   const deg = (b) => (b * Math.PI) / 180;
   const real = (L, m) => formatDistance(m / L.def.scale);
@@ -112,25 +112,36 @@ export function installHikes(game) {
     }
   }
 
+  // ── The list ─────────────────────────────────────────────────────────────
+  // In the real world's metres, the way you'd describe the hike.
+  const panel = new HikesPanel({
+    hikes: lands.map((L) => ({
+      id: L.id,
+      name: L.name,
+      trail: L.def.trail ? L.def.trail.name : '',
+      length: L.def.trail ? L.def.trail.length / L.def.scale : 0,
+      climb: L.def.trail ? L.def.trail.climb / L.def.scale : 0,
+      lakes: L.lakes.map((l) => l.name).filter(Boolean),
+    })),
+    input,
+    onGo: (id, at) => go(lands.find((L) => L.id === id), at),
+    here: () => {
+      const L = onHike(player.pos.x, player.pos.z);
+      return L ? L.id : null;
+    },
+  });
+  game.provide('hikes', panel);
+  // One panel at a time: opening this one closes whatever else is up.
+  const toggle = () => {
+    if (!panel.isOpen) game.emit('panel', 'hikes');
+    panel.toggle();
+  };
+  game.on('panel', (which) => which !== 'hikes' && panel.close());
   if (lands.length) {
-    const stops = lands.flatMap((L) => [
-      { L, at: 'trailhead' },
-      { L, at: 'view' },
-    ]);
-    commands.add({
-      id: 'hike',
-      keys: ['KeyK'],
-      group: 'WANDER',
-      label: 'go on a hike',
-      run() {
-        const here = stops.findIndex((s) => {
-          const p = spot(s.L, s.at);
-          return Math.hypot(p.x - player.pos.x, p.z - player.pos.z) < AT_STOP;
-        });
-        const next = stops[(here + 1) % stops.length];
-        go(next.L, next.at);
-      },
-    });
+    commands.add({ id: 'hikes', keys: ['KeyK'], group: 'WANDER', label: 'hikes · go to one', run: toggle });
+    hud.button('hikes-btn', toggle);
+    const btn = document.getElementById('hikes-btn');
+    if (btn) btn.hidden = false;
   }
 
   // On a hike, the HUD points to where the photo was taken.

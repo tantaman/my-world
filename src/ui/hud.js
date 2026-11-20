@@ -57,7 +57,8 @@ export class Hud {
   }
 
   // Say what one of the HUD's buttons does (the ones in index.html: save-btn,
-  // map-btn, sound-btn, help-btn, and act-stake on a touch screen).
+  // hikes-btn, map-btn, sound-btn, help-btn, and act-stake on a touch screen).
+  // hikes-btn starts hidden: there's only something to list once there are hikes.
   button(id, fn) {
     const el = document.getElementById(id);
     if (!el) return;
