@@ -6,6 +6,7 @@
 // whatever the chunk workers generate, so the workers never need to know.
 
 import { smoothstep } from '../noise.js';
+import { regionOf } from '../save/regions.js';
 import { DIG } from './constants.js';
 
 const OFF = 1 << 20;
@@ -17,8 +18,6 @@ export class TerrainEdits {
     this.chunks = chunks;
     this.map = new Map(); // K -> { x, z, d, c }
     this.dirty = false;
-    chunks.onTerrainData = (ch, t) => this.patchFresh(ch, t);
-    chunks.heightOffset = (x, z) => this.deltaAt(x, z);
   }
 
   get(ix, iz) {
@@ -285,3 +284,31 @@ export class TerrainEdits {
     }
   }
 }
+
+// How moved ground is spelled in a save (see src/save/domains.js): one element
+// per vertex, `t:x:z` -> [height offset, cleared]. The data is serialize()'s
+// flat list of x, z, offset, cleared.
+export const terrainSave = {
+  id: 'terrain',
+  scope: 'world',
+  kinds: ['t'],
+  encode(data, put) {
+    const list = Array.isArray(data) ? data : [];
+    for (let i = 0; i + 3 < list.length; i += 4) {
+      const x = list[i];
+      const z = list[i + 1];
+      put(regionOf(x, z), `t:${x}:${z}`, [list[i + 2], list[i + 3]]);
+    }
+  },
+  decode() {
+    const out = [];
+    return {
+      take(region, kind, rest, v) {
+        const [x, z] = rest.split(':').map(Number);
+        out.push(x, z, v[0], v[1]);
+      },
+      done: () => out,
+    };
+  },
+  validate: (raw) => (Array.isArray(raw) ? raw : []),
+};

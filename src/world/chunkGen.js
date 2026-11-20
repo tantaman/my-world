@@ -11,6 +11,7 @@
 // heights (waterSurface.js), so it can follow the digging.
 
 import { mulberry32, hash2i, smoothstep } from '../noise.js';
+import { VEG_STRIDE, VEG_KINDS } from './flora.js';
 
 export const WATER_STRIDE = 5;
 
@@ -147,8 +148,7 @@ export function generateTerrain(gen, cx, cz, step, size) {
 // Plants are known by where they stand (felling one saves its position), so
 // every candidate draws its random numbers whether or not it's planted: a
 // stream through one corner of a chunk mustn't move every tree after it.
-export const VEG_STRIDE = 7;
-export const VEG_KINDS = ['pine', 'broad', 'birch', 'bush', 'fern', 'rock', 'log'];
+export { VEG_STRIDE, VEG_KINDS };
 
 export function generateVegetation(gen, cx, cz, size, trunkRadius) {
   const x0 = cx * size;

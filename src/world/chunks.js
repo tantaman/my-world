@@ -11,13 +11,12 @@ import { CONFIG } from '../config.js';
 import { generateTerrain, generateVegetation, VEG_KINDS, VEG_STRIDE, WATER_STRIDE as WS } from './chunkGen.js';
 import { buildWaterGeometry } from './waterSurface.js';
 import { NO_WATER } from './water.js';
+import { FLORA } from './flora.js';
+import { Emitter } from '../core/events.js';
 
 const KEY_OFF = 32768;
 const chunkKey = (cx, cz) => (cx + KEY_OFF) * 65536 + (cz + KEY_OFF);
 
-const TREE_KINDS = new Set(['pine', 'broad', 'birch']);
-// Furthest chunk LOD at which each kind is still drawn.
-const MAX_LOD = { pine: 2, broad: 2, birch: 2, rock: 2, bush: 1, log: 1, fern: 0 };
 
 const _m = new THREE.Matrix4();
 const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -116,8 +115,13 @@ class Chunk {
   }
 }
 
-export class ChunkManager {
+// Emits (synchronously, see core/events.js):
+//   'terrain'     (chunk, buffers)   fresh terrain for a chunk, *before* it is
+//                                    meshed: a listener may patch the buffers
+//   'vegetation'  (chunk)            a chunk's plants were just placed
+export class ChunkManager extends Emitter {
   constructor(scene, gen, materials, models, structures = []) {
+    super();
     this.scene = scene;
     this.gen = gen;
     this.materials = materials;
@@ -128,12 +132,8 @@ export class ChunkManager {
     this.lastCz = NaN;
     this.wanted = [];
     this.pending = true;
-    // Hooks for the building system (see src/build/):
-    //   onTerrainData(ch, t)  patch freshly generated terrain buffers in place
-    //   onVegetation(ch)      a chunk's plants were just placed
-    //   heightOffset(x, z)    edit offset used when no chunk is loaded
-    this.onTerrainData = null;
-    this.onVegetation = null;
+    // (x, z) -> how far the ground has been moved from where it was grown.
+    // Asked only where no chunk is loaded; set by whoever keeps the edits.
     this.heightOffset = null;
     this.trunkRadius = {};
     for (const k of VEG_KINDS) this.trunkRadius[k] = models[k].trunkRadius;
@@ -364,7 +364,7 @@ export class ChunkManager {
 
   // ── Terrain ──────────────────────────────────────────────────────────────
   applyTerrain(ch, lod, t) {
-    if (this.onTerrainData) this.onTerrainData(ch, t);
+    this.emit('terrain', ch, t);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(t.pos, 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(t.nor, 3));
@@ -532,7 +532,7 @@ export class ChunkManager {
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       mesh.computeBoundingSphere();
-      mesh.castShadow = kind !== 'fern';
+      mesh.castShadow = FLORA[kind].shadow;
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
       mesh.updateMatrix();
@@ -540,7 +540,7 @@ export class ChunkManager {
       ch.veg.push({ kind, mesh });
       ch.vegMesh[kind] = mesh;
     }
-    if (this.onVegetation) this.onVegetation(ch);
+    this.emit('vegetation', ch);
   }
 
   // Hide one plant instance (felled, picked up or cleared) and drop its collider.
@@ -588,8 +588,8 @@ export class ChunkManager {
     for (const { kind, mesh } of ch.veg) {
       const model = this.models[kind];
       mesh.geometry = ch.lod === 0 ? model.lod0 : ch.lod === 1 ? model.lod1 : model.lod2;
-      mesh.visible = ch.lod <= MAX_LOD[kind];
-      if (TREE_KINDS.has(kind)) mesh.castShadow = ch.lod <= 1;
+      mesh.visible = ch.lod <= FLORA[kind].maxLod;
+      if (FLORA[kind].tree) mesh.castShadow = ch.lod <= 1;
     }
   }
 

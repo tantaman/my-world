@@ -23,8 +23,6 @@ export class Hud {
     this._last = '';
     this._lastTrack = '';
     this._arrivedAt = null;
-    const btn = document.getElementById('help-btn');
-    if (btn) btn.addEventListener('click', () => this.toggleHelp());
     this.hotbar = document.getElementById('hotbar');
     this.prompt = document.getElementById('prompt');
     this.inv = document.getElementById('inv');
@@ -34,38 +32,55 @@ export class Hud {
     this._prompt = null;
     this._inv = '';
     this.soundBtn = document.getElementById('sound-btn');
-    this.onSoundToggle = null;
-    this.onStake = null;
-    const stake = document.getElementById('act-stake');
-    if (stake) {
-      stake.addEventListener('pointerdown', (e) => {
+    this.saveBtn = document.getElementById('save-btn');
+    this.button('help-btn', () => this.toggleHelp());
+  }
+
+  // Say what one of the HUD's buttons does (the ones in index.html: save-btn,
+  // map-btn, sound-btn, help-btn, and act-stake on a touch screen).
+  button(id, fn) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    // The touch buttons sit over the look pad: act on the press itself and
+    // don't let it through. The corner buttons are ordinary clicks.
+    const touch = el.closest('#touch-act');
+    el.addEventListener(touch ? 'pointerdown' : 'click', (e) => {
+      if (touch) {
         e.preventDefault();
         e.stopPropagation();
-        if (this.onStake) this.onStake();
-      });
-    }
-    if (this.soundBtn) {
-      this.soundBtn.addEventListener('click', () => {
-        if (this.onSoundToggle) this.onSoundToggle();
-        this.soundBtn.blur();
-      });
-    }
-    this.saveBtn = document.getElementById('save-btn');
-    this.onSaveToggle = null;
-    if (this.saveBtn) {
-      this.saveBtn.addEventListener('click', () => {
-        if (this.onSaveToggle) this.onSaveToggle();
-        this.saveBtn.blur();
-      });
-    }
-    this.mapBtn = document.getElementById('map-btn');
-    this.onMapToggle = null;
-    if (this.mapBtn) {
-      this.mapBtn.addEventListener('click', () => {
-        if (this.onMapToggle) this.onMapToggle();
-        this.mapBtn.blur();
-      });
-    }
+      }
+      fn();
+      if (!touch) el.blur();
+    });
+  }
+
+  // Show the on-screen use / alt buttons: someone is playing by touch.
+  showTouchActions() {
+    const el = document.getElementById('touch-act');
+    if (el) el.hidden = false;
+  }
+
+  // The help panel (H), written from the keys that are actually bound.
+  // groups: [{ group, rows: [{ help, label }] }], see Commands.help().
+  renderHelp(groups) {
+    if (!this.help) return;
+    this.help.textContent = '';
+    groups.forEach((g, i) => {
+      if (i) this.help.appendChild(document.createElement('hr'));
+      const h = document.createElement('h2');
+      h.textContent = g.group;
+      this.help.appendChild(h);
+      for (const r of g.rows) {
+        const row = document.createElement('div');
+        row.className = 'row';
+        const k = document.createElement('kbd');
+        k.textContent = r.help;
+        const what = document.createElement('span');
+        what.textContent = r.label;
+        row.append(k, what);
+        this.help.appendChild(row);
+      }
+    });
   }
 
   // The save button says where the world stands: save / saving… / saved /
@@ -146,6 +161,8 @@ export class Hud {
   // ── Building ─────────────────────────────────────────────────────────────
   buildTools(tools, onPick) {
     if (!this.hotbar) return;
+    const range = document.getElementById('hint-tools');
+    if (range) range.textContent = `1–${tools.length}`;
     this.hotbar.textContent = '';
     this.slots = tools.map((t, i) => {
       const b = document.createElement('button');

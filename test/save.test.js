@@ -3,56 +3,72 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { toElements, fromElements, diffElements, applyOps, cloneElements } from '../src/save/regions.js';
-import { validateSnapshot } from '../src/save/snapshot.js';
+import { SaveDomains } from '../src/save/domains.js';
+import { diffElements, applyOps, cloneElements, regionOf, LOOSE } from '../src/save/regions.js';
 import { matchesGolden } from './helpers/golden.js';
-import { SEED, NAME, BUILD, MARKS, PLAYER, HOURS } from './fixtures/save.js';
+import { makeDomains, plain, fromPlain } from './helpers/saved.js';
+import { NAME, BUILD, MARKS, PLAYER, HOURS } from './fixtures/save.js';
 
-const snapshot = () => structuredClone({ v: 1, seed: SEED, name: NAME, saved: 0, world: BUILD, marks: MARKS, player: PLAYER, hours: HOURS });
-const visitor = () => structuredClone({ saved: 0, inv: BUILD.inv, datum: BUILD.datum, player: PLAYER, hours: HOURS, tracked: MARKS.tracked });
-
-const plain = (elements) => {
-  const out = {};
-  for (const r of [...elements.keys()].sort()) out[r] = Object.fromEntries([...elements.get(r)].sort(([a], [b]) => (a < b ? -1 : 1)));
-  return out;
-};
-const fromPlain = (obj) => new Map(Object.entries(obj).map(([r, m]) => [r, new Map(Object.entries(m))]));
+// Everything, by domain: what domains.collect() hands back in the game.
+const state = () =>
+  structuredClone({
+    name: NAME,
+    terrain: BUILD.terrain,
+    forest: BUILD.forest,
+    buildings: BUILD.buildings,
+    marks: MARKS.marks,
+    inv: BUILD.inv,
+    datum: BUILD.datum,
+    player: PLAYER,
+    hours: HOURS,
+    tracked: MARKS.tracked,
+  });
 
 test('a world is spelled the way it always has been', () => {
-  matchesGolden('save-elements', plain(toElements(snapshot())));
+  // Recorded from the game before saving was made a registry. If this fails,
+  // the code is wrong, not the golden file.
+  matchesGolden('save-elements', plain(makeDomains().toElements(state())));
 });
 
 test('elements put back together are the world that was taken apart', () => {
-  const elements = toElements(snapshot());
-  const back = fromElements(SEED, elements, visitor());
-  assert.deepEqual(plain(toElements(back)), plain(elements));
+  const domains = makeDomains();
+  const elements = domains.toElements(state());
+  const back = domains.fromElements(elements);
+  assert.deepEqual(plain(domains.toElements(back)), plain(elements));
   assert.equal(back.name, NAME);
-  assert.deepEqual(back.world.inv, BUILD.inv);
-  assert.deepEqual(back.world.datum, BUILD.datum);
-  assert.deepEqual(back.player, PLAYER);
-  assert.equal(back.hours, HOURS);
-  assert.equal(back.marks.tracked, MARKS.tracked);
-  assert.deepEqual([...back.marks.marks].sort((a, b) => (a.id < b.id ? -1 : 1)), MARKS.marks);
-  assert.equal(back.world.buildings.length, 2);
-  assert.equal(back.world.terrain.length, BUILD.terrain.length);
+  assert.deepEqual(back.terrain.length, BUILD.terrain.length);
+  assert.deepEqual(back.forest.stumps.length, 2);
+  assert.equal(back.buildings.length, 2);
+  assert.deepEqual([...back.marks].sort((a, b) => (a.id < b.id ? -1 : 1)), MARKS.marks);
+  assert.deepEqual(Object.keys(back).sort(), ['buildings', 'forest', 'marks', 'name', 'terrain'], 'only what is the world’s is in the elements');
+});
+
+test('what is yours travels beside the world, spelled as it always was', () => {
+  const domains = makeDomains();
+  const yours = domains.yours(state());
+  assert.ok(Number.isFinite(yours.saved));
+  assert.deepEqual({ ...yours, saved: 0 }, { saved: 0, inv: BUILD.inv, datum: BUILD.datum, player: PLAYER, hours: HOURS, tracked: MARKS.tracked });
+  assert.deepEqual(domains.fromYours(yours), { inv: BUILD.inv, datum: BUILD.datum, player: PLAYER, hours: HOURS, tracked: MARKS.tracked });
+  assert.deepEqual(domains.fromYours(null), {});
 });
 
 test('a world from the server opens the same', () => {
   // what GET /api/worlds/:id hands back, once unpacked
-  const golden = fromPlain(plain(toElements(snapshot())));
-  const opened = validateSnapshot(fromElements(SEED, golden, visitor()));
-  assert.ok(opened);
-  assert.deepEqual(plain(toElements(opened)), plain(golden));
+  const domains = makeDomains();
+  const served = fromPlain(plain(domains.toElements(state())));
+  const opened = domains.validate(domains.fromElements(served));
+  assert.deepEqual(plain(domains.toElements(opened)), plain(served));
 });
 
 test('only what changed goes out', () => {
-  const before = toElements(snapshot());
-  const s = snapshot();
-  s.world.terrain[2] = -0.6; // dig the first vertex deeper
-  s.world.forest.stumps.pop(); // grub out a stump
-  s.marks.marks[1].name = 'the ford'; // name a mark
-  s.world.buildings[0].logs.push(['log', 'x', 20, 10, 14, 2, []]); // lay a log
-  const ops = diffElements(before, toElements(s));
+  const domains = makeDomains();
+  const before = domains.toElements(state());
+  const s = state();
+  s.terrain[2] = -0.6; // dig the first vertex deeper
+  s.forest.stumps.pop(); // grub out a stump
+  s.marks[1].name = 'the ford'; // name a mark
+  s.buildings[0].logs.push(['log', 'x', 20, 10, 14, 2, []]); // lay a log
+  const ops = diffElements(before, domains.toElements(s));
   assert.deepEqual(
     ops.map((o) => `${o.r} ${o.k} ${o.v === null ? 'gone' : 'set'}`).sort(),
     ['* m:p0q8zz set', '0,0 l:x:20:10:14:2 set', '0,0 t:10:20 set', '1,0 s:70.25:3 gone'],
@@ -60,19 +76,82 @@ test('only what changed goes out', () => {
   const after = cloneElements(before);
   const touched = applyOps(after, ops);
   assert.deepEqual([...touched].sort(), ['*', '0,0', '1,0']);
-  assert.deepEqual(plain(after), plain(toElements(s)));
-  assert.equal(diffElements(after, toElements(s)).length, 0);
+  assert.deepEqual(plain(after), plain(domains.toElements(s)));
+  assert.equal(diffElements(after, domains.toElements(s)).length, 0);
 });
 
-test('a save that is not a save is turned away', () => {
-  assert.equal(validateSnapshot(null), null);
-  assert.equal(validateSnapshot({ v: 99, seed: 1 }), null);
-  assert.equal(validateSnapshot({ v: 1, seed: 'x' }), null);
-  const bare = validateSnapshot({ v: 1, seed: 7.9, name: 5, world: { terrain: 'no', buildings: {} }, marks: { marks: 3 }, player: { x: 'a' } });
-  assert.equal(bare.seed, 7);
-  assert.equal(bare.name, '');
-  assert.deepEqual(bare.world.terrain, []);
-  assert.deepEqual(bare.world.buildings, []);
-  assert.deepEqual(bare.marks.marks, []);
-  assert.equal(bare.player.x, null);
+test('what a newer game saved is left alone by an older one', () => {
+  const domains = makeDomains();
+  const server = domains.toElements(state());
+  server.get('0,0').set('c:12:22', [3, 1]); // a campfire, say, from a version that has them
+  server.set('9,9', new Map([['zz:1', 'who knows']]));
+  const mine = domains.toElements(state());
+  const owned = (key) => !!domains.owner(key);
+  assert.deepEqual(diffElements(server, mine, owned), [], 'nothing to send: the campfire is not ours to remove');
+  assert.equal(diffElements(server, mine).length, 2, 'without asking who owns what, it would have been swept away');
+  // and opening that world doesn't trip over it
+  const opened = domains.fromElements(server);
+  assert.equal(opened.buildings.length, 2);
+});
+
+test('a save that is not a save is tidied, not trusted', () => {
+  const domains = makeDomains();
+  const tidy = domains.validate({ terrain: 'no', buildings: {}, forest: 7, marks: 3, somethingElse: [1] });
+  assert.deepEqual(tidy, { terrain: [], forest: null, buildings: [], marks: [] });
+  assert.deepEqual(domains.validate(null), {});
+  // nothing in the elements at all
+  assert.deepEqual(domains.fromElements(new Map()), { name: '', terrain: [], forest: { removed: {}, stumps: [], felled: [] }, buildings: [], marks: [] });
+  // a building's pieces with nowhere to stand don't make a building
+  const orphan = new Map([['0,0', new Map([['l:x:20:10:14:0', ['10:20', 'log', []]]])]]);
+  assert.deepEqual(domains.fromElements(orphan).buildings, []);
+});
+
+test("someone else's changes go to whoever owns them", () => {
+  const heard = [];
+  const note = (id) => ({ restore: (data) => heard.push([id, 'restore', data]) });
+  const domains = makeDomains({
+    terrain: { adoptOps: (ops) => heard.push(['terrain', 'ops', ops.map((o) => o.k)]) },
+    forest: { adopt: (data, ops) => heard.push(['forest', 'adopt', data.stumps.length, ops.length]) },
+    buildings: note('buildings'),
+    marks: note('marks'),
+    name: note('name'),
+  });
+  const elements = domains.toElements(state());
+  const ops = [
+    { r: '0,0', k: 't:10:20', v: [-1, 1] },
+    { r: '0,0', k: 't:10:21', v: [-1, 1] },
+    { r: '1,0', k: 's:70.25:3', v: null },
+    { r: LOOSE, k: 'name', v: 'Renamed' },
+    { r: '0,0', k: 'c:1:2', v: [1] }, // nobody's
+  ];
+  applyOps(elements, ops);
+  const moved = domains.adopt(ops, elements);
+  assert.deepEqual(moved.sort(), ['forest', 'name', 'terrain']);
+  assert.deepEqual(heard, [
+    ['terrain', 'ops', ['t:10:20', 't:10:21']],
+    ['forest', 'adopt', 1, 1],
+    ['name', 'restore', 'Renamed'],
+  ]);
+});
+
+test('a domain is registered once, and owns its kinds outright', () => {
+  const domains = new SaveDomains();
+  const fires = {
+    id: 'fires',
+    kinds: ['c'],
+    encode: (data, put) => data.forEach((f) => put(regionOf(f.x, f.z), `c:${f.x}:${f.z}`, [f.wood])),
+    decode() {
+      const out = [];
+      return { take: (r, k, rest, v) => void out.push({ x: +rest.split(':')[0], z: +rest.split(':')[1], wood: v[0] }), done: () => out };
+    },
+  };
+  domains.register(fires);
+  assert.throws(() => domains.register(fires), /already registered/);
+  assert.throws(() => domains.register({ ...fires, id: 'embers' }), /belongs to "fires"/);
+  assert.throws(() => domains.register({ id: 'half', kinds: ['h'] }), /needs kinds, encode and decode/);
+  assert.throws(() => domains.register({ id: 'odd', scope: 'theirs' }), /scope/);
+  const data = [{ x: 70, z: -3, wood: 2.5 }];
+  const elements = domains.toElements({ fires: data });
+  assert.deepEqual(plain(elements), { '1,-1': { 'c:70:-3': [2.5] } });
+  assert.deepEqual(domains.fromElements(elements), { fires: data });
 });

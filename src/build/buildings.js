@@ -18,6 +18,7 @@
 import * as THREE from 'three';
 import { HALF, LOG_D, TIMBER_H, TIMBER_W, OVERHANG, PIER, MAX_SPAN, MAX_LEVEL, JOIN_RADIUS, ROOF, height, raise } from './constants.js';
 import { Mesher, addRoundLog, addTimber, addChink, addChalk, addFooting, addRoof, alongMatrix, phash } from './geometry.js';
+import { regionOf } from '../save/regions.js';
 
 const nk = (x, z) => `${x},${z}`;
 const nodeXZ = (axis, line, n) => (axis === 'x' ? [n, line] : [line, n]);
@@ -30,7 +31,6 @@ export class Buildings {
     this.list = [];
     this.nextId = 1;
     this.dirty = false;
-    this.onChange = null; // (building)
   }
 
   // ── Lookup ────────────────────────────────────────────────────────────────
@@ -394,7 +394,6 @@ export class Buildings {
     b.rooms = this._rooms(b);
     this._rebuild(b);
     this.dirty = true;
-    if (this.onChange) this.onChange(b);
   }
 
   _dispose(b) {
@@ -604,4 +603,69 @@ function rayRoof(o, d, r) {
     best = t;
   }
   return best;
+}
+
+// How what is built is spelled in a save (see src/save/domains.js). Each piece
+// lives where it stands, and carries the building it belongs to — its
+// *anchor*, the building's lowest footing, which every machine works out the
+// same way — so pieces regroup without anyone re-deriving which is which.
+//
+//   p:<x>:<z>                          a footing   -> [anchor, ground, y0, sill]
+//   l:<axis>:<line>:<s0>:<s1>:<k>      a log       -> [anchor, kind, notches]
+//   o:<x0>:<z0>:<x1>:<z1>              a roof      -> [anchor, eave, axis]
+//
+// The data is serialize()'s list of buildings.
+export const buildingsSave = {
+  id: 'buildings',
+  scope: 'world',
+  kinds: ['p', 'l', 'o'],
+  encode(data, put) {
+    for (const b of Array.isArray(data) ? data : []) {
+      const anchor = anchorOf(b);
+      for (const [x, z, ground] of b.footings || []) put(regionOf(x, z), `p:${x}:${z}`, [anchor, ground, b.y0, b.sill]);
+      for (const [kind, axis, line, s0, s1, k, notches] of b.logs || []) {
+        const [x, z] = axis === 'x' ? [(s0 + s1) / 2, line] : [line, (s0 + s1) / 2];
+        put(regionOf(x, z), `l:${axis}:${line}:${s0}:${s1}:${k}`, [anchor, kind, notches || []]);
+      }
+      for (const [x0, z0, x1, z1, eave, axis] of b.roofs || []) {
+        put(regionOf((x0 + x1) / 2, (z0 + z1) / 2), `o:${x0}:${z0}:${x1}:${z1}`, [anchor, eave, axis]);
+      }
+    }
+  },
+  decode() {
+    const groups = new Map(); // anchor -> building being put back together
+    const building = (anchor, y0, sill) => {
+      let b = groups.get(anchor);
+      if (!b) groups.set(anchor, (b = { y0: 0, sill: null, footings: [], logs: [], roofs: [] }));
+      if (y0 !== undefined) b.y0 = y0;
+      if (sill !== undefined && sill !== null) b.sill = sill;
+      return b;
+    };
+    return {
+      take(region, kind, rest, v) {
+        if (kind === 'p') {
+          const [x, z] = rest.split(':').map(Number);
+          building(v[0], v[2], v[3]).footings.push([x, z, v[1]]);
+        } else if (kind === 'l') {
+          const [axis, line, s0, s1, k] = rest.split(':');
+          building(v[0]).logs.push([v[1], axis, Number(line), Number(s0), Number(s1), Number(k), v[2] || []]);
+        } else {
+          const [x0, z0, x1, z1] = rest.split(':').map(Number);
+          building(v[0]).roofs.push([x0, z0, x1, z1, v[1], v[2]]);
+        }
+      },
+      // A building needs somewhere to stand; pieces orphaned by a half-arrived
+      // save would only throw when the mesher reached them.
+      done: () => [...groups.values()].filter((b) => b.footings.length),
+    };
+  },
+  validate: (raw) => (Array.isArray(raw) ? raw : []),
+};
+
+function anchorOf(b) {
+  let best = null;
+  for (const [x, z] of b.footings || []) {
+    if (!best || x < best[0] || (x === best[0] && z < best[1])) best = [x, z];
+  }
+  return best ? `${best[0]}:${best[1]}` : '0:0';
 }

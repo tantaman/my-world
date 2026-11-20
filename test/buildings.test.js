@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Buildings } from '../src/build/buildings.js';
-import { Solids } from '../src/build/solids.js';
+import { Solids } from '../src/world/solids.js';
 import { matchesGolden } from './helpers/golden.js';
 
 const scene = { add() {}, remove() {} };

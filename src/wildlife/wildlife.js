@@ -18,34 +18,16 @@ import { buildSnake, buildSalamander, Crawler } from './crawlers.js';
 import { BeeSwarm, buildButterfly, Butterfly } from './insects.js';
 import { disposeAnimal } from './rig.js';
 import { smoothstep, clamp } from '../noise.js';
+import { rand, pick, wrapAngle as wrap, segDist, waterSample } from '../core/geom.js';
+import { TREE_KINDS as TREES } from '../world/flora.js';
 
-const rand = (a, b) => a + Math.random() * (b - a);
-const pick = (a) => a[Math.floor(Math.random() * a.length)];
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const article = (s) => (/^[aeiou]/i.test(s) ? `an ${s}` : `a ${s}`);
-const TREES = ['pine', 'broad', 'birch'];
 const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
 const _v = new THREE.Vector3();
 const _sphere = new THREE.Sphere();
-const _wet = { level: 0, depth: 0, flowX: 0, flowZ: 0, foam: 0 };
+const _wet = waterSample();
 // Animals ford a shallow stream but go round anything deeper.
 const WADE = 0.35;
-
-function segDist(px, pz, ax, az, bx, bz, out) {
-  const ex = bx - ax;
-  const ez = bz - az;
-  const l2 = ex * ex + ez * ez;
-  let t = l2 > 1e-9 ? ((px - ax) * ex + (pz - az) * ez) / l2 : 0;
-  t = t < 0 ? 0 : t > 1 ? 1 : t;
-  const dx = px - (ax + ex * t);
-  const dz = pz - (az + ez * t);
-  const d = Math.hypot(dx, dz);
-  out.d = d;
-  out.t = t;
-  out.nx = d > 1e-6 ? dx / d : 1;
-  out.nz = d > 1e-6 ? dz / d : 0;
-  return out;
-}
 
 // ── A herd, pack, family or lone animal ────────────────────────────────────
 class Herd {
@@ -288,10 +270,12 @@ class Flutter {
 
 // ── The manager ────────────────────────────────────────────────────────────
 export class Wildlife {
-  constructor({ scene, gen, chunks, player, peers, sound, camera, hud }) {
+  // solids: built things animals have to go round (src/world/solids.js)
+  constructor({ scene, gen, chunks, solids = null, player, peers, sound, camera, hud }) {
     this.scene = scene;
     this.gen = gen;
     this.chunks = chunks;
+    this.solids = solids;
     this.player = player;
     this.peers = peers;
     this.sound = sound;
@@ -356,7 +340,7 @@ export class Wildlife {
         chunks.forEachCollider(x, z, (cx, cz, cr) => {
           if (!hit && Math.hypot(cx - x, cz - z) < cr + r) hit = { x: cx, z: cz };
         });
-        const solids = wl.player.solids;
+        const solids = wl.solids;
         if (!hit && solids) {
           solids.forEachNear(x, z, r + 0.5, (s) => {
             if (hit) return;
@@ -397,7 +381,7 @@ export class Wildlife {
             e.z += (dz / d) * (min - d);
           }
         });
-        const solids = wl.player.solids;
+        const solids = wl.solids;
         if (solids) {
           solids.forEachNear(e.x, e.z, r + 1, (s) => {
             segDist(e.x, e.z, s.ax, s.az, s.bx, s.bz, _seg);

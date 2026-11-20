@@ -1,0 +1,37 @@
+// Things standing on the ground that work has to go round: trees, boulders,
+// stumps, footings — and whatever a feature adds (a fire ring, a well).
+//
+// Each tool used to ask the forest and the buildings separately, so adding a
+// new thing to the world meant editing every tool that might bump into it.
+// Now whoever owns a kind of thing registers a source, and tools ask one
+// question.
+//
+//   obstacles.addSource((x, z, R, out) => {
+//     for (const f of fires.near(x, z, R)) out.push({ x: f.x, z: f.z, what: 'a fire ring', dig: 1.3, wall: 0.8, footing: 1.4 });
+//   });
+//
+// An obstacle says how much room it needs for each kind of work, as a radius
+// from its centre (leave one out and that work ignores it):
+//
+//   what      how to name it in a prompt: 'a pine', 'a stump'
+//   dig       the shovel can't move ground this close (roots, the stone itself)
+//   wall      a wall can't run this close
+//   low       ...but only its lowest courses are stopped (a stump is short)
+//   footing   a footing can't be set this close
+
+export class Obstacles {
+  constructor() {
+    this.sources = [];
+  }
+
+  addSource(fn) {
+    this.sources.push(fn);
+  }
+
+  // Everything within R of (x, z).
+  near(x, z, R) {
+    const out = [];
+    for (const source of this.sources) source(x, z, R, out);
+    return out;
+  }
+}

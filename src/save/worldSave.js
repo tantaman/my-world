@@ -18,13 +18,19 @@
 // screen the instant you make them; the object is the only writer, so its
 // order is the order; and a change that loses a race loses it on one element.
 
-import { collectSnapshot, validateSnapshot } from './snapshot.js';
-import { toElements, fromElements, diffElements, applyOps, cloneElements } from './regions.js';
-import { applyRemote } from './apply.js';
+//
+// What is in a world is not this file's business: every system registers its
+// share as a save domain (register(), see domains.js), and this file moves
+// domains about — to this browser (local.js), to the server, and back.
+
+import { SaveDomains } from './domains.js';
+import { LocalStore } from './local.js';
+import { LOOSE, diffElements, applyOps, cloneElements, elementsToPlain, plainToElements } from './regions.js';
 import { Live } from './live.js';
 import { createWorld, openWorld, sendOps, WorldError } from './remote.js';
+import { Emitter } from '../core/events.js';
+import { KEYS } from '../core/storage.js';
 
-const CACHE_KEY = (id) => `my-world:world:${id}`;
 // Wall-clock, not frame time: the render loop clamps its dt to 50 ms, so below
 // 20 fps accumulated frame time runs behind the clock.
 const LIVE_LULL = 250; // ms of quiet before changes go out over the socket
@@ -33,8 +39,14 @@ const AT_EVERY = 150; // ms between telling everyone where you are
 const BIG_BATCH = 400; // ops; more than this goes over HTTP instead
 const BACKOFF = [1000, 2000, 5000, 10000, 30000];
 
-export class WorldSave {
-  constructor() {
+// Emits:
+//   'status'  (save)   the status, the name or who is here changed
+export class WorldSave extends Emitter {
+  constructor({ storage }) {
+    super();
+    this.storage = storage;
+    this.domains = new SaveDomains();
+    this.local = null; // this browser's copy of a world with no address (see begin)
     this.id = null;
     this.seed = 0;
     this.gen = 0;
@@ -46,18 +58,42 @@ export class WorldSave {
     this.holdUntil = 0;
     this.attempt = 0;
     this.pushing = null;
-    this.adopting = false; // folding in someone else's change
-    this.onStatus = null;
-    this.parts = null;
+    this.adopting = false; // folding in someone else's change, or what was saved
+    this.attached = null; // { peers, where, me }
     this.peers = null;
     this.live = null;
     this.elements = new Map(); // what the server is known to hold
     this.pending = new Map(); // ops we have made but not got through yet
+    this.opened = null; // the elements a world opened with, until restore() hands them out
     this.visitor = null;
     this.visitorSent = '';
     this.visitorDirty = false;
     this.toldAt = 0;
     this.diffCost = 0; // ms the last look over the world took
+
+    // The world's name is the one thing in a save that belongs to no system.
+    this.domains.register({
+      id: 'name',
+      scope: 'world',
+      local: false,
+      kinds: ['name'],
+      collect: () => this.name,
+      restore: (v) => {
+        this.name = typeof v === 'string' ? v.slice(0, 80) : '';
+      },
+      encode: (name, put) => {
+        if (name) put(LOOSE, 'name', name);
+      },
+      decode() {
+        let name = '';
+        return { take: (region, kind, rest, v) => void (name = v), done: () => name };
+      },
+    });
+  }
+
+  // A system's share of the save. See domains.js for what a domain is.
+  register(domain) {
+    return this.domains.register(domain);
   }
 
   get online() {
@@ -75,14 +111,16 @@ export class WorldSave {
   // ── Opening ───────────────────────────────────────────────────────────────
   // Resolves before the world is built, because the seed lives in the save.
   // Never throws: a world that won't open leaves the game to start a fresh one.
-  async open() {
-    const id = (new URLSearchParams(location.search).get('w') || '').trim().toLowerCase();
+  // -> { id, seed, name, offline?, recovered? }, or null for a local world.
+  // What was saved is handed out later, by restore(), once every system has
+  // registered its domain.
+  async open(id) {
     if (!id) return null;
     if (!/^[0-9a-z]{4,32}$/.test(id)) {
       this._set('local', 'that is not a world address');
       return null;
     }
-    const cached = readCache(id);
+    const cached = this._readCache(id);
 
     let remote = null;
     try {
@@ -100,9 +138,9 @@ export class WorldSave {
       // Couldn't reach it. Carry on from this browser's copy if we have one,
       // and let the socket push what we do once it comes back.
       if (cached && cached.elements) {
-        const snapshot = this._adopt(id, cached, cached.seed, cached.visitor);
+        this._adopt(id, cached, cached.seed, cached.visitor);
         this._set('offline', err.message);
-        return { id, name: this.name, snapshot, offline: true };
+        return { id, seed: this.seed, name: this.name, offline: true };
       }
       this._set('offline', err.message);
       return null;
@@ -111,14 +149,14 @@ export class WorldSave {
     // Anything we made last time and never got through is still ours: it goes
     // on top of whatever the world has become, and out again as ops.
     const held = cached && cached.pending && cached.pending.length ? cached.pending : [];
-    const snapshot = this._adopt(id, { ...remote, pending: held }, remote.seed, held.length && cached.visitor ? cached.visitor : remote.visitor);
+    this._adopt(id, { ...remote, pending: held }, remote.seed, held.length && cached.visitor ? cached.visitor : remote.visitor);
     this._set('saved', held.length ? 'picking up where you left off' : '');
-    return { id, name: this.name, snapshot, recovered: held.length > 0 };
+    return { id, seed: this.seed, name: this.name, recovered: held.length > 0 };
   }
 
   _adopt(id, from, seed, visitor) {
     this.id = id;
-    this.seed = seed;
+    this.seed = Math.trunc(seed);
     this.gen = from.gen || 0;
     this.elements = from.elements instanceof Map ? from.elements : plainToElements(from.elements);
     this.pending = new Map();
@@ -127,32 +165,57 @@ export class WorldSave {
     // What we can see is the world plus whatever of ours hasn't got through.
     const seen = cloneElements(this.elements);
     applyOps(seen, [...this.pending.values()]);
-    const snapshot = validateSnapshot(fromElements(seed, seen, this.visitor)) || fromElements(seed, seen, this.visitor);
-    this.name = snapshot.name || '';
+    this.opened = seen;
+    const name = seen.get(LOOSE) && seen.get(LOOSE).get('name');
+    this.name = typeof name === 'string' ? name.slice(0, 80) : '';
     if (this.pending.size) this.dirty = true;
     tidyUrl();
-    return snapshot;
+  }
+
+  // The world is about to be built from `seed`. A world without an address is
+  // kept in this browser; `fresh` (?reset) and `clear` (?clearbuild) say how
+  // much of that to pick up.
+  begin({ seed, fresh = false, clear = false }) {
+    this.seed = this.seed || seed;
+    this.local = new LocalStore({ domains: this.domains, storage: this.storage, seed, fresh, clear });
+    if (this.id) this.local.disable();
+  }
+
+  // Hand every domain what was saved: from the server's copy of the world, or
+  // from this browser's. Call it once everything has registered, and before
+  // the world starts streaming in, so changes are there as it loads.
+  restore() {
+    const state = this.id ? { ...this.domains.fromElements(this.opened || new Map()), ...this.domains.fromYours(this.visitor) } : this.local.read();
+    this.opened = null;
+    this.adopting = true;
+    try {
+      this.domains.restore(this.domains.validate(state));
+    } finally {
+      this.adopting = false;
+    }
   }
 
   // ── Wiring ────────────────────────────────────────────────────────────────
-  attach(parts) {
-    this.parts = parts;
-    this.seed = this.seed || parts.gen.seed;
-    parts.builder.onChange = () => this.touch();
-    parts.marks.subscribe(() => this.touch());
-    this.peers = parts.peers;
-    if (this.peers) this.peers.onChange = () => this.onStatus && this.onStatus(this);
+  // peers: everyone else in the world (src/world/peers.js)
+  // where: () => { x, z, yaw }, where you are standing, to tell them
+  attach({ peers = null, where, me = '' }) {
+    this.attached = { where, me };
+    this.peers = peers;
+    if (peers) peers.on('change', () => this.emit('status', this));
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.flush();
     });
     addEventListener('pagehide', () => this.flush({ keepalive: true }));
+    addEventListener('beforeunload', () => this.local && this.local.enabled && this.local.flush());
     if (this.id) this._goLive();
   }
 
+  // Something about the world really changed.
   touch() {
     if (this.adopting) return; // that change came from somebody else
     this.dirty = true;
     this.changedAt = performance.now();
+    if (this.local) this.local.touch();
   }
 
   rename(name) {
@@ -170,13 +233,17 @@ export class WorldSave {
 
   // ── Every frame ───────────────────────────────────────────────────────────
   tick() {
-    if (!this.id || !this.parts) return;
+    if (!this.attached) return;
     const now = performance.now();
+    if (!this.id) {
+      this.local.tick(now);
+      return;
+    }
 
     if (this.connected && now - this.toldAt > AT_EVERY) {
       this.toldAt = now;
-      const p = this.parts.player;
-      this.live.at(round(p.pos.x), round(p.pos.z), round(p.yaw, 100), this.parts.me || '');
+      const p = this.attached.where();
+      this.live.at(round(p.x), round(p.z), round(p.yaw, 100), this.attached.me || '');
     }
 
     // Finding changes means looking over the whole world, which on a world
@@ -194,12 +261,14 @@ export class WorldSave {
   // then undid simply stops being a difference.
   _collect() {
     this.dirty = false;
-    if (!this.parts || this.pushing) return; // a batch in flight is based on this
+    if (!this.attached || this.pushing) return; // a batch in flight is based on this
     const started = performance.now();
-    const snapshot = this._snapshot();
-    const ops = diffElements(this.elements, toElements(snapshot));
+    const state = this.domains.collect();
+    // An element whose kind nobody here owns was put there by a newer version
+    // of the game; it is not ours to take away.
+    const ops = diffElements(this.elements, this.domains.toElements(state), (key) => !!this.domains.owner(key));
     this.pending = new Map(ops.map((op) => [opKey(op), op]));
-    this.visitor = visitorOf(snapshot);
+    this.visitor = this.domains.yours(state);
     // Where you are standing and the hour are yours, not the world's: they
     // ride along with the next change rather than going out on their own.
     this.visitorDirty = JSON.stringify(this.visitor) !== this.visitorSent;
@@ -242,7 +311,11 @@ export class WorldSave {
   // Leaving the tab is the moment to make sure everything is out, including
   // where you stopped walking.
   flush(opts = {}) {
-    if (!this.id || !this.parts) return Promise.resolve();
+    if (!this.attached) return Promise.resolve();
+    if (!this.id) {
+      this.local.flush();
+      return Promise.resolve();
+    }
     this._collect();
     if (!this.pending.size && !this.visitorDirty) return Promise.resolve();
     return this._send(opts);
@@ -251,21 +324,20 @@ export class WorldSave {
   // Put this world on the server for the first time. -> the world's URL.
   async publish(name = '') {
     if (this.id) return this.url();
-    if (!this.parts) throw new WorldError('the world is not ready yet', 0);
+    if (!this.attached) throw new WorldError('the world is not ready yet', 0);
     this._set('saving');
-    const snapshot = this._snapshot(name);
-    const elements = toElements(snapshot);
+    const state = { ...this.domains.collect(), name };
+    const elements = this.domains.toElements(state);
     const ops = diffElements(new Map(), elements);
-    const visitor = visitorOf(snapshot);
+    const visitor = this.domains.yours(state);
     let made;
     try {
-      made = await createWorld({ seed: snapshot.seed, name, ops, visitor });
+      made = await createWorld({ seed: this.seed, name, ops, visitor });
     } catch (err) {
       this._set('local', err.message);
       throw err;
     }
     this.id = made.id;
-    this.seed = snapshot.seed;
     this.gen = made.gen || 0;
     this.name = name;
     this.elements = elements;
@@ -273,8 +345,7 @@ export class WorldSave {
     this.pending.clear();
     // From here on the world lives on the server; the per-seed local saves
     // would only drift, so hand persistence over to the cache for this id.
-    this.parts.builder.storeKey = null;
-    this.parts.marks.key = null;
+    this.local.disable();
     this._cache();
     setParam('w', this.id);
     this._goLive();
@@ -311,18 +382,17 @@ export class WorldSave {
 
   // Somebody else changed something.
   _heard(ops, gen) {
-    if (!ops.length || !this.parts) return;
+    if (!ops.length || !this.attached) return;
     this.gen = gen || this.gen;
     this.adopting = true;
     try {
       applyOps(this.elements, ops);
-      const what = applyRemote(ops, this.elements, this.parts, this.seed);
-      if (what.name !== null) this.name = what.name;
+      this.domains.adopt(ops, this.elements);
     } finally {
       this.adopting = false;
     }
     this._cache();
-    if (this.onStatus) this.onStatus(this);
+    this.emit('status', this);
   }
 
   // We fell so far behind that the object no longer holds the changes we
@@ -341,27 +411,27 @@ export class WorldSave {
     this._set(status >= 400 && status < 500 ? 'local' : 'offline', err.message);
   }
 
-  _snapshot(name = this.name) {
-    const { gen, builder, marks, player, sky } = this.parts;
-    return collectSnapshot({ seed: gen.seed, name, builder, marks, player, sky });
-  }
-
   _cache() {
     if (!this.id) return;
-    try {
-      localStorage.setItem(
-        CACHE_KEY(this.id),
-        JSON.stringify({ gen: this.gen, seed: this.seed, visitor: this.visitor, elements: elementsToPlain(this.elements), pending: [...this.pending.values()] }),
-      );
-    } catch {
-      /* storage full or unavailable: the server copy is the one that matters */
-    }
+    // If storage is full or unavailable, the server copy is the one that matters.
+    this.storage.set(KEYS.world(this.id), {
+      gen: this.gen,
+      seed: this.seed,
+      visitor: this.visitor,
+      elements: elementsToPlain(this.elements),
+      pending: [...this.pending.values()],
+    });
+  }
+
+  _readCache(id) {
+    const raw = this.storage.get(KEYS.world(id));
+    return raw && raw.elements ? raw : null;
   }
 
   _set(status, detail = '') {
     this.status = status;
     this.detail = detail;
-    if (this.onStatus) this.onStatus(this);
+    this.emit('status', this);
   }
 }
 
@@ -369,37 +439,6 @@ export class WorldSave {
 
 const opKey = (op) => `${op.r}\u0000${op.k}`;
 const round = (v, f = 10) => Math.round(v * f) / f;
-
-const visitorOf = (s) => ({
-  saved: s.saved,
-  inv: s.world.inv,
-  datum: s.world.datum,
-  player: s.player,
-  hours: s.hours,
-  tracked: s.marks.tracked,
-});
-
-const elementsToPlain = (elements) => {
-  const out = {};
-  for (const [r, m] of elements) out[r] = Object.fromEntries(m);
-  return out;
-};
-
-function plainToElements(plain) {
-  const out = new Map();
-  for (const r in plain || {}) out.set(r, new Map(Object.entries(plain[r])));
-  return out;
-}
-
-function readCache(id) {
-  try {
-    const raw = JSON.parse(localStorage.getItem(CACHE_KEY(id)) || 'null');
-    if (raw && raw.elements) return raw;
-  } catch {
-    /* unreadable or blocked storage */
-  }
-  return null;
-}
 
 // ── The address bar ─────────────────────────────────────────────────────────
 

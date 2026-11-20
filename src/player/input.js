@@ -1,7 +1,28 @@
 // Keyboard + mouse (pointer lock or drag) + touch (virtual stick / look pad).
+//
+// This is the raw state of the controls. Walking reads it directly (BINDINGS
+// below); everything else that happens on a key press is a command, bound by
+// the feature that owns it (src/game/commands.js).
 
-export class Input {
+import { Emitter } from '../core/events.js';
+
+// Held controls: KeyboardEvent.code values, any of which will do.
+export const BINDINGS = {
+  forward: ['KeyW', 'ArrowUp'],
+  back: ['KeyS', 'ArrowDown'],
+  right: ['KeyD', 'ArrowRight'],
+  left: ['KeyA', 'ArrowLeft'],
+  run: ['ShiftLeft', 'ShiftRight'],
+  jump: ['Space'],
+  turnLeft: ['KeyQ'],
+  turnRight: ['KeyE'],
+};
+
+// Emits:
+//   'touch'  ()   the first touch: this visitor is playing on a touch screen
+export class Input extends Emitter {
   constructor(dom) {
+    super();
     this.dom = dom;
     this.keys = new Set();
     this.pressed = new Set(); // keys pressed this frame
@@ -88,8 +109,7 @@ export class Input {
       (e) => {
         if (!this.isTouch) {
           this.isTouch = true;
-          const act = document.getElementById('touch-act');
-          if (act) act.hidden = false;
+          this.emit('touch');
         }
         this._interact();
         for (const t of e.changedTouches) {
@@ -197,14 +217,19 @@ export class Input {
     return codes.some((c) => this.keys.has(c));
   }
 
+  // Is a held control (see BINDINGS) down?
+  isDown(action) {
+    return BINDINGS[action].some((c) => this.keys.has(c));
+  }
+
   // Movement axes in [-1, 1]: x = strafe right, y = forward
   moveAxes() {
     let x = 0;
     let y = 0;
-    if (this.down('KeyW', 'ArrowUp')) y += 1;
-    if (this.down('KeyS', 'ArrowDown')) y -= 1;
-    if (this.down('KeyD', 'ArrowRight')) x += 1;
-    if (this.down('KeyA', 'ArrowLeft')) x -= 1;
+    if (this.isDown('forward')) y += 1;
+    if (this.isDown('back')) y -= 1;
+    if (this.isDown('right')) x += 1;
+    if (this.isDown('left')) x -= 1;
     if (this.touchMove.active) {
       x += this.touchMove.x;
       y -= this.touchMove.y;
@@ -219,11 +244,11 @@ export class Input {
 
   running() {
     if (this.touchMove.active) return Math.hypot(this.touchMove.x, this.touchMove.y) > 0.92;
-    return this.down('ShiftLeft', 'ShiftRight');
+    return this.isDown('run');
   }
 
   jumped() {
-    const j = this.pressed.has('Space') || this.touchJump;
+    const j = BINDINGS.jump.some((c) => this.pressed.has(c)) || this.touchJump;
     this.touchJump = false;
     return j;
   }

@@ -7,7 +7,9 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { mulberry32, hash2i, smoothstep, createSimplex2 } from '../noise.js';
 import { NO_WATER } from './water.js';
+import { growRect } from '../core/geom.js';
 
+const REGROW_EVERY = 0.35; // seconds between regrowing changed ground
 const tileKey = (tx, tz) => (tx + 32768) * 65536 + (tz + 32768);
 
 // Blade shading multipliers (the hue comes from the ground shader).
@@ -44,12 +46,20 @@ export class Grass {
     this.material = material;
     this.seed = seed;
     this.tiles = new Map();
+    this.stale = null; // [x0, z0, x1, z1] waiting to regrow
+    this.regrowIn = 0;
     // where reeds and lily pads grow in clumps
     this.nReed = createSimplex2((seed ^ 0x2eed5) >>> 0);
     this.nLily = createSimplex2((seed ^ 0x1117) >>> 0);
   }
 
-  update(px, pz, budgetMs = 3) {
+  update(px, pz, budgetMs = 3, dt = 0) {
+    this.regrowIn -= dt;
+    if (this.stale && this.regrowIn <= 0) {
+      this.invalidate(...this.stale);
+      this.stale = null;
+      this.regrowIn = REGROW_EVERY;
+    }
     const T = CONFIG.grassTile;
     const R = CONFIG.grassRadius;
     const tx0 = Math.floor((px - R) / T);
@@ -90,6 +100,12 @@ export class Grass {
       this.tiles.set(tileKey(t.tx, t.tz), { tx: t.tx, tz: t.tz, mesh });
       if (mesh) this.scene.add(mesh);
     }
+  }
+
+  // The ground changed around (x, z): regrow the turf there. Changes that keep
+  // coming (a long dig) are gathered up and regrown a few times a second.
+  touch(x, z, pad = 1) {
+    this.stale = growRect(this.stale, x, z, pad);
   }
 
   // Drop tiles overlapping a rectangle so they regrow from the current ground

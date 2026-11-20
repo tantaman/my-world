@@ -37,3 +37,9 @@ export const DIG = {
 export const height = (kind) => (kind === 'log' ? LOG_D : TIMBER_H);
 // Height an unnotched log rides above where it would sit if notched.
 export const raise = (kind) => height(kind) - HALF;
+
+// How far you can reach with each kind of tool (m).
+export const REACH = { hands: 3, axe: 2.2, shovel: 5, build: 10 };
+// Rocks bigger than this stay put; smaller ones are worth this many stones.
+export const LIFTABLE = 0.8;
+export const stonesIn = (s) => (s < 0.45 ? 1 : s < 0.65 ? 2 : 3);

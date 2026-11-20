@@ -1,7 +1,8 @@
-// Places of interest you've tagged on the map. Kept per world seed in this
-// browser, so a different ?seed has its own set of marks — or, for a world
-// with an address of its own, kept on the save server alongside everything
-// else you changed.
+// Places of interest you've tagged on the map. They are part of the world:
+// saved with it (src/save/), and shared with whoever else is in it. Which one
+// you're tracking is yours alone.
+
+import { LOOSE } from '../save/regions.js';
 
 // 7×7 pixel glyphs drawn inside a mark's pin.
 export const ICONS = [
@@ -50,23 +51,13 @@ export function iconSvg(id, color = 'currentColor') {
 
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
+const usable = (list) => (Array.isArray(list) ? list : []).filter((m) => m && Number.isFinite(m.x) && Number.isFinite(m.z));
+
 export class MarkStore {
-  // key: where to keep marks in this browser, or null to keep none because the
-  //   save server owns them. data: the marks to start with, from a save.
-  constructor(seed, { key, data } = {}) {
-    this.key = key === undefined ? `my-world:marks:${seed}` : key;
+  constructor() {
     this.marks = [];
     this.tracked = null;
     this.listeners = new Set();
-    try {
-      const raw = data !== undefined ? data : JSON.parse(localStorage.getItem(this.key) || 'null');
-      if (raw && Array.isArray(raw.marks)) {
-        this.marks = raw.marks.filter((m) => m && Number.isFinite(m.x) && Number.isFinite(m.z));
-        this.tracked = this.marks.some((m) => m.id === raw.tracked) ? raw.tracked : null;
-      }
-    } catch {
-      /* unreadable or blocked storage: start empty */
-    }
   }
 
   list() {
@@ -117,11 +108,12 @@ export class MarkStore {
     return this.tracked ? this.get(this.tracked) : null;
   }
 
-  // Take someone else's version of the marks.
-  adopt(data) {
-    this.marks = ((data && data.marks) || []).filter((m) => m && Number.isFinite(m.x) && Number.isFinite(m.z));
-    const want = data && data.tracked;
-    this.tracked = this.marks.some((m) => m.id === want) ? want : null;
+  // Replace the marks with a saved list: yours when a world opens, or someone
+  // else's version of them while you're both in it. What you're tracking is
+  // kept if it's still there.
+  load(list) {
+    this.marks = usable(list);
+    if (!this.marks.some((m) => m.id === this.tracked)) this.tracked = null;
     this._changed();
   }
 
@@ -131,16 +123,27 @@ export class MarkStore {
   }
 
   _changed() {
-    if (this.key) {
-      try {
-        localStorage.setItem(this.key, JSON.stringify({ v: 1, marks: this.marks, tracked: this.tracked }));
-      } catch {
-        /* private mode etc. */
-      }
-    }
     for (const fn of this.listeners) fn(this);
   }
 }
+
+// How marks are spelled in a save (see src/save/domains.js): one element per
+// mark, `m:<id>` -> the mark, among the things that have no place of their
+// own in the region grid.
+export const marksSave = {
+  id: 'marks',
+  scope: 'world',
+  local: 'marks',
+  kinds: ['m'],
+  encode(list, put) {
+    for (const m of Array.isArray(list) ? list : []) put(LOOSE, `m:${m.id}`, m);
+  },
+  decode() {
+    const marks = [];
+    return { take: (region, kind, rest, v) => void marks.push(v), done: () => marks };
+  },
+  validate: (raw) => (Array.isArray(raw) ? raw : []),
+};
 
 export const markLabel = (m) => m.name.trim() || 'unnamed place';
 
