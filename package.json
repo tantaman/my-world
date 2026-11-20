@@ -12,7 +12,8 @@
     "serve": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
     "test": "node --test \"test/*.test.js\"",
-    "smoke": "npm run build && node test/smoke.mjs"
+    "smoke": "npm run build && node test/smoke.mjs",
+    "together": "node test/together.mjs"
   },
   "dependencies": {
     "three": "^0.187.0"

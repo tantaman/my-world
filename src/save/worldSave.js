@@ -260,8 +260,10 @@ export class WorldSave extends Emitter {
   // worked out afresh each time rather than accumulated: a change you made and
   // then undid simply stops being a difference.
   _collect() {
+    // A batch in flight is based on what was collected last; look again once
+    // it has landed (the world stays marked as changed until then).
+    if (!this.attached || this.pushing) return;
     this.dirty = false;
-    if (!this.attached || this.pushing) return; // a batch in flight is based on this
     const started = performance.now();
     const state = this.domains.collect();
     // An element whose kind nobody here owns was put there by a newer version
@@ -340,7 +342,10 @@ export class WorldSave extends Emitter {
     this.id = made.id;
     this.gen = made.gen || 0;
     this.name = name;
-    this.elements = elements;
+    // what the server now holds: the ops, not the map they were made from,
+    // whose values are still the game's own objects
+    this.elements = new Map();
+    applyOps(this.elements, ops);
     this.visitor = visitor;
     this.pending.clear();
     // From here on the world lives on the server; the per-seed local saves
