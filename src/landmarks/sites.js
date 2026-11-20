@@ -69,6 +69,8 @@ export function toLocal(s, x, z, out = {}) {
 
 const _l = { x: 0, z: 0 };
 // Is the world point (x, z) on one of the site's rectangles, grown by margin?
+// (Anything with x, z, yaw and a box round its rectangles will do: a town, a
+// building in it.)
 export function onPlan(s, x, z, margin = 0, rects = s.plan) {
   if (x < s.box[0] - margin || x > s.box[2] + margin || z < s.box[1] - margin || z > s.box[3] + margin) return false;
   toLocal(s, x, z, _l);
@@ -106,6 +108,10 @@ export class Sites {
     this.start = start;
     this.cells = new Map(); // "ci:cj" -> site or null
     this.queue = new Set(); // cells asked about and not yet looked at
+    // the side of a cell, and how far (m) a site may reach out of its own:
+    // something grown on bigger cells (a town) says otherwise
+    this.size = CELL;
+    this.spill = SPILL;
   }
 
   // The site in cell (ci, cj), or null.
@@ -130,10 +136,11 @@ export class Sites {
   // would rather fill in over a few frames than stall.
   within(x0, z0, x1, z1, wait = true) {
     const out = [];
-    const ci0 = Math.floor((x0 - SPILL) / CELL);
-    const ci1 = Math.floor((x1 + SPILL) / CELL);
-    const cj0 = Math.floor((z0 - SPILL) / CELL);
-    const cj1 = Math.floor((z1 + SPILL) / CELL);
+    const { size, spill } = this;
+    const ci0 = Math.floor((x0 - spill) / size);
+    const ci1 = Math.floor((x1 + spill) / size);
+    const cj0 = Math.floor((z0 - spill) / size);
+    const cj1 = Math.floor((z1 + spill) / size);
     for (let cj = cj0; cj <= cj1; cj++) {
       for (let ci = ci0; ci <= ci1; ci++) {
         let s = this.cells.get(key(ci, cj));

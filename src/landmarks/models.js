@@ -22,7 +22,7 @@ import { mulberry32, phash } from '../noise.js';
 import { toWorld } from './sites.js';
 
 const lin = (hex) => new THREE.Color(hex);
-const PAL = {
+export const PAL = {
   canvas: [lin(0xa89a6c), lin(0xb07a4e), lin(0x6f7348), lin(0x617487)],
   paint: [lin(0xcfc8b4), lin(0x5e7a5a), lin(0x93493a), lin(0x3f5f78)],
   trim: lin(0x2a2622),
@@ -92,8 +92,8 @@ export function buildSite(site, ground, material) {
 
 // ── The kit ──────────────────────────────────────────────────────────────────
 // Everything below works in the site's own frame, with y measured from the
-// ground at its origin.
-class Builder {
+// ground at its origin. The towns (towns/buildings.js) build with it too.
+export class Builder {
   constructor(site, g, rnd, y0) {
     this.site = site;
     this.g = g;
@@ -135,18 +135,18 @@ class Builder {
 }
 
 // One colour for a whole piece, a little different from the next.
-const tone = (color, rnd, spread = 0.2) => {
+export const tone = (color, rnd, spread = 0.2) => {
   const k = 1 - spread / 2 + rnd() * spread;
   return (p, n, out) => out.copy(color).multiplyScalar(k);
 };
 
-function box(m, x, y, z, sx, sy, sz, color, rx = 0, ry = 0, rz = 0) {
+export function box(m, x, y, z, sx, sy, sz, color, rx = 0, ry = 0, rz = 0) {
   const mat = new THREE.Matrix4().compose(_v.set(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(1, 1, 1));
   m.add(new THREE.BoxGeometry(sx, sy, sz), mat, typeof color === 'function' ? color : (p, n, out) => out.copy(color));
 }
 
 // A round rod from a to b (arrays [x, y, z]).
-function rod(m, a, b, r, color, sides = 5) {
+export function rod(m, a, b, r, color, sides = 5) {
   const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
   const len = d.length();
   if (len < 1e-4) return;
@@ -155,7 +155,7 @@ function rod(m, a, b, r, color, sides = 5) {
 }
 
 // A rough stone, about `s` across, its middle at (x, y, z).
-function stone(m, x, y, z, s, seed, flat = 0.6) {
+export function stone(m, x, y, z, s, seed, flat = 0.6) {
   const mat = new THREE.Matrix4().compose(
     _v.set(x, y, z),
     new THREE.Quaternion().setFromEuler(new THREE.Euler(phash(seed, 1, 2) * 0.4, phash(seed, 2, 3) * 6.28, phash(seed, 3, 4) * 0.4)),
@@ -167,7 +167,7 @@ function stone(m, x, y, z, s, seed, flat = 0.6) {
 }
 
 // Dry-stacked stones from the ground (g) up to `top`, with a flat one on top.
-function pier(m, x, z, g, top, seed, w = 0.42) {
+export function pier(m, x, z, g, top, seed, w = 0.42) {
   let y = g - 0.12;
   let i = 0;
   while (top - y > 0.2) {
@@ -181,7 +181,7 @@ function pier(m, x, z, g, top, seed, w = 0.42) {
 
 // Greys whatever was added to m since `from`, as wood goes in the weather,
 // with moss on what faces the sky.
-function weather(m, from, grey, moss = 0) {
+export function weather(m, from, grey, moss = 0) {
   const c = m.col;
   const n = m.nor;
   const p = m.pos;
@@ -229,7 +229,7 @@ function logWall(b, { axis, at, half, base, lift = 0, courses, gaps = [], seed, 
 // Steps from the ground in front of a door (at z, across x0..x1) up to a
 // floor at `floor`: as many as it takes to keep each rise easy. Also the
 // threshold you cross, so your feet find something in the doorway.
-function stepsUp(b, z, x0, x1, floor, color) {
+export function stepsUp(b, z, x0, x1, floor, color) {
   const xm = (x0 + x1) / 2;
   const w = x1 - x0;
   b.solid(x0 + 0.15, z, x1 - 0.15, z, 0.22, floor - 2, floor, { step: 0.34, surface: 'boards' });
@@ -249,7 +249,7 @@ function stepsUp(b, z, x0, x1, floor, color) {
 }
 
 // The floor of a raised room, as capsules you stand on, and its planks.
-function floor(b, x0, z0, x1, z1, top, bottom, color) {
+export function floor(b, x0, z0, x1, z1, top, bottom, color) {
   const inset = 0.04;
   const along = x1 - x0 >= z1 - z0;
   const cross = along ? [z0, z1] : [x0, x1];
@@ -344,7 +344,7 @@ function chimney(b, at, base, top, seed) {
 }
 
 // ── The kinds ────────────────────────────────────────────────────────────────
-const BUILD = {
+export const BUILD = {
   cabin(b) {
     const W = 5.0;
     const D = 4.2;
