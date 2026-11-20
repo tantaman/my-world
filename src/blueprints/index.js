@@ -68,7 +68,8 @@ export function installBlueprints(game) {
 
   const tool = builder.register(blueprintTool({ library, foreman, ghost: new Ghost((o) => builder.previews.add(o)), copy }));
 
-  // Picking the tool again while it's in hand moves on to the next plan.
+  // Picking the tool again while it's in hand (its number key, again) moves
+  // on to the next plan.
   let inHand = builder.current === tool;
   builder.on('select', (t) => {
     if (t === tool) {
@@ -89,7 +90,7 @@ export function installBlueprints(game) {
     label: 'build the staked-out blueprint for you · pause',
     run() {
       if (!foreman.site) {
-        hud.flash(`stake out a blueprint first (${builder.tools.indexOf(tool) + 1}, then click)`);
+        hud.flash(`stake out a blueprint first (${builder.slotOf(tool.id)}, then click)`);
         return;
       }
       if (builder.current !== tool) builder.select(tool.id, true);

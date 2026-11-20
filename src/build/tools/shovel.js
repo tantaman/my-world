@@ -14,6 +14,7 @@ export const shovel = {
   id: 'shovel',
   label: 'shovel',
   short: 'dig',
+  kit: 'earth', // with the footing: getting the ground ready
   held: { name: 'shovel', make: makeShovel, rest: 2.75, elbow: -0.35 },
   stake: true,
 

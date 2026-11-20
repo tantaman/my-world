@@ -1,6 +1,7 @@
 // The map (M), and the marks you leave on it: listed beside the map, tracked
 // on the HUD, and standing in the world as pennants. Other features put
-// places on it too, through map.places (places.js).
+// places on it too, through map.places (places.js), and lists of where to go
+// beside it, through map.addTab (mapView.js): it's where you go from.
 
 import { MarkStore, marksSave, markLabel } from './marks.js';
 import { MapView } from './mapView.js';
@@ -22,7 +23,10 @@ export function installMap(game) {
   // Places other features put on the map (an old cabin, a dock): see places.js.
   const places = new Places();
   marks.findPlace = (id) => places.get(id);
-  const map = new MapView({ seed: gen.seed, land: gen.land, structures, hikes: gen.hikes, ready: (x0, z0, x1, z1, ask) => landforms.ready(x0, z0, x1, z1, ask), marks, player, input, places });
+  // One panel at a time: opening the map, on whichever tab, closes whatever
+  // else is up.
+  const onOpen = () => game.emit('panel', 'map');
+  const map = new MapView({ seed: gen.seed, land: gen.land, structures, hikes: gen.hikes, ready: (x0, z0, x1, z1, ask) => landforms.ready(x0, z0, x1, z1, ask), marks, player, input, places, onOpen });
   landforms.on('land', (def) => map.addHike(def));
   game.provide('marks', marks);
   game.provide('map', map);
@@ -38,14 +42,9 @@ export function installMap(game) {
   });
   marks.subscribe(() => save.touch());
 
-  // One panel at a time: opening the map closes whatever else is up.
-  const open = () => {
-    game.emit('panel', 'map');
-    map.open();
-  };
   game.on('panel', (which) => which !== 'map' && map.close());
-  commands.add({ id: 'map', keys: ['KeyM'], group: 'WANDER', label: 'map · mark places', run: open });
-  hud.button('map-btn', () => (map.isOpen ? map.close() : open()));
+  commands.add({ id: 'map', keys: ['KeyM'], group: 'WANDER', label: 'map · mark places · where to go', run: () => map.open() });
+  hud.button('map-btn', () => map.toggle());
 
   // The map covers the view, so the world isn't drawn under it.
   game.coverWhen(() => map.isOpen);

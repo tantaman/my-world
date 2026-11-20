@@ -8,14 +8,14 @@ tender stacked with firewood, and two open cars with benches.
 
 | | |
 |---|---|
-| **Y** / *rail* | the stations within reach: pick one (click, or its number) to go there |
+| **Y**, or **M** then *stations* | the stations within reach, beside the map: pick one (click, or its number) to go there |
 | **Y** beside a standing train | get on |
 | **Y** at a station | get off |
 
-**Getting there.** Press **Y**, or *rail* in the corner, for the stations
-within about 7 km, nearest first: which line each is on, how far it is and
+**Getting there.** Press **Y** away from a train, or open the map (**M**) and
+its *stations* tab, for the stations within about 7 km, nearest first: which line each is on, how far it is and
 which way, and when the next train is due. Pick one and you're on its
-platform, looking along it. The lines are on the map (**M**), with each train
+platform, looking along it; **Y** again closes the map. The lines are on the map, with each train
 where it is right now, and the stations are places there like the old ones:
 you can track one and walk.
 
@@ -78,13 +78,13 @@ world.railway.soon('station:0:-1:2')  // (to try it out) the next train there in
 ## Files
 
 ```
-index.js              plugs it into the game: Y and the rail button, riding, the map, what's kept clear
+index.js              plugs it into the game: Y and the stations tab, riding, the map, what's kept clear
 lines.js              where the lines run, grown from the seed: the survey, the rail's height, stations
 timetable.js          where every train is, by the clock on the wall
 track.js              ballast banks, ties and rails, trestles, platforms and station houses
 trains.js             the engine, tender and cars; wheels and rods; the smoke
 sound.js              chuff, clatter, hiss, brakes, the whistle; ballast underfoot
 onMap.js              the lines and the trains on the map
-panel.js              the stations to go to, and when the next train is due
-railway.css           the panel's look
+panel.js              the stations to go to, and when the next train is due (a tab beside the map)
+railway.css           the stations tab's look
 ```

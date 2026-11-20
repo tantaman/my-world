@@ -13,7 +13,7 @@
   position: absolute;
   inset: calc(16px + var(--inset-t)) calc(16px + var(--inset-r)) calc(16px + var(--inset-b)) calc(16px + var(--inset-l));
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 250px;
+  grid-template-columns: minmax(0, 1fr) 280px;
   grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--bg);
   border: 1px solid var(--line);
@@ -74,6 +74,13 @@
   min-height: 0;
   background: var(--bg);
 }
+/* the lists beside the map, one tab each */
+#map .side-tabs { display: flex; gap: 4px; padding: 8px 10px 0 12px; border-bottom: 1px solid var(--line); }
+#map .side-tabs[hidden] { display: none; }
+#map .side-tabs button { border-color: transparent; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 4px 8px 5px; }
+#map .side-tabs button[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--accent); }
+#map .side-pane { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; overflow-y: auto; }
+#map .side-pane[hidden] { display: none; }
 #map .side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 8px 14px; }
 #mark-list, #place-list { list-style: none; margin: 0; padding: 0 6px 10px; overflow-y: auto; flex: 0 1 auto; min-height: 0; }
 #place-list { flex: 1 1 auto; }

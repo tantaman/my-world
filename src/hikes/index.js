@@ -5,9 +5,9 @@
 // out in the world (world/hikes.js lists them; world/landform.js is how the
 // world grows them). This feature is the part you play:
 //
-//   - J (or the hikes button) lists them all (hikesPanel.js): go to one's
-//     trailhead, or straight to the spot its photo was taken from, facing
-//     the way it looked, at the hour it was taken.
+//   - The hikes tab beside the map (M) lists them all (hikesPanel.js): go
+//     to one's trailhead, or straight to the spot its photo was taken from,
+//     facing the way it looked, at the hour it was taken.
 //   - On a hike, the HUD points the way to that spot (unless you're
 //     following a mark of your own).
 //   - A signpost stands at the trailhead and a cairn at the view, and the
@@ -46,7 +46,7 @@ const SIGN = ['.......', '.####..', '.#####.', '.####..', '...#...', '...#...', 
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player', 'map'];
 export function installHikes(game) {
-  const { scene, gen, landforms, chunks, player, hud, commands, pipeline, camera, sky, map, input } = game;
+  const { scene, gen, landforms, chunks, player, hud, pipeline, camera, sky, map } = game;
   const cards = landforms.cards;
   const deg = (b) => (b * Math.PI) / 180;
   const real = (c, m) => formatDistance(m / c.scale);
@@ -146,26 +146,17 @@ export function installHikes(game) {
       climb: c.trail ? c.trail.climb / c.scale : 0,
       lakes: waterOn(c),
     })),
-    input,
-    onGo: (id, at) => go(cards.find((c) => c.id === id), at),
+    onGo(id, at) {
+      map.close();
+      go(cards.find((c) => c.id === id), at);
+    },
     here: () => {
       const c = onHike(player.pos.x, player.pos.z);
       return c ? c.id : null;
     },
   });
   game.provide('hikes', panel);
-  // One panel at a time: opening this one closes whatever else is up.
-  const toggle = () => {
-    if (!panel.isOpen) game.emit('panel', 'hikes');
-    panel.toggle();
-  };
-  game.on('panel', (which) => which !== 'hikes' && panel.close());
-  if (cards.length) {
-    commands.add({ id: 'hikes', keys: ['KeyJ'], group: 'WANDER', label: 'hikes · go to one', run: toggle });
-    hud.button('hikes-btn', toggle);
-    const btn = document.getElementById('hikes-btn');
-    if (btn) btn.hidden = false;
-  }
+  if (cards.length) map.addTab({ id: 'hikes', label: 'hikes', el: panel.el, shown: () => panel.shown() });
 
   // On a hike, the HUD points to where the photo was taken.
   hud.guide(() => {

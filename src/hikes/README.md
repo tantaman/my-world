@@ -27,7 +27,8 @@ A photo that has lost its location on the way (sent through a chat, say)
 can still be used: say where it was taken with `--lat` and `--lon`, and
 `--bearing` and `--hour` if you remember which way you looked and when.
 
-In the game, press **J** (or tap *hikes*) for the list of them: each with its
+In the game, open the map (**M**) and the *hikes* tab beside it for the list
+of them: each with its
 trail, how long it is, how far it climbs (or drops: a cove is walked down
 to) and the water on it, and two ways in. **trailhead** puts you at the
 start, by a signpost, with the HUD pointing the way to the top. The trail is
@@ -38,8 +39,8 @@ drops away, and the chain slung between them. At the end of it a cairn stands
 where you took the photo. **the view** takes you
 straight there: you're standing where you stood, facing the way you faced, at
 the hour you were there. From the top you can see across the whole of it, the
-lake below, the ridges beyond, the valley running off into the haze. In the
-list, the arrow keys move between the buttons and **Esc** or **J** closes it.
+lake below, the ridges beyond, the valley running off into the haze. The map
+opens on the tab you last had, so the hikes are there again next time.
 
 A hike's trailhead and its view are on [the map](../map/README.md) too, as
 places with a name that you can look up and track like any other. What the
@@ -48,9 +49,9 @@ keeps off a hike: a real place has what is really there.
 
 | | |
 |---|---|
-| **J** | the list of hikes (also the *hikes* button at the top) |
-| **arrows**, **Enter** | in the list: move between the buttons, and go |
-| **Esc** / **J** | close it |
+| **M**, then *hikes* | the list of hikes, beside the map |
+| **Tab**, **Enter** | in the list: move between the buttons, and go |
+| **M** / **Esc** | close it |
 
 **What gets imported.** The land is scaled 1 : 5, the same across and up, so
 slopes are as steep as they really are: 2.5 km of trail and 600 m of climb
@@ -142,7 +143,7 @@ Angels Landing, 1,480 km away in fact, is 296 km to the south-east; and the
 hikes on Maui, 4,200 km away, are 835 km off to the south-west. The forest
 round the middle is the game's own, not the real Hoh, so a hike is kept a
 few kilometres clear of it (`tools/hike/place.js`). Between hikes it's
-forest; the list (**J**) is the quick way across.
+forest; the list beside the map is the quick way across.
 
 Hikes close enough to overlap are the same land, and join: the second is
 placed from the first by the real distance between their photos, and stands
@@ -213,12 +214,12 @@ OpenStreetMap contributors, under the
 ## Files
 
 ```
-index.js              plugs it into the game: the list (J), the way to the view, signpost, cairn and chains
+index.js              plugs it into the game: the hikes tab, the way to the view, signpost, cairn and chains
 farView.js            the land past the loaded chunks, seen from up high
 farGrid.js            that land, sampled coarsely (pure)
 farWorker.js          Web Worker wrapper around farGrid
 waymarks.js           the cairn, the signpost and the chains
-hikesPanel.js         the list of hikes (J), and the way to each
+hikesPanel.js         the list of hikes (a tab beside the map), and the way to each
 hikes.css             its styles
 ```
 

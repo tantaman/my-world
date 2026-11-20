@@ -14,7 +14,7 @@ export default async function ({ page, step, shot }) {
       plants: world.stats().instances,
       spawn: [Math.round(world.player.pos.x), Math.round(world.player.pos.z)],
     }));
-    assert.ok(f.tools.length >= 7, 'the tool bar is there');
+    assert.ok(f.tools.length >= 6, 'the tool bar is there');
     assert.ok(f.chunks > 0 && f.plants > 0, 'the forest streamed in');
     await shot('boot');
     return f;

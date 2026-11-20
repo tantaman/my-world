@@ -8,7 +8,7 @@
 
 import assert from 'node:assert/strict';
 
-export default async function ({ page, step, key, frames, state, shot, open, made }) {
+export default async function ({ page, step, key, take, frames, state, shot, open, made }) {
   const tree = await step('fell a tree', async () => {
     const t = await page.evaluate(async () => {
       const p = world.player.pos;
@@ -20,7 +20,8 @@ export default async function ({ page, step, key, frames, state, shot, open, mad
       return tree;
     });
     await key('Digit2');
-    assert.equal(await page.evaluate(() => T.tool()), 2, 'the axe is in hand');
+    assert.equal(await page.evaluate(() => T.tool()), 'axe', '2: the axe is in hand');
+    assert.equal(await page.evaluate(() => T.slot()), 2, 'and its slot on the bar is lit');
     const prompt = await page.evaluate(() => T.prompt());
     assert.match(prompt, /chop the/, `aiming at the tree (prompt: "${prompt}")`);
     const fell = await page.evaluate(() => T.hold('use', () => world.builder.forest.felled.size > 0 && !world.builder.forest.falling, 90000));
@@ -61,7 +62,7 @@ export default async function ({ page, step, key, frames, state, shot, open, mad
   });
 
   await step('pick up a stone', async () => {
-    await key('Digit1');
+    await take('hands');
     const rock = await page.evaluate(async () => {
       const p = world.player.pos;
       const rock = T.plants(p.x, p.z, 80, ['rock']).find((r) => r.s <= 0.75 && T.trees(r.x, r.z, 1.5).length === 0);
@@ -77,7 +78,7 @@ export default async function ({ page, step, key, frames, state, shot, open, mad
   });
 
   await step('dig, fill and stake', async () => {
-    await key('Digit3');
+    await take('shovel');
     await page.evaluate(async () => {
       const p = world.player.pos;
       // open ground a few steps off
@@ -147,7 +148,13 @@ export default async function ({ page, step, key, frames, state, shot, open, mad
   const middle = { x: site.x + 2, z: site.z + 1.5 };
 
   await step('set four footings', async () => {
-    await key('Digit4');
+    // the footing shares a kit, and its key, with the shovel
+    await key('Digit3');
+    assert.equal(await page.evaluate(() => T.tool()), 'shovel', '3: the shovel');
+    await key('Digit3');
+    assert.equal(await page.evaluate(() => T.tool()), 'footing', '3 again: the footing');
+    const fan = await page.evaluate(() => [...document.querySelectorAll('#hotbar .fan:not([hidden]) button')].map((b) => b.textContent));
+    assert.deepEqual(fan, ['shovel', 'footing'], 'and the kit shows what is in it');
     const prompts = [];
     for (const [x, z] of corners) {
       await page.evaluate(([gx, gz, m]) => T.aimGround(gx, gz, 2.6, m), [x, z, middle]);
@@ -177,7 +184,7 @@ export default async function ({ page, step, key, frames, state, shot, open, mad
   };
 
   await step('lay the first course', async () => {
-    await key('Digit5');
+    await take('log');
     const prompts = [];
     prompts.push(await lay(corners[0], corners[1]));
     prompts.push(await lay(corners[2], corners[3]));
@@ -189,7 +196,7 @@ export default async function ({ page, step, key, frames, state, shot, open, mad
   });
 
   await step('cut the notches', async () => {
-    await key('Digit2');
+    await take('axe');
     const loose = () => page.evaluate(() => world.builder.buildings.list[0].logs.filter((L) => !L.seated).length);
     assert.equal(await loose(), 2, 'the two crossing logs ride high');
     const prompts = [];
@@ -219,7 +226,7 @@ export default async function ({ page, step, key, frames, state, shot, open, mad
         }
       }
     }, [corners]);
-    await key('Digit7');
+    await take('roof');
     await page.evaluate((m) => T.aimGround(m.x, m.z, 1.2), middle);
     const prompt = await page.evaluate(() => T.prompt());
     assert.match(prompt, /raise the roof/, `aiming into the room (prompt: "${prompt}")`);
@@ -260,7 +267,7 @@ export default async function ({ page, step, key, frames, state, shot, open, mad
   });
 
   await step('take the roof down', async () => {
-    await key('Digit7');
+    await take('roof');
     await page.evaluate((m) => T.standAndAim(m.x - 9, m.z - 7, m.x - 0.8, world.builder.buildings.list[0].y0 + 2.6, m.z - 1), middle);
     const prompt = await page.evaluate(() => T.prompt());
     assert.match(prompt, /take the roof down/, `aiming at the roof (prompt: "${prompt}")`);

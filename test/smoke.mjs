@@ -23,6 +23,8 @@
 //   page           the Playwright page, with the game open in it
 //   step(name, fn) one thing done and checked; what fn returns goes in the report
 //   key(code)      press a key, and let the game see it
+//   take(id)       take a tool in hand as a visitor does: its kit's number
+//                  key, pressed again until it's the one ('roof', 'fire')
 //   frames(n)      let n frames go by
 //   open(extra)    load the game again, with more on the address (&creative, &reset)
 //   shot(name)     a screenshot, when --shots was asked for; numbered as taken
@@ -181,7 +183,8 @@ function installHelpers() {
   };
   T.trees = (x, z, r) => T.plants(x, z, r, TREES);
   T.prompt = () => document.getElementById('prompt').textContent;
-  T.tool = () => [...document.querySelectorAll('#hotbar .slot')].findIndex((b) => b.getAttribute('aria-pressed') === 'true') + 1;
+  T.tool = () => w.builder.tool; // the id of the tool in hand
+  T.slot = () => [...document.querySelectorAll('#hotbar .slot')].findIndex((b) => b.getAttribute('aria-pressed') === 'true') + 1; // and its slot on the bar
   // What has been changed about the world, the way a save sees it.
   T.state = () => {
     const b = w.builder;
@@ -204,6 +207,15 @@ const frames = (n) => page.evaluate((k) => T.frames(k), n);
 const key = async (code) => {
   await page.keyboard.press(code);
   await frames(3);
+};
+const take = async (id) => {
+  for (let i = 0; i < 9; i++) {
+    const { now, slot } = await page.evaluate((t) => ({ now: world.builder.tool, slot: world.builder.slotOf(t) }), id);
+    if (now === id) return;
+    if (!slot || slot > 10) throw new Error(`there is no key for the ${id}`);
+    await key(`Digit${slot % 10}`);
+  }
+  throw new Error(`couldn't take the ${id} in hand`);
 };
 const state = () => page.evaluate(() => T.state());
 let shots = 0;
@@ -240,7 +252,7 @@ try {
   await open('&reset&clearbuild');
   for (const part of parts) {
     console.log(part.name);
-    await part.play({ page, step, key, frames, open, shot, state, made });
+    await part.play({ page, step, key, take, frames, open, shot, state, made });
   }
   assert.deepEqual(problems, [], 'nothing went wrong in the page');
   console.log(`\nplayed through${asked.length ? ` (${parts.map((p) => p.name).join(', ')})` : ''}: all good`);

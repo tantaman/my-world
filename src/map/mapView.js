@@ -8,6 +8,14 @@
 //  + −  arrows  C      zoom, pan, back to where you are
 //  M / Esc             close
 //
+// Beside it are lists of where you could go: the marks and the places near
+// you, and a tab for each list another feature adds (the hikes, the railway's
+// stations), so that going somewhere is all in one place:
+//   map.addTab({ id, label, el, shown })
+//     el       what to show in the tab, made and kept up by its feature
+//     shown()  it has just come into view: bring it up to date
+//   map.open(tab)   open the map with that tab showing (or the last one shown)
+//
 // Other features can draw on it too, over the land and under you and the
 // marks: map.addLayer((pen) => ...), where pen is
 //   ctx              the canvas (device pixels)
@@ -50,7 +58,7 @@ const TEMPLATE = /* html */ `
         <button type="button" data-act="zoom-in" aria-label="Zoom in">+</button>
         <button type="button" data-act="zoom-out" aria-label="Zoom out">−</button>
         <button type="button" data-act="center" title="Back to where you are (C)">me</button>
-        <button type="button" data-act="side" class="map-marks-toggle" aria-pressed="false">marks</button>
+        <button type="button" data-act="side" class="map-marks-toggle" aria-pressed="false">lists</button>
         <button type="button" data-act="close" aria-label="Close map (M)">✕</button>
       </div>
     </div>
@@ -79,18 +87,25 @@ const TEMPLATE = /* html */ `
         </div>
       </div>
     </div>
-    <aside id="map-side" aria-label="Marks and places">
-      <div class="side-head"><h3>MARKS</h3><button type="button" data-act="mark-here">+ mark where I am</button></div>
-      <ul id="mark-list"></ul>
-      <div class="side-head"><h3>NEARBY</h3></div>
-      <ul id="place-list"></ul>
+    <aside id="map-side" aria-label="Where to go">
+      <div class="side-tabs" role="tablist" hidden>
+        <button type="button" role="tab" data-tab="places" aria-selected="true">places</button>
+      </div>
+      <div class="side-pane" data-pane="places" role="tabpanel">
+        <div class="side-head"><h3>MARKS</h3><button type="button" data-act="mark-here">+ mark where I am</button></div>
+        <ul id="mark-list"></ul>
+        <div class="side-head"><h3>NEARBY</h3></div>
+        <ul id="place-list"></ul>
+      </div>
     </aside>
     <div class="map-foot"><b>click</b> to mark · <b>drag</b> to pan · <b>scroll</b> to zoom · <b>C</b> find me · <b>M</b> close</div>
   </div>`;
 
 export class MapView {
-  constructor({ seed, land = 1, structures = [], hikes = [], ready, marks, player, input, places = new Places() }) {
+  // onOpen(): it's about to open (so whatever else is up can close first)
+  constructor({ seed, land = 1, structures = [], hikes = [], ready, marks, player, input, places = new Places(), onOpen = () => {} }) {
     this.marks = marks;
+    this.onOpen = onOpen;
     this.places = places;
     this.placeSel = null; // the place whose card is open
     this._placesShown = []; // [{ place, r }] drawn last frame, for hits and labels
@@ -163,6 +178,11 @@ export class MapView {
     this.whereEl = root.querySelector('#mark-where');
     this.iconsEl = root.querySelector('#mark-icons');
     this.colorsEl = root.querySelector('#mark-colors');
+    this.side = root.querySelector('#map-side');
+    this.tabBar = root.querySelector('.side-tabs');
+    // the lists beside the map: [{ id, button, pane, shown }]
+    this.tabs = [{ id: 'places', button: this.tabBar.firstElementChild, pane: root.querySelector('[data-pane="places"]'), shown: () => {} }];
+    this.tab = 'places'; // the one showing
 
     for (const ic of ICONS) {
       const b = document.createElement('button');
@@ -214,8 +234,15 @@ export class MapView {
   }
 
   // ── open / close ──────────────────────────────────────────────────────────
-  open() {
+  // tab: the list to show beside it (the last one shown, if not said). On a
+  // narrow screen, where the lists cover the map, asking for one opens them.
+  open(tab) {
+    if (tab) {
+      this.showTab(tab);
+      if (tab !== 'places' && matchMedia('(max-width: 760px)').matches) this._setSide(true);
+    }
     if (this.isOpen) return;
+    this.onOpen();
     this.isOpen = true;
     this.input.setBlocked(true);
     if (document.pointerLockElement) document.exitPointerLock?.();
@@ -229,6 +256,7 @@ export class MapView {
     this._resize();
     this.scale = this._stopScale(this.stop);
     this._renderList();
+    this._current().shown();
     this.frame.focus({ preventScroll: true });
   }
 
@@ -254,6 +282,42 @@ export class MapView {
   // Something more to draw on the map: draw(pen), every frame it is open.
   addLayer(draw) {
     this.layers.push(draw);
+  }
+
+  // Another list beside the map: see the top of this file.
+  addTab({ id, label, el, shown = () => {} }) {
+    if (this.tabs.some((t) => t.id === id)) throw new Error(`the map already has a tab called "${id}"`);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('role', 'tab');
+    button.dataset.tab = id;
+    button.textContent = label;
+    button.setAttribute('aria-selected', 'false');
+    this.tabBar.appendChild(button);
+    this.tabBar.hidden = false;
+    const pane = document.createElement('div');
+    pane.className = 'side-pane';
+    pane.dataset.pane = id;
+    pane.setAttribute('role', 'tabpanel');
+    pane.hidden = true;
+    pane.appendChild(el);
+    this.side.appendChild(pane);
+    this.tabs.push({ id, button, pane, shown });
+  }
+
+  showTab(id) {
+    const tab = this.tabs.find((t) => t.id === id);
+    if (!tab) return;
+    this.tab = id;
+    for (const t of this.tabs) {
+      t.button.setAttribute('aria-selected', String(t === tab));
+      t.pane.hidden = t !== tab;
+    }
+    if (this.isOpen) tab.shown();
+  }
+
+  _current() {
+    return this.tabs.find((t) => t.id === this.tab);
   }
 
   // ── view math ─────────────────────────────────────────────────────────────
@@ -1106,6 +1170,7 @@ export class MapView {
   _onClick(e) {
     const b = e.target.closest('button');
     if (!b || !this.root.contains(b)) return;
+    if (b.dataset.tab) return this.showTab(b.dataset.tab);
     if (b.dataset.icon) return this._edit({ icon: b.dataset.icon }, true);
     if (b.dataset.color) return this._edit({ color: b.dataset.color }, true);
     if (b.dataset.place) {

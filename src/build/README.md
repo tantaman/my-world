@@ -9,10 +9,24 @@ above the tool bar always says what a click would do, or why it can't.
 
 | | |
 |---|---|
-| **1 – 9** | pick a tool: hands, axe, shovel, footing, log wall, timber and roof, then whatever other features put on the bar |
+| **1 – 6** | pick a tool; press it again for the next in its kit (below) |
 | **click** (while looking) | use the tool, hold to keep working |
 | **right-click** | the tool's second action, or take a piece down |
 | **G** | set or pull up a grade stake |
+
+**The tool bar.** Tools that go together share a slot, and its number key: a
+**kit**. Pressing the key takes up the tool you last used from the kit, and
+pressing it again moves on to the next; the kit opens over its slot for a
+moment so you can see what's in it, or click (tap) one straight away. The
+pips on a slot are its tools, the lit one the tool it gives you.
+
+| | | |
+|---|---|---|
+| **1** | hands | hands |
+| **2** | axe | axe |
+| **3** | earth | shovel, footing |
+| **4** | cabin | log wall, timber, roof |
+| **5** … | | whatever other features put on the bar, in a kit of their own or one of these |
 
 **Gather.**
 - **Axe (2).** Click a tree to chop it. Pines take 5–7 swings, birches 4,
@@ -38,13 +52,13 @@ above the tool bar always says what a click would do, or why it can't.
   level a pad by sweeping across it.
 
 **Build.** Everything snaps to a 1 m grid.
-- **Footing (4).** Hold **click** on a grid node to dig a footing and set a
+- **Footing (3, again).** Hold **click** on a grid node to dig a footing and set a
   stone pier (2 stones). The first footing starts a building. Every other
   footing must come up to the same level, and a pier only makes up about
   25 cm. On a slope you'll be told how many centimetres too high or too low
   the ground is, so grade it first. Footings can't go under water: fill the
   spot in first.
-- **Log wall (5) / timber (6).** Click a node to start a wall, then click
+- **Log wall / timber (4).** Click a node to start a wall, then click
   another node along the same line to lay a log between them (up to 8 m).
   Click again to stack the next course on the same line, and **right-click**
   when you're done. Walls stack Lincoln-log style:
@@ -59,7 +73,7 @@ above the tool bar always says what a click would do, or why it can't.
     **window**. A door needs about five courses of opening.
   - Walls that close a loop make a **room**. A wall ending against another
     wall makes a T-junction, and its log ends poke through.
-- **Roof (7).** Aim into a finished rectangular room. Its walls must be at
+- **Roof (4, again).** Aim into a finished rectangular room. Its walls must be at
   least ~1.7 m high and level all round, and fully notched. Click to raise a
   gable roof with shakes, board gables and a ridge pole. It costs hewn timber.
 - **Right-click** with a building tool takes a piece down and gives the
@@ -77,7 +91,7 @@ skip the gathering.
 
 ```
 index.js              plugs it into the game: the tools, the obstacles, what is saved
-builder.js            the bench: aim, swing, hold, prompt — and what a tool is
+builder.js            the bench: aim, swing, hold, prompt — what a tool is, and kits
 tools/                hands · axe · shovel · footing · wall · roof
 buildings.js          footings, notched log walls, rooms, roofs (the rules)
 forestry.js           felling, limbing, bucking, stumps, cleared plants

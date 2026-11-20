@@ -27,7 +27,7 @@ export function inPage() {
   T.idle = () => T.until(() => !w.builder.act, 30000);
 }
 
-export default async function ({ page, step, key, frames, open, shot }) {
+export default async function ({ page, step, key, take, frames, open, shot }) {
   const inv = () => page.evaluate(() => ({ meat: world.builder.inv.meat, roast: world.builder.inv.roast }));
   const prompt = () => page.evaluate(() => T.prompt());
 
@@ -37,10 +37,12 @@ export default async function ({ page, step, key, frames, open, shot }) {
       const s = world.player.start;
       await world.teleport(s.x, s.z, s.yaw);
     });
-    await key('Digit0');
-    assert.equal(await page.evaluate(() => world.builder.tool), 'rifle', '0 is the rifle');
-    const slot = await page.evaluate(() => document.querySelectorAll('#hotbar .slot kbd')[9]?.textContent);
-    assert.equal(slot, '0', 'and the bar says so');
+    // the rifle's key is wherever its slot is on the bar
+    const n = await page.evaluate(() => world.builder.slotOf('rifle'));
+    await key(`Digit${n % 10}`);
+    assert.equal(await page.evaluate(() => world.builder.tool), 'rifle', `${n % 10} is the rifle`);
+    const slot = await page.evaluate((i) => document.querySelectorAll('#hotbar .slot')[i - 1].querySelector('kbd')?.textContent, n);
+    assert.equal(slot, String(n % 10), 'and the bar says so');
     const said = await prompt();
     assert.match(said, /click shoot \(5 rounds\) · hold right-click scope/, `(prompt: "${said}")`);
     await shot('rifle');
@@ -132,7 +134,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
       world.builder.gain('stone', 4);
       world.builder.gain('log', 1);
     });
-    await key('Digit8');
+    await take('fire');
     node = await page.evaluate(async () => {
       const p = world.player.pos;
       for (let r = 4; r < 20; r += 2) {
@@ -157,7 +159,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
       if (step === 'light') assert.equal(await page.evaluate(() => world.fires.state(world.fires.list.values().next().value).state), 'burning', 'a fire burning');
     }
 
-    await key('Digit0');
+    await take('rifle');
     await page.evaluate((n) => T.aimGround(n.x, n.z, 1.4), node);
     const prompts = { put: await prompt() };
     assert.match(prompts.put, /click put a cut of meat on a spit over the fire/, `(prompt: "${prompts.put}")`);
@@ -187,7 +189,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
     assert.deepEqual(back.map(([x, z, y, c]) => [x, z, y, c.length]), kept.map(([x, z, y, c]) => [x, z, y, c.length]), 'the spit is remembered');
     back[0][3].forEach((d, i) => assert.ok(Math.abs(d - kept[0][3][i]) < 0.05, `and how done each cut is (${d} for ${kept[0][3][i]})`));
 
-    await key('Digit0');
+    await take('rifle');
     await page.evaluate((n) => T.aimGround(n.x, n.z, 1.4), node);
     await page.evaluate(async () => {
       await T.tap('alt');
@@ -263,7 +265,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
     assert.match(loading, /loading…/);
 
     // and leave no fire behind
-    await key('Digit8');
+    await take('fire');
     await page.evaluate((n) => T.aimGround(n.x, n.z, 1.4), node);
     for (let i = 0; i < 2; i++) {
       await page.evaluate(async () => {

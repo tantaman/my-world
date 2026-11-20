@@ -10,6 +10,7 @@ export const roof = {
   id: 'roof',
   label: 'roof',
   short: 'roof',
+  kit: 'cabin',
   roofs: true,
 
   setup(b) {

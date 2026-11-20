@@ -4,11 +4,11 @@ A blueprint is a building written down: its footings, its logs course by
 course, its roofs. Pick one, stake it out, and the hiker puts it up for you,
 piece by piece, with the same tools and the same rules as building by hand.
 
-- **Plan (9).** A ghost of the plan follows the crosshair, green where it
+- **Plan (6).** A ghost of the plan follows the crosshair, green where it
   will go and red where it won't, and the prompt says why (too steep to
   level, a boulder in the way, another building too close) and what it
   takes in wood, stone, clearing and levelling. **Right-click** turns it a
-  quarter. Press **9** again for
+  quarter. Press **6** again for
   the next plan. Four come with the game: a small cabin, a cabin with
   windows, a two-room cabin and a hewn-timber hut.
 - **Click** to stake it out. The plan stays on the ground as a pale-blue
@@ -97,7 +97,7 @@ plans that ship are written as walls with openings in
 
 | | |
 |---|---|
-| **9** | the plan tool; again for the next plan |
+| **6** | the plan tool; again for the next plan |
 | **B** | build the staked-out blueprint for you (again to pause) |
 
 ## Files
@@ -112,5 +112,5 @@ plans.js              the blueprints that come with the game
 library.js            those, and the ones you copied, kept in this browser
 foreman.js            clearing, levelling, gathering for and building a site
 ghost.js              what's still to go up, drawn where it will stand
-tool.js               the plan tool (9)
+tool.js               the plan tool (6)
 ```

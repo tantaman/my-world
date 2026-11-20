@@ -26,9 +26,9 @@ const DAY_MINUTES = 24; // how long a full day takes when time flows
 const wrapHours = (h) => ((h % 24) + 24) % 24;
 
 // The features this uses, so it is installed after them (game/features.js).
-export const after = ['render'];
+export const after = ['render', 'ui'];
 export function installWorld(game) {
-  const { scene, camera, commands, save } = game;
+  const { scene, camera, hud, save } = game;
 
   // The forest a seed grows on its land. The real hikes are set into it as
   // their land arrives, which it does the first time something near one is
@@ -89,26 +89,20 @@ export function installWorld(game) {
 
   // ── The hour ──────────────────────────────────────────────────────────────
   let flows = false;
-  const say = (msg) => game.hud && game.hud.flash(msg);
-  commands.add({
-    id: 'time-scrub',
-    keys: ['Comma', 'Period'],
-    group: 'LOOK',
+  const clock = (h) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
+  hud.setting({
+    id: 'time-of-day',
+    group: 'TIME',
     label: 'time of day',
-    hold: (dt, key) => {
-      sky.hours = wrapHours(sky.hours + (key === 'Period' ? 1 : -1) * dt * 2);
-    },
+    min: 0,
+    max: 24,
+    step: 1 / 12, // five minutes
+    get: () => sky.hours,
+    set: (h) => (sky.hours = wrapHours(h)),
+    show: clock,
   });
-  commands.add({
-    id: 'time-flow',
-    keys: ['KeyT'],
-    group: 'LOOK',
-    label: 'let time flow',
-    run() {
-      flows = !flows;
-      say(flows ? 'time flows' : 'time paused');
-    },
-  });
+  hud.setting({ id: 'time-flow', group: 'TIME', label: 'let time flow', get: () => flows, set: (on) => (flows = on) });
+
   // The hour you left it at is yours, not the world's: two people in one
   // world can each have their own afternoon.
   save.register({

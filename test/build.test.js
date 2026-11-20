@@ -1,9 +1,11 @@
-// The bench's smaller parts: what you carry, and what work has to go round.
+// The bench's smaller parts: what you carry, what work has to go round, and
+// how tools are picked.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Inventory } from '../src/build/inventory.js';
 import { Obstacles } from '../src/build/obstacles.js';
+import { Builder } from '../src/build/builder.js';
 
 test('materials are gathered and spent', () => {
   const inv = new Inventory();
@@ -70,4 +72,73 @@ test('whoever owns a thing says how much room it needs', () => {
   assert.equal(blocksFooting(0, 0.5).what, 'a pine');
   assert.equal(blocksFooting(3, 1).what, 'a fire ring');
   assert.equal(blocksFooting(-3, -3), undefined);
+});
+
+// A bench with nothing round it: enough to register tools and pick them.
+function bench() {
+  const said = [];
+  const b = new Builder({ player: { character: { addHeld() {}, setTool() {} } }, hud: { flash: (m) => said.push(m) } });
+  const tool = (id, kit) => b.register({ id, label: id, kit, target() {}, work() {} });
+  return { b, tool, said };
+}
+
+test('tools that share a kit share a slot, in the order the kits were made', () => {
+  const { b, tool } = bench();
+  tool('hands');
+  tool('shovel', 'earth');
+  tool('log', 'cabin');
+  tool('footing', 'earth');
+  tool('roof', 'cabin');
+  tool('fire', 'camp');
+  assert.deepEqual(
+    b.kits.map((k) => [k.label, k.tools.map((t) => t.id)]),
+    [
+      ['hands', ['hands']],
+      ['earth', ['shovel', 'footing']],
+      ['cabin', ['log', 'roof']],
+      ['fire', ['fire']], // a kit of one goes by its tool's name
+    ],
+  );
+  assert.equal(b.slotOf('roof'), 3);
+  assert.equal(b.slotOf('nothing'), null);
+  // a tool another feature adds to a kit joins the end of it
+  tool('stove', 'camp');
+  assert.deepEqual(b.kits[3].tools.map((t) => t.id), ['fire', 'stove']);
+  assert.equal(b.kits[3].label, 'camp');
+});
+
+test("a kit's key takes up the tool last used from it, and again, the next", () => {
+  const { b, tool, said } = bench();
+  tool('hands');
+  tool('log', 'cabin');
+  tool('timber', 'cabin');
+  tool('roof', 'cabin');
+  assert.equal(b.tool, 'hands', 'the first tool is in hand to begin with');
+  b.pick(1);
+  assert.equal(b.tool, 'log');
+  b.pick(1);
+  b.pick(1);
+  assert.equal(b.tool, 'roof');
+  b.pick(1);
+  assert.equal(b.tool, 'log', 'and round again');
+  b.pick(1);
+  b.pick(0);
+  assert.equal(b.tool, 'hands');
+  b.pick(1);
+  assert.equal(b.tool, 'timber', 'coming back to a kit gives the one you had');
+  b.pick(7);
+  assert.equal(b.tool, 'timber', 'a key with no kit does nothing');
+  assert.deepEqual(said, ['log', 'timber', 'roof', 'log', 'timber', 'hands', 'timber']);
+});
+
+test('picking a kit of one again picks its tool again', () => {
+  const { b, tool } = bench();
+  tool('hands');
+  const plan = tool('plan');
+  const picked = [];
+  b.on('select', (t) => picked.push(t.id));
+  b.pick(1);
+  b.pick(1);
+  assert.deepEqual(picked, ['plan', 'plan'], 'so the plan tool can move on to the next plan');
+  assert.equal(b.current, plan);
 });

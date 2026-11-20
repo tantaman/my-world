@@ -1,4 +1,5 @@
-// Looking under the bonnet: the stats line (V), and helpers for the console.
+// Looking under the bonnet: the stats line (frame stats, on the settings
+// panel), and helpers for the console.
 //
 //   await world.teleport(120, -40)     jump somewhere, once it has streamed in
 //   world.look(yaw, pitch, dist)       point the camera
@@ -8,12 +9,12 @@
 import { CONFIG } from '../config.js';
 
 export function installDebug(game) {
-  const { renderer, pipeline, chunks, grass, player, hud, commands } = game;
+  const { renderer, pipeline, chunks, grass, player, hud } = game;
   let show = CONFIG.debug;
   let seconds = 0;
   let frames = 0;
 
-  commands.add({ id: 'stats', keys: ['KeyV'], group: 'LOOK', label: 'stats', run: () => void (show = !show) });
+  hud.setting({ id: 'stats', group: 'PICTURE', label: 'frame stats', get: () => show, set: (on) => (show = on) });
 
   game.addSystem({
     name: 'debug',

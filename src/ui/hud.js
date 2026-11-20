@@ -1,7 +1,7 @@
 // Minimal overlay: a hint at the start, coordinates (handy for deciding where
-// to build things), the mark you're tracking, a help panel, and the building
-// HUD: tool bar, materials, what the tool in hand would do, and a progress bar
-// for press-and-hold work.
+// to build things), the mark you're tracking, a help panel, the settings
+// panel, and the building HUD: tool bar, materials, what the tool in hand
+// would do, and a progress bar for press-and-hold work.
 
 import { formatDistance } from '../core/format.js';
 
@@ -9,9 +9,11 @@ const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 // relative to where the camera looks: ahead, ahead-right, right, ...
 const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
 const ARRIVED = 8; // meters
+const FAN_SHOWS = 2200; // ms a kit's fan stays open after it's picked
 
 export class Hud {
-  constructor() {
+  // settings: the settings panel (settingsPanel.js), which hud.setting() adds to
+  constructor({ settings = null } = {}) {
     this.el = document.getElementById('hud');
     this.coords = document.getElementById('coords');
     this.hint = document.getElementById('hint');
@@ -28,18 +30,20 @@ export class Hud {
     this.inv = document.getElementById('inv');
     this.progress = document.getElementById('progress');
     this.progressBar = this.progress ? this.progress.firstElementChild : null;
-    this.slots = [];
+    this.slots = []; // the tool bar: [{ kit, button, fan }]
+    this._held = null; // the id of the tool in hand
+    this._fan = null; // the kit fan that's open
+    this._fanTimer = 0;
     this._prompt = null;
     // What the tool in hand has to say, and something at hand that a key
     // would do (cue), which is said in its place while there is one.
     this._tool = { html: '', bad: false, progress: null };
     this._cue = null;
     this._inv = '';
-    this.soundBtn = document.getElementById('sound-btn');
+    this.settings = settings;
     this.saveBtn = document.getElementById('save-btn');
     this.helpSource = null; // () => what renderHelp shows
     this.guides = []; // see guide()
-    this.button('help-btn', () => this.toggleHelp());
   }
 
   // Somewhere to head for, shown under the coordinates. More than one feature
@@ -57,8 +61,7 @@ export class Hud {
   }
 
   // Say what one of the HUD's buttons does (the ones in index.html: save-btn,
-  // hikes-btn, map-btn, sound-btn, help-btn, and act-stake on a touch screen).
-  // hikes-btn starts hidden: there's only something to list once there are hikes.
+  // map-btn, settings-btn, help-btn, and act-stake on a touch screen).
   button(id, fn) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -112,10 +115,10 @@ export class Hud {
     if (this.saveBtn.dataset.state !== state) this.saveBtn.dataset.state = state;
   }
 
-  setSound(on) {
-    if (!this.soundBtn) return;
-    this.soundBtn.textContent = on ? 'sound on' : 'sound off';
-    this.soundBtn.setAttribute('aria-pressed', String(on));
+  // A control on the settings panel (O): a switch or a slider. What one is,
+  // is at the top of settingsPanel.js.
+  setting(control) {
+    this.settings.add(control);
   }
 
   hideHint() {
@@ -124,8 +127,16 @@ export class Hud {
 
   // Written afresh each time it opens, from whatever is bound by then.
   toggleHelp() {
-    if (this.helpSource && !this.help.classList.contains('open')) this.renderHelp(this.helpSource());
+    if (this.helpSource && !this.helpOpen) this.renderHelp(this.helpSource());
     this.help.classList.toggle('open');
+  }
+
+  get helpOpen() {
+    return this.help.classList.contains('open');
+  }
+
+  closeHelp() {
+    this.help.classList.remove('open');
   }
 
   // Is a word on the screen right now?
@@ -190,27 +201,82 @@ export class Hud {
   }
 
   // ── Building ─────────────────────────────────────────────────────────────
-  buildTools(tools, onPick) {
+  // The tool bar: a slot for each kit of tools (see Kits in build/builder.js),
+  // numbered for its key, showing the tool it would give you. A kit of more
+  // than one has a pip for each, and a fan of them over its slot that opens
+  // for a moment whenever it's picked, to choose from directly.
+  //   kits        [{ label, tools: [{ id, label, short }], last }]
+  //   pick(i)     the slot for kit i was pressed, as its number key would be
+  //   choose(id)  a tool in a fan was
+  buildTools(kits, { pick, choose }) {
     if (!this.hotbar) return;
     const range = document.getElementById('hint-tools');
-    if (range) range.textContent = `1–${tools.length}`;
+    if (range) range.textContent = `1–${kits.length}`;
+    this._closeFan();
     this.hotbar.textContent = '';
-    this.slots = tools.map((t, i) => {
-      // the number keys pick the first ten (0 for the tenth); past that, the bar
-      const key = i < 10 ? String((i + 1) % 10) : '';
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'slot';
-      b.innerHTML = `${key ? `<kbd>${key}</kbd>` : ''}<span class="long">${t.label}</span><span class="short">${t.short || t.label}</span>`;
-      b.setAttribute('aria-label', key ? `${t.label} (key ${key})` : t.label);
-      b.addEventListener('pointerdown', (e) => {
+    this.slots = kits.map((kit, i) => {
+      const el = document.createElement('div');
+      el.className = 'kit';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'slot';
+      button.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
-        onPick(i);
-        b.blur();
+        pick(i);
+        this.showKit(i);
+        button.blur();
       });
-      this.hotbar.appendChild(b);
-      return b;
+      el.appendChild(button);
+      let fan = null;
+      if (kit.tools.length > 1) {
+        fan = document.createElement('div');
+        fan.className = 'fan';
+        fan.hidden = true;
+        fan.setAttribute('role', 'group');
+        fan.setAttribute('aria-label', kit.label);
+        const h = document.createElement('h3');
+        h.textContent = kit.label;
+        fan.appendChild(h);
+        for (const t of kit.tools) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.dataset.tool = t.id;
+          b.textContent = t.label;
+          b.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            choose(t.id);
+            this._closeFan();
+            b.blur();
+          });
+          fan.appendChild(b);
+        }
+        el.appendChild(fan);
+      }
+      this.hotbar.appendChild(el);
+      return { kit, button, fan };
     });
+    // the bar is made again as tools are added: keep showing what's in hand
+    this.slots.forEach((s, i) => this._showSlot(s, i, s.kit.tools.find((t) => t.id === this._held) || s.kit.last));
+  }
+
+  // The slot for kit i, showing `tool` from it.
+  _showSlot(s, i, tool) {
+    const { kit, button, fan } = s;
+    const held = kit.tools.some((t) => t.id === this._held);
+    // the number keys pick the first ten (0 for the tenth); past that, the bar
+    const key = i < 10 ? String((i + 1) % 10) : '';
+    button.innerHTML = `${key ? `<kbd>${key}</kbd>` : ''}<span class="long"></span><span class="short"></span>`;
+    button.querySelector('.long').textContent = tool.label;
+    button.querySelector('.short').textContent = tool.short || tool.label;
+    if (fan) {
+      const pips = document.createElement('i');
+      pips.className = 'pips';
+      for (const t of kit.tools) pips.appendChild(document.createElement('b')).classList.toggle('on', t.id === tool.id);
+      button.appendChild(pips);
+      for (const b of fan.querySelectorAll('button')) b.setAttribute('aria-pressed', String(held && b.dataset.tool === this._held));
+    }
+    button.setAttribute('aria-label', `${fan ? `${kit.label}: ` : ''}${tool.label}${key ? ` (key ${key})` : ''}`);
+    button.setAttribute('aria-pressed', String(held));
   }
 
   showStake(on) {
@@ -218,8 +284,26 @@ export class Hud {
     if (el) el.hidden = !on;
   }
 
-  selectTool(i) {
-    this.slots.forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
+  // The tool in hand: `tool`, from kit i.
+  selectTool(i, tool) {
+    this._held = tool.id;
+    this.slots.forEach((s, j) => this._showSlot(s, j, j === i ? tool : s.kit.last));
+  }
+
+  // Open kit i's fan for a moment (closing any other); a kit of one has none.
+  showKit(i) {
+    this._closeFan();
+    const s = this.slots[i];
+    if (!s || !s.fan) return;
+    s.fan.hidden = false;
+    this._fan = s.fan;
+    this._fanTimer = setTimeout(() => this._closeFan(), FAN_SHOWS);
+  }
+
+  _closeFan() {
+    clearTimeout(this._fanTimer);
+    if (this._fan) this._fan.hidden = true;
+    this._fan = null;
   }
 
   // What the tool in hand would do (the builder says this every frame).

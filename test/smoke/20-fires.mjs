@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict';
 
-export default async function ({ page, step, key, frames, shot, open, made }) {
+export default async function ({ page, step, key, take, frames, shot, open, made }) {
   const { site, middle } = made.cabin;
 
   await step('a campfire', async () => {
@@ -24,8 +24,8 @@ export default async function ({ page, step, key, frames, shot, open, made }) {
       return ok;
     };
     const prompts = {};
-    await key('Digit8');
-    assert.equal(await page.evaluate(() => world.builder.tool), 'fire', '8 is the campfire');
+    await take('fire');
+    assert.equal(await page.evaluate(() => world.builder.tool), 'fire', 'the campfire is in hand');
     await aim();
     prompts.ring = await page.evaluate(() => T.prompt());
     assert.match(prompts.ring, /clear a fire pit/, `aiming at open ground (prompt: "${prompts.ring}")`);
@@ -53,14 +53,14 @@ export default async function ({ page, step, key, frames, shot, open, made }) {
     await shot('campfire');
 
     // no roof over a fire
-    await key('Digit7');
+    await take('roof');
     await page.evaluate((m) => T.aimGround(m.x, m.z, 1.2), middle);
     prompts.roof = await page.evaluate(() => T.prompt());
     assert.match(prompts.roof, /fire ring in this room and no chimney/, `the roof goes round it (prompt: "${prompts.roof}")`);
     await page.evaluate(() => T.tap('use'));
     assert.equal(await page.evaluate(() => world.builder.buildings.list[0].roofs.length), 0, 'no roof went up');
 
-    await key('Digit8');
+    await take('fire');
     await aim();
     await page.evaluate(() => T.tap('alt'));
     assert.ok(await until(() => world.fires.serialize()[0][4] === 0), 'put out');
@@ -73,13 +73,13 @@ export default async function ({ page, step, key, frames, shot, open, made }) {
     await open('&creative');
     assert.deepEqual(await page.evaluate(() => world.fires.serialize()), kept, 'the fire is remembered');
 
-    await key('Digit8');
+    await take('fire');
     await aim();
     prompts.take = await page.evaluate(() => T.prompt());
     assert.match(prompts.take, /take it apart/, `(prompt: "${prompts.take}")`);
     await page.evaluate(() => T.tap('alt'));
     assert.ok(await until(() => world.fires.list.size === 0), 'the ring is taken apart');
-    await key('Digit7');
+    await take('roof');
     await page.evaluate((m) => T.aimGround(m.x, m.z, 1.2), middle);
     prompts.roofAgain = await page.evaluate(() => T.prompt());
     assert.match(prompts.roofAgain, /raise the roof/, `and the room can be roofed again (prompt: "${prompts.roofAgain}")`);

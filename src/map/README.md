@@ -17,6 +17,12 @@ so the map opens already drawn.
 | **C** / *me* | back to where you are |
 | **M** / **Esc** | close |
 
+**Where to go** is beside the map, a tab for each list of it: *places* (your
+marks and the places nearest you, below), and the lists other features add,
+such as the [hikes](../hikes/README.md) and the [railway's stations](../railway/README.md).
+Going to one from its list closes the map. The map opens on the tab you last
+had (on a phone, the lists are behind the *lists* button).
+
 **Old places** — the cabins, wells, docks and so on that the forest has (see
 [Old places](../landmarks/README.md)) — are on the map as little square badges with
 their names under them, paler once you've been. Close up, the map draws what
@@ -27,7 +33,7 @@ flies to it.
 
 **Marks** tag places of interest. Each has a name, one of eight pixel icons,
 a colour and an optional note. They're listed beside the map by distance
-(behind the *marks* button on a phone), and clicking one there flies to it.
+(behind the *lists* button on a phone), and clicking one there flies to it.
 Press *track* on a mark and the HUD shows its name, how far it is and an arrow
 toward it from where the camera's looking. On the map a dotted line runs from
 you to it. Out in the world, every mark stands as a little stake with a cloth
@@ -44,7 +50,7 @@ index.js              plugs it into the game
 mapRender.js          pure top-down tile renderer (runs in a worker)
 mapWorker.js          Web Worker wrapper around mapRender
 tiles.js              tile cache + worker scheduling
-mapView.js            the map overlay: pan/zoom, pins, mark editor, list
+mapView.js            the map overlay: pan/zoom, pins, mark editor, the lists beside it (map.addTab)
 marks.js              the marks, their icons and colours
 places.js             places other features put on the map (an old cabin), to look up and track
 markers.js            your marks as pennants in the world

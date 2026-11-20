@@ -1,5 +1,6 @@
-// Hikes: the list of them (J), the way to one's trailhead and to where its
-// photo was taken, and the land beyond the forest drawn from up there.
+// Hikes: the list of them (a tab beside the map), the way to one's trailhead
+// and to where its photo was taken, and the land beyond the forest drawn
+// from up there.
 //
 // Leaves: you standing at a hike's view, kilometres from where the play began.
 
@@ -14,20 +15,25 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.evaluate(() => world.marks.setTracked(null));
     const near = (p, q, what) => assert.ok(Math.hypot(p.x - q.x, p.z - q.z) < 1, `${what}: at ${p.x}, ${p.z}, not ${q.x}, ${q.z}`);
     const where = () => page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z, track: document.getElementById('track').textContent }));
-    // J lists the hikes; each has a way to its trailhead and to its view
-    await key('KeyJ');
-    const listed = await page.evaluate(() => ({
-      open: document.getElementById('hikes').classList.contains('open'),
-      names: [...document.querySelectorAll('#hikes li .hikes-name')].map((n) => n.firstChild.textContent),
-    }));
-    assert.ok(listed.open, 'J opens the list of hikes');
-    assert.deepEqual(listed.names, hikes.map((x) => x.name), 'and every hike is on it');
-    await key('KeyJ');
-    assert.ok(!(await page.evaluate(() => document.getElementById('hikes').classList.contains('open'))), 'J again closes it');
+    // the hikes are a tab beside the map; each has a way to its trailhead and to its view
+    const showing = () => page.evaluate(() => world.map.isOpen && !document.getElementById('hikes').closest('[hidden]'));
+    const openHikes = async () => {
+      await key('KeyM');
+      await page.click('#map-side [data-tab="hikes"]');
+    };
+    await openHikes();
+    const names = await page.evaluate(() => [...document.querySelectorAll('#hikes li .hikes-name')].map((n) => n.firstChild.textContent));
+    assert.ok(await showing(), 'the map has a tab of hikes');
+    assert.deepEqual(names, hikes.map((x) => x.name), 'and every hike is on it');
+    await key('KeyM');
+    await key('KeyM');
+    assert.ok(await showing(), 'and opens on it again next time');
+    await key('Escape');
     const pick = async (at) => {
-      await key('KeyJ');
+      await openHikes();
       await page.click(`#hikes li[data-hike="${h.id}"] [data-act="${at}"]`);
       await frames(3);
+      assert.ok(!(await page.evaluate(() => world.map.isOpen)), 'going there closes the map');
     };
     // its land is fetched the first time: wait to be there, and for the forest round it
     const arrive = (to) =>

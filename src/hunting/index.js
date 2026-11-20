@@ -32,8 +32,8 @@ const MUNCH_EVERY = 0.75; // seconds between mouthfuls
 const RELISH = ['that was good', 'smoky, and good', 'you feel better for that', 'not bad at all'];
 
 // The features this uses, so it is installed after them (game/features.js).
-// And after blueprints for its place on the tool bar: the plan tool keeps 9,
-// and the rifle takes 0.
+// And after blueprints for its place on the tool bar: the rifle comes after
+// the plan tool.
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'fires', 'wildlife', 'blueprints'];
 export function installHunting(game) {
   const { scene, camera, chunks, player, input, hud, commands, save, sound, builder, fires, wildlife } = game;
@@ -54,10 +54,10 @@ export function installHunting(game) {
   const eatHint = () => (input.isTouch ? 'tap eat' : 'U to eat');
   const rifle = builder.register(rifleTool({ wildlife, fires, carcasses, spits, scope, which: (a) => isGame(a.kind), eatHint }));
   hunting.rifle = rifle;
-  // its key is wherever it sits on the tool bar (0, the tenth, as things are)
+  // its key is wherever its slot is on the tool bar (0 for the tenth)
   const rifleKey = () => {
-    const i = builder.tools.indexOf(rifle);
-    return i < 10 ? String((i + 1) % 10) : 'tool bar';
+    const n = builder.slotOf(rifle.id);
+    return n <= 10 ? String(n % 10) : 'tool bar';
   };
   commands.describe({ group: 'HUNT', help: rifleKey, label: 'the rifle: click to shoot, hold right-click to look through the scope' });
   commands.describe({ group: 'HUNT', help: 'hold click', label: 'beside a kill: dress it for its meat' });

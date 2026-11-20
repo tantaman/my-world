@@ -169,12 +169,14 @@ tundra, ice), that is where each is: a scree is strewn with boulders, a
 thicket is thick with shrubs, and a country with a treeline and a snow line
 has them at their real heights (`landform.js`).
 
-## Keys
+## Settings
+
+On the settings panel (**O**), under *time*:
 
 | | |
 |---|---|
-| **, .** | scrub the time of day |
-| **T** | let time flow (a full day takes 24 minutes) |
+| time of day | slide it to any hour |
+| let time flow | a full day takes 24 minutes |
 
 ## Files
 
