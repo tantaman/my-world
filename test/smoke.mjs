@@ -42,7 +42,7 @@ const problems = [];
 
 const server = await preview({ preview: { port: 0, strictPort: false }, logLevel: 'silent' });
 const base = server.resolvedUrls.local[0];
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
 const page = await browser.newPage({ viewport: { width: 960, height: 600 }, deviceScaleFactor: 1 });
 page.on('console', (m) => {
   if (m.type() === 'error') problems.push(`console: ${m.text()}`);
@@ -495,6 +495,55 @@ try {
     const hours = await page.evaluate(() => world.sky.hours);
     assert.ok(hours > before.hours, '. moves the day on');
     return { ok: true };
+  });
+
+  await step('leave a mark', async () => {
+    await key('KeyM');
+    await frames(20);
+    const box = await page.locator('#map-canvas').boundingBox();
+    await page.mouse.click(box.x + box.width * 0.4, box.y + box.height * 0.4);
+    await frames(5);
+    await page.keyboard.type('the level spot');
+    await page.keyboard.press('Enter');
+    await frames(5);
+    const made = await page.evaluate(() => world.marks.list().map((m) => m.name));
+    assert.deepEqual(made, ['the level spot'], 'a click on the map leaves a mark, and it takes a name');
+    await page.evaluate(() => {
+      const m = world.marks.list()[0];
+      world.marks.setTracked(m.id);
+    });
+    await key('Escape');
+    await frames(5);
+    const hud = await page.evaluate(() => document.getElementById('track').textContent);
+    assert.match(hud, /the level spot/, 'the HUD points the way to a tracked mark');
+    await page.evaluate(() => T.frames(120));
+    await open('&creative');
+    const kept = await page.evaluate(() => ({ names: world.marks.list().map((m) => m.name), tracked: !!world.marks.trackedMark() }));
+    assert.deepEqual(kept, { names: ['the level spot'], tracked: true }, 'and it is still there after a reload');
+    return kept;
+  });
+
+  await step('sound', async () => {
+    // The play-through runs muted; turn sound on here and make some.
+    const heard = await page.evaluate(async () => {
+      const s = world.sound;
+      s.setEnabled(true);
+      const up = await T.until(() => s.running, 5000);
+      if (!up) return { running: false };
+      const p = world.player.pos;
+      await T.frames(10);
+      for (const kind of ['chop', 'thud', 'crash', 'deny']) s.sfx(kind, { size: 0.5 });
+      for (const kind of ['snort', 'howl', 'song', 'rattle']) s.call(kind, p.x + 5, p.y, p.z + 5);
+      for (const ground of ['dirt', 'grass', 'litter', 'water']) s.footstep(ground, 0.5);
+      await T.frames(90);
+      const out = { running: true, buses: [...s.buses.keys()].sort(), layers: s.layers.map((l) => l.name) };
+      s.setEnabled(false);
+      return out;
+    });
+    // no audio device, no audio: that is the machine's business, not the game's
+    if (!heard.running) console.log('    (no audio here: skipped)');
+    else assert.deepEqual(heard.buses, ['ambience', 'effects', 'wildlife'], 'everything goes out through a bus');
+    return heard;
   });
 
   await step('wildlife on request', async () => {
