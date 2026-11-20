@@ -10,21 +10,26 @@ The photo (HEIC or JPEG, straight off a phone) says where it was taken, which
 way the camera looked and at what time. From that, `tools/hike.mjs` fetches
 the real shape of the land for 4 km around
 ([AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/)) and the
-trails and lakes on it ([OpenStreetMap](https://www.openstreetmap.org/)),
-and writes the hike to `src/world/hikes/`. It prints what it found and where
-it put a picture of it:
+trails and lakes on it, and the coast if it's by the sea
+([OpenStreetMap](https://www.openstreetmap.org/)), and writes the hike to
+`src/world/hikes/`. It prints what it found and where it put a picture of
+it:
 
 ```
 photo: 48.05540, -123.77340, looking 280°, at 16:21
 Mount Storm King → src/world/hikes/mount-storm-king.js (206 kB)
   at 27149.5, -1553.7 in the world, 136 km from the middle as the crow flies: the real land for 800 m round the photo, at 1 : 5
   the walk: Mt. Storm King Trail, 496 m, climbing 122 m
-  lakes: Lake Crescent
+  water: Lake Crescent
 ```
 
+A photo that has lost its location on the way (sent through a chat, say)
+can still be used: say where it was taken with `--lat` and `--lon`, and
+`--bearing` and `--hour` if you remember which way you looked and when.
+
 In the game, press **K** (or tap *hikes*) for the list of them: each with its
-trail, how long it is, how far it climbs and the lakes on it, and two ways
-in. **trailhead** puts you at the start, by a signpost, with the HUD pointing
+trail, how long it is, how far it climbs (or drops: a cove is walked down
+to) and the water on it, and two ways in. **trailhead** puts you at the start, by a signpost, with the HUD pointing
 the way to the top. The trail is the real one, switchbacks and all, cut into
 the hillside as a level tread. At the end of it a cairn stands where you took
 the photo. **the view** takes you straight there: you're standing where you
@@ -40,10 +45,16 @@ become a four-minute walk up 120 m, and the game's trees stand against the
 mountain about as big as real ones do. Inside 4 km of the photo (800 m in the
 game) the ground is the real ground; over the next kilometre it gives way to
 the forest around it. Every footpath, track and lake that OpenStreetMap has
-in there comes too. The trail the photo was taken on, from its lower end, is
-the walk. Steep ground is bare rock, the rest is wooded (`--cover`,
-`--species`), and the spot the photo was taken from is kept clear of trees,
-with nothing growing in front of it to block the view.
+in there comes too, and the sea, up to its real shoreline: it breaks white
+along the shore, and stops at a low bank a little short of the edge of the
+land that was imported, where the forest begins. The walk starts where you'd
+leave the car, at the nearest road or car park along the paths, and goes by
+them to where the photo was taken, uphill or down. (Failing a road, it's the
+trail the photo was taken on, from its lower end.) Steep ground is bare rock,
+the rest is wooded (`--cover`, `--species`; `--cover 0` for land above the
+tree line, with nothing standing on it at all), and the spot the photo was
+taken from is kept clear of trees, with nothing growing in front of it to
+block the view.
 
 **Where it goes.** Where it really is. The game world is the real world at
 the hikes' own scale, 1 : 5, so hikes lie as far apart, and in the same

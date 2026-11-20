@@ -238,10 +238,12 @@ export class ChunkManager extends Emitter {
       out.wRegion = ch.sampleGrid(ch.wData, x, z, WS, 0);
       out.wLevel = ch.sampleLevel(x, z);
       out.wSpeed = Math.hypot(ch.sampleGrid(ch.wData, x, z, WS, 1), ch.sampleGrid(ch.wData, x, z, WS, 2));
+      out.wFoam = ch.sampleGrid(ch.wData, x, z, WS, 3);
     } else {
       out.wRegion = 0;
       out.wLevel = NO_WATER;
       out.wSpeed = 0;
+      out.wFoam = 0;
     }
     return true;
   }

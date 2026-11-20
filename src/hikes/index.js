@@ -128,7 +128,7 @@ export function installHikes(game) {
       hud.flash(`${c.name} · where the photo was taken`);
     } else {
       const t = c.trail;
-      hud.flash(t ? `${c.name} · ${t.name || 'the trail'}: ${real(c, t.length)}, ${real(c, t.climb)} up` : c.name);
+      hud.flash(t ? `${c.name} · ${t.name || 'the trail'}: ${real(c, t.length)}, ${real(c, Math.abs(t.climb))} ${t.climb < 0 ? 'down' : 'up'}` : c.name);
     }
     return true;
   }

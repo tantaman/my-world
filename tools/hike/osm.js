@@ -3,7 +3,9 @@
 //
 // Trails are ways tagged as footpaths. Water is closed ways and multipolygon
 // relations tagged natural=water (lakes, ponds, reservoirs); an outer ring
-// made of several ways is joined end to end.
+// made of several ways is joined end to end. The coast is ways tagged
+// natural=coastline, which OpenStreetMap always draws with the land on their
+// left and the sea on their right.
 
 const attr = (s, name) => {
   const m = new RegExp(`\\b${name}="([^"]*)"`).exec(s);
@@ -79,6 +81,19 @@ export function trails(osm) {
   return out;
 }
 
+// Where you could leave a car: roads you can drive ([[lat, lon], ...] each),
+// and the outlines of car parks.
+const DRIVE = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street', 'service', 'road']);
+export function roads(osm) {
+  const out = [];
+  for (const w of osm.ways.values()) {
+    if (!DRIVE.has(w.tags.highway) && w.tags.amenity !== 'parking') continue;
+    const points = coords(osm, w.refs);
+    if (points.length > 1) out.push(points);
+  }
+  return out;
+}
+
 const isWater = (t) => t.natural === 'water' && !['river', 'stream', 'canal', 'riverbank'].includes(t.water);
 
 // [{ name, rings: [[[lat, lon], ...], ...] }] — outer rings only; islands are
@@ -97,6 +112,33 @@ export function waters(osm) {
     if (rings.length) out.push({ name: r.tags.name || '', rings });
   }
   return out;
+}
+
+// The coast: [[[lat, lon], ...], ...], each a line with the land on its left
+// as you go along it. Ways that follow on from one another are joined, so a
+// corner where two meet is a corner of one line (an islet comes out closed).
+export function coastlines(osm) {
+  const left = [...osm.ways.values()].filter((w) => w.tags.natural === 'coastline' && w.refs.length > 1).map((w) => w.refs.slice());
+  const lines = [];
+  while (left.length) {
+    let line = left.shift();
+    for (let grew = true; grew && line[0] !== line[line.length - 1]; ) {
+      grew = false;
+      for (let i = 0; i < left.length; i++) {
+        const l = left[i];
+        // they all run the same way round, so only ever end to start
+        if (l[0] === line[line.length - 1]) line = line.concat(l.slice(1));
+        else if (l[l.length - 1] === line[0]) line = l.slice(0, -1).concat(line);
+        else continue;
+        left.splice(i, 1);
+        grew = true;
+        break;
+      }
+    }
+    const points = coords(osm, line);
+    if (points.length > 1) lines.push(points);
+  }
+  return lines;
 }
 
 // Ways that share end nodes, joined into closed rings.

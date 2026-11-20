@@ -1,5 +1,5 @@
-// From a photo's position, the real land around it and OpenStreetMap's trails
-// and lakes, to a hike the game can set into the forest (see
+// From a photo's position, the real land around it and OpenStreetMap's trails,
+// lakes and coast, to a hike the game can set into the forest (see
 // src/world/landform.js for what a hike holds).
 //
 // Pure: elevation comes in as a function and OpenStreetMap as parsed data, so
@@ -19,22 +19,42 @@ export const DEFAULTS = {
 // How near (game m) the photo has to be to a trail for that trail to be the
 // walk to it.
 const ON_TRAIL = 30;
+// How near (game m) a trail has to come to a road or a car park for the walk
+// to start there.
+const AT_ROAD = 4;
+// Points of two paths nearer than this (game m) are the same point.
+const SAME = 0.05;
 // Lakes stop this far (game m) inside the real land, so they never reach
 // the forest's edge.
 const LAKE_INSET = 25;
+// The sea is a lake like any other to the game (landform.js), at this real
+// height (m), and this is what it's called. Where the real sea runs on past
+// the land that was imported, the ground is brought up to just over it: the
+// game's sea stops there, at a low shore, and the forest begins.
+const SEA_LEVEL = 0;
+const SEA_NAME = 'the sea';
+// real m: how far over the water a lake's, or the sea's, banks are kept
+const BANK = 0.5;
 // and trails this far
 const TRAIL_INSET = 12;
 // what is kept of a trail's line: no point off it by more than this (game m)
 const SIMPLIFY = 0.25;
+// game m: the sea's shore is worked out this far past the water and the land
+// that is kept. More than a packed shore distance can say (landform.js).
+const SEA_MARGIN = 70;
 
 //   photo      { lat, lon, bearing, hour } (readPhoto())
 //   elevation  (lat, lon) -> metres above sea level
 //   trails     [{ name, points: [[lat, lon], ...] }]   (osm.js)
 //   waters     [{ name, rings: [[[lat, lon], ...]] }]
+//   coast      [[[lat, lon], ...], ...]: the shoreline of the sea, the land
+//              on the left of each line as you go along it (osm.js)
+//   roads      [[[lat, lon], ...], ...]: roads and car parks, where a walk
+//              can begin
 //   datum      the heights to stand on, shared with a hike this one overlaps
 //              (place.js), or null to set its own
 // → { def, preview: { width, height, rgb } }
-export function buildHike({ id, name, photo, elevation, trails = [], waters = [], at = [0, 0], datum = null, ...opt }) {
+export function buildHike({ id, name, photo, elevation, trails = [], waters = [], coast = [], roads = [], at = [0, 0], datum = null, ...opt }) {
   const o = { ...DEFAULTS, ...opt, trees: { ...DEFAULTS.trees, ...opt.trees } };
   const s = o.scale;
   const frame = localFrame(photo.lat, photo.lon);
@@ -113,10 +133,74 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
         if (v < 0) {
           E[k] = level;
           lakeCells[k] = 1;
-        } else if (v < 3) E[k] = Math.max(E[k], level + 0.5);
+        } else if (v < 3) E[k] = Math.max(E[k], level + BANK);
       }
     }
     lakes.push({ name: w.name, levelReal: level, box: [i0, j0, bw, bh], d });
+  }
+
+  // ── The sea ────────────────────────────────────────────────────────────────
+  // Elevation data gives the sea floor, roughly, and where the shore is only
+  // to the nearest cell. The coastline says where it is properly.
+  // (A coastline can run on for hundreds of kilometres: only the stretches
+  // by this land are kept, each with a point to spare at either end.)
+  const reach = R + SEA_MARGIN * 2;
+  const shores = [];
+  for (const line of coast) {
+    const pts = line.map(toGame);
+    const by = pts.map(([x, z]) => Math.hypot(x, z) < reach);
+    let run = [];
+    for (let k = 0; k < pts.length; k++) {
+      // a point is kept if it, or the one before or after it, is by the land
+      if (by[k] || by[k - 1] || by[k + 1]) run.push(pts[k]);
+      else if (run.length) {
+        if (run.length > 1) shores.push(run);
+        run = [];
+      }
+    }
+    if (run.length > 1) shores.push(run);
+  }
+  if (shores.length) {
+    const Rl = R - LAKE_INSET;
+    const D = new Float32Array(n * n);
+    let [i0, j0, i1, j1] = [n, n, -1, -1];
+    let wet = 0;
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const x = gx(i);
+        const z = gx(j);
+        const off = Math.hypot(x, z) - Rl;
+        // far outside the land that's kept, nobody asks
+        const v = off > SEA_MARGIN ? off : Math.max(coastDistance(shores, x, z), off);
+        D[j * n + i] = v;
+        if (v < 0) wet++;
+        // the part of the grid a point near the water could ask about
+        if (v < SEA_MARGIN) {
+          i0 = Math.min(i0, i);
+          j0 = Math.min(j0, j);
+          i1 = Math.max(i1, i);
+          j1 = Math.max(j1, j);
+        }
+      }
+    }
+    if (wet >= 4) {
+      i0 = Math.max(0, i0 - 1);
+      j0 = Math.max(0, j0 - 1);
+      i1 = Math.min(n - 1, i1 + 1);
+      j1 = Math.min(n - 1, j1 + 1);
+      const bw = i1 - i0 + 1;
+      const bh = j1 - j0 + 1;
+      const d = new Float32Array(bw * bh);
+      for (let j = 0; j < bh; j++) for (let i = 0; i < bw; i++) d[j * bw + i] = D[(j0 + j) * n + i0 + i];
+      for (let k = 0; k < n * n; k++) {
+        if (lakeCells[k]) continue; // a pond by the shore keeps its own level
+        if (D[k] < 0) {
+          E[k] = SEA_LEVEL;
+          lakeCells[k] = 1;
+        } else E[k] = Math.max(E[k], SEA_LEVEL + BANK);
+      }
+      lakes.push({ name: SEA_NAME, sea: true, levelReal: SEA_LEVEL, box: [i0, j0, bw, bh], d });
+    }
   }
 
   const base = Math.min(...E);
@@ -135,10 +219,14 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
 
   // ── Trails ─────────────────────────────────────────────────────────────────
   const lines = [];
+  const whole = []; // the same, with every point: where paths meet is a point of each
   for (const t of trails) {
     let cur = [];
     const flush = () => {
-      if (cur.length > 1) lines.push({ name: t.name, pts: simplify(cur, SIMPLIFY) });
+      if (cur.length > 1) {
+        lines.push({ name: t.name, pts: simplify(cur, SIMPLIFY) });
+        whole.push({ name: t.name, pts: cur });
+      }
       cur = [];
     };
     for (const p of t.points.map(toGame)) {
@@ -148,9 +236,11 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
     flush();
   }
 
-  // The walk: the trail the photo was taken on, from its low end.
+  // The walk: from where you'd leave the car, by whatever paths lead to where
+  // the photo was taken. Failing a road, up the trail it was taken on.
   const view = { x: 0, z: 0, bearing: round(photo.bearing, 10), hour: round(photo.hour, 100) };
-  const route = walkTo(lines, heightAt);
+  const fromRoad = walkFromRoad(whole, roads.map((r) => r.map(toGame)));
+  const route = fromRoad ? { ...fromRoad, pts: simplify(fromRoad.pts, SIMPLIFY) } : walkTo(lines, heightAt);
   const trailhead = route ? { x: route.pts[0][0], z: route.pts[0][1], yaw: route.yaw } : { x: 0, z: 0, yaw: Math.PI - ((photo.bearing || 0) * Math.PI) / 180 };
 
   const def = {
@@ -168,7 +258,7 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
     trailhead: { x: round(trailhead.x, 10), z: round(trailhead.z, 10), yaw: round(trailhead.yaw, 1000) },
     trail: route ? { name: route.name, length: Math.round(route.length), climb: Math.round(heightAt(0, 0) - heightAt(trailhead.x, trailhead.z)) } : null,
     trees: o.trees,
-    lakes: lakes.map((l) => ({ name: l.name, level: round((l.levelReal - base) * s, 100), box: l.box, shore: packShore(l.d) })),
+    lakes: lakes.map((l) => ({ name: l.name, ...(l.sea ? { sea: true } : {}), level: round((l.levelReal - base) * s, 100), box: l.box, shore: packShore(l.d) })),
     paths: lines.map((l) => l.pts.flatMap(([x, z]) => [round(x, 10), round(z, 10)])),
     ground: { n, cell, heights: packHeights(H, n) },
   };
@@ -191,7 +281,7 @@ export function splitHike(def) {
   const land = {};
   for (const [k, v] of Object.entries(def)) (LAND_PARTS.includes(k) ? land : card)[k] = v;
   // the card keeps the lakes' names, for the list of hikes
-  card.lakes = (def.lakes || []).map((l) => ({ name: l.name }));
+  card.lakes = (def.lakes || []).map((l) => ({ name: l.name, ...(l.sea ? { sea: true } : {}) }));
   return { card, land };
 }
 
@@ -216,6 +306,51 @@ export function signedDistance(rings, x, z) {
     }
   }
   return inside ? -best : best;
+}
+
+// Signed distance from (x, z) to the coast (negative at sea). `lines` are in
+// game coordinates, drawn as OpenStreetMap draws a coast: with the land on the
+// left as you go along, which here, with z running south, is on the right.
+// At a corner both the stretches that meet there have a say, or a headland's
+// point would be judged by whichever stretch came first.
+export function coastDistance(lines, x, z) {
+  let best = Infinity;
+  let landward = 1;
+  for (const c of lines) {
+    const closed = c.length > 2 && c[0][0] === c[c.length - 1][0] && c[0][1] === c[c.length - 1][1];
+    const last = c.length - 1;
+    for (let k = 1; k <= last; k++) {
+      const [ax, az] = c[k - 1];
+      const dx = c[k][0] - ax;
+      const dz = c[k][1] - az;
+      const l2 = dx * dx + dz * dz;
+      if (!l2) continue;
+      const t = ((x - ax) * dx + (z - az) * dz) / l2;
+      const l = Math.sqrt(l2);
+      // (nx, nz): the way to the land from this stretch
+      let nx = dz / l;
+      let nz = -dx / l;
+      let [px, pz] = [ax + dx * t, az + dz * t];
+      // nearest an end: the corner there, if the coast goes on round it
+      const corner = t <= 0 ? (k > 1 ? [k - 2, k - 1] : closed ? [last - 1, 0] : null) : t >= 1 ? (k < last ? [k, k + 1] : closed ? [0, 1] : null) : null;
+      if (t <= 0) [px, pz] = [ax, az];
+      else if (t >= 1) [px, pz] = c[k];
+      if (corner) {
+        const [qx, qz] = [c[corner[1]][0] - c[corner[0]][0], c[corner[1]][1] - c[corner[0]][1]];
+        const ql = Math.hypot(qx, qz);
+        if (ql) {
+          nx += qz / ql;
+          nz += -qx / ql;
+        }
+      }
+      const d = Math.hypot(x - px, z - pz);
+      if (d < best) {
+        best = d;
+        landward = (x - px) * nx + (z - pz) * nz;
+      }
+    }
+  }
+  return landward < 0 ? -best : best;
 }
 
 // Ramer-Douglas-Peucker: drop points that are within tol of the line.
@@ -249,8 +384,9 @@ export function simplify(pts, tol) {
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 const lengthOf = (pts) => pts.reduce((sum, p, k) => sum + (k ? dist(p, pts[k - 1]) : 0), 0);
 
-// The trail nearest the photo, joined end to end with the rest of the trail
-// of the same name, from its lower end to the point nearest the photo.
+// For when no road is to be found (walkFromRoad): the trail nearest the
+// photo, joined end to end with the rest of the trail of the same name, from
+// its lower end to the point nearest the photo.
 // → { name, pts, length, yaw } or null if the photo wasn't taken on a trail.
 export function walkTo(lines, heightAt, to = [0, 0]) {
   let near = null;
@@ -293,6 +429,96 @@ export function walkTo(lines, heightAt, to = [0, 0]) {
   while (k < pts.length - 1 && dist(pts[k], pts[0]) < 4) k++;
   const yaw = Math.atan2(pts[k][0] - pts[0][0], pts[k][1] - pts[0][1]);
   return { name: near.name, pts, length: lengthOf(pts), yaw };
+}
+
+// The walk from the nearest road or car park to the point of a path nearest
+// the photo, by the shortest way along the paths: a walk begins where the car
+// is left, whether that is below (a mountain) or above (a cove).
+//   lines  [{ name, pts }] with every point kept, so paths that meet share one
+//   roads  [[[x, z], ...], ...]
+// → { name, pts, length, yaw }, or null if the photo wasn't taken on a path,
+//   or no path from it comes to a road.
+export function walkFromRoad(lines, roads, to = [0, 0]) {
+  // the points of the paths, and which lead to which
+  const ids = new Map();
+  const pts = [];
+  const next = []; // [[other, metres, line], ...] for each point
+  const idOf = (p) => {
+    const key = `${Math.round(p[0] / SAME)},${Math.round(p[1] / SAME)}`;
+    if (!ids.has(key)) {
+      ids.set(key, pts.length);
+      pts.push(p);
+      next.push([]);
+    }
+    return ids.get(key);
+  };
+  lines.forEach((l, li) => {
+    for (let k = 1; k < l.pts.length; k++) {
+      const [a, b] = [idOf(l.pts[k - 1]), idOf(l.pts[k])];
+      if (a === b) continue;
+      const d = dist(pts[a], pts[b]);
+      next[a].push([b, d, li]);
+      next[b].push([a, d, li]);
+    }
+  });
+  let end = -1;
+  let endD = ON_TRAIL;
+  pts.forEach((p, k) => {
+    const d = dist(p, to);
+    if (d < endD) [end, endD] = [k, d];
+  });
+  if (end < 0) return null;
+
+  // how far along the paths every point is from there (Dijkstra; there are
+  // few enough points to look for the nearest each time)
+  const far = new Float64Array(pts.length).fill(Infinity);
+  const back = new Int32Array(pts.length).fill(-1);
+  const via = new Int32Array(pts.length).fill(-1);
+  const done = new Uint8Array(pts.length);
+  far[end] = 0;
+  for (;;) {
+    let k = -1;
+    for (let i = 0; i < pts.length; i++) if (!done[i] && far[i] < Infinity && (k < 0 || far[i] < far[k])) k = i;
+    if (k < 0) break;
+    done[k] = 1;
+    for (const [o, d, li] of next[k]) {
+      if (far[k] + d < far[o]) {
+        far[o] = far[k] + d;
+        back[o] = k;
+        via[o] = li;
+      }
+    }
+  }
+  // the nearest point, along the paths, that is at a road
+  const atRoad = (p) => roads.some((r) => r.some((q, k) => k > 0 && segDist(p, r[k - 1], q) < AT_ROAD));
+  let start = -1;
+  for (let k = 0; k < pts.length; k++) if (far[k] < Infinity && (start < 0 || far[k] < far[start]) && atRoad(pts[k])) start = k;
+  if (start < 0 || start === end) return null;
+
+  const walk = [];
+  const names = new Map(); // name -> metres of the walk on a path of that name
+  for (let k = start; k >= 0; k = back[k]) {
+    walk.push(pts[k]);
+    if (back[k] >= 0) {
+      const name = lines[via[k]].name;
+      names.set(name, (names.get(name) || 0) + dist(pts[k], pts[back[k]]));
+    }
+  }
+  // called after the named path most of it is on
+  const name = [...names].filter(([n]) => n).sort((a, b) => b[1] - a[1])[0];
+  let k = 1;
+  while (k < walk.length - 1 && dist(walk[k], walk[0]) < 4) k++;
+  const yaw = Math.atan2(walk[k][0] - walk[0][0], walk[k][1] - walk[0][1]);
+  return { name: name ? name[0] : '', pts: walk, length: lengthOf(walk), yaw };
+}
+
+// Metres from p to the segment a→b.
+function segDist(p, a, b) {
+  const dx = b[0] - a[0];
+  const dz = b[1] - a[1];
+  const l2 = dx * dx + dz * dz;
+  const t = l2 > 0 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / l2)) : 0;
+  return Math.hypot(p[0] - a[0] - dx * t, p[1] - a[1] - dz * t);
 }
 
 // ── A picture of it ──────────────────────────────────────────────────────────

@@ -9,10 +9,10 @@ import { deflateSync } from 'node:zlib';
 import { readPhoto } from '../tools/hike/exif.js';
 import { decodePng, encodePng } from '../tools/hike/png.js';
 import { localFrame, tileXY, terrarium } from '../tools/hike/geo.js';
-import { parseOsm, trails, waters } from '../tools/hike/osm.js';
-import { buildHike, splitHike, simplify, signedDistance } from '../tools/hike/build.js';
+import { parseOsm, trails, waters, coastlines, roads } from '../tools/hike/osm.js';
+import { buildHike, splitHike, simplify, signedDistance, coastDistance, walkFromRoad } from '../tools/hike/build.js';
 import { placeHike, project, ORIGIN } from '../tools/hike/place.js';
-import { packHeights, unpackHeights, packShore, unpackShore } from '../src/world/landform.js';
+import { Landform, packHeights, unpackHeights, packShore, unpackShore } from '../src/world/landform.js';
 import { WorldGen as Land1 } from '../src/world/worldgen.js';
 import { withRealPlaces } from '../src/world/realPlaces.js';
 import { generateVegetation } from '../src/world/chunkGen.js';
@@ -119,6 +119,69 @@ test('OpenStreetMap: trails, and lakes joined from their ways', () => {
   assert.equal(w[0].rings[0].length, 5, 'a closed ring of the four corners');
 });
 
+test('OpenStreetMap: the coast, joined the way it runs, and where a car can be left', () => {
+  // Three stretches of coast given out of order, each running the same way
+  // (land on its left); a road, a car park, and a path that is neither.
+  const xml = `<osm>
+    <node id="1" lat="0" lon="0"/><node id="2" lat="0.01" lon="0"/><node id="3" lat="0.02" lon="0"/><node id="4" lat="0.03" lon="0.01"/>
+    <node id="5" lat="0.5" lon="0.5"/><node id="6" lat="0.5" lon="0.51"/><node id="7" lat="0.51" lon="0.5"/>
+    <way id="12"><nd ref="3"/><nd ref="4"/><tag k="natural" v="coastline"/></way>
+    <way id="10"><nd ref="1"/><nd ref="2"/><tag k="natural" v="coastline"/></way>
+    <way id="11"><nd ref="2"/><nd ref="3"/><tag k="natural" v="coastline"/></way>
+    <way id="13"><nd ref="5"/><nd ref="6"/><nd ref="7"/><nd ref="5"/><tag k="natural" v="coastline"/></way>
+    <way id="20"><nd ref="1"/><nd ref="5"/><tag k="highway" v="tertiary"/></way>
+    <way id="21"><nd ref="5"/><nd ref="6"/><nd ref="7"/><nd ref="5"/><tag k="amenity" v="parking"/></way>
+    <way id="22"><nd ref="2"/><nd ref="6"/><tag k="highway" v="path"/></way>
+  </osm>`;
+  const osm = parseOsm(xml);
+  const coast = coastlines(osm);
+  assert.deepEqual(coast.map((c) => c.map(([lat]) => lat)), [[0, 0.01, 0.02, 0.03], [0.5, 0.5, 0.51, 0.5]], 'one line south to north, and an islet');
+  assert.deepEqual(roads(osm).map((r) => r.length), [2, 4], 'the road and the car park, not the path');
+});
+
+test('the coast: which side is the sea, and how far', () => {
+  // In the game z runs south. A coast drawn going north (z falling) has its
+  // land on the left, the west: so the sea is to the east.
+  const north = [[[0, 100], [0, 0], [0, -100]]];
+  near(coastDistance(north, 30, 10), -30, 1e-9, 'east of it is sea');
+  near(coastDistance(north, -30, 10), 30, 1e-9, 'west of it is land');
+  // A headland: north, then round a corner to the west. Off its point, to
+  // the north-east, it's the corner that is nearest, and that is sea.
+  const head = [[[0, 100], [0, 0], [-100, 0]]];
+  near(coastDistance(head, 30, -40), -50, 1e-9, 'off the point');
+  near(coastDistance(head, -30, 40), 30, 1e-9, 'on the headland');
+  near(coastDistance(head, -30, -20), -20, 1e-9, 'north of it, sea again');
+  // and a bay, the other way about: in its corner you're in the water
+  const bay = [[[-100, 0], [0, 0], [0, 100]]];
+  near(coastDistance(bay, -30, 40), -30, 1e-9, 'in the bay');
+  near(coastDistance(bay, 30, -40), 50, 1e-9, 'on the land behind it');
+  // an islet, drawn round with its land on the left: north up its east side
+  const islet = [[[10, 0], [10, -10], [0, -10], [0, 0], [10, 0]]];
+  near(coastDistance(islet, 5, -5), 5, 1e-9, 'ashore');
+  near(coastDistance(islet, -4, 4), -Math.hypot(4, 4), 1e-9, 'off its corner');
+});
+
+test('the walk starts where the car is left, by whatever paths lead to the photo', () => {
+  // A road along the south. A path runs north from it to a fork; one branch
+  // goes on to where the photo was taken, the other back down to the road a
+  // long way round. None of them has a name.
+  const road = [[[-200, 100], [200, 100]]];
+  const line = (pts) => ({ name: '', pts });
+  const up = line([[0, 100], [0, 60], [0, 20]]);
+  const on = line([[0, 20], [2, 5], [0, 0]]);
+  const round = line([[0, 20], [-80, 20], [-80, 100]]);
+  const w = walkFromRoad([on, round, up], road);
+  assert.deepEqual([w.pts[0], w.pts[w.pts.length - 1]], [[0, 100], [0, 0]], 'from the road to the photo');
+  near(w.length, 80 + Math.hypot(2, 15) + Math.hypot(2, 5), 1e-9, 'the short way');
+  near(Math.cos(w.yaw), -1, 1e-9, 'setting off north');
+  // downhill or up makes no odds: a cove is walked down to
+  assert.equal(walkFromRoad([on, round, up], []), null, 'no road: left to the old rule');
+  assert.equal(walkFromRoad([on, up], road, [300, 300]), null, 'nor if the photo is nowhere near a path');
+  // it takes its name from the named path most of it is on
+  const named = walkFromRoad([{ ...on, name: 'Spur' }, { ...up, name: 'Main Trail' }], road);
+  assert.equal(named.name, 'Main Trail');
+});
+
 // ── Packing ──────────────────────────────────────────────────────────────────
 test('heights and shores pack small and come back as they went', () => {
   const n = 23;
@@ -221,6 +284,79 @@ test('the world grows a hike: the real land, its trail, its lake', () => {
       if (gen.water.region) assert.equal(gen.water.kind, 'lake', `${gen.water.kind} at ${x}, ${z}`);
     }
   }
+});
+
+// The same mountain by the sea: the land falls away to the east, and a
+// little over a kilometre out the coast runs north. A road runs along the
+// shore, and the trail comes up from it.
+const COAST_AT = 1300; // real metres east of the photo
+const byTheSea = (lat, lon) => {
+  const [e] = frame.toEN(lat, lon);
+  // the sea floor, as elevation data has it: falling away from the shore
+  return e > COAST_AT ? -(e - COAST_AT) * 0.1 : Math.max(1, elevation(lat, lon) - 395);
+};
+const coastal = buildHike({
+  id: 'by-the-sea',
+  name: 'By the Sea',
+  photo: PHOTO,
+  elevation: byTheSea,
+  trails: [{ name: '', points: Array.from({ length: 41 }, (_, k) => toLL(1000 - k * 25, 0)) }],
+  // going north, so the land is on its left (west) and the sea to the east
+  coast: [[toLL(COAST_AT, -6000), toLL(COAST_AT, 0), toLL(COAST_AT, 6000)]],
+  roads: [[toLL(1000, -3000), toLL(1000, 3000)]],
+  at: AT,
+  radius: 2400,
+  fade: 600,
+  cell: 40,
+  trees: { cover: 0 },
+}).def;
+
+test('a hike by the sea has the sea, and is walked up to from the road', () => {
+  assert.deepEqual(coastal.lakes.map((l) => [l.name, l.sea, l.level]), [['the sea', true, 0]], 'the sea is the lowest ground there is');
+  assert.deepEqual(splitHike(coastal).card.lakes, [{ name: 'the sea', sea: true }]);
+  near(coastal.base, 0, 1e-9, 'heights are measured from sea level, not the sea floor');
+  // the walk comes up from the road by the shore to the top, though its path has no name
+  near(coastal.trailhead.x, 1000 * 0.2, 0.5, 'it starts at the road');
+  near(coastal.trail.length, 1000 * 0.2, 2, 'and is the kilometre up from it');
+  near(coastal.trail.climb, (byTheSea(...toLL(0, 0)) - byTheSea(...toLL(1000, 0))) * 0.2, 3, 'climbing from it');
+
+  const gen = new WorldGen(SEED, [], [coastal]);
+  const L = gen.lands[0];
+  const at = (e, n) => [AT[0] + e * 0.2, AT[1] - n * 0.2];
+  const shore = (e, n) => L.shore(...at(e, n));
+  near(shore(COAST_AT + 100, 300), -20, 0.6, 'a hundred metres out to sea (20 in the game)');
+  near(shore(COAST_AT - 100, -300), 20, 0.6, 'and a hundred inland');
+  assert.ok(L.sea, 'it is the sea that is near');
+  // out in it there is water, standing at sea level, over a bed
+  const bed = gen.height(...at(COAST_AT + 400, 0));
+  assert.equal(gen.water.kind, 'lake');
+  assert.ok(gen.water.region && bed < gen.water.level - 3, 'deep water');
+  near(gen.water.level, L.offset, 1e-9, 'at the level of the sea');
+  assert.ok(gen.water.foam > 0.25 && gen.water.foam < 0.4, `a chop out there (${gen.water.foam})`);
+  // it breaks on the shore
+  gen.height(...at(COAST_AT + 10, 0));
+  assert.ok(gen.water.foam > 0.7, `surf (${gen.water.foam})`);
+  // the real sea runs on past the land that was imported; the game's stops
+  // short of its edge, at a low shore, with nothing under the water beyond
+  const rim = gen.height(...at(2350, 0));
+  assert.ok(rim > gen.water.level || !gen.water.region, 'dry land at the rim');
+  for (let e = -2300; e <= 2300; e += 115) assert.ok(L.raw(...at(e, 200)) >= -0.01, 'no ground is left under sea level');
+  // a lake in the hills has no surf
+  const inland = new WorldGen(SEED, [], [hike]);
+  inland.height(AT[0] - 1600 * 0.2, AT[1]);
+  assert.equal(inland.water.foam, 0);
+  assert.ok(!inland.lands[0].sea);
+});
+
+test('land with no trees has none at all', () => {
+  // The forest plants the odd tree even where it's thinnest. Above the tree
+  // line there are none.
+  const L = new Landform(coastal);
+  const bare = generateVegetation(new WorldGen(SEED, [], [coastal]), Math.floor(AT[0] / 64), Math.floor(AT[1] / 64), 64, TRUNK);
+  assert.ok(L.forest(AT[0] + 40, AT[1] + 40) < -0.025);
+  assert.deepEqual(['pine', 'broad', 'birch', 'log'].map((k) => bare.lists[k].length), [0, 0, 0, 0]);
+  const wooded = generateVegetation(new WorldGen(SEED, [], [hike]), Math.floor(AT[0] / 64), Math.floor(AT[1] / 64), 64, TRUNK);
+  assert.ok(wooded.lists.pine.length + wooded.lists.broad.length + wooded.lists.birch.length > 0, 'where the same mountain, wooded, has plenty');
 });
 
 test('nothing grows where the photo was taken, nor in front of it', () => {
