@@ -948,7 +948,7 @@ written from the same list, and two features wanting one key are warned about.
 
 ```bash
 npm test             # in Node, a second or so
-npm run smoke        # a play-through in a headless browser, about four minutes
+npm run smoke        # a play-through in a headless browser, four or five minutes
 npm run together     # two visitors in one world (run `npm run serve` first)
 ```
 
