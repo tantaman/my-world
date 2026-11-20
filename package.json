@@ -6,13 +6,20 @@
   "description": "An open-world forest you can walk around in, rendered as soft, realistic pixel art with three.js.",
   "scripts": {
     "dev": "vite",
+    "api": "mkdir -p dist && wrangler dev --port 8787",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "serve": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "db:create": "wrangler d1 create my-world",
+    "db:migrate": "wrangler d1 migrations apply my-world --remote",
+    "db:local": "wrangler d1 migrations apply my-world --local"
   },
   "dependencies": {
     "three": "^0.187.0"
   },
   "devDependencies": {
-    "vite": "^8.3.8"
+    "vite": "^8.3.8",
+    "wrangler": "^4.165.0"
   }
 }

@@ -18,6 +18,9 @@ import { MarkStore } from './map/marks.js';
 import { MapView } from './map/mapView.js';
 import { Markers } from './world/markers.js';
 import { Builder } from './build/builder.js';
+import { WorldSave } from './save/worldSave.js';
+import { SharePanel } from './save/sharePanel.js';
+import { spawnFrom } from './save/snapshot.js';
 
 const SAVE_KEY = 'my-world:state';
 const SETTINGS_KEY = 'my-world:settings';
@@ -37,6 +40,16 @@ const store = {
     }
   },
 };
+
+// ── A world off the server ─────────────────────────────────────────────────
+// ?w=<id> opens a saved world. Its seed lives inside the save, so this has to
+// resolve before the forest is grown from it. If it can't be opened we fall
+// through to an ordinary local world, and worldSave says why.
+const params = new URLSearchParams(location.search);
+const worldSave = new WorldSave();
+if (params.has('w')) document.getElementById('load-label').textContent = 'opening your world…';
+const opened = await worldSave.open();
+if (opened) CONFIG.seed = opened.snapshot.seed;
 
 // ── Renderer ───────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
@@ -82,23 +95,37 @@ const hud = new Hud();
 const sound = new Soundscape();
 // Felling, digging and building. Created before the first chunk streams in so
 // your changes to the world are applied as it loads.
-const builder = new Builder({ scene, camera, gen, chunks, grass, player, input, hud, sound });
+// A world with an address of its own is kept by the save server, so the
+// builder's per-seed local copy stands down in favour of worldSave's cache.
+const builder = new Builder({
+  scene, camera, gen, chunks, grass, player, input, hud, sound,
+  ...(opened ? { storeKey: null, snapshot: opened.snapshot.world } : {}),
+});
 input.bindButton(document.getElementById('act-use'), 'use');
 input.bindButton(document.getElementById('act-alt'), 'alt');
 
 // ── Map + marks ────────────────────────────────────────────────────────────
 // Marks are kept per seed and survive ?reset: they're things you made.
-const marks = new MarkStore(CONFIG.seed);
+const marks = opened ? new MarkStore(CONFIG.seed, { key: null, data: opened.snapshot.marks }) : new MarkStore(CONFIG.seed);
 const markers = new Markers(scene, (x, z) => chunks.heightAt(x, z));
 markers.sync(marks.list());
 marks.subscribe(() => markers.sync(marks.list()));
 const map = new MapView({ seed: CONFIG.seed, structures: STRUCTURES, marks, player, input });
-hud.onMapToggle = () => map.toggle();
+
+// ── Saving ─────────────────────────────────────────────────────────────────
+worldSave.attach({ gen, builder, marks, player, sky });
+const share = new SharePanel({ save: worldSave, input, hud });
+hud.onSaveToggle = () => share.toggle();
+const openMap = () => {
+  share.close();
+  map.toggle();
+};
+hud.onMapToggle = openMap;
 
 const settings = store.get(SETTINGS_KEY);
 if (settings && !CONFIG.reset) {
-  if (typeof settings.softness === 'number' && !new URLSearchParams(location.search).has('soft')) pipeline.softness = settings.softness;
-  if (typeof settings.pixelSize === 'number' && !new URLSearchParams(location.search).has('px')) pipeline.pixelSize = settings.pixelSize;
+  if (typeof settings.softness === 'number' && !params.has('soft')) pipeline.softness = settings.softness;
+  if (typeof settings.pixelSize === 'number' && !params.has('px')) pipeline.pixelSize = settings.pixelSize;
   if (typeof settings.outline === 'number') pipeline.outline = settings.outline;
   if (typeof settings.sound === 'boolean') sound.enabled = settings.sound;
 }
@@ -144,12 +171,17 @@ addEventListener('resize', resize);
 resize();
 
 // ── Spawn ──────────────────────────────────────────────────────────────────
-const saved = store.get(SAVE_KEY);
 const start = gen.findSpawn(0, 0);
 let spawn = start;
-if (saved && saved.seed === CONFIG.seed && !CONFIG.reset) {
-  spawn = saved;
-  if (typeof saved.hours === 'number' && !new URLSearchParams(location.search).has('time')) sky.hours = saved.hours;
+if (opened) {
+  spawn = spawnFrom(opened.snapshot, start);
+  if (opened.snapshot.hours !== null && !params.has('time')) sky.hours = opened.snapshot.hours;
+} else {
+  const saved = store.get(SAVE_KEY);
+  if (saved && saved.seed === CONFIG.seed && !CONFIG.reset) {
+    spawn = saved;
+    if (typeof saved.hours === 'number' && !params.has('time')) sky.hours = saved.hours;
+  }
 }
 
 let timeFlows = false;
@@ -183,6 +215,10 @@ async function boot() {
   player.spawn(spawn.x, spawn.z, spawn.yaw ?? 0, spawn.camYaw);
   if (typeof spawn.camPitch === 'number') player.camPitch = spawn.camPitch;
   document.getElementById('loader').classList.add('gone');
+  // Anything worth knowing about how this world opened.
+  if (opened && opened.recovered) hud.flash('picked up where you left off');
+  else if (opened && opened.offline) hud.flash("opened this browser's copy · the save server is out of reach");
+  else if (worldSave.detail) hud.flash(worldSave.detail);
   last = performance.now();
   prefetchCheck = last + 3000; // let the forest settle first
   requestAnimationFrame(loop);
@@ -227,7 +263,11 @@ function handleKeys() {
   }
   if (input.wasPressed('KeyV')) showDebug = !showDebug;
   if (input.wasPressed('KeyN')) toggleSound();
-  if (input.wasPressed('KeyM')) map.open();
+  if (input.wasPressed('KeyM')) {
+    share.close();
+    map.open();
+  }
+  if (input.wasPressed('KeyL')) share.toggle();
 }
 
 function loop(now) {
@@ -292,18 +332,23 @@ function loop(now) {
     } else hud.setDebug('');
   }
 
+  // A world on the server saves itself a few seconds after you change
+  // something; where you're standing and the hour ride along with it.
+  worldSave.tick();
   saveTimer += dt;
   if (saveTimer > 2) {
     saveTimer = 0;
-    store.set(SAVE_KEY, {
-      seed: CONFIG.seed,
-      x: player.pos.x,
-      z: player.pos.z,
-      yaw: player.yaw,
-      camYaw: player.camYaw,
-      camPitch: player.camPitch,
-      hours: sky.hours,
-    });
+    if (!worldSave.online) {
+      store.set(SAVE_KEY, {
+        seed: CONFIG.seed,
+        x: player.pos.x,
+        z: player.pos.z,
+        yaw: player.yaw,
+        camYaw: player.camYaw,
+        camPitch: player.camPitch,
+        hours: sky.hours,
+      });
+    }
   }
   requestAnimationFrame(loop);
 }
@@ -312,6 +357,7 @@ function loop(now) {
 window.world = {
   gen,
   builder,
+  save: worldSave,
   sound,
   marks,
   map,

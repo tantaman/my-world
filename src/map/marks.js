@@ -1,5 +1,7 @@
-// Places of interest you've tagged on the map. Stored per world seed in
-// localStorage, so a different ?seed has its own set of marks.
+// Places of interest you've tagged on the map. Kept per world seed in this
+// browser, so a different ?seed has its own set of marks — or, for a world
+// with an address of its own, kept on the save server alongside everything
+// else you changed.
 
 // 7×7 pixel glyphs drawn inside a mark's pin.
 export const ICONS = [
@@ -49,13 +51,15 @@ export function iconSvg(id, color = 'currentColor') {
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
 export class MarkStore {
-  constructor(seed) {
-    this.key = `my-world:marks:${seed}`;
+  // key: where to keep marks in this browser, or null to keep none because the
+  //   save server owns them. data: the marks to start with, from a save.
+  constructor(seed, { key, data } = {}) {
+    this.key = key === undefined ? `my-world:marks:${seed}` : key;
     this.marks = [];
     this.tracked = null;
     this.listeners = new Set();
     try {
-      const raw = JSON.parse(localStorage.getItem(this.key) || 'null');
+      const raw = data !== undefined ? data : JSON.parse(localStorage.getItem(this.key) || 'null');
       if (raw && Array.isArray(raw.marks)) {
         this.marks = raw.marks.filter((m) => m && Number.isFinite(m.x) && Number.isFinite(m.z));
         this.tracked = this.marks.some((m) => m.id === raw.tracked) ? raw.tracked : null;
@@ -119,10 +123,12 @@ export class MarkStore {
   }
 
   _changed() {
-    try {
-      localStorage.setItem(this.key, JSON.stringify({ v: 1, marks: this.marks, tracked: this.tracked }));
-    } catch {
-      /* private mode etc. */
+    if (this.key) {
+      try {
+        localStorage.setItem(this.key, JSON.stringify({ v: 1, marks: this.marks, tracked: this.tracked }));
+      } catch {
+        /* private mode etc. */
+      }
     }
     for (const fn of this.listeners) fn(this);
   }
