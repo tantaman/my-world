@@ -184,7 +184,8 @@ export class Water {
     const pz = P[bq * 2 + 1] + (P[bq * 2 + 3] - P[bq * 2 + 1]) * bt;
     cw *= 1 + WIDTH_VARY * this.nWidth(px / WIDTH_WAVE, pz / WIDTH_WAVE);
     cw *= smoothstep(4, 30, this.gen.padClearance(x, z));
-    if (this.gen.lands.length) cw *= smoothstep(0, LAND_DRY, this.gen.landClearance(x, z));
+    // (a real place's own streams run on it; the forest's give way to it)
+    if (!s.real && this.gen.lands.length) cw *= smoothstep(0, LAND_DRY, this.gen.landClearance(x, z));
     hit.d = d;
     hit.cw = cw;
     // a stream fades in at its spring, valley and all
@@ -301,6 +302,17 @@ export class Water {
       const hit = hits[order.length];
       if (this._hit(s, x, z, hit, true)) order.push(hit);
     }
+    // the streams of real places, which run into their lakes and the sea
+    for (const L of this.gen.lands) {
+      const real = L.streamsNear(x, z);
+      if (!real.length) continue;
+      lake = Math.min(lake, L.shore(x, z));
+      for (const s of real) {
+        if (order.length >= MAX_HITS) break;
+        const hit = hits[order.length];
+        if (this._hit(s, x, z, hit, true)) order.push(hit);
+      }
+    }
     order.sort((a, b) => b.d - b.cw - (a.d - a.cw));
     for (const L of order) {
       h = this._carveLine(L, h, pm, lake);
@@ -366,6 +378,10 @@ export class Water {
       if (L.weight(x, z) <= 0) continue;
       const u = L.shore(x, z);
       if (u < LAKE_BLEND) this._offer(NO_WATER, 0, u, 'lake', 0, 0, 0, 1);
+      for (const s of L.streamsNear(x, z)) {
+        if (!this._hit(s, x, z, hit, false) || hit.cw <= 0.05) continue;
+        this._offer(NO_WATER, 0, hit.d - hit.cw, hit.river ? 'river' : 'stream', 0, 0, 0, 1);
+      }
     }
   }
 }

@@ -20,6 +20,7 @@ import { CONFIG } from '../config.js';
 import { SKY_GLSL, SKY_UNIFORMS_GLSL } from '../render/glsl.js';
 import { SKY } from '../render/uniforms.js';
 import { NO_WATER } from '../world/water.js';
+import { COUNTRIES } from '../world/country.js';
 
 const CANOPY = 11; // m: how far the crowns of a closed wood stand over the ground
 const SINK = 45; // m: how far it drops out of sight under the loaded chunks
@@ -56,11 +57,10 @@ export class FarView {
     return this.meshes.has(id);
   }
 
-  // A grid from sampleFar() → a mesh for hike `id`. ground: what the hike's
-  // country says its ground is made of (world/country.js).
-  add(id, grid, ground = null) {
+  // A grid from sampleFar() → a mesh for hike `id`.
+  add(id, grid) {
     this.remove(id);
-    const mesh = new THREE.Mesh(buildGeometry(grid, ground), this.material);
+    const mesh = new THREE.Mesh(buildGeometry(grid), this.material);
     mesh.name = `far view: ${id}`;
     mesh.userData.grid = { x0: grid.x0, z0: grid.z0, x1: grid.x0 + (grid.n - 1) * grid.step, z1: grid.z0 + (grid.n - 1) * grid.step };
     mesh.position.set(grid.x0, 0, grid.z0);
@@ -158,9 +158,7 @@ export class FarView {
 }
 
 // Positions are from the grid's corner (x0, z0), where the mesh is put.
-function buildGeometry({ n, step, h, water, forest, species, bare, sand, land }, ground) {
-  // the country's own colours, as far as each spot is that country's
-  const G = ground && { tint: new THREE.Color(...ground.tint), rock: new THREE.Color(...ground.rock), bareA: new THREE.Color(...ground.bare[0]), bareB: new THREE.Color(...ground.bare[1]), sand: new THREE.Color(...ground.sand) };
+function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, country }) {
   const _g = new THREE.Color();
   const N = n * n;
   const pos = new Float32Array(N * 3);
@@ -186,7 +184,9 @@ function buildGeometry({ n, step, h, water, forest, species, bare, sand, land },
         const wood = smooth(0.25, 0.75, forest[k]) * (1 - rock);
         _w.copy(BROADLEAF).lerp(CONIFER, smooth(-0.3, 0.3, species[k]));
         _c.copy(MEADOW);
-        if (G && land[k] > 0) {
+        // a real place's own colours, as far as this spot is its country's
+        const G = land[k] > 0 ? GROUND[country[k]] : null;
+        if (G) {
           _c.multiply(_g.setRGB(1, 1, 1).lerp(G.tint, land[k]));
           // bare ground in broad drifts of its two colours, and beaches
           _c.lerp(_g.copy(G.bareB).lerp(G.bareA, smooth(0.7, 1, bare[k]) * (0.35 + 0.65 * hash(i >> 2, j >> 2))), smooth(0.34, 0.62, bare[k]));
@@ -229,6 +229,9 @@ function buildGeometry({ n, step, h, water, forest, species, bare, sand, land },
   geo.boundingSphere.radius += CANOPY;
   return geo;
 }
+
+// What each country says its ground is made of (world/country.js), by id.
+const GROUND = COUNTRIES.map(({ ground: g }) => ({ tint: new THREE.Color(...g.tint), rock: new THREE.Color(...g.rock), bareA: new THREE.Color(...g.bare[0]), bareB: new THREE.Color(...g.bare[1]), sand: new THREE.Color(...g.sand) }));
 
 const smooth = (a, b, v) => {
   const t = Math.min(1, Math.max(0, (v - a) / (b - a)));

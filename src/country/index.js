@@ -2,39 +2,46 @@
 //
 // A real place set into the forest says what kind of country it is
 // (world/country.js): what its ground is made of, what its sky is doing. The
-// world generator places all that (which vertex is bare, where the palms
-// stand); this is the part that follows you about. It finds the real place
-// you are on or nearest, and hands its colours to the shaders, which use
-// them only as far as the ground says it is that country's (see groundColor
-// in render/glsl.js); and it sets its weather over you as you come onto it:
+// world generator places all that (which vertex is bare and whose it is,
+// where the palms stand). This hands the shaders every country's colours,
+// once, for the ground to pick its own from (see groundColor in
+// render/glsl.js); and it is the part that follows you about: it finds the
+// real place you are on or nearest, and sets its weather over you as you
+// come onto it:
 // its layer of cloud (DECK in render/uniforms.js), how thick its air is, how
-// much sun gets through. In the forest, far from any, it has nothing to do.
+// much sun gets through. And it adds the sound of its sea (surf.js). In the
+// forest, far from any, it has nothing to do.
 //
 // From the console: world.country.name, world.country.here
 
-import { LAND, DECK } from '../render/uniforms.js';
-import { COUNTRY } from '../world/country.js';
+import { LAND, DECK, MAX_COUNTRIES } from '../render/uniforms.js';
+import { COUNTRY, COUNTRIES } from '../world/country.js';
 import { nearestLand, deckHeight, weatherAt } from './here.js';
+import { surf } from './surf.js';
 
 const EASE = 1.6; // 1/s: how quickly the weather comes over you
 
 // The features this uses, so it is installed after them (game/features.js).
-export const after = ['render', 'world'];
+export const after = ['render', 'world', 'audio'];
 export function installCountry(game) {
-  const { gen, pipeline, sky, camera } = game;
+  const { gen, pipeline, sky, camera, sound } = game;
   const names = new Map(Object.entries(COUNTRY).map(([name, c]) => [c, name]));
   const state = { here: COUNTRY.forest, land: null, name: 'forest' };
   game.provide('country', state);
+  // the sea, where a real place has one, is heard breaking on its shore
+  sound.addLayer(surf());
 
-  const paint = (c) => {
+  // every country's colours, by its id, for the ground to pick from
+  if (COUNTRIES.length > MAX_COUNTRIES) throw new Error(`there is room in the shaders for ${MAX_COUNTRIES} countries (render/uniforms.js), and ${COUNTRIES.length} in the table`);
+  for (const c of COUNTRIES) {
     const g = c.ground;
-    LAND.uTint.value.setRGB(...g.tint);
-    LAND.uDirt.value.setRGB(...g.dirt);
-    LAND.uRock.value.setRGB(...g.rock);
-    LAND.uBareA.value.setRGB(...g.bare[0]);
-    LAND.uBareB.value.setRGB(...g.bare[1]);
-    LAND.uSand.value.setRGB(...g.sand);
-  };
+    LAND.uTint.value[c.id].setRGB(...g.tint);
+    LAND.uDirt.value[c.id].setRGB(...g.dirt);
+    LAND.uRock.value[c.id].setRGB(...g.rock);
+    LAND.uBareA.value[c.id].setRGB(...g.bare[0]);
+    LAND.uBareB.value[c.id].setRGB(...g.bare[1]);
+    LAND.uSand.value[c.id].setRGB(...g.sand);
+  }
 
   game.addSystem({
     name: 'country',
@@ -43,12 +50,9 @@ export function installCountry(game) {
       const at = game.focus;
       const land = nearestLand(gen.lands, at.x, at.z);
       if (land !== state.land) {
-        // (Lands lie far apart, so the one that is nearest changes while both
-        // are out of sight: nothing on screen is repainted.)
         state.land = land;
         state.here = land ? land.country : COUNTRY.forest;
         state.name = names.get(state.here) || 'forest';
-        paint(state.here);
         DECK.uDeckCover.value = 0;
         if (land) {
           DECK.uDeck.value = deckHeight(land);

@@ -167,7 +167,8 @@ export class WorldGen {
   // And what whoever draws the ground asks: what it is made of where a real
   // place has its own kind of country (country.js).
   //   surface(x, z, out)     fills out.bare, out.sand and out.land (0..1 each)
-  //                          and returns the country: here nothing, and null
+  //                          and out.country (its id), and returns the
+  //                          country: here nothing, and null
   //   countryAt(x, z)        the country a plant there grows in, or null in
   //                          the forest
   forestHeight(x, z, minWavelength = 0) {
@@ -183,6 +184,7 @@ export class WorldGen {
     out.bare = 0;
     out.sand = 0;
     out.land = 0;
+    out.country = 0;
     return null;
   }
   countryAt() {

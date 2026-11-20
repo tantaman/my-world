@@ -33,7 +33,7 @@ const LILY_HEART = new THREE.Color(0.95, 0.75, 0.15);
 
 const _tip = new THREE.Color();
 const _c = new THREE.Color();
-const _g = { h: 0, path: 0, forest: 0, above: 0, snow: 0, wRegion: 0, wLevel: NO_WATER, wSpeed: 0, wFoam: 0, bare: 0, sand: 0, land: 0 };
+const _g = { h: 0, path: 0, forest: 0, above: 0, snow: 0, wRegion: 0, wLevel: NO_WATER, wSpeed: 0, wFoam: 0, bare: 0, sand: 0, land: 0, country: 0 };
 
 // Depth of water over the ground in _g (> 0 under water), or −99 if none.
 const waterDepth = () => (_g.wRegion > 0.3 && _g.wLevel > NO_WATER * 0.5 ? _g.wLevel - _g.h : -99);
@@ -163,19 +163,20 @@ export class Grass {
     const col = [];
     const blade = [];
     const gnd = [];
-    const land = []; // how far each grows in a real place's own country (its green is that country's)
+    const land = []; // how far each grows in a real place's own country, and which (its green is that country's)
     const idx = [];
     let v = 0;
 
     let gPath = 0;
     let gForest = 0;
     let gLand = 0;
+    let gCountry = 0;
     const vert = (x, y, z, c, rx, ry, rz, hf) => {
       pos.push(x, y, z);
       col.push(c.r, c.g, c.b);
       blade.push(rx, ry, rz, hf);
       gnd.push(gPath, gForest);
-      land.push(gLand);
+      land.push(gLand, gCountry);
       return v++;
     };
 
@@ -223,6 +224,7 @@ export class Grass {
       gPath = 0;
       gForest = _g.forest;
       gLand = _g.land;
+      gCountry = _g.country;
 
       const a = vert(lx - sx * w * 0.5, y0, lz - sz * w * 0.5, C_ROOT, lx, y0, lz, 0);
       const b = vert(lx + sx * w * 0.5, y0, lz + sz * w * 0.5, C_ROOT, lx, y0, lz, 0);
@@ -373,7 +375,7 @@ export class Grass {
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     geo.setAttribute('aBlade', new THREE.Float32BufferAttribute(blade, 4));
     geo.setAttribute('aGround', new THREE.Float32BufferAttribute(gnd, 2));
-    geo.setAttribute('aLand', new THREE.Float32BufferAttribute(land, 1));
+    geo.setAttribute('aLand', new THREE.Float32BufferAttribute(land, 2));
     const nor = new Float32Array(v * 3);
     for (let i = 0; i < v; i++) nor[i * 3 + 1] = 1; // lit like the ground beneath
     geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));

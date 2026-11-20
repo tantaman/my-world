@@ -4,10 +4,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COUNTRY, countryOf, pick, display } from '../src/world/country.js';
+import { COUNTRY, COUNTRIES, countryOf, pick, display } from '../src/world/country.js';
+import { MAX_COUNTRIES } from '../src/render/uniforms.js';
 import { FLORA, TREE_KINDS } from '../src/world/flora.js';
 import { SPECIES } from '../src/wildlife/species.js';
-import { SPECIES as TIMBER } from '../src/build/forestry.js';
+import { SPECIES as TIMBER, treeName } from '../src/build/forestry.js';
 import { WorldGen as Land1 } from '../src/world/worldgen.js';
 import { withRealPlaces } from '../src/world/realPlaces.js';
 import { generateTerrain, generateSurface, generateVegetation, SURFACE_STRIDE } from '../src/world/chunkGen.js';
@@ -37,7 +38,13 @@ test('every country says everything, in words the rest of the game knows', () =>
     for (const kind of c.animals || []) assert.ok(SPECIES[kind], `${name}: ${kind} is an animal`);
     assert.ok(['beach', 'rock'].includes(c.shore), name);
     assert.ok(c.clouds.cover >= 0 && c.clouds.cover <= 1 && c.clouds.shade >= 0 && c.clouds.shade <= 1 && c.haze > 0, name);
+    for (const [kind, called] of Object.entries(c.names)) assert.ok(TIMBER[kind] && called.length === 2, `${name}: a name for a tree`);
+    assert.equal(COUNTRIES[c.id], c, `${name} is found by its id`);
   }
+  assert.equal(COUNTRY.forest.id, 0, 'the forest is country 0: what a vertex that says nothing is');
+  assert.ok(COUNTRIES.length <= MAX_COUNTRIES, 'and the shaders have room for them all');
+  // a tree is called what it's called where it stands
+  assert.deepEqual([treeName('broad').a, treeName('broad', COUNTRY.forest).a, treeName('broad', COUNTRY['cloud forest']).a, treeName('palm', COUNTRY['cloud forest']).a], ['an oak', 'an oak', 'an ʻōhiʻa', 'a coconut palm']);
   assert.equal(countryOf('nowhere'), COUNTRY.forest, 'a place that says nothing, or nonsense, is forest');
   assert.equal(countryOf(undefined), COUNTRY.forest);
   assert.deepEqual([0, 0.44, 0.45, 0.76, 0.99].map((r) => pick(COUNTRY['tropical coast'].trees, r)), ['ironwood', 'ironwood', 'broad', 'palm', 'palm']);
@@ -116,17 +123,17 @@ test('the walk starts on top of the mountain: the mountain stands over the fores
 });
 
 test('the ground is made of what the country says, and the forest of what it always was', () => {
-  const out = { bare: 9, sand: 9, land: 9 };
+  const out = { bare: 9, sand: 9, land: 9, country: 9 };
   const forest = new WorldGen(SEED, []);
   assert.equal(forest.surface(40, 40, out), null);
-  assert.deepEqual(out, { bare: 0, sand: 0, land: 0 });
+  assert.deepEqual(out, { bare: 0, sand: 0, land: 0, country: 0 });
   assert.equal(forest.countryAt(40, 40), null);
   assert.equal(generateSurface(forest, 0, 0, 1, 64), null, 'and no chunk of it carries anything extra');
 
   // cinder: bare all over
   const cinder = new WorldGen(SEED, [], [island({ country: 'cinder desert', trees: { cover: 0 } })]);
   assert.equal(cinder.surface(...at(200, 200), out), COUNTRY['cinder desert']);
-  assert.ok(out.bare > 0.9 && out.land === 1 && out.sand === 0, JSON.stringify(out));
+  assert.ok(out.bare > 0.9 && out.land === 1 && out.sand === 0 && out.country === COUNTRY['cinder desert'].id, JSON.stringify(out));
   // half way out through its edge, half of that; past it, none
   cinder.surface(AT[0], AT[1] + 480 + 60, out);
   assert.ok(out.land > 0.3 && out.land < 0.7 && out.bare < 0.7 && out.bare > 0.2, JSON.stringify(out));
@@ -152,9 +159,9 @@ test('the ground is made of what the country says, and the forest of what it alw
   assert.equal(s.length / SURFACE_STRIDE, t.pos.length / 3, 'one for every vertex of the terrain');
   cinder.surface(cx * 64 + 10 * 2, cz * 64 + 7 * 2, out);
   const k = (7 * 33 + 10) * SURFACE_STRIDE;
-  assert.deepEqual([s[k], s[k + 1], s[k + 2]], [out.bare, out.sand, out.land].map(Math.fround));
+  assert.deepEqual([s[k], s[k + 1], s[k + 2], s[k + 3]], [out.bare, out.sand, out.land, COUNTRY['cinder desert'].id].map(Math.fround));
   const skirt = (33 * 33 + 5) * SURFACE_STRIDE; // the sixth vertex of the first skirt hangs from the sixth of the first row
-  assert.deepEqual([...s.subarray(skirt, skirt + 3)], [...s.subarray(5 * SURFACE_STRIDE, 5 * SURFACE_STRIDE + 3)]);
+  assert.deepEqual([...s.subarray(skirt, skirt + 4)], [...s.subarray(5 * SURFACE_STRIDE, 5 * SURFACE_STRIDE + 4)]);
 });
 
 test('what grows is what grows there', () => {
@@ -233,7 +240,7 @@ test('the weather is the country’s, as far as you are onto it', () => {
 test('from far off the land is its own colour too', () => {
   const gen = new WorldGen(SEED, [], [island({ country: 'cinder desert', trees: { cover: 0 } })]);
   const g = sampleFar(gen, AT[0] - 320, AT[1] - 320, 5, 160);
-  assert.ok(g.bare[12] > 0.9 && g.land[12] === 1, 'bare at the middle');
+  assert.ok(g.bare[12] > 0.9 && g.land[12] === 1 && g.country[12] === COUNTRY['cinder desert'].id, 'bare cinder at the middle');
   assert.ok(g.forest[12] < 0, 'and nothing standing on it to raise a canopy');
   const out = sampleFar(new WorldGen(SEED, []), 0, 0, 3, 100);
   assert.deepEqual([...out.bare, ...out.land], new Array(18).fill(0));

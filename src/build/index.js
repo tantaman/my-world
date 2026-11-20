@@ -12,7 +12,7 @@ import { createVegetationMaterial } from '../world/materials.js';
 import { TREE_KINDS } from '../world/flora.js';
 import { Builder } from './builder.js';
 import { TerrainEdits, terrainSave } from './terrainEdits.js';
-import { Forestry, forestSave, SPECIES } from './forestry.js';
+import { Forestry, forestSave, SPECIES, treeName } from './forestry.js';
 import { Buildings, buildingsSave } from './buildings.js';
 import { Inventory } from './inventory.js';
 import { GradeStake } from './stake.js';
@@ -59,7 +59,7 @@ export function installBuild(game) {
   obstacles.addSource((x, z, R, out) => {
     chunks.forEachPlant(x, z, R + 1, TREE_KINDS, (ch, kind, k, px, py, pz, s) => {
       const r = SPECIES[kind].r * s;
-      out.push({ x: px, z: pz, what: SPECIES[kind].a, dig: r + 0.9, wall: r, footing: 0.9, clear: 'fell', grown: true });
+      out.push({ x: px, z: pz, what: treeName(kind, chunks.gen.countryAt(px, pz)).a, dig: r + 0.9, wall: r, footing: 0.9, clear: 'fell', grown: true });
     });
     chunks.forEachPlant(x, z, R + 1, ['rock'], (ch, kind, k, px, py, pz, s) => {
       if (s > LIFTABLE) out.push({ x: px, z: pz, what: 'a boulder', dig: s * 1.05, grown: true });

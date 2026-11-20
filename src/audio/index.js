@@ -22,7 +22,7 @@ export function installAudio(game) {
   game.provide('sound', sound);
 
   // ── What's underfoot ──────────────────────────────────────────────────────
-  const ground = { h: 0, path: 0, forest: 0, above: 0, snow: 0, bare: 0, sand: 0, land: 0 };
+  const ground = { h: 0, path: 0, forest: 0, above: 0, snow: 0, bare: 0, sand: 0, land: 0, country: 0 };
   function groundHere() {
     const { x, z } = player.pos;
     if (!chunks.groundAt(x, z, ground)) {

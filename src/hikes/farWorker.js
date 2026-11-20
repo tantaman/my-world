@@ -18,6 +18,6 @@ self.onmessage = (e) => {
   }
   if (m.type === 'far') {
     const g = sampleFar(gen, m.x0, m.z0, m.n, m.step);
-    self.postMessage({ type: 'far', id: m.id, grid: g }, [g.h.buffer, g.water.buffer, g.forest.buffer, g.species.buffer, g.bare.buffer, g.sand.buffer, g.land.buffer]);
+    self.postMessage({ type: 'far', id: m.id, grid: g }, [g.h.buffer, g.water.buffer, g.forest.buffer, g.species.buffer, g.bare.buffer, g.sand.buffer, g.land.buffer, g.country.buffer]);
   }
 };

@@ -21,7 +21,11 @@
 //                   water level, and the signed distance to the shore
 //                   (negative in the water) over part of the same grid, packed
 //                   by packShore(). The sea is one of them, marked `sea`: it
-//                   breaks along its shore and nothing grows in it
+//                   breaks along its shore and nothing grows in it. Its shore
+//                   is on a finer grid of its own ({ x, z, w, h, cell } in
+//                   place of box, as a beach's is)
+//   streams         [{ name, big, pts: [x, z, x, z, ...] }]: running water,
+//                   relative to `at`, each the way it flows; big for a river
 //   beaches         [{ x, z, w, h, cell, shore }]: each beach, as the signed
 //                   distance to its edge (negative on it) over a w × h grid
 //                   of its own, `cell` apart from (x, z) relative to `at`,
@@ -49,6 +53,7 @@
 
 import { smoothstep } from '../noise.js';
 import { countryOf } from './country.js';
+import { NET, channelHalf } from './drainage.js';
 
 // The trodden tread of a trail, and the bench it is cut into the hillside as.
 export const TRAIL_HALF = 0.9; // m, half the tread
@@ -68,6 +73,29 @@ const SHORE_FAR = 60; // m, what a packed shore distance saturates at
 const SURF = 0.85;
 const CHOP = 0.3;
 const SURF_REACH = 9;
+// m in from the land's edge that tells whether the sea runs on past it
+// (inside the bank the importer leaves round the sea: tools/hike/build.js)
+const SEA_EDGE = 40;
+// Streams. A real stream is handed to the same code that shapes the forest's
+// own (water.js), as pieces of channel; these say how one is made from the
+// line on the map.
+const STREAM_STEP = 5; // m between the points its fall is worked out at
+const STREAM_CUT = 0.3; // m its water lies under the ground the line was drawn over
+const STREAM_PIECE = 8; // of those steps to a piece of channel
+const STREAM_REACH = 60; // m to either side that a piece may shape the ground
+// How much water it carries, in the drainage network's terms (nodes of
+// catchment: drainage.js): at a spring; where it comes onto the land already
+// running; what it gains for every metre it runs; and the most that one the
+// map calls a stream comes to, however far it runs and whatever runs into
+// it: a small river's worth.
+const STREAM_SPRING = NET.springAcc * 1.2;
+const STREAM_ENTERS = 30;
+const STREAM_GAIN = 0.2;
+const STREAM_MOST = NET.riverAcc * 1.15;
+const STREAM_RIVER = NET.riverAcc * 1.2; // what a river carries, all the way
+const STREAM_JOIN = 3; // m: a stream that ends this near another's line runs into it
+const STREAM_BUCKET = 64; // m, cells of the lookup grid
+
 // What forest() says of land with no trees: low enough that the odd tree the
 // forest plants even in its barest meadows isn't planted either.
 const TREELESS = -0.05;
@@ -164,6 +192,23 @@ export function unpackShore(s) {
 }
 
 // ── The land ─────────────────────────────────────────────────────────────────
+const NONE = [];
+
+// A shore kept on a grid of its own, f = { x, z, w, h, cell, d }: the signed
+// distance at (lx, lz), measured from the land's middle as x and z are.
+// SHORE_FAR off the grid.
+function fieldAt(f, lx, lz) {
+  const gx = (lx - f.x) / f.cell;
+  const gz = (lz - f.z) / f.cell;
+  if (gx < 0 || gz < 0 || gx > f.w - 1 || gz > f.h - 1) return SHORE_FAR;
+  const i = Math.min(f.w - 2, Math.floor(gx));
+  const j = Math.min(f.h - 2, Math.floor(gz));
+  const u = gx - i;
+  const v = gz - j;
+  const k = j * f.w + i;
+  const D = f.d;
+  return (D[k] * (1 - u) + D[k + 1] * u) * (1 - v) + (D[k + f.w] * (1 - u) + D[k + f.w + 1] * u) * v;
+}
 const cr = (a, b, c, d, t) => b + 0.5 * t * (c - a + t * (2 * a - 5 * b + 4 * c - d + t * (3 * (b - c) + d - a)));
 
 export class Landform {
@@ -181,13 +226,17 @@ export class Landform {
     this.cell = g.cell;
     this.half = ((g.n - 1) / 2) * g.cell;
     this.h = unpackHeights(g.heights, g.n);
-    this.lakes = (def.lakes || []).map((l) => ({ name: l.name, sea: !!l.sea, level: l.level, box: l.box, d: unpackShore(l.shore) }));
+    this.lakes = (def.lakes || []).map((l) => ({ ...l, sea: !!l.sea, d: unpackShore(l.shore) }));
     this.beaches = (def.beaches || []).map((b) => ({ ...b, d: unpackShore(b.shore) }));
     this.view = def.view;
     this.trailhead = def.trailhead;
     this.trees = { cover: 0.85, species: 0.6, ...def.trees };
     this.country = countryOf(def.country);
     this._bucketPaths(def.paths || []);
+    // its streams, as pieces of channel: made by settled(), once it's known
+    // how high the land stands
+    this.segs = [];
+    this._streamBuckets = new Map();
     // set by WorldGen.settle(): added to every height
     this.offset = 0;
     // what the last trail() / shore() found
@@ -312,6 +361,148 @@ export class Landform {
     return this._qd;
   }
 
+  // ── Streams ────────────────────────────────────────────────────────────────
+  // Called once the land's heights are settled in the world. Makes each
+  // stream into pieces of channel as water.js wants them (see Water._hit):
+  //   pts, count   its points (world x, z), and how many stretches
+  //   s            metres along the piece at each point
+  //   W            the water's level at each point
+  //   acc0, acc1   how much water it carries at each end
+  //   w0, w1       its half-width at each end
+  //   LB           the level its pools step down to
+  // The water never runs uphill: its level is the ground under the line,
+  // less a little, and no higher than anywhere upstream. Where the map's line
+  // strays up a bank, it cuts through. It comes down to the level of what it
+  // runs into: a lake, the sea, or another stream, which carries its water
+  // on from there (the map draws one stream as several lines, end to end,
+  // as often as not). One that ends on dry land dwindles away.
+  settled() {
+    this.segs = [];
+    this._streamBuckets = new Map();
+    // each line, in steps
+    const all = [];
+    for (const st of this.def.streams || []) {
+      const P = [];
+      for (let k = 0; k + 3 < st.pts.length; k += 2) {
+        const [ax, az, bx, bz] = [st.pts[k] + this.cx, st.pts[k + 1] + this.cz, st.pts[k + 2] + this.cx, st.pts[k + 3] + this.cz];
+        const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / STREAM_STEP));
+        for (let i = k ? 1 : 0; i <= steps; i++) P.push([ax + ((bx - ax) * i) / steps, az + ((bz - az) * i) / steps]);
+      }
+      if (P.length < 2) continue;
+      const last = P.length - 1;
+      const along = [0];
+      for (let i = 1; i <= last; i++) along.push(along[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
+      all.push({ big: !!st.big, P, last, along, into: null, at: 0, fed: [], W: null, acc: null });
+    }
+    // what each runs into: the stream whose line its end is on (anywhere
+    // but that one's own end: two that end together both run on into a third)
+    for (const a of all) {
+      const [ex, ez] = a.P[a.last];
+      let best = STREAM_JOIN;
+      for (const b of all) {
+        if (b === a) continue;
+        for (let i = 0; i < b.last; i++) {
+          const d = Math.hypot(b.P[i][0] - ex, b.P[i][1] - ez);
+          if (d < best) [best, a.into, a.at] = [d, b, i];
+        }
+      }
+      if (a.into) a.into.fed.push(a);
+    }
+    // How high its water stands: worked out from the bottom up, since each
+    // comes down to what it runs into. (W is set before that is asked, so a
+    // ring of streams, which the map shouldn't have, ends.)
+    const levels = (a) => {
+      if (a.W) return;
+      a.W = [];
+      const [ex, ez] = a.P[a.last];
+      let mouth = -Infinity;
+      if (a.into) {
+        levels(a.into);
+        mouth = a.into.W[a.at] ?? -Infinity;
+      } else if (this.shore(ex, ez) < 3) mouth = this.level + this.offset;
+      a.mouth = mouth > -Infinity;
+      let low = Infinity;
+      for (let i = 0; i <= a.last; i++) {
+        low = Math.min(low, this.raw(a.P[i][0], a.P[i][1]) + this.offset - STREAM_CUT);
+        a.W.push(Math.max(low, mouth));
+      }
+    };
+    // How much it carries: worked out from the top down. It gathers as it
+    // goes, and takes on what runs into it. One that comes onto the land at
+    // its edge is running already.
+    const carries = (a) => {
+      if (a.acc) return;
+      a.acc = [];
+      const takes = new Float64Array(a.last + 1);
+      for (const f of a.fed) {
+        carries(f);
+        takes[f.at] += f.acc[f.last] ?? 0;
+      }
+      const enters = Math.hypot(a.P[0][0] - this.cx, a.P[0][1] - this.cz) > this.radius - SEA_EDGE;
+      let got = takes[0] > 0 ? 0 : enters ? STREAM_ENTERS : STREAM_SPRING;
+      for (let i = 0; i <= a.last; i++) {
+        got += takes[i];
+        a.acc.push(a.big ? STREAM_RIVER : Math.min(STREAM_MOST, got + a.along[i] * STREAM_GAIN));
+      }
+      a.fedAtTop = takes[0] > 0;
+    };
+    for (const a of all) {
+      levels(a);
+      carries(a);
+    }
+    for (const { P, last, along, W, acc, mouth, fedAtTop } of all) {
+      const half = acc.map(channelHalf);
+      // it rises from nothing, unless another runs into the top of it, and
+      // dwindles to nothing unless it has somewhere to run to
+      if (!fedAtTop) half[0] = 0;
+      if (!mouth) half[last] = 0;
+      for (let a = 0; a < last; a += STREAM_PIECE) {
+        const b = Math.min(last, a + STREAM_PIECE);
+        const seg = {
+          real: true,
+          count: b - a,
+          pts: new Float64Array((b - a + 1) * 2),
+          s: new Float64Array(b - a + 1),
+          W: new Float64Array(b - a + 1),
+          acc0: acc[a],
+          acc1: acc[b],
+          w0: half[a],
+          w1: half[b],
+          sa: -1,
+          LB: W[last],
+          minX: Infinity,
+          maxX: -Infinity,
+          minZ: Infinity,
+          maxZ: -Infinity,
+        };
+        for (let i = a; i <= b; i++) {
+          seg.pts[(i - a) * 2] = P[i][0];
+          seg.pts[(i - a) * 2 + 1] = P[i][1];
+          seg.s[i - a] = along[i] - along[a];
+          seg.W[i - a] = W[i];
+          seg.minX = Math.min(seg.minX, P[i][0] - STREAM_REACH);
+          seg.maxX = Math.max(seg.maxX, P[i][0] + STREAM_REACH);
+          seg.minZ = Math.min(seg.minZ, P[i][1] - STREAM_REACH);
+          seg.maxZ = Math.max(seg.maxZ, P[i][1] + STREAM_REACH);
+        }
+        this.segs.push(seg);
+        const B = STREAM_BUCKET;
+        for (let j = Math.floor(seg.minZ / B); j <= Math.floor(seg.maxZ / B); j++) {
+          for (let i = Math.floor(seg.minX / B); i <= Math.floor(seg.maxX / B); i++) {
+            const key = `${i},${j}`;
+            if (!this._streamBuckets.has(key)) this._streamBuckets.set(key, []);
+            this._streamBuckets.get(key).push(seg);
+          }
+        }
+      }
+    }
+  }
+
+  // The pieces of stream that could reach (x, z): hand each to Water._hit.
+  streamsNear(x, z) {
+    return this._streamBuckets.get(`${Math.floor(x / STREAM_BUCKET)},${Math.floor(z / STREAM_BUCKET)}`) || NONE;
+  }
+
   // ── Lakes ──────────────────────────────────────────────────────────────────
   // Signed metres to the nearest lake's shore (negative in the water), that
   // lake's level (relative, like raw()) in this.level, and whether it is the
@@ -322,6 +513,16 @@ export class Landform {
     const fx = (x - this.cx + this.half) / this.cell;
     const fz = (z - this.cz + this.half) / this.cell;
     for (const l of this.lakes) {
+      if (l.cell) {
+        // on a grid of its own
+        const d = fieldAt(l, x - this.cx, z - this.cz);
+        if (d < best) {
+          best = d;
+          this.level = l.level;
+          this.sea = l.sea;
+        }
+        continue;
+      }
       const [i0, j0, w, h] = l.box;
       const gx = fx - i0;
       const gz = fz - j0;
@@ -346,19 +547,7 @@ export class Landform {
   // (negative on it). SHORE_FAR if there's none near.
   strand(x, z) {
     let best = SHORE_FAR;
-    for (const b of this.beaches) {
-      const gx = (x - this.cx - b.x) / b.cell;
-      const gz = (z - this.cz - b.z) / b.cell;
-      if (gx < 0 || gz < 0 || gx > b.w - 1 || gz > b.h - 1) continue;
-      const i = Math.min(b.w - 2, Math.floor(gx));
-      const j = Math.min(b.h - 2, Math.floor(gz));
-      const u = gx - i;
-      const v = gz - j;
-      const k = j * b.w + i;
-      const D = b.d;
-      const d = (D[k] * (1 - u) + D[k + 1] * u) * (1 - v) + (D[k + b.w] * (1 - u) + D[k + b.w + 1] * u) * v;
-      if (d < best) best = d;
-    }
+    for (const b of this.beaches) best = Math.min(best, fieldAt(b, x - this.cx, z - this.cz));
     return best;
   }
 
@@ -368,6 +557,21 @@ export class Landform {
   beachy(x, z) {
     if (this.country.shore !== 'rock') return 1;
     return this.beaches.length ? 1 - smoothstep(-1, 3, this.strand(x, z)) : 0;
+  }
+
+  // Whether (x, z), out past the edge of the land, is where the real sea
+  // runs on: the game's sea stops at a bank just short of the edge, with
+  // forest beyond, but seen from on the land it should lie open to the
+  // horizon. It does where the edge of the land, in from here, is sea.
+  // (For the far view: sets this.level, as shore() does.)
+  openSea(x, z) {
+    if (!this.lakes.some((l) => l.sea)) return false;
+    const dx = x - this.cx;
+    const dz = z - this.cz;
+    const r = Math.hypot(dx, dz);
+    const edge = this.radius - SEA_EDGE;
+    if (r < edge) return false;
+    return this.shore(this.cx + (dx / r) * edge, this.cz + (dz / r) * edge) < -SEA_EDGE * 0.2 && this.sea;
   }
 
   // How churned up the sea is u metres from its shore (negative in the

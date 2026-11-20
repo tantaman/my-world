@@ -251,10 +251,16 @@ export class ChunkManager extends Emitter {
       out.bare = ch.sampleGrid(ch.surface, x, z, SS, 0);
       out.sand = ch.sampleGrid(ch.surface, x, z, SS, 1);
       out.land = ch.sampleGrid(ch.surface, x, z, SS, 2);
+      // (which country isn't a thing to average: the nearest vertex says)
+      const N = ch.n + 1;
+      const i = Math.min(ch.n, Math.max(0, Math.round((x - ch.x0) / ch.step)));
+      const j = Math.min(ch.n, Math.max(0, Math.round((z - ch.z0) / ch.step)));
+      out.country = ch.surface[(j * N + i) * SS + 3];
     } else {
       out.bare = 0;
       out.sand = 0;
       out.land = 0;
+      out.country = 0;
     }
     return true;
   }
@@ -467,6 +473,8 @@ export class ChunkManager extends Emitter {
   //            loudest first; count says how many are in use
   //   still    0..1 how much still-water shore is near
   //   sx, sy, sz  where that is
+  //   surf     0..1 how much breaking sea is near
+  //   ux, uy, uz  where that is
   waterAround(x, z, r, out) {
     const pts = this._waterPts || (this._waterPts = []);
     let n = 0;
@@ -474,6 +482,10 @@ export class ChunkManager extends Emitter {
     let sx = 0;
     let sy = 0;
     let sz = 0;
+    let surf = 0;
+    let ux = 0;
+    let uy = 0;
+    let uz = 0;
     const s = this.size;
     for (let cz = Math.floor((z - r) / s); cz <= Math.floor((z + r) / s); cz++) {
       for (let cx = Math.floor((x - r) / s); cx <= Math.floor((x + r) / s); cx++) {
@@ -505,6 +517,13 @@ export class ChunkManager extends Emitter {
               // how open the sky is over it grows with a channel's breadth
               p.big = Math.max(0, Math.min(1, (D[o + 4] - 0.15) / 0.55));
               n++;
+            } else if (D[o + 3] > 0.5) {
+              // still water that is white is the sea breaking
+              const w = near * D[o + 3];
+              surf += w;
+              ux += px * w;
+              uy += ch.wLevel[k] * w;
+              uz += pz * w;
             } else if (depth < 0.35) {
               const w = near;
               still += w;
@@ -555,6 +574,12 @@ export class ChunkManager extends Emitter {
       out.sx = sx / still;
       out.sy = sy / still;
       out.sz = sz / still;
+    }
+    out.surf = 1 - Math.exp(-surf * 0.12);
+    if (surf > 0) {
+      out.ux = ux / surf;
+      out.uy = uy / surf;
+      out.uz = uz / surf;
     }
     return out;
   }

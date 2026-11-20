@@ -16,6 +16,7 @@ From the console: `world.country.name`.
 ## Files
 
 ```
-index.js              plugs it into the game: the colours and the weather of the country you're in
+index.js              plugs it into the game: every country's colours, and the weather and the surf where you are
 here.js               which real place you're on, and its weather where you stand
+surf.js               the sound of the sea breaking on a real shore
 ```

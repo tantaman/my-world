@@ -48,6 +48,8 @@ const SIMPLIFY = 0.25;
 // game m: the sea's shore is worked out this far past the water and the land
 // that is kept. More than a packed shore distance can say (landform.js).
 const SEA_MARGIN = 70;
+// game m: the spacing of the grid the sea's shore is kept on
+const SEA_CELL = 3;
 
 //   photo      { lat, lon, bearing, hour } (readPhoto())
 //   elevation  (lat, lon) -> metres above sea level
@@ -58,10 +60,12 @@ const SEA_MARGIN = 70;
 //   roads      [[[lat, lon], ...], ...]: roads and car parks, where a walk
 //              can begin
 //   beaches    [[[lat, lon], ...], ...]: the outline of each beach
+//   streams    [{ name, river, points: [[lat, lon], ...] }]: running water,
+//              each the way it flows
 //   datum      the heights to stand on, shared with a hike this one overlaps
 //              (place.js), or null to set its own
 // → { def, preview: { width, height, rgb } }
-export function buildHike({ id, name, photo, elevation, trails = [], waters = [], coast = [], roads = [], beaches = [], at = [0, 0], datum = null, ...opt }) {
+export function buildHike({ id, name, photo, elevation, trails = [], waters = [], coast = [], roads = [], beaches = [], streams = [], at = [0, 0], datum = null, ...opt }) {
   const o = { ...DEFAULTS, ...opt, trees: { ...DEFAULTS.trees, ...opt.trees } };
   const s = o.scale;
   const frame = localFrame(photo.lat, photo.lon);
@@ -195,10 +199,29 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
       j0 = Math.max(0, j0 - 1);
       i1 = Math.min(n - 1, i1 + 1);
       j1 = Math.min(n - 1, j1 + 1);
-      const bw = i1 - i0 + 1;
-      const bh = j1 - j0 + 1;
+      // The shore is kept on a finer grid than the ground's, so a cove a few
+      // metres across comes out a cove. Only near the coast is it worth
+      // working out again; elsewhere the coarse answer says the same.
+      const k = Math.max(1, Math.round(cell / SEA_CELL));
+      const fine = cell / k;
+      const bw = (i1 - i0) * k + 1;
+      const bh = (j1 - j0) * k + 1;
       const d = new Float32Array(bw * bh);
-      for (let j = 0; j < bh; j++) for (let i = 0; i < bw; i++) d[j * bw + i] = D[(j0 + j) * n + i0 + i];
+      for (let j = 0; j < bh; j++) {
+        for (let i = 0; i < bw; i++) {
+          const [ci, cj] = [Math.min(i1 - 1, i0 + Math.floor(i / k)), Math.min(j1 - 1, j0 + Math.floor(j / k))];
+          const near = Math.min(Math.abs(D[cj * n + ci]), Math.abs(D[cj * n + ci + 1]), Math.abs(D[(cj + 1) * n + ci]), Math.abs(D[(cj + 1) * n + ci + 1]));
+          const x = gx(i0) + i * fine;
+          const z = gx(j0) + j * fine;
+          if (near > SEA_MARGIN) {
+            const [u, v] = [(i % k) / k, (j % k) / k];
+            const a = D[cj * n + ci] * (1 - u) + D[cj * n + ci + 1] * u;
+            const b = D[(cj + 1) * n + ci] * (1 - u) + D[(cj + 1) * n + ci + 1] * u;
+            d[j * bw + i] = a * (1 - v) + b * v;
+          } else d[j * bw + i] = Math.max(coastDistance(shores, x, z), Math.hypot(x, z) - Rl);
+        }
+      }
+      const own = { x: round(gx(i0), 100), z: round(gx(j0), 100), w: bw, h: bh, cell: fine };
       for (let k = 0; k < n * n; k++) {
         if (lakeCells[k]) continue; // a pond by the shore keeps its own level
         if (D[k] < 0) {
@@ -206,7 +229,7 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
           lakeCells[k] = 1;
         } else E[k] = Math.max(E[k], SEA_LEVEL + BANK);
       }
-      lakes.push({ name: SEA_NAME, sea: true, levelReal: SEA_LEVEL, box: [i0, j0, bw, bh], d });
+      lakes.push({ name: SEA_NAME, sea: true, levelReal: SEA_LEVEL, own, d });
     }
   }
 
@@ -266,6 +289,24 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
     flush();
   }
 
+  // ── Streams ────────────────────────────────────────────────────────────────
+  // The stretches that are on the land, each the way it flows. How high the
+  // water stands along them is worked out from the ground when the land is
+  // set into the world (Landform.settled).
+  const runs = [];
+  for (const st of streams) {
+    let cur = [];
+    const flush = () => {
+      if (cur.length > 1) runs.push({ name: st.name, big: st.river ? 1 : 0, pts: simplify(cur, SIMPLIFY).flatMap(([x, z]) => [round(x, 10), round(z, 10)]) });
+      cur = [];
+    };
+    for (const p of st.points.map(toGame)) {
+      if (inside(p[0], p[1], LAKE_INSET)) cur.push(p);
+      else flush();
+    }
+    flush();
+  }
+
   // The walk: from where you'd leave the car, by whatever paths lead to where
   // the photo was taken. Failing a road, up the trail it was taken on.
   const view = { x: 0, z: 0, bearing: round(photo.bearing, 10), hour: round(photo.hour, 100) };
@@ -290,8 +331,9 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
     trees: o.trees,
     // what kind of country it is (src/world/country.js); unsaid, forest
     ...(o.country ? { country: o.country } : {}),
-    lakes: lakes.map((l) => ({ name: l.name, ...(l.sea ? { sea: true } : {}), level: round((l.levelReal - base) * s, 100), box: l.box, shore: packShore(l.d) })),
+    lakes: lakes.map((l) => ({ name: l.name, ...(l.sea ? { sea: true } : {}), level: round((l.levelReal - base) * s, 100), ...(l.own || { box: l.box }), shore: packShore(l.d) })),
     ...(strands.length ? { beaches: strands } : {}),
+    ...(runs.length ? { streams: runs } : {}),
     paths: lines.map((l) => l.pts.flatMap(([x, z]) => [round(x, 10), round(z, 10)])),
     ground: { n, cell, heights: packHeights(H, n) },
   };
@@ -311,19 +353,21 @@ export function buildHike({ id, name, photo, elevation, trails = [], waters = []
     if (anchor > edge + SUMMIT) anchor = edge;
     def.datum = { at: [...at], outer: def.radius + def.fade, anchor: round(anchor, 1000), base: def.base };
   }
-  return { def, preview: preview(H, n, cell, lakeCells, lines, route) };
+  return { def, preview: preview(H, n, cell, lakeCells, lines, route, runs) };
 }
 
 // A hike as it's kept (see src/world/landforms.js): its card, small, listed in
 // src/world/hikes.js and always loaded; and its land, in a file of its own,
 // fetched the first time it's needed. { ...card, ...land } is the hike again.
-export const LAND_PARTS = ['ground', 'lakes', 'beaches', 'paths'];
+export const LAND_PARTS = ['ground', 'lakes', 'beaches', 'streams', 'paths'];
 export function splitHike(def) {
   const card = {};
   const land = {};
   for (const [k, v] of Object.entries(def)) (LAND_PARTS.includes(k) ? land : card)[k] = v;
-  // the card keeps the lakes' names, for the list of hikes
+  // the card keeps the names of its lakes and streams, for the list of hikes
   card.lakes = (def.lakes || []).map((l) => ({ name: l.name, ...(l.sea ? { sea: true } : {}) }));
+  const named = [...new Set((def.streams || []).map((s) => s.name).filter(Boolean))];
+  if (named.length) card.streams = named;
   return { card, land };
 }
 
@@ -564,8 +608,9 @@ function segDist(p, a, b) {
 }
 
 // ── A picture of it ──────────────────────────────────────────────────────────
-// Hillshade, lakes, trails, the walk (red) and where the photo was taken.
-function preview(H, n, cellM, lakeCells, lines, route) {
+// Hillshade, lakes, streams, trails, the walk (red) and where the photo was
+// taken.
+function preview(H, n, cellM, lakeCells, lines, route, runs = []) {
   const rgb = new Uint8Array(n * n * 3);
   let lo = Infinity;
   let hi = -Infinity;
@@ -598,6 +643,7 @@ function preview(H, n, cellM, lakeCells, lines, route) {
       }
     }
   };
+  for (const r of runs) plot(Array.from({ length: r.pts.length / 2 }, (_, k) => [r.pts[k * 2], r.pts[k * 2 + 1]]), r.big ? [70, 130, 215] : [90, 150, 225]);
   for (const l of lines) plot(l.pts, [235, 225, 170]);
   if (route) plot(route.pts, [230, 50, 40]);
   for (let b = -2; b <= 2; b++) for (let a = -2; a <= 2; a++) rgb.set([255, 255, 255], ((half + b) * n + half + a) * 3);
