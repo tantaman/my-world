@@ -19,7 +19,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
       const s = world.player.start;
       await world.teleport(s.x, s.z, s.yaw);
     });
-    await key('KeyI');
+    await key('KeyJ');
     const board = await page.evaluate(() => ({
       open: document.getElementById('adventures').classList.contains('open'),
       rows: [...document.querySelectorAll('#adventures [data-act="go"]')].map((b) => b.dataset.kind),
@@ -43,7 +43,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
   });
 
   await step('a twister', async () => {
-    await key('KeyI');
+    await key('KeyJ');
     await page.click('#adventures [data-kind="tornado"]');
     await frames(30);
     const on = await page.evaluate(() => ({
@@ -71,7 +71,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
     assert.ok(thrown.health < 100 && thrown.up > 5, `it picks you up and throws you (${JSON.stringify(thrown)})`);
     await shot('twister');
     // given up from the board
-    await key('KeyI');
+    await key('KeyJ');
     assert.match(await page.evaluate(() => document.querySelector('#adventures .adv-board-now').textContent), /on now: Tornado/);
     await page.click('#adventures [data-act="quit"]');
     await frames(5);
@@ -232,7 +232,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
     assert.equal(rec.bear.won, 1, 'the bear you brought down');
     assert.equal(rec.wildfire.tries, 1);
     assert.equal(rec.wildfire.won, 0);
-    await key('KeyI');
+    await key('KeyJ');
     const said = await page.evaluate(() => document.querySelector('#adventures [data-kind="bear"] .adv-board-rec').textContent);
     await key('Escape');
     assert.match(said, /^made it once · best \d:\d\d$/);

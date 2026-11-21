@@ -106,3 +106,31 @@ test('each comes after the features whose things it takes from the game', () => 
     }
   }
 });
+
+test('no two features bind the same key', () => {
+  // Commands.update runs every command whose key was pressed (commands.js), so
+  // a key bound twice does both things at once — and if one of them takes the
+  // keyboard, it swallows what you press next. The command system warns about
+  // it; this is what fails.
+  //
+  // Read as text like the rest of this section. Keys built in a loop (the tool
+  // bar's digits) are written as template strings and are not checked here.
+  const bound = new Map(); // key code -> ['feature:id', ...]
+  for (const f of real) {
+    for (const call of f.text.split('commands.add(').slice(1)) {
+      const head = call.slice(0, 400);
+      const id = head.match(/id: '([^']+)'/)?.[1] ?? head.match(/id: `([^`]+)`/)?.[1];
+      const keys = head.match(/keys: \[([^\]]*)\]/)?.[1];
+      if (!id || keys === undefined) continue;
+      for (const code of [...keys.matchAll(/'([^']+)'/g)].map((m) => m[1])) {
+        if (!bound.has(code)) bound.set(code, []);
+        bound.get(code).push(`${f.name}:${id}`);
+      }
+    }
+  }
+  assert.ok(bound.size > 10, `the bindings were found (${bound.size})`);
+  const twice = [...bound]
+    .filter(([, who]) => new Set(who).size > 1)
+    .map(([code, who]) => `${code} is bound by ${[...new Set(who)].join(' and ')}`);
+  assert.deepEqual(twice, []);
+});
