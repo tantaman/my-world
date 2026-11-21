@@ -356,6 +356,25 @@ for (const land of LANDS) test(`the world grows a hike: the real land, its trail
   }
 });
 
+for (const land of LANDS) test(`in snowy mountains its lake is frozen over: flat snow at its level, no water, nothing growing on it${onLand(land)}`, () => {
+  const open = world([hike], land);
+  const frozen = world([{ ...hike, country: 'snowy mountains' }], land);
+  const at = (e, n) => [AT[0] + e * 0.2, AT[1] - n * 0.2];
+  const [x, z] = at(-1600, 0);
+  open.height(x, z);
+  const level = open.water.level;
+  const ice = frozen.height(x, z);
+  assert.equal(frozen.water.region, 0, 'no water in it');
+  assert.ok(frozen.water.kind !== 'lake' || frozen.water.edge > 0, 'and no lake');
+  near(ice, level, 0.1, 'the ice is at the water’s level');
+  near(frozen.height(...at(-1500, 60)), ice, 0.1, 'and flat');
+  assert.ok(frozen.snow(x, z, ice) > 0.99, 'snowed over');
+  assert.ok(frozen.padClearance(x, z) < 0, 'nothing grows on it');
+  assert.ok(frozen.landforms[0].frozen && !open.landforms[0].frozen);
+  // the rest of it is as it was
+  assert.equal(frozen.height(...at(0, 0)), open.height(...at(0, 0)));
+});
+
 // The same mountain by the sea: the land falls away to the east, and a
 // little over a kilometre out the coast runs north. A road runs along the
 // shore, and the trail comes up from it.

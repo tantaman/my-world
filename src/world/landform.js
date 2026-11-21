@@ -128,6 +128,12 @@ const STREAM_BUCKET = 64; // m, cells of the lookup grid
 // m in from the edge of a finer grid over which it gives way to the coarse one
 const FINE_EDGE = 8;
 
+// A frozen lake's ice lies this far (m) under its water level, and a frozen
+// stream's fills its channel to this far (m) past its banks. Nothing grows on
+// a frozen lake, or within ICE_CLEAR (m) of its shore.
+export const ICE = { under: 0.05, bank: 0.5 };
+const ICE_CLEAR = 1.5;
+
 // What forest() says of land with no trees: low enough that the odd tree the
 // forest plants even in its barest meadows isn't planted either.
 const TREELESS = -0.05;
@@ -359,6 +365,8 @@ export class Landform {
     this.trailhead = def.trailhead;
     this.trees = { cover: 0.85, species: 0.6, ...def.trees };
     this.country = countryOf(def.country);
+    // its lakes and streams frozen over, if its country's are (and it has no sea)
+    this.frozen = !!this.country.frozen && !this.lakes.some((l) => l.sea);
     this.scale = def.scale || 0.2;
     this.base = def.base || 0;
     // what covers it, as COVER's kinds (1 + index; 0 nothing said), and the
@@ -624,6 +632,7 @@ export class Landform {
         const b = Math.min(last, a + STREAM_PIECE);
         const seg = {
           real: true,
+          frozen: this.frozen,
           count: b - a,
           pts: new Float64Array((b - a + 1) * 2),
           s: new Float64Array(b - a + 1),
@@ -919,6 +928,8 @@ export class Landform {
       best = Math.min(best, Math.hypot(lx - t.x, lz - t.z) - TRAILHEAD_CLEAR);
       best = Math.min(best, camera(t.x, t.z, Math.sin(t.yaw), Math.cos(t.yaw)));
     }
+    // nothing stands on a frozen lake
+    if (this.frozen) best = Math.min(best, this.shore(x, z) - ICE_CLEAR);
     return best;
   }
 

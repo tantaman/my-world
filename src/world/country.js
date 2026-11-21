@@ -54,6 +54,8 @@
 //   treeline [from, to]: the real heights (m above the sea) over which the
 //            trees thin out to none, and the ground above is thin turf among
 //            stones; or null for none
+//   frozen   whether its lakes and streams are frozen over and snowed on, to
+//            walk and ski across (not the sea: a place by the sea keeps it all open)
 //   snowline [from, to]: the real heights over which snow comes to lie on all
 //            the gentle ground, in drifts at first; or null for none. A hike
 //            can say otherwise for itself, on its card (a photo taken in
@@ -90,6 +92,7 @@ const FOREST = {
   tints: {},
   treeline: null,
   snowline: null,
+  frozen: false,
 };
 
 const kind = (over) => ({ ...FOREST, ...over, ground: { ...FOREST.ground, ...over.ground }, clouds: { ...FOREST.clouds, ...over.clouds } });
@@ -225,9 +228,9 @@ export const COUNTRY = {
   }),
 
   // High mountains in winter, where people go to ski (the Alps in February):
-  // snow lying on all of it but the crags, dark firs in the valleys thinning
-  // out to none a little over 2,000 m, the odd bush poking through, and a
-  // hard, clear sky.
+  // snow lying on all of it but the crags, its lakes frozen and snowed over,
+  // dark firs in the valleys thinning out to none a little over 2,000 m, the
+  // odd bush poking through, and a hard, clear sky.
   'snowy mountains': kind({
     ground: {
       tint: [0.8, 0.88, 0.85],
@@ -245,6 +248,7 @@ export const COUNTRY = {
     treeline: [1800, 2050],
     // (all the way down to the sea: it's winter)
     snowline: [-100, 0],
+    frozen: true,
   }),
 };
 

@@ -28,14 +28,17 @@
 // Real places set into the world (landform.js) bring their own lakes, and the
 // forest's own water keeps out of them: the drainage network is worked out
 // over the forest's land alone, so it is the same with or without them, and
-// its channels and basins give way where real land begins.
+// its channels and basins give way where real land begins. Where a real
+// place is frozen (a country in winter), its lakes are flat ice at their
+// level and its streams are filled to theirs between their banks, all
+// snowed over: the ground is there, and no water is.
 //
 // In a land with a sea (sea.js) the sea stands wherever the land lies below
 // its level. Rivers run out into it, and only ever deepen its bed.
 
 import { createSimplex2, smoothstep } from '../noise.js';
 import { Drainage, NET, basinRadius, channelSize } from './drainage.js';
-import { LAKE_REGION, seaSurf } from './landform.js';
+import { LAKE_REGION, ICE, seaSurf } from './landform.js';
 import { SHORE_BAND } from './sea.js';
 
 // Level reported where there's no water at all.
@@ -199,6 +202,7 @@ export class Water {
     if (!s.real && this.gen.landforms.length) cw *= smoothstep(0, LANDFORM_DRY, this.gen.landformClearance(x, z));
     hit.d = d;
     hit.cw = cw;
+    hit.frozen = !!s.frozen;
     // a stream fades in at its spring, valley and all
     hit.g = smoothstep(0, 0.35, cw);
     hit.size = size;
@@ -358,6 +362,12 @@ export class Water {
     order.sort((a, b) => b.d - b.cw - (a.d - a.cw));
     for (const L of order) {
       h = this._carveLine(L, h, pm, lake);
+      // frozen: the channel filled to its water's level between its banks,
+      // and no water in it
+      if (L.frozen) {
+        if (L.d < L.cw + ICE.bank) h = Math.max(h, L.Wq - ICE.under);
+        continue;
+      }
       const edge = L.d - L.cw;
       const region = L.d < L.cw + L.region && L.cw > 0.05 ? 1 : 0;
       const kind = L.river ? 'river' : 'stream';
@@ -392,6 +402,10 @@ export class Water {
       if (u > LAKE_BLEND) continue;
       const level = L.level + L.offset;
       h = L.lakeBed(u, h, level, L.sea ? L.beachy(x, z) : 1);
+      if (L.frozen) {
+        h = Math.max(h, level - ICE.under);
+        continue;
+      }
       // (the sea is a lake that breaks on its shore)
       this._offer(level, u < LAKE_REGION ? 1 : 0, u, 'lake', 0, 0, L.sea ? L.surf(u) : 0, OPEN.lake);
     }
@@ -423,7 +437,7 @@ export class Water {
       this._offer(NO_WATER, 0, hit.d - hit.cw, hit.river ? 'river' : 'stream', 0, 0, 0, 1);
     }
     for (const L of this.gen.landforms) {
-      if (L.weight(x, z) <= 0) continue;
+      if (L.weight(x, z) <= 0 || L.frozen) continue;
       const u = L.shore(x, z);
       if (u < LAKE_BLEND) this._offer(NO_WATER, 0, u, 'lake', 0, 0, 0, 1);
       for (const s of L.streamsNear(x, z)) {
