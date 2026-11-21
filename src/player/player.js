@@ -174,6 +174,12 @@ export class Player extends Emitter {
     //   agility        how quickly it gets up to speed (1/s)
     //   turn           how quickly it turns the way it's going (1/s)
     //   push           how much of the current carries it (0..1)
+    //   keel           if it floats (a boat): the water it needs (m). It goes
+    //                  no further where it's shallower, but runs aground and
+    //                  slides along the shore; from somewhere shallower still
+    //                  (pulled up on the bank) it can only go out, not in
+    //   bow            ...and how far ahead of its middle (m) the water has
+    //                  to be deep enough too, the way it's going
     //   fly            null, or { cruise, fast, climb, glide, dive, ceiling,
     //                  agility }: m/s along and up (glide and dive sink, so
     //                  are negative), and how high over the ground it goes (m)
@@ -454,6 +460,8 @@ export class Player extends Emitter {
 
     // A cave's walls and roof.
     if (this.space) this._keepInside(wasX, wasZ);
+    // A boat's keel: off the shallows.
+    else if (c && c.keel && !this.flying) this._keepAfloat(wasX, wasZ, c);
 
     // Ground
     const wasGrounded = this.grounded;
@@ -576,6 +584,64 @@ export class Player extends Emitter {
       this.pos.y = Math.max(floor, roof - head);
       this.vel.y = 0;
     }
+  }
+
+  // Carried by something that floats (carrier.keel): no further into water too
+  // shallow for it. A step that would take it there is turned to run along
+  // the shore instead (the way the water keeps its depth), so it slides along
+  // rather than stopping dead; and anywhere deeper than where it was is
+  // allowed, so a boat pulled up on the bank can always be pushed out again.
+  _keepAfloat(wasX, wasZ, c) {
+    let mx = this.pos.x - wasX;
+    let mz = this.pos.z - wasZ;
+    const m = Math.hypot(mx, mz);
+    if (m < 1e-9) return;
+    const from = this._draught(wasX, wasZ, c, mx / m, mz / m);
+    const ok = (x, z, dx, dz) => {
+      const d = this._draught(x, z, c, dx, dz);
+      return d >= c.keel || d > from;
+    };
+    if (ok(this.pos.x, this.pos.z, mx / m, mz / m)) return;
+    // which way the water gets deeper, here
+    const e = 0.3;
+    const gx = this._depth(wasX + e, wasZ) - this._depth(wasX - e, wasZ);
+    const gz = this._depth(wasX, wasZ + e) - this._depth(wasX, wasZ - e);
+    const gl = Math.hypot(gx, gz);
+    const nx = gl > 1e-9 ? gx / gl : 0;
+    const nz = gl > 1e-9 ? gz / gl : 0;
+    const into = mx * nx + mz * nz;
+    if (gl > 1e-9 && into < 0) {
+      // along the shore, the part of the step that was into the shallows taken out
+      mx -= into * nx;
+      mz -= into * nz;
+      const l = Math.hypot(mx, mz);
+      if (l > 1e-9 && ok(wasX + mx, wasZ + mz, mx / l, mz / l)) {
+        this.pos.x = wasX + mx;
+        this.pos.z = wasZ + mz;
+        const vn = this.vel.x * nx + this.vel.z * nz;
+        if (vn < 0) {
+          this.vel.x -= vn * nx;
+          this.vel.z -= vn * nz;
+        }
+        return;
+      }
+    }
+    this.pos.x = wasX;
+    this.pos.z = wasZ;
+    this.vel.x = 0;
+    this.vel.z = 0;
+  }
+
+  // How deep the water is at (x, z) (m, 0 out of it).
+  _depth(x, z) {
+    return this.world.waterAt(x, z, _w) ? Math.max(0, _w.depth) : 0;
+  }
+
+  // How much water there is to float in at (x, z) (m), going the way (dx, dz):
+  // under the middle, or under the bow, whichever is shallower.
+  _draught(x, z, c, dx, dz) {
+    const d = this._depth(x, z);
+    return c.bow ? Math.min(d, this._depth(x + dx * c.bow, z + dz * c.bow)) : d;
   }
 
   // Is the camera's view clear t metres back from its target along dir: open
