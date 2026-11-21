@@ -11,7 +11,7 @@
 
 import assert from 'node:assert/strict';
 
-export default async function ({ page, step, key, frames, open, shot }) {
+export default async function ({ page, step, key, take, frames, open, shot }) {
   const view = () => page.evaluate(() => world.adventures.view());
 
   await step('the board', async () => {
@@ -105,7 +105,9 @@ export default async function ({ page, step, key, frames, open, shot }) {
     });
     assert.ok(mauled.health < 100, `mauled (${mauled.health})`);
     assert.equal(mauled.mind, 'back', 'and it backs off');
-    await key('Digit0');
+    // the rifle in hand, however many tools share its number: pressing the
+    // number once can as easily put away what you are already holding
+    await take('rifle');
     const shots = await page.evaluate(async () => {
       const a = world.adventures;
       const b = a.run.prowler;

@@ -312,7 +312,10 @@ test('a lion only comes from behind: face it, and it turns away', () => {
   faced.p._set('charge');
   faced.run(6);
   assert.equal(faced.mauls.length, 0, 'not while you look at it');
-  assert.equal(faced.p.mind, 'back');
+  // It backs off for 4 to 7 s and then goes back to circling, so which of the
+  // two it is doing after 6 is a toss-up: what is being asked is that it gave
+  // up coming at you, not which way it is waiting.
+  assert.ok(!['charge', 'pounce'].includes(faced.p.mind), `it gave up coming (${faced.p.mind})`);
   const behind = prowling('cougar', 0, 30, { facing: { x: 0, z: -1 } });
   behind.p._set('charge');
   behind.run(6);
