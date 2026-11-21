@@ -1,7 +1,7 @@
 # The world
 
 - **Varied.** Over a few kilometres the country changes
-  (`src/world/land2.js`):
+  (`src/world/worldgen.js`):
   - **Lake country** lies low, in broad smooth hollows that each gather a lot
     of water, so there's a pond or a lake in every other one, and the lakes are
     the biggest anywhere (well over 100 m across). It's wetter, more open, and
@@ -22,7 +22,7 @@
   **open parkland**, where the meadows run together, the odd lone tree grows
   big, and scrub grows in the open. You start on level ground among the
   trees.
-- **The sea** (the third land, `src/world/land3.js`, `sea.js`). A walk from
+- **The sea** (`src/world/worldgen.js`, `sea.js`). A walk from
   the start, about half a kilometre to a kilometre off in a direction of the
   seed's own, the land goes down to the sea. Far out the land falls away
   under a sea that stands at one level everywhere; how far it falls is a
@@ -72,7 +72,7 @@
     below; on a river, riffles. A channel widens into pools and narrows
     between them. A pond or lake fills its hollow to just under the lowest
     point of its rim, with a beach that rises gently to meet the land. On
-    the third land most lakes are deep tarns: a shelf a metre or two deep
+    Most lakes are deep tarns: a shelf a metre or two deep
     out from the shore, then a steep drop to a floor 15 to 30-odd metres
     down.
   - **The water itself** is meshed per chunk on the main thread from the
@@ -119,18 +119,22 @@ a new **land**, and every world keeps the land it was first grown on
 
 | land | |
 |---|---|
-| 1 | rolling hills and mixed woods everywhere (`world/worldgen.js`) — every world saved before there was a second |
-| 2 | lake country, hills and mountains, benches, and different woods (`world/land2.js`) |
-| 3 | all of that, and the sea a walk from the start, and deep lakes (`world/land3.js`, `sea.js`) |
+| 1 | lake country, hills, mountains and benches, the woods changing with the country, the sea a walk from the start, and deep lakes (`world/worldgen.js`, `sea.js`) |
 
 New worlds are grown on the newest. A shared world says which land it is on
 in its save, beside its name (`land` → 2); one that says nothing is land 1,
 which is every world saved before lands were counted. A world that lives only
 in your browser is known by its seed and its land, so the world you built in
-before is still there, at `?land=1` or `?land=2`; the first time you open the
-new land where one is kept, the game says so. What each land grows is pinned
-by `test/golden/` (land 2's files end in `-land2`, land 3's in `-land3`), and
-never changes: something new goes in a land of its own.
+before is still there, at `?land=1`; the first time you open the new land
+where one is kept, the game says so.
+
+How far that is pinned is `FROZEN` in `world/lands.js`. A frozen land's
+golden files are for good, because worlds people keep are grown on it: if one
+fails, the code is wrong. The lands past it are drafts — the land is still
+being shaped, `UPDATE_GOLDEN=1 npm test` re-records them, and the diff is
+what a change did. Nothing is frozen yet, so the land is still ours to
+change; once it is, something that changes how the forest grows goes in a
+land of its own (a land 2's files end in `-land2`).
 
 ## Real places
 
@@ -183,11 +187,9 @@ On the settings panel (**O**), under *time*:
 
 ```
 index.js              plugs it into the game: the land, the sky, the hour
-worldgen.js           pure world description: height, paths, forest, species (land 1)
-land2.js              the second land: lake country, mountains, benches, kinds of woods
-land3.js              the third land: the second, by the sea, with deep lakes
+worldgen.js           the land: height, paths, country, woods, forest, species
 sea.js                the sea: where the land falls away to it, its beaches
-lands.js              which land a world is grown on; growWorld()
+lands.js              which land a world is grown on, and how far they are pinned; growWorld()
 drainage.js           where water runs and gathers: the drainage network
 water.js              streams, rivers, ponds, lakes and the sea on the ground, from that network
 landform.js           a piece of real land (a hike): its heights, trails, lakes, streams

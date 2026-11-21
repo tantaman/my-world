@@ -56,7 +56,7 @@ export const NET = {
 export const POND = { acc: 3, accFull: 30, r: [6, 14], depth: [1.0, 1.7] };
 export const LAKE = { acc: 30, accFull: 260, r: [22, 60], depth: [2.5, 5.5] };
 // Lakes that go deep, on a land that has them (its stillWater() lake
-// carries this as `deep`; see land3.js). Most are tarns that shelve out from
+// carries this as `deep`; see worldgen.js). Most are tarns that shelve out from
 // the shore a little way and then drop away steeply to a floor far below:
 //   chance   of a lake being one
 //   depth    range (m) at the deepest point, by catchment as above

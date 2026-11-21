@@ -1,27 +1,82 @@
-// Pure, deterministic description of the world: height, footpaths, where the
-// forest is thick and where it opens into meadows. No three.js in here so it
-// can be reused anywhere (workers, tools, tests).
+// Pure, deterministic description of the world: height, footpaths, the
+// country the land changes into over a few kilometres, the sea a walk from
+// the start, and where the forest is thick and where it opens into meadows.
+// No three.js in here so it can be reused anywhere (workers, tools, tests).
 //
-// This is the first *land*: the way every world was grown until the land got
-// more to it (land2.js, which grows from this). A world keeps the land it was
-// first grown on, because a save is only what was changed from it — so what
-// this file grows must never change (see test/golden/). lands.js picks which
-// to grow.
+// This is the *land*: the one way a forest is grown from a seed. A world
+// keeps the land it was grown on, because a save is only what was changed
+// from it — so once worlds have been grown on a land, what it grows is
+// pinned (test/golden/) and must not change. Whether that has happened yet
+// is FROZEN in lands.js: while the land is still a draft it may be reshaped
+// freely, and its golden files re-recorded.
 //
-// Real places can be set into any land (realPlaces.js, which grows from
-// whichever it is given). A land knows nothing of them, but for the few
-// things marked "real places" below, which answer for a land that has none.
+// Over a few kilometres the land changes country:
+//
+//   lake country   low ground in broad, smooth hollows, each gathering enough
+//                  water for a pond or a lake (the biggest anywhere), birch
+//                  and broadleaf woods, wet meadows
+//   hill country   rolling hills and mixed woods
+//   mountains      ridges and peaks a hundred metres and more over the
+//                  valleys, rock on the steep faces, the trees thinning out
+//                  to a treeline, alpine meadows and boulders above it, and
+//                  snow lying on the tops
+//   benches        the land stepped into level shelves with rock along each
+//                  riser, here and there in the hills and mountains
+//
+// and the woods change over a kilometre or so, whatever the country: dark
+// conifer forest, birch groves, and open parkland where the meadows run
+// together and a lone tree stands here and there. A walk from the start the
+// land goes down to the sea (sea.js): the hills tilt down under it, so the
+// coast follows them, with coves, headlands and islands, a sand beach and a
+// sandy seabed, and rivers running out into it. Its lakes go deep: most are
+// tarns, a shelf out from the shore and then a steep drop (DEEP in
+// drainage.js).
+//
+// Real places can be set into the land (realPlaces.js, which grows from it).
+// The land knows nothing of them, but for the few things marked "real places"
+// below, which answer for a land that has none.
 
 import { createSimplex2, fbm, smoothstep } from '../noise.js';
 import { Water } from './water.js';
+import { POND, LAKE, DEEP } from './drainage.js';
+import { Sea, SEA } from './sea.js';
+
+// Country, over this many metres: what kind of land it is.
+const COUNTRY_WAVE = 3200;
+// Where on the country field (about −1..1) lake country gives way to hills,
+// and hills to mountains.
+const LOWLAND = [-0.5, -0.18];
+const MOUNTAINS = [0.12, 0.5];
+// Mountains: the whole range raised this much (m), and ridges on it this far
+// apart (m) at their broadest, and up to this high (m).
+const MASSIF = 45;
+const RIDGE_WAVE = 1100;
+const RIDGE_HIGH = 170;
+// How much the crests are rounded off (on the ridged noise's own scale).
+const CREST = 0.012;
+// Benches: shelves this high (m) between risers. A riser takes up this much
+// of the way from one shelf to the next; the rest is level.
+const BENCH_STEP = 10;
+const BENCH_RISER = 0.16;
+// The trees thin out from here to nothing at the treeline (m, ± a little),
+// and snow lies above the snow line.
+const TREELINE = 92;
+const TREE_FADE = 26;
+const SNOWLINE = 122;
+// The steepest ground (rise over run) you start out on.
+const START_SLOPE = 0.2;
+// The woods: kinds of woodland, over this many metres.
+const WOODS_WAVE = 1500;
+
+// Ponds and lakes where the land is not low (see stillWater, drainage.js).
+const STILL = Object.freeze({ pond: POND, lake: Object.freeze({ ...LAKE, deep: DEEP }), room: 1.4 });
 
 export class WorldGen {
   constructor(seed, structures = []) {
     const n = (k) => createSimplex2((seed * 131 + k * 7919) >>> 0);
     this.seed = seed;
     this.land = 1;
-    // The sea, on a land that has one (land3.js, sea.js): none here. Set
-    // before the fields, which is where such a land puts it.
+    // The sea: set by _fields, which is where the fields it needs are laid.
     this.sea = null;
     this._fields(n);
     // The real places set into this land, each a Landform (landform.js):
@@ -44,8 +99,8 @@ export class WorldGen {
   }
 
   // The noise fields the land is made of. n(k) is the k-th field of this
-  // seed; a land grown from this one adds fields of its own here, before
-  // anything is asked of it.
+  // seed. The numbers are the land's own spelling: water.js takes 26 for
+  // itself, and the sea takes 40 and on, so leave those be.
   _fields(n) {
     this.nHills = n(1);
     this.nBig = n(2);
@@ -61,6 +116,38 @@ export class WorldGen {
     this.nPathWarpA = n(12);
     this.nPathWarpB = n(13);
     this.nMoist = n(14);
+    this.nCountry = n(30);
+    this.nRidge = n(31);
+    this.nBench = n(32);
+    this.nTreeline = n(33);
+    this.nWoods = n(34);
+    this.nGroves = n(35);
+    // the last height asked for, and the last country: both asked for over
+    // and over at the same spot
+    this._at = { x: NaN, z: NaN, h: 0 };
+    this._c = { x: NaN, z: NaN, low: 0, mtn: 0, bench: 0 };
+    // The sea lies over the land's own shape, so it is given that shape
+    // rather than broadHeight(), which is the land with the sea already in it.
+    this.sea = new Sea(this.seed, n, (x, z) => this._landHeight(x, z, 0));
+  }
+
+  // ── Country ───────────────────────────────────────────────────────────────
+  // How much of each kind of country (x, z) is in: this._c.low (lake
+  // country), .mtn (mountains), .bench (stepped into shelves); hill country is
+  // what is left.
+  country(x, z) {
+    const c = this._c;
+    if (c.x === x && c.z === z) return c;
+    const f = 1 / COUNTRY_WAVE;
+    const wx = x + this.nWarpB(x * 0.0005 + 3.1, z * 0.0005) * 260;
+    const wz = z + this.nWarpA(x * 0.0005, z * 0.0005 - 7.7) * 260;
+    const v = (this.nCountry(wx * f, wz * f) + 0.3 * this.nCountry(wx * f * 3.3 + 31.7, wz * f * 3.3 - 17.3)) / 1.15;
+    c.x = x;
+    c.z = z;
+    c.low = 1 - smoothstep(LOWLAND[0], LOWLAND[1], v);
+    c.mtn = smoothstep(MOUNTAINS[0], MOUNTAINS[1], v);
+    c.bench = smoothstep(0.32, 0.6, this.nBench(x * 0.00055, z * 0.00055)) * (1 - c.low);
+    return c;
   }
 
   // ── Footpaths ─────────────────────────────────────────────────────────────
@@ -76,15 +163,22 @@ export class WorldGen {
     out[1] = this.nPathB(wx * (1 / 105) + 40.0, wz * (1 / 105) - 13.0);
   }
 
-  // 0..1: whether there are trails here at all (they give out high up, in
-  // a land with mountains).
-  _trailsHere() {
-    return 1;
+  // 0..1: whether there are trails here at all. They give out on the way up a
+  // mountain, about where the trees do. (Judged from the broadest ridges
+  // alone: the trails are worked out before the height.)
+  _trailsHere(x, z) {
+    const c = this.country(x, z);
+    if (c.mtn <= 0) return 1;
+    const wx = x + this.nWarpA(x * 0.0016, z * 0.0016) * 70;
+    const wz = z + this.nWarpB(x * 0.0016, z * 0.0016) * 70;
+    const high = this.nBig(x * 0.0007, z * 0.0007) * 36 + c.mtn * (c.mtn * MASSIF + Math.pow(this._ridges(wx, wz, 500), 1.25) * RIDGE_HIGH - 12);
+    return 1 - smoothstep(TREELINE - 40, TREELINE - 5, high);
   }
 
-  // 0..1: how much there is of a side trail here, where there is one.
+  // 0..1: how much there is of a side trail here, where there is one. Fewer
+  // of them in the mountains.
   _sideTrails(x, z) {
-    return smoothstep(-0.15, 0.25, this.nPathMask(x * 0.0035, z * 0.0035));
+    return smoothstep(-0.15, 0.25, this.nPathMask(x * 0.0035, z * 0.0035)) * (1 - this.country(x, z).mtn * 0.7);
   }
 
   // Returns a mask in [0,1] (1 = middle of a path). Also fills this.pathEdge
@@ -122,40 +216,113 @@ export class WorldGen {
   }
 
   // ── Height ────────────────────────────────────────────────────────────────
-  _baseHeight(x, z) {
+  // The land's own shape, without the sea: every part of the height is built
+  // here, so the map's far-off relief and the land the water runs over (both
+  // of which leave the small octaves out) are the same hills you walk on.
+  _landHeight(x, z, minWavelength = 0) {
+    const c = this.country(x, z);
     const wx = x + this.nWarpA(x * 0.0016, z * 0.0016) * 70;
     const wz = z + this.nWarpB(x * 0.0016, z * 0.0016) * 70;
-    let h = fbm(this.nHills, wx * 0.0032, wz * 0.0032, 5) * 24;
-    h += this.nBig(x * 0.0007, z * 0.0007) * 36;
-    return h;
-  }
 
-  _detailHeight(x, z) {
-    return this.nDetail(x * 0.09, z * 0.09) * 0.45 + this.nDetail(x * 0.31 + 50, z * 0.31 - 20) * 0.1;
-  }
-
-  // The hills without the small bumps, and without any octave shorter than
-  // minWavelength meters: for drawing relief from far away (the map), where
-  // finer detail would only alias into noise. With minWavelength = 0 this is
-  // exactly _baseHeight.
-  broadHeight(x, z, minWavelength = 0) {
-    const wx = x + this.nWarpA(x * 0.0016, z * 0.0016) * 70;
-    const wz = z + this.nWarpB(x * 0.0016, z * 0.0016) * 70;
+    // the rolling hills; lake country lies lower and flatter, in broad
+    // smooth hollows that gather a lot of water each
     let sum = 0;
     let amp = 1;
     let freq = 0.0032;
-    // same octaves as fbm(nHills, ·, ·, 5) in _baseHeight, normalised the same
+    const smooth = 1 - c.low * 0.55;
     for (let o = 0; o < 5 && 1 / freq >= minWavelength; o++) {
-      sum += amp * this.nHills(wx * freq + o * 17.31, wz * freq - o * 9.13);
+      sum += amp * (o ? smooth : 1) * this.nHills(wx * freq + o * 17.31, wz * freq - o * 9.13);
       amp *= 0.5;
       freq *= 2;
     }
-    return (sum / 1.9375) * 24 + this.nBig(x * 0.0007, z * 0.0007) * 36;
+    let h = (sum / 1.9375) * 24 * (1 - c.low * 0.3) + this.nBig(x * 0.0007, z * 0.0007) * 36 * (1 - c.low * 0.7) - c.low * 6;
+
+    // mountains: the range raised, and ridged, sharp along the crests
+    if (c.mtn > 0) h += c.mtn * (c.mtn * MASSIF + Math.pow(this._ridges(wx, wz, minWavelength), 1.25) * RIDGE_HIGH - 12);
+
+    // benches: level shelves, and a riser of rock up to the next
+    if (c.bench > 0) {
+      const f = h / BENCH_STEP;
+      const i = Math.floor(f);
+      const shelf = (i + smoothstep(1 - BENCH_RISER, 1, f - i)) * BENCH_STEP;
+      h += (shelf - h) * c.bench * 0.92;
+    }
+    return h;
+  }
+
+  // The land laid by the sea. Everything else about the height is built on
+  // this (_baseHeight asks it), so the map, the water's routes and the ground
+  // you walk on all go down to it.
+  //
+  // The hills without the small bumps, and without any octave shorter than
+  // minWavelength metres: for drawing relief from far away (the map), where
+  // finer detail would only alias into noise.
+  broadHeight(x, z, minWavelength = 0) {
+    return this.sea.shape(this._landHeight(x, z, minWavelength), x, z);
+  }
+
+  // 0..~1: ridged noise, sharp along the crests (rounded off just enough to
+  // walk along), its finer octaves only where there is a ridge to put them on.
+  _ridges(x, z, minWavelength) {
+    let sum = 0;
+    let amp = 1;
+    let freq = 1 / RIDGE_WAVE;
+    let w = 1;
+    for (let o = 0; o < 4 && 1 / freq >= minWavelength; o++) {
+      const n = this.nRidge(x * freq + o * 31.1, z * freq - o * 11.7);
+      let r = 1 - Math.sqrt(n * n + CREST);
+      r *= r * w;
+      w = Math.min(1, r * 1.8);
+      sum += r * amp;
+      amp *= 0.5;
+      freq *= 2.1;
+    }
+    return sum / 1.875;
+  }
+
+  _baseHeight(x, z) {
+    const a = this._at;
+    if (a.x !== x || a.z !== z) {
+      a.x = x;
+      a.z = z;
+      a.h = this.forestHeight(x, z, 0);
+    }
+    return a.h;
+  }
+
+  // the small bumps: rougher in the mountains
+  _detailHeight(x, z) {
+    const d = this.nDetail(x * 0.09, z * 0.09) * 0.45 + this.nDetail(x * 0.31 + 50, z * 0.31 - 20) * 0.1;
+    return d * (1 + this.country(x, z).mtn * 0.8);
   }
 
   naturalHeight(x, z, pm = this.pathMask(x, z)) {
     // Paths are a touch sunken and smoothed, like trodden earth.
     return this._baseHeight(x, z) + this._detailHeight(x, z) * (1 - pm * 0.9) - pm * 0.14;
+  }
+
+  height(x, z, pm = this.pathMask(x, z)) {
+    let h = this.water.shape(x, z, this.naturalHeight(x, z, pm), pm);
+    for (let i = 0; i < this.pads.length; i++) {
+      const p = this.pads[i];
+      const d = Math.hypot(x - p.x, z - p.z);
+      if (d < p.r * 1.8) {
+        const t = 1 - smoothstep(p.r * 0.85, p.r * 1.8, d);
+        h += (p.y - h) * t;
+      }
+    }
+    return h;
+  }
+
+  // 0 = how far from any structure pad (meters past its radius). Large if none.
+  padClearance(x, z) {
+    let best = 1e9;
+    for (let i = 0; i < this.pads.length; i++) {
+      const p = this.pads[i];
+      const d = Math.hypot(x - p.x, z - p.z) - p.r;
+      if (d < best) best = d;
+    }
+    return best;
   }
 
   // ── Real places ───────────────────────────────────────────────────────────
@@ -204,82 +371,108 @@ export class WorldGen {
     return 0;
   }
 
-  height(x, z, pm = this.pathMask(x, z)) {
-    let h = this.water.shape(x, z, this.naturalHeight(x, z, pm), pm);
-    for (let i = 0; i < this.pads.length; i++) {
-      const p = this.pads[i];
-      const d = Math.hypot(x - p.x, z - p.z);
-      if (d < p.r * 1.8) {
-        const t = 1 - smoothstep(p.r * 0.85, p.r * 1.8, d);
-        h += (p.y - h) * t;
-      }
-    }
-    return h;
-  }
-
-  // 0 = how far from any structure pad (meters past its radius). Large if none.
-  padClearance(x, z) {
-    let best = 1e9;
-    for (let i = 0; i < this.pads.length; i++) {
-      const p = this.pads[i];
-      const d = Math.hypot(x - p.x, z - p.z) - p.r;
-      if (d < best) best = d;
-    }
-    return best;
+  // ── Water ─────────────────────────────────────────────────────────────────
+  // Lake country holds bigger lakes, and from less water (see drainage.js),
+  // and the lakes go deep.
+  stillWater(x, z) {
+    const l = this.country(x, z).low;
+    if (l <= 0) return STILL;
+    return {
+      pond: POND,
+      lake: { acc: LAKE.acc - 16 * l, accFull: LAKE.accFull - 140 * l, r: [LAKE.r[0] + 20 * l, LAKE.r[1] + 40 * l], depth: [LAKE.depth[0], LAKE.depth[1] + 1.5 * l], deep: DEEP },
+      room: STILL.room + 1.2 * l,
+    };
   }
 
   // ── Ecology ───────────────────────────────────────────────────────────────
-  // 0 = open meadow, 1 = dense forest
-  forest(x, z) {
-    const v = fbm(this.nForest, x * 0.0042, z * 0.0042, 3) + this.nForest2(x * 0.021, z * 0.021) * 0.14;
-    return smoothstep(-0.34, 0.1, v);
+  // The kind of woods (x, z) is in, about −1..1: low is open parkland, high is
+  // deep, dark forest.
+  woods(x, z) {
+    const f = 1 / WOODS_WAVE;
+    return this.nWoods(x * f, z * f) + this.nWoods(x * f * 4 + 5.3, z * f * 4 - 2.9) * 0.25;
   }
 
-  // -1..1: low = broadleaf woods, high = conifers
+  treeline(x, z) {
+    return TREELINE + this.nTreeline(x * 0.004, z * 0.004) * 10;
+  }
+
+  // 0 = open meadow, 1 = dense forest
+  forest(x, z) {
+    const c = this.country(x, z);
+    const wd = this.woods(x, z);
+    let v = fbm(this.nForest, x * 0.0042, z * 0.0042, 3) + this.nForest2(x * 0.021, z * 0.021) * 0.14;
+    // parkland opens right up; deep forest closes in
+    v += smoothstep(0.1, 0.45, wd) * 0.3 - smoothstep(-0.3, -0.62, wd) * 0.6;
+    // lake country is wetter and a little more open
+    v -= c.low * 0.06;
+    let f = smoothstep(-0.34, 0.1, v);
+    // thinning out to the treeline (which only the mountains reach)
+    if (c.mtn > 0) f *= 1 - this.above(x, z, this._baseHeight(x, z));
+    return f;
+  }
+
+  // −1..1: low = broadleaf woods, high = conifers. Conifers up the mountains
+  // and in the deep forest; broadleaf down in lake country.
   species(x, z) {
-    return this.nSpecies(x * 0.0033, z * 0.0033) + this.nSpecies(x * 0.02 + 9, z * 0.02 - 4) * 0.15;
+    const c = this.country(x, z);
+    let sp = this.nSpecies(x * 0.0033, z * 0.0033) + this.nSpecies(x * 0.02 + 9, z * 0.02 - 4) * 0.15;
+    sp += smoothstep(0.15, 0.55, this.woods(x, z)) * 0.6 - c.low * 0.35;
+    if (c.mtn > 0) sp += c.mtn * smoothstep(10, 70, this._baseHeight(x, z)) * 1.2;
+    return sp;
   }
 
   // 0..1 moisture, used for ferns/moss
   moisture(x, z) {
-    return this.nMoist(x * 0.006, z * 0.006) * 0.5 + 0.5;
+    return Math.min(1, this.nMoist(x * 0.006, z * 0.006) * 0.5 + 0.5 + this.country(x, z).low * 0.18);
   }
 
-  // What this land has that the first one didn't, for whoever draws it (the
-  // map, the ground). Nothing, here.
+  // What the land has high up, and what the woods are made of, for whoever
+  // draws it (the map, the ground):
   //   groves(x, z)     0..1 how much more of the woods is birch than usual
   //   above(x, z, h)   0..1 how far above the trees: alpine ground
   //   snow(x, z, h)    0..1 snow lying on the ground
   //   highGround       whether above() and snow() are ever more than 0
   //   highIn(x0, z0, x1, z1)  whether they may be anywhere in that square (a
   //                    real place can have high ground of its own)
-  groves() {
-    return 0;
+
+  // Birch groves: whole stands of them, some way from any mountain.
+  groves(x, z) {
+    const c = this.country(x, z);
+    return smoothstep(0.2, 0.5, this.nGroves(x * 0.0011, z * 0.0011)) * (1 - c.mtn) * 0.85;
   }
-  above() {
-    return 0;
+
+  above(x, z, h) {
+    const line = this.treeline(x, z);
+    return smoothstep(line - TREE_FADE, line + 6, h);
   }
-  snow() {
-    return 0;
+
+  // (the snow line wanders with the treeline's field, on a finer scale)
+  snow(x, z, h) {
+    const line = SNOWLINE + this.nTreeline(x * 0.011 + 40, z * 0.011) * 9;
+    return smoothstep(line - 4, line + 6, h);
   }
+
   get highGround() {
-    return false;
+    return true;
   }
   highIn() {
     return this.highGround;
   }
 
   // How high a real place set into this land stands (realPlaces.js), given
-  // the forest's height round it (m): at that height, here. (A land with a
-  // sea raises one that would be under it into an island: land3.js.)
+  // the forest's height round it (m). One that would be under the sea is
+  // raised into an island, its trailhead a little over the water, rather than
+  // left down on the seabed with the sea round it.
   datumLevel(h) {
-    return h;
+    return Math.max(h, this.sea.level + SEA.island);
   }
 
-  // Whatever else a land asks of a place to start from (a path in the woods,
-  // out of the water, it always asks).
-  _fineStart() {
-    return true;
+  // Start on level ground, down among the trees: not on a mountainside, and
+  // out of the water, which findSpawn asks anyway.
+  _fineStart(x, z) {
+    const dx = this.broadHeight(x + 3, z, 0) - this.broadHeight(x - 3, z, 0);
+    const dz = this.broadHeight(x, z + 3, 0) - this.broadHeight(x, z - 3, 0);
+    return Math.hypot(dx, dz) / 6 < START_SLOPE && this.above(x, z, this._baseHeight(x, z)) === 0;
   }
 
   // Find a nice spot on a footpath near (x0, z0) to start from.

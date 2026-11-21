@@ -74,7 +74,7 @@ export const LANDFORM_DRY = 80;
 // a pond or lake of the forest's gives way when its middle is within its
 // size, its beach and LANDFORM_DRY of the edge, and shapes the ground for its
 // size and beach again beyond that. On the land with the biggest lakes
-// (land2.js) the drainage network gives a basin at most 90 m and a beach of
+// (worldgen.js) the drainage network gives a basin at most 90 m and a beach of
 // 36 m, so 2 × 128 + 80, and a little (test/hikes.test.js checks every land).
 export const LANDFORM_REACH = 340;
 // How far (m) past a real lake's shore it still shapes the ground.

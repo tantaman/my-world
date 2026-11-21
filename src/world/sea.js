@@ -1,4 +1,4 @@
-// The sea, on the third land (land3.js).
+// The sea, which the land goes down to (worldgen.js).
 //
 // Pure and deterministic like the rest of WorldGen (no three.js).
 //
@@ -53,7 +53,7 @@ export const SEA = {
   // and up to this high (m) above the sea, it is sand
   sand: 2.2,
   // A real place set into the land out at sea stands at least this high (m)
-  // over it, an island (land3.js).
+  // over it, an island (worldgen.js).
   island: 3,
 };
 

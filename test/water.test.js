@@ -110,7 +110,7 @@ for (const land of LANDS) test(`any part of the network can be worked out on its
   assert.ok(NET.cell > 0);
 });
 
-// Lake country on the second land, for seed 20261119: the biggest lakes.
+// Lake country, for seed 20261119: the biggest lakes.
 const LAKE_COUNTRY = { x: -1275, z: -85 };
 
 for (const land of LANDS) test(`nothing that reaches a spot is missed when shaping it${land > 1 ? `, on land ${land}` : ''}`, () => {
