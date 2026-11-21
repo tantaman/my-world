@@ -1,8 +1,9 @@
 // A mark left on the map: named, tracked on the HUD, still there after a
 // reload, and somewhere to go back to with `go here`.
 //
-// Leaves: the world opened with &creative, and you back where it found you
-// (so that what follows starts where it always did).
+// Leaves: the world opened with &creative, you back where it found you, and
+// nothing tracked on the HUD (so that what follows starts where it always
+// did, and can point the way somewhere of its own).
 
 import assert from 'node:assert/strict';
 
@@ -53,7 +54,14 @@ export default async function ({ page, step, key, frames, open }) {
     const shut = await page.evaluate(() => ({ map: world.map.isOpen, said: document.getElementById('toast').textContent }));
     assert.equal(shut.map, false, 'and closes the map');
     assert.match(shut.said, /the level spot/, 'saying where you are');
-    await page.evaluate((w) => world.teleport(w.x, w.z, w.yaw), was); // back where the next part expects you
+    // Back where the next part expects you, tracking nothing: a tracked mark
+    // holds the HUD's guide for good (the first source with one wins, see
+    // ui/hud.js), so anything later that points the way somewhere of its own
+    // would never get a look in.
+    await page.evaluate((w) => {
+      world.marks.setTracked(null);
+      world.teleport(w.x, w.z, w.yaw);
+    }, was);
     return { away: Math.round(away), said: shut.said };
   });
 }
