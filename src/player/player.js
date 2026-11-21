@@ -204,8 +204,12 @@ export class Player extends Emitter {
     //     behind     how quickly (1/s) the camera swings round behind the
     //                way you're going, when you aren't looking about
     //     back       how much further back the camera sits (m)
+    //     wade       how deep in the water you sit (m), if you're in it (a
+    //                tube on a river), for the ripples round you and the
+    //                sound of the water going by
+    //     flowX, flowZ  ...and which way it runs (m/s)
     this.aboard = null;
-    this._at = { x: 0, y: 0, z: 0, yaw: 0, heading: undefined, grounded: true, behind: 0, back: 0 };
+    this._at = { x: 0, y: 0, z: 0, yaw: 0, heading: undefined, grounded: true, behind: 0, back: 0, wade: 0, flowX: 0, flowZ: 0 };
     this._rode = false;
     this._heading = 0;
     this._looked = 0; // s since you last looked about, while aboard
@@ -673,6 +677,9 @@ export class Player extends Emitter {
     at.grounded = true;
     at.behind = 0;
     at.back = 0;
+    at.wade = 0;
+    at.flowX = 0;
+    at.flowZ = 0;
     this.aboard.place(at, dt);
     const dx = at.x - this.pos.x;
     const dy = at.y - this.pos.y;
@@ -700,10 +707,16 @@ export class Player extends Emitter {
     this.turnRate = 0;
     this.grounded = at.grounded !== false;
     this.flying = this.climbing = this.swimming = this.manual = false;
-    this.wade = 0;
-    this.current.x = this.current.z = 0;
+    this.wade = at.wade;
+    this.current.x = at.flowX;
+    this.current.z = at.flowZ;
     this.underfoot = null;
     this.space = null;
+    // not swimming, nor under the water, whatever you were doing before it
+    // took you (it may have picked you up out of the river)
+    this.under = this.surface = this.prone = this.pitch = 0;
+    this.submerged = false;
+    this.character.swim(0);
     const root = this.character.root;
     root.position.copy(this.pos);
     root.rotation.y = this.yaw;
