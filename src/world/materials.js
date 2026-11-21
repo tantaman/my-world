@@ -146,7 +146,6 @@ export function createTerrainMaterial() {
         `#include <color_fragment>
         vec2 wp = worldXZ(vWorldPos);
         diffuseColor.rgb = groundColor(wp, vWorldPos.y, vGround.x, vGround.y, 1.0 - vWorldNormal.y, vLand, vCountry);
-        diffuseColor.rgb = highGround(diffuseColor.rgb, wp, vHigh, 1.0 - vWorldNormal.y);
         // by the sea: a beach of pale sand, up from the waterline
         float seaY = vWorldPos.y - uSea;
         bool seaWater = uSea > -1000.0 && abs(vWater.x - uSea) < 0.05; // the water here is the sea's
@@ -159,6 +158,8 @@ export function createTerrainMaterial() {
           onSand *= 1.0 - smoothstep(0.42, 0.6, 1.0 - vWorldNormal.y); // not on a cliff
           diffuseColor.rgb = mix(diffuseColor.rgb, sand, onSand);
         }
+        // high ground, and snow where it lies (over a beach too, in winter)
+        diffuseColor.rgb = highGround(diffuseColor.rgb, wp, vHigh, 1.0 - vWorldNormal.y);
         if (cutF < ${RIM.toFixed(3)} + 1.0) {
           // broken rock round a hole in the ground, ragged at its edge
           float rn = wnoise(wp, 1.3, vec2(vWorldPos.y)) * 0.65 + wnoise(wp, 4.7) * 0.35;
