@@ -1,5 +1,6 @@
 // Mounts: hear of the wild horse, find it, win it over, ride it and whistle
-// it back; swim a lake on the turtle and fly the eagle.
+// it back; take the other two from the map rather than going looking; swim a
+// lake on the turtle and fly the eagle.
 //
 // Needs: a world where none is yours yet. Leaves: all three tame, and you on
 // the eagle's summit.
@@ -84,12 +85,47 @@ export default async function ({ page, step, key, frames, shot }) {
     return { word: word.said, signs: signs.r, gallop: Math.round(gallop * 10) / 10 };
   });
 
+  // Rather than go looking for the other two: the map's option hands you all
+  // three at once, each left where it lives.
+  await step('acquire the rest from the map', async () => {
+    await key('KeyM');
+    await frames(10);
+    const before = await page.evaluate(() => ({
+      tame: world.mounts.list().filter((m) => m.tame).length,
+      off: document.querySelector('#map .side-acts [data-action="mounts-all"]').disabled,
+    }));
+    assert.deepEqual(before, { tame: 1, off: false }, 'only the horse is yours, and the option is there to press');
+    await page.click('#map .side-acts [data-action="mounts-all"]');
+    await frames(3);
+    const after = await page.evaluate(() => ({
+      said: document.getElementById('toast').textContent,
+      mine: world.mounts
+        .list()
+        .filter((m) => m.tame)
+        .map((m) => m.kind)
+        .sort(),
+      off: document.querySelector('#map .side-acts [data-action="mounts-all"]').disabled,
+      // each stays where it lives, so a whistle is what brings one to you
+      home: ['turtle', 'eagle'].every((k) => {
+        const m = world.mounts.list().find((x) => x.kind === k);
+        const h = world.mounts.haunts[k];
+        return Math.hypot(m.x - h.x, m.z - h.z) < (h.r || 0) + 40;
+      }),
+    }));
+    assert.deepEqual(after.mine, ['eagle', 'horse', 'turtle'], 'all three are yours');
+    assert.match(after.said, /yours/, 'and it says so');
+    assert.equal(after.off, true, 'with nothing left in the option, it greys out');
+    assert.ok(after.home, 'each is still at its haunt');
+    await key('KeyM');
+    await frames(3);
+    return { said: after.said, mine: after.mine };
+  });
+
   await step('swim a lake on the turtle, and fly the eagle', async () => {
     const swum = await page.evaluate(async () => {
       const L = world.mounts.haunts.turtle.lake;
       const t = world.mounts.list().find((m) => m.kind === 'turtle');
       await world.teleport(t.x, t.z);
-      world.mounts.tame('turtle');
       world.mounts.ride('turtle');
       const p = world.player.pos;
       world.look(Math.atan2(p.x - L.x, p.z - L.z), 0.3);
@@ -107,7 +143,6 @@ export default async function ({ page, step, key, frames, shot }) {
     const flew = await page.evaluate(async () => {
       const e = world.mounts.haunts.eagle;
       await world.teleport(e.x + 3, e.z);
-      world.mounts.tame('eagle');
       world.mounts.ride('eagle');
       await T.frames(3);
       return world.mounts.riding;

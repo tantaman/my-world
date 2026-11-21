@@ -82,6 +82,12 @@
 #map .side-pane { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; overflow-y: auto; }
 #map .side-pane[hidden] { display: none; }
 #map .side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 8px 14px; }
+/* the options under the lists, put there by other features (map.addAction) */
+#map .side-acts { display: flex; flex-wrap: wrap; gap: 6px; padding: 9px 12px 10px 14px; border-top: 1px solid var(--line); }
+#map .side-acts[hidden] { display: none; }
+#map .side-acts button { flex: 1 1 auto; }
+#map .side-acts button:disabled { color: rgba(238, 240, 226, 0.28); border-color: var(--line); cursor: default; }
+
 #mark-list, #place-list { list-style: none; margin: 0; padding: 0 6px 10px; overflow-y: auto; flex: 0 1 auto; min-height: 0; }
 #place-list { flex: 1 1 auto; }
 #place-list li button { color: var(--ink); }
@@ -132,7 +138,7 @@
 #mark-editor .row button { padding: 0; width: 26px; height: 26px; min-height: 0; display: grid; place-items: center; }
 #mark-editor .swatch { width: 12px; height: 12px; display: block; }
 #mark-editor .where { color: var(--ink-dim); font-size: 10.5px; letter-spacing: 0.06em; }
-#mark-editor .actions { display: flex; gap: 6px; }
+#mark-editor .actions { display: flex; flex-wrap: wrap; gap: 6px; }
 #mark-editor .actions .done { margin-left: auto; color: var(--ink); border-color: var(--accent); }
 
 /* a place's card: what it is, where, and track it */
@@ -152,7 +158,7 @@
 #place-card .name { color: var(--ink); font-size: 13px; }
 #place-card .note { color: var(--ink-dim); line-height: 1.5; margin: 0; }
 #place-card .where { color: var(--ink-dim); font-size: 10.5px; letter-spacing: 0.06em; }
-#place-card .actions { display: flex; gap: 6px; margin-top: 3px; }
+#place-card .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
 #place-card .actions .done { margin-left: auto; color: var(--ink); border-color: var(--accent); }
 
 .map-marks-toggle { display: none; }

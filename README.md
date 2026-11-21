@@ -185,6 +185,7 @@ place in that order, not at the end:
 | `hunting/shot.js` | something else the rifle can hit (a man, a wall that stops a shot) | `game.hunting.targets.add({ aimed, struck?, heard? })` |
 | `map/mapView.js` | something drawn on the map | `map.addLayer((pen) => …)` |
 | `map/mapView.js` | a list of somewhere to go, beside the map | `game.map.addTab({ id, label, el, shown })`, `map.open(id)` |
+| `map/mapView.js` | an option under those lists (a button) | `game.map.addAction({ id, label, title, run, enabled })` |
 | `map/places.js` | a place on the map, to look up and track | `game.map.places.addSource({ within, get })` |
 | `player/character.js` | something the hiker holds up to the face | `character.addRaised(name, object, { stowed })`, `raise(name)` |
 | `player/character.js` | sitting astride what carries you | `character.seat({ spread, hang, lean })` |

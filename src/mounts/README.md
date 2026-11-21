@@ -35,6 +35,11 @@ the nearest water, which it needs to reach you). Tame more than one, and **Z**
 again just after a whistle calls the next instead. On a game controller, **X**
 does all that Z does, and **A** and **B** are space and shift.
 
+**Not going looking.** Under the lists beside the map (**M**) is *acquire all
+mounts*: the horse, the turtle and the eagle are yours at once, each left
+where it lives, so a whistle (**Z**) is what brings the first one to you. It
+greys out once all three are yours.
+
 Where they live is grown from the seed like everything else
 (`src/mounts/haunts.js`), so the hints point at the same places on every
 visit, and everyone in a shared world goes looking in the same meadow. Which
@@ -45,13 +50,14 @@ own, as they meet their own wildlife. From the console:
 ```js
 world.mounts.list()          // where they are, what they're doing, how far they trust you
 world.mounts.tame('eagle')   // skip the finding and the taming: it's yours, beside you
+world.mounts.tameAll()       // all three, each where it lives (the map's option)
 world.mounts.ride('eagle')
 ```
 
 ## Files
 
 ```
-index.js              plugs it into the game: Z, riding, what you've heard, on the map, saved as yours
+index.js              plugs it into the game: Z, riding, what you've heard, on the map and its option, saved as yours
 haunts.js             where each lives, grown from the seed; the circles on the map
 hints.js              what you know of where they are, and when you hear more
 taming.js             winning a wild one over

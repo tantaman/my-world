@@ -1,7 +1,7 @@
-// A mark left on the map: named, tracked on the HUD, and still there after a
-// reload.
+// A mark left on the map: named, tracked on the HUD, still there after a
+// reload, and somewhere to go back to with `go here`.
 //
-// Leaves: the world opened with &creative.
+// Leaves: the world opened with &creative, and you standing on the mark.
 
 import assert from 'node:assert/strict';
 
@@ -30,5 +30,27 @@ export default async function ({ page, step, key, frames, open }) {
     const kept = await page.evaluate(() => ({ names: world.marks.list().map((m) => m.name), tracked: !!world.marks.trackedMark() }));
     assert.deepEqual(kept, { names: ['the level spot'], tracked: true }, 'and it is still there after a reload');
     return kept;
+  });
+
+  await step('go to it from the map', async () => {
+    const mark = await page.evaluate(() => world.marks.list()[0]);
+    const away = await page.evaluate(async (m) => {
+      await world.teleport(m.x + 300, m.z - 240);
+      return Math.hypot(world.player.pos.x - m.x, world.player.pos.z - m.z);
+    }, mark);
+    assert.ok(away > 300, `a long way off (${Math.round(away)} m)`);
+    await key('KeyM');
+    await frames(10);
+    // pick it out of the list beside the map, then go there
+    await page.click(`#mark-list button[data-mark="${mark.id}"]`);
+    await page.evaluate(() => T.until(() => !world.map.fly, 10000)); // let the map stop flying, so its card holds still
+    await frames(5);
+    await page.click('#mark-editor [data-act="go"]');
+    const there = await page.evaluate((m) => T.until(() => Math.hypot(world.player.pos.x - m.x, world.player.pos.z - m.z) < 1, 60000), mark);
+    assert.ok(there, 'go here stands you on the mark');
+    const shut = await page.evaluate(() => ({ map: world.map.isOpen, said: document.getElementById('toast').textContent }));
+    assert.equal(shut.map, false, 'and closes the map');
+    assert.match(shut.said, /the level spot/, 'saying where you are');
+    return { away: Math.round(away), said: shut.said };
   });
 }
