@@ -13,6 +13,14 @@ you scrape to a halt and step out. **I** puts them on anywhere there's snow,
 even on the flat, where **W** poles you along (they stay on until **I** takes
 them off), and **I** takes them off wherever you are.
 
+The forest's own mountains hold snow on their tops, enough for a pitch of
+fifty metres or so. For a run worth the name, go to a snowy real place: the
+hikes tab beside the map (**M**), and *the view*, which stands you where the
+photo was taken. The longest of them is the Vallée Blanche, where that is the
+top of the Aiguille du Midi, with Mont Blanc behind you, three hundred metres
+of fall line down to the glacier, and the Chamonix valley five hundred
+further below.
+
 | | on the snow | in the air |
 |---|---|---|
 | **A D** | carve left and right; at a standstill, pivot round | spin |
