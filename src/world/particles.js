@@ -1,5 +1,5 @@
-// Drifting pollen / dust motes by day, fireflies by night. One-pixel points
-// in the low-res render, which is exactly what you'd hand-place in pixel art.
+// Drifting pollen / dust motes by day, fireflies by night: specks of a few
+// millimetres (a firefly's glow is wider), so a pixel or two of pixel art.
 // They belong to the open air, and thin out where the sky doesn't reach (a cave).
 //
 // The motes fill a box that follows you, each wrapping round to the far side
@@ -9,6 +9,10 @@
 
 import * as THREE from 'three';
 import { SHARED, SKY } from '../render/uniforms.js';
+import { POINT_GLSL, POINT_DISC_GLSL } from '../render/glsl.js';
+
+const MOTE = 0.006; // m across (a mote, made a little more of than it is)
+const FIREFLY = 0.02; // m: the glow round one
 
 const mod = (a, n) => ((a % n) + n) % n;
 
@@ -33,8 +37,10 @@ export function createParticles(count = 900) {
       uOpen: { value: 1 },
       uNight: SKY.uNight,
       uSunColor: SKY.uSunColor,
+      uLines: SHARED.uLines,
     },
     vertexShader: /* glsl */ `
+      ${POINT_GLSL}
       attribute float aSeed;
       uniform float uTime;
       uniform vec2 uPhase;
@@ -43,6 +49,7 @@ export function createParticles(count = 900) {
       uniform float uNight;
       varying float vAlpha;
       varying float vSeed;
+      varying float vPx;
       void main() {
         vec3 p = position * uBox;
         float t = uTime * (0.15 + aSeed * 0.2);
@@ -54,9 +61,10 @@ export function createParticles(count = 900) {
         gl_Position = projectionMatrix * mv;
         float dist = -mv.z;
         float blink = mix(1.0, pow(max(0.0, sin(uTime * (0.8 + aSeed) + aSeed * 40.0)), 6.0), uNight);
-        vAlpha = (1.0 - smoothstep(10.0, 23.0, dist)) * blink;
+        vAlpha = smoothstep(0.4, 1.2, dist) * (1.0 - smoothstep(10.0, 23.0, dist)) * blink;
         vSeed = aSeed;
-        gl_PointSize = dist < 6.0 ? 2.0 : 1.0;
+        vPx = pointPx(mix(${MOTE}, ${FIREFLY}, uNight), dist);
+        gl_PointSize = vPx;
       }`,
     fragmentShader: /* glsl */ `
       uniform float uNight;
@@ -64,10 +72,12 @@ export function createParticles(count = 900) {
       uniform float uOpen;
       varying float vAlpha;
       varying float vSeed;
+      varying float vPx;
+      ${POINT_DISC_GLSL}
       void main() {
         vec3 day = mix(vec3(1.0, 0.95, 0.75), uSunColor, 0.4) * 0.9;
         vec3 night = vec3(0.75, 1.0, 0.25) * 4.0;
-        float a = vAlpha * mix(0.45, 1.0, uNight) * mix(step(0.55, vSeed), 1.0, uNight) * step(vSeed, uOpen * 1.2 - 0.2);
+        float a = vAlpha * pointDisc(vPx) * mix(0.45, 1.0, uNight) * mix(step(0.55, vSeed), 1.0, uNight) * step(vSeed, uOpen * 1.2 - 0.2);
         if (a < 0.02) discard;
         gl_FragColor = vec4(mix(day, night, uNight), a);
       }`,

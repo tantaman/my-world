@@ -9,7 +9,7 @@ long as you like. (Diving is the hiker's, in `src/player/`. This is what
 happens once the camera follows you under.)
 
 - **The light.** The post-process swaps the air's fog for the water's
-  (`render/pixelPipeline.js`): everything loses its reds with depth, fades
+  (`render/pipeline.js`): everything loses its reds with depth, fades
   into green in a lake and blue in the sea within a few tens of metres, and
   gets darker the deeper you go, into a twilight in the deep sea. Sunlight
   comes down through it in slanting shafts, and nets of light play over the

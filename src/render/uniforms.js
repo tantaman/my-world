@@ -21,6 +21,7 @@ export const SHARED = {
   uPlayer: { value: new THREE.Vector3() },
   uGrassRadius: { value: 40 },
   uOrigin: { value: new THREE.Vector2() },
+  uLines: { value: 1080 }, // how many lines tall the picture is drawn (set by the pipeline)
 };
 
 // Set every frame by the sky (world/sky.js) from the hour of the day.
@@ -62,7 +63,7 @@ export const LAND = {
 };
 
 // A layer of cloud over the country you're in (world/country.js), drawn by
-// the composite pass (pixelPipeline.js): from under it, a grey sky with the
+// the composite pass (pipeline.js): from under it, a grey sky with the
 // hilltops lost in it; from over it, a sea of cloud. Set by the country
 // feature. uDeckMid is a place (the middle of the real land it lies over,
 // which its billows are measured from), slid with the scene like any other.

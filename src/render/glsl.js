@@ -2,6 +2,29 @@
 
 import { MAX_COUNTRIES } from './uniforms.js';
 
+// ── Points ─────────────────────────────────────────────────────────────────
+// A point sprite (a mote, a spark, a drop) the size it really is: size m
+// across, dist m off, in pixels of the picture however finely that's drawn;
+// never under one, and never over POINT_MOST of the picture's height, since
+// one right at the eye would cover it, and a lot of those would choke the
+// card. (The shader needs uLines: SHARED.uLines.)
+const POINT_MOST = 0.012;
+export const POINT_GLSL = /* glsl */ `
+uniform float uLines;
+float pointPx(float size, float dist) {
+  float px = size * projectionMatrix[1][1] * 0.5 * uLines / max(dist, 1.0e-3);
+  return clamp(px, 1.0, max(1.0, uLines * ${POINT_MOST}));
+}
+`;
+// In its fragment shader: 1 inside it, fading to 0 at its round edge. A
+// point of a pixel or two is too small to be round, and is all inside.
+export const POINT_DISC_GLSL = /* glsl */ `
+float pointDisc(float px) {
+  float r = length(gl_PointCoord - 0.5) * 2.0;
+  return px < 2.5 ? 1.0 : 1.0 - smoothstep(0.55, 1.0, r);
+}
+`;
+
 export const NOISE_GLSL = /* glsl */ `
 float hash12(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
