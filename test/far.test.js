@@ -24,6 +24,7 @@ import { Splashes } from '../src/splashes/splashes.js';
 import { FireFx } from '../src/fires/look.js';
 import { FarView } from '../src/far/view.js';
 import { ChunkManager } from '../src/world/chunks.js';
+import { VEG_KINDS } from '../src/world/chunkGen.js';
 import { WorldGen } from '../src/world/worldgen.js';
 import { createVegetationMaterial } from '../src/world/materials.js';
 import { makePine, makeBroadleaf, makeBirch, makeBush, makeFern, makeRock, makeLog } from '../src/world/models.js';
@@ -322,4 +323,65 @@ test('a cave far away is built from its own spot, and its mouth cut where it is 
   o.end(new THREE.Scene(), camera);
   assert.deepEqual(CUTS.uCutAt.value[0].toArray(), [c.ax, c.az], 'and put back after');
   setCuts([]);
+});
+
+// ── Reaching ahead ──────────────────────────────────────────────────────────
+// The chunks grow round you and round where you are going (chunks.js), so the
+// ground is grown before it is crossed rather than a ring of it behind you.
+// Here because this is the file that drives a ChunkManager.
+test('the chunks grow where you are going, and keep the detail where you are', () => {
+  const warn = console.warn;
+  console.warn = () => {}; // no Web Workers here: it says so
+  const gen = new WorldGen(CONFIG.seed, []);
+  // every kind of plant, with a trunk, which is all a manager asks of them
+  const stand = Object.fromEntries(VEG_KINDS.map((k) => [k, { trunkRadius: 0.3 }]));
+  const made = () => new ChunkManager(scene, gen, { terrain: null, water: null, vegetation: null }, stand);
+  console.warn = warn;
+  const S = CONFIG.chunkSize;
+  const R = CONFIG.viewRadius;
+  const ring = (m) => {
+    const cx = Math.floor(m.lastCx);
+    const cz = Math.floor(m.lastCz);
+    let most = 0;
+    for (const w of m.wanted) most = Math.max(most, Math.hypot(w.cx - cx, w.cz - cz));
+    return most;
+  };
+
+  // standing still: the disc round you, as it always was
+  const still = made();
+  still.update(0, 0, 0);
+  const alone = still.wanted.length;
+  assert.ok(Math.abs(ring(still) - (R + 0.6)) < 0.7, `reaches the view radius (${ring(still).toFixed(1)} chunks)`);
+  assert.ok(
+    still.wanted.some((w) => w.cx === 0 && w.cz === 0 && w.lod === 0),
+    'the chunk you stand in is wanted at full detail',
+  );
+
+  // going somewhere: further that way, and no fewer than before
+  const going = made();
+  const lead = R * S; // the most it ever reaches ahead
+  going.update(0, 0, 0, lead, 0);
+  assert.ok(going.wanted.length > alone, `more is wanted (${going.wanted.length}, not ${alone})`);
+  assert.ok(ring(going) > R + 2, `and it reaches further (${ring(going).toFixed(1)} chunks)`);
+  const ahead = going.wanted.filter((w) => w.cx > R).length;
+  assert.ok(ahead > 0, 'past the old edge, the way you are going');
+  assert.equal(going.wanted.filter((w) => w.cx < -R).length, 0, 'and not the same again behind you');
+
+  // the detail still goes by where you are, not where you are going
+  assert.ok(
+    going.wanted.some((w) => w.cx === 0 && w.cz === 0 && w.lod === 0),
+    'the chunk you stand in is still at full detail',
+  );
+  for (const w of going.wanted) {
+    const want = still.lodFor(Math.max(Math.abs(w.cx), Math.abs(w.cz)));
+    assert.equal(w.lod, want, `chunk ${w.cx},${w.cz} is drawn for how far it is from you`);
+  }
+
+  // the nearest are still grown first, so the ground underfoot never waits
+  let last = -1;
+  for (const w of going.wanted) {
+    const d2 = w.cx * w.cx + w.cz * w.cz;
+    assert.ok(d2 >= last, 'wanted nearest-first');
+    last = d2;
+  }
 });

@@ -125,12 +125,43 @@ export function installWorld(game) {
     },
   });
 
+  // How fast the focus is moving (m/s), smoothed, and so how far ahead of it
+  // the chunks should reach: at a walk a few metres, which changes nothing;
+  // tucked on skis at 26 m/s the whole of the view radius again, so the ground
+  // is grown before it is skied onto rather than a ring of it behind. Smoothed
+  // because a lead that jumped about would throw away what was being grown.
+  const LEAD_TIME = 10; // s of travel to reach ahead by
+  const LEAD_EASE = 1; // 1/s: how quickly the lead follows your speed
+  const LEAD_MOST = 200; // m/s: faster than anything travels, so it was put there
+  const was = { x: 0, z: 0, had: false };
+  const vel = { x: 0, z: 0 };
+
   game.addSystem({
     name: 'world',
     phase: 'world',
     update({ dt }) {
       const at = game.focus;
-      chunks.update(at.x, at.z, 5);
+      if (was.had && dt > 0) {
+        const vx = (at.x - was.x) / dt;
+        const vz = (at.z - was.z) / dt;
+        if (Math.hypot(vx, vz) > LEAD_MOST) {
+          // set down somewhere rather than travelling there: no lead, or it
+          // would reach off along the jump and grow a strip of nowhere
+          vel.x = 0;
+          vel.z = 0;
+        } else {
+          const k = 1 - Math.exp(-dt * LEAD_EASE);
+          vel.x += (vx - vel.x) * k;
+          vel.z += (vz - vel.z) * k;
+        }
+      }
+      was.x = at.x;
+      was.z = at.z;
+      was.had = true;
+      const speed = Math.hypot(vel.x, vel.z);
+      // (a teleport is not a speed: it would reach off to nowhere)
+      const reach = speed > 1e-3 ? Math.min(CONFIG.viewRadius * CONFIG.chunkSize, speed * LEAD_TIME) / speed : 0;
+      chunks.update(at.x, at.z, 5, at.x + vel.x * reach, at.z + vel.z * reach);
       grass.update(at.x, at.z, 3, dt);
       sky.update(at, camera.position);
       particles.update(at, at.y, sky.open);

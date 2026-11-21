@@ -57,7 +57,13 @@
 - **Deterministic.** The same seed always produces the same hills, paths
   and trees. This matters because structures will be placed at fixed
   coordinates. The HUD shows your `x, z`, your heading and the time.
-- **Endless.** The world streams in 64 m chunks around you. Terrain uses three
+- **Endless.** The world streams in 64 m chunks around you, and around where
+  you are *going*: at a walk those are the same place and nothing changes, but
+  tucked on skis at 90 km/h you cross the loaded ground in nine seconds, so
+  the chunks reach up to the view radius again ahead of you and the ground is
+  grown before it is skied onto. How detailed a chunk is still goes by how far
+  it is from you, not from where you are heading, so you never stand on the
+  coarse kind, and the nearest are still grown first. Terrain uses three
   levels of detail with skirts to hide the seams. Trees switch between three
   mesh LODs, and ferns and bushes drop out with distance. Chunk generation
   (noise, geometry buffers, vegetation placement) runs in Web Workers, so
