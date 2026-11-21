@@ -115,7 +115,7 @@ sky over it is doing, each as one entry in one table
 | `lava coast` | wind-cropped grass and red dirt down to a black rock shelf | a few ironwoods, low bushes | overcast |
 | `red rock canyon` | red sand and slickrock; sandstone cliffs in beds, streaked dark, turning white towards the rim | ponderosa pines and oaks over scrub | clear and dry, fair-weather cloud over the rims |
 | `high mountains` | granite cliffs, talus of broken stone, pale grit paths; turf and stones over a treeline at 3,000 m, snow lying above it | slim spruces and firs, a few aspens, willow thickets | clear, thin air |
-| `snowy mountains` | snow on all of it but the crags: a ski resort in winter | firs in the valleys, thinning out to none at 2,050 m; the odd bush | clear and crisp |
+| `snowy mountains` | snow on all of it but the crags, its lakes frozen over and snowed on: a ski resort in winter | firs in the valleys, thinning out to none at 2,050 m; the odd bush | clear and crisp |
 
 **Snow** lies where a real place's country has a snow line, at its real
 height: up on high mountains, everywhere on snowy mountains. A photo taken in
