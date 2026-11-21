@@ -27,7 +27,7 @@ const LOOK_EVERY = 0.12; // seconds between looks along the crosshair for what's
 const TEND = 2.8; // metres from a fire ring you can reach its spit from
 const DRESS_REACH = 1.6; // metres from a kill you can dress it from
 const FLASH = 0.06; // seconds the muzzle flash shows
-const DUST = { ground: 0x5a4a36, tree: 0x6b5a40, rock: 0x8a8a84, building: 0xb08a5a };
+const DUST = { ground: 0x5a4a36, tree: 0x6b5a40, rock: 0x8a8a84, building: 0xb08a5a, wall: 0x8a6a48, target: 0x6a5a4a };
 const BLOOD = 0x5e2018;
 
 // ── How the hiker holds it ──────────────────────────────────────────────────
@@ -67,7 +67,8 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 // scope: the view through the scope (scope.js)
 // which: (animal) -> whether it's game
 // eatHint: () -> how to eat, in a few words ('U to eat')
-export function rifleTool({ wildlife, fires, carcasses, spits, scope, which, eatHint }) {
+// targets: anything else a shot can hit (shot.js Targets), or null
+export function rifleTool({ wildlife, fires, carcasses, spits, scope, which, eatHint, targets = null }) {
   let rounds = MAG;
   let sighted = false;
   let clock = 0;
@@ -196,9 +197,11 @@ export function rifleTool({ wildlife, fires, carcasses, spits, scope, which, eat
       const d = b.aimD;
       const near = nearOf(b);
       const a = wildlife.aimed(o, d, RANGE, near, which);
-      if (a && !traceShot({ chunks: b.chunks, buildings: b.buildings }, o, d, near, a.t).what) {
-        look.label = a.label;
-        look.t = a.t;
+      const other = targets && targets.aimed(o, d, a ? a.t : RANGE, near);
+      const on = other ? (other.label && !other.solid ? other : null) : a;
+      if (on && !traceShot({ chunks: b.chunks, buildings: b.buildings }, o, d, near, on.t).what) {
+        look.label = on.label;
+        look.t = on.t;
       }
     }
     const on = look.label ? `${look.label} · ${formatDistance(look.t)} · ` : '';
@@ -209,7 +212,7 @@ export function rifleTool({ wildlife, fires, carcasses, spits, scope, which, eat
   function shoot(b) {
     const o = b.aimO;
     const d = b.aimD;
-    const shot = traceShot({ chunks: b.chunks, buildings: b.buildings, wildlife, which }, o, d, nearOf(b));
+    const shot = traceShot({ chunks: b.chunks, buildings: b.buildings, wildlife, which, targets }, o, d, nearOf(b));
     rounds--;
     look.at = -1;
     b.sound.sfx('rifle');
@@ -220,11 +223,15 @@ export function rifleTool({ wildlife, fires, carcasses, spits, scope, which, eat
     if (shot.what === 'animal') {
       const body = wildlife.kill(shot.hit);
       if (body) b.flash(`a clean shot · ${carcasses.add(body).label} is down`, 2600);
+    } else if (shot.what === 'target') {
+      const said = shot.source.struck ? shot.source.struck(shot.hit, o.clone().addScaledVector(d, shot.t)) : null;
+      if (said) b.flash(said, 2600);
     } else if (shot.what) {
       b.chips.burst(o.clone().addScaledVector(d, shot.t), 8, DUST[shot.what], 1.4, 0.25);
     }
     const P = b.player.pos;
     wildlife.startle(P.x, P.z, HEARD);
+    if (targets) targets.heard(P.x, P.z);
   }
 
   function reload(b) {

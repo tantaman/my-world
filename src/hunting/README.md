@@ -49,7 +49,8 @@ some: *raw meat* and *roast meat*, in cuts.
 ```
 index.js              plugs it into the game: the rifle, the meat you carry, eating, saving the spits
 rifle.js              the rifle on the tool bar: shoot, the scope, dress a kill, roast over a fire
-shot.js               what a shot along the crosshair hits first: game, ground, a trunk, a wall
+shot.js               what a shot along the crosshair hits first: game, ground, a trunk, a wall,
+                      or a target another feature put there (Targets)
 quarry.js             what is game, and how much meat each gives and how long it takes to dress
 carcasses.js          kills lying where they fell, tipped over on their side, until dressed
 roasting.js           spits over the fires, how the meat on them cooks, and how they are saved

@@ -1,0 +1,268 @@
+/* Adventures: the board (I), the banner while one is on, the red pulse when
+   you're hurt, the word on how it ended and the blackout after a loss. Uses
+   the colour tokens defined on :root in index.html. */
+
+/* ── The board, where the other panels open ─────────────────────────────── */
+#adventures {
+  position: absolute;
+  right: calc(16px + var(--inset-r));
+  bottom: calc(44px + var(--inset-b));
+  width: min(380px, calc(100vw - 32px));
+  max-height: calc(100vh - 120px - var(--inset-t) - var(--inset-b));
+  display: flex;
+  flex-direction: column;
+  padding: 13px 15px 12px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  background: rgba(10, 16, 11, 0.94);
+  border: 1px solid var(--line);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+#adventures.open {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+#adventures .adv-board-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+#adventures h2 {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  color: var(--accent);
+  font-weight: 600;
+}
+#adventures .adv-board-note {
+  margin: 0 0 8px;
+  color: var(--ink-dim);
+  font-size: 10.5px;
+}
+#adventures .adv-board-now {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0 9px;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+}
+#adventures .adv-board-now[hidden] {
+  display: none;
+}
+#adventures .adv-board-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+#adventures li {
+  border-top: 1px solid var(--line);
+}
+#adventures button {
+  font: inherit;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 5px 9px;
+  cursor: pointer;
+}
+#adventures .adv-board-head button {
+  border: 0;
+  padding: 0 2px;
+  font-size: 12px;
+}
+#adventures li button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1px 10px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  padding: 8px 4px 9px;
+}
+#adventures li button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+#adventures .adv-board-name {
+  color: var(--ink);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+#adventures .adv-board-rec {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  text-align: right;
+}
+#adventures .adv-board-blurb {
+  grid-column: 1 / -1;
+  font-size: 10.5px;
+}
+#adventures button:not(:disabled):hover,
+#adventures button:focus-visible {
+  color: var(--ink);
+  background: rgba(238, 240, 226, 0.05);
+}
+#adventures button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+@media (max-width: 1230px) {
+  #adventures {
+    top: calc(44px + var(--inset-t));
+    bottom: auto;
+  }
+}
+
+/* ── The banner, while one is on ─────────────────────────────────────────── */
+#adventure {
+  position: absolute;
+  left: 50%;
+  top: calc(74px + var(--inset-t));
+  transform: translateX(-50%);
+  width: min(320px, calc(100vw - 32px));
+  padding: 8px 12px 9px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-top: 2px solid #c0573a;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+#adventure[hidden],
+#adventure [hidden] {
+  display: none;
+}
+#adventure .adv-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  color: #e8906a;
+  font-weight: 600;
+}
+#adventure .adv-left {
+  color: var(--ink);
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+#adventure .adv-objective {
+  color: var(--ink);
+}
+#adventure .adv-way {
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#adventure .adv-note {
+  color: var(--ink-dim);
+  font-size: 10.5px;
+}
+#adventure .adv-health {
+  margin-top: 6px;
+  height: 4px;
+  background: var(--line);
+}
+#adventure .adv-health i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: #8fb26a;
+  transition: width 0.2s;
+}
+#adventure .adv-health.low i {
+  background: #d9573a;
+}
+@media (max-width: 620px) {
+  #adventure {
+    top: calc(96px + var(--inset-t));
+  }
+}
+
+/* ── Hurt: red at the edges, by how badly ────────────────────────────────── */
+#adv-hurt {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(150, 18, 6, 0.85) 100%);
+}
+#adv-hurt.on {
+  animation: adv-hurt 0.7s ease-out;
+}
+@keyframes adv-hurt {
+  0% {
+    opacity: var(--hurt, 0.6);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ── How it ended ────────────────────────────────────────────────────────── */
+#adv-card {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translate(-50%, -50%);
+  width: max-content;
+  max-width: calc(100vw - 48px);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.6s;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7), 0 0 14px rgba(0, 0, 0, 0.6);
+  z-index: 2;
+}
+#adv-card.show {
+  opacity: 1;
+}
+#adv-card h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  letter-spacing: 0.3em;
+  color: #e8906a;
+}
+#adv-card.won h2 {
+  color: var(--accent);
+}
+#adv-card p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+/* ── The blackout ────────────────────────────────────────────────────────── */
+#adv-black {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  transition: opacity 1.4s ease-in;
+  z-index: 1;
+}
+#adv-black.on {
+  opacity: 1;
+  transition: opacity 0.7s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #adventures,
+  #adv-card,
+  #adv-black,
+  #adventure .adv-health i {
+    transition: none;
+  }
+  #adv-hurt.on {
+    animation: none;
+  }
+}

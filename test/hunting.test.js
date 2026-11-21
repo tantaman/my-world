@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { QUARRY, isGame, yieldOf } from '../src/hunting/quarry.js';
-import { traceShot, RANGE } from '../src/hunting/shot.js';
+import { traceShot, RANGE, Targets } from '../src/hunting/shot.js';
 import { Carcasses, the } from '../src/hunting/carcasses.js';
 import { Spits, ROAST, doneness, roastPace, cutColour, validateSpits } from '../src/hunting/roasting.js';
 import { rayCapsule } from '../src/wildlife/beasts.js';
@@ -70,6 +70,32 @@ test('a shot hits the first thing along it: game, ground, a trunk or a boulder',
   assert.equal(traceShot({ chunks: land(), wildlife: animalAt(RANGE + 10) }, o, level).what, null, 'nor anything out of range');
   const wall = { raycast: (oo, dd, max) => (12 < max ? { t: 12 } : null) };
   assert.equal(traceShot({ chunks: land(), buildings: wall, wildlife: animalAt(40) }, o, level).what, 'building');
+});
+
+test('something else a feature put in the world can be shot, and a wall of its own stops a shot', () => {
+  const o = v(0, 1.5, 0);
+  const level = v(0, 0, 1);
+  const down = v(0, -0.1, 1).normalize();
+  const targets = new Targets();
+  const struck = [];
+  const heard = [];
+  // a man 30 m off, behind a stockade 20 m off that only comes up to his chest
+  const man = { aimed: (oo, d, far, nearT) => (30 >= nearT && 30 < far ? { t: 30, label: 'an outlaw', hit: 'him' } : null), struck: (h) => struck.push(h), heard: (x, z) => heard.push([x, z]) };
+  const off = targets.add(man);
+  const hit = traceShot({ chunks: land(), targets }, o, level);
+  assert.deepEqual([hit.what, hit.hit, hit.label, hit.source], ['target', 'him', 'an outlaw', man]);
+  assert.equal(traceShot({ chunks: land(), targets, wildlife: animalAt(20) }, o, level).what, 'animal', 'the nearer thing is hit');
+  assert.equal(traceShot({ chunks: land(), targets }, o, down).what, 'ground', 'not through the hillside');
+  const stockade = { aimed: (oo, d, far, nearT) => (20 >= nearT && 20 < far ? { t: 20, solid: true } : null) };
+  targets.add(stockade);
+  const stopped = traceShot({ chunks: land(), targets }, o, level);
+  assert.deepEqual([stopped.what, stopped.t], ['wall', 20], 'the wall is in the way');
+  targets.remove(stockade);
+  targets.heard(3, 4);
+  assert.deepEqual(heard, [[3, 4]], 'it hears a shot');
+  off();
+  assert.equal(traceShot({ chunks: land(), targets }, o, level).what, null, 'gone, once taken away');
+  assert.equal(targets.list.length, 0);
 });
 
 test('a ray meets a capsule where it should', () => {
