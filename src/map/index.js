@@ -48,18 +48,19 @@ export function installMap(game) {
   marks.subscribe(() => save.touch());
 
   // Off to somewhere picked on the map. You are put down there as soon as it
-  // is asked for and the camera stays where it was looking; the wait is only
+  // is asked for, facing the way the place says (yaw: its way in, say) or
+  // else the way you were, the camera behind you; the wait is only
   // for the ground to grow round you, and for a hike's land to arrive if the
   // spot is on one (the chunks send for it as they ask whether they may grow).
   // Not while something is carrying you or moving you: get off it first, or
   // it would be left behind with you still sitting on it.
-  async function travel(x, z, label) {
+  async function travel(x, z, label, yaw) {
     if (player.carrier || player.aboard) {
       hud.flash('get off first');
       return false;
     }
     map.close();
-    await game.api.teleport(x, z);
+    await game.api.teleport(x, z, yaw);
     if (label) hud.flash(label);
     return true;
   }

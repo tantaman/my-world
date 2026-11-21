@@ -21,6 +21,8 @@
 //   shape    optional: polygons [[x, z], ...] in the world, drawn close up
 //   ground   optional: polygons of open ground it has (a town's street),
 //            drawn under its shapes at every zoom
+//   yaw      optional: which way to face when `go here` sets you down at
+//            x, z (the way in, say); otherwise the way you were facing
 
 export const PLACE_COLOR = '#e9dfc0';
 

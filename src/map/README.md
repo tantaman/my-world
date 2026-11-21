@@ -26,8 +26,10 @@ had (on a phone, the lists are behind the *lists* button).
 
 **Go here** takes you to the mark or the old place you've picked, rather than
 leaving you the walk: press it on its card and you're standing there, looking
-the way you were. Not while something is carrying you or moving you (a mount,
-a boat, a train) — get off first, or it would be left behind under you.
+the way you were (or, at a place with a way in, such as the doors of the
+[video store](../videostore/README.md), facing it). Not while something is
+carrying you or moving you (a mount, a boat, a train) — get off first, or it
+would be left behind under you.
 
 **Options** are under the lists: whatever other features ask of the world as a
 whole rather than of one spot on it, such as *acquire all mounts* (see

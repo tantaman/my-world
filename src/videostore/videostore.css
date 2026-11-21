@@ -1,0 +1,74 @@
+/* The video store: the box in your hands, and the till receipt. Neither
+   takes a click: they're only to read. */
+
+#vhs {
+  position: fixed; right: calc(14px + var(--inset-r, 0px)); top: 50%; transform: translateY(-50%); z-index: 9; pointer-events: none;
+  width: min(370px, calc(100vw - 28px)); font-family: var(--font); color: #1b1712;
+}
+#vhs[hidden], #vhs-receipt[hidden] { display: none; }
+#vhs .box { display: flex; gap: 0; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.55)); }
+#vhs .front { position: relative; flex: 0 0 auto; width: 132px; height: 198px; background: #111; }
+/* (the page's own rule for canvases is for the game's: full screen, fixed) */
+#vhs .front canvas { position: static; inset: auto; width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+#vhs .front .title {
+  position: absolute; left: 6px; right: 6px; display: flex; align-items: center; justify-content: center; text-align: center;
+  font-family: Impact, 'Arial Black', 'Helvetica Neue', sans-serif; font-weight: 800; font-size: 16px; line-height: 1.02; letter-spacing: 0.04em; text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); overflow: hidden;
+}
+#vhs .front .title.long { font-size: 12px; }
+#vhs .front .sticker {
+  position: absolute; right: -8px; top: 34%; transform: rotate(12deg); background: #f2c230; color: #b01a2a; font-weight: 800;
+  font-size: 11px; padding: 3px 6px; border-radius: 10px; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4); letter-spacing: 0.04em;
+}
+#vhs .front .sticker[hidden] { display: none; }
+#vhs .back {
+  flex: 1 1 auto; min-width: 0; height: 198px; box-sizing: border-box; padding: 7px 9px; background: #f4efe2; overflow: hidden;
+  font-size: 10px; line-height: 1.28; border-left: 3px solid #1b1712; font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+#vhs .back .tagline { font-weight: 800; font-style: italic; font-size: 12px; margin-bottom: 4px; color: #6a1430; }
+#vhs .back .blurb { margin: 0 0 5px; }
+#vhs .back .lang { font-size: 10px; margin-bottom: 4px; color: #3a3428; }
+#vhs .back .credits { font-size: 10px; color: #3a3428; margin-bottom: 4px; }
+#vhs .back .credits b { color: #1b1712; }
+#vhs .back .facts { font-size: 10px; margin-bottom: 4px; }
+#vhs .back .rating { display: inline-block; border: 1.5px solid #1b1712; padding: 0 3px; margin-right: 5px; font-weight: 800; font-size: 10px; }
+#vhs .back .quote { font-size: 10px; margin-bottom: 4px; }
+#vhs .back .quote small { display: block; color: #5a5242; }
+#vhs .back .stars { color: #c8901a; letter-spacing: 0.05em; }
+#vhs .back .note {
+  background: #fff6a0; padding: 3px 5px; transform: rotate(-1.5deg); font-size: 10px; margin: 2px 0 4px; font-style: italic;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+#vhs .back .price { font-weight: 800; font-size: 11px; color: #19695f; }
+#vhs .hands { margin-top: 8px; display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; color: var(--ink); padding: 6px 8px; background: var(--panel); border: 1px solid var(--line); }
+#vhs .hands:empty { display: none; }
+#vhs .hands span { width: 100%; font-size: 10px; letter-spacing: 0.08em; color: var(--ink-dim); }
+#vhs .hands i { display: flex; gap: 5px; align-items: center; font-style: normal; font-size: 10px; max-width: 190px; }
+#vhs .hands img { width: 24px; height: 36px; image-rendering: pixelated; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
+#vhs .hands b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#vhs .hint { margin-top: 6px; font-size: 11px; color: var(--ink-dim); padding: 4px 8px; background: var(--panel); letter-spacing: 0.02em; display: inline-block; }
+#vhs .hint:empty { display: none; }
+#vhs .hint b { color: var(--accent); }
+
+#vhs-receipt {
+  position: fixed; left: 50%; top: 14%; transform: translateX(-50%) rotate(-1deg); z-index: 10; pointer-events: none;
+  width: 250px; padding: 12px 14px 14px; background: #fbf8f0; color: #222; font-family: ui-monospace, 'Courier New', monospace;
+  font-size: 11px; line-height: 1.35; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 92% 98%, 84% 100%, 76% 98%, 68% 100%, 60% 98%, 52% 100%, 44% 98%, 36% 100%, 28% 98%, 20% 100%, 12% 98%, 4% 100%, 0 98%);
+}
+#vhs-receipt .head { text-align: center; font-weight: 800; letter-spacing: 0.2em; font-size: 13px; }
+#vhs-receipt .sub { color: #666; font-size: 10px; text-align: left; }
+#vhs-receipt .head + .sub { text-align: center; }
+#vhs-receipt hr { border: 0; border-top: 1px dashed #999; margin: 6px 0; }
+#vhs-receipt .row { display: flex; justify-content: space-between; gap: 8px; }
+#vhs-receipt .row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#vhs-receipt .total { font-weight: 800; }
+#vhs-receipt .foot { margin-top: 8px; text-align: center; font-style: italic; }
+
+@media (max-width: 640px) {
+  #vhs { top: auto; bottom: calc(120px + var(--inset-b, 0px)); transform: none; width: calc(100vw - 28px); }
+  #vhs .front { width: 96px; height: 144px; }
+  #vhs .front .title { font-size: 11px; }
+  #vhs .back { height: 144px; font-size: 10px; padding: 6px 8px; }
+  #vhs .back .credits, #vhs .back .quote, #vhs .back .lang { display: none; }
+}
