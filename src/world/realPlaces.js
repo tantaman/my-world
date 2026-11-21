@@ -1,6 +1,6 @@
 // Real places, set into whichever land a world is grown on.
 //
-// A land (worldgen.js, land2.js) grows a forest from a seed.
+// A land (worldgen.js) grows a forest from a seed.
 // withRealPlaces(Land) is that land with real places (`hikes`: landform.js)
 // set into it: inside one the ground, its trails, its lakes and its woods are
 // the real ones, and the forest takes over again round its edge.
@@ -219,7 +219,7 @@ export function withRealPlaces(Land) {
       return s;
     }
 
-    // What a land has high up (a treeline, snow, birch groves: land2.js) is
+    // What a land has high up (a treeline, snow, birch groves: worldgen.js) is
     // the forest's: a real place is as high as it really is, and wooded as it
     // really is. Its own country may have a treeline and snow of its own, at
     // their real heights, and its map tundra and ice (landform.js).

@@ -151,6 +151,9 @@ export class ChunkManager extends Emitter {
     this.chunks = new Map();
     this.lastCx = NaN;
     this.lastCz = NaN;
+    // ...and the square ahead that was last reached toward (see update())
+    this.lastAx = NaN;
+    this.lastAz = NaN;
     this.wanted = [];
     this.pending = true;
     // (x, z) -> how far the ground has been moved from where it was grown.
@@ -327,31 +330,52 @@ export class ChunkManager extends Emitter {
     return ready / this.wanted.length;
   }
 
-  update(px, pz, budgetMs = 5) {
+  // Grows the chunks round (px, pz), and round (aheadX, aheadZ) as well —
+  // where whoever is being followed is going, which at a walk is where they
+  // already are and on skis at 90 km/h is hundreds of metres off (see
+  // world/index.js). So the ground you are about to cross is grown before you
+  // reach it, rather than a ring of it behind you being grown instead.
+  //
+  // Detail still goes by how far a chunk is from *you*, not from where you
+  // are going, so you never stand on the coarse kind; and the nearest are
+  // still grown first, so the ground underfoot never waits on the view.
+  update(px, pz, budgetMs = 5, aheadX = px, aheadZ = pz) {
     const size = this.size;
     const cx = Math.floor(px / size);
     const cz = Math.floor(pz / size);
+    const ax = Math.floor(aheadX / size);
+    const az = Math.floor(aheadZ / size);
     const R = CONFIG.viewRadius;
+    const within = (R + 0.6) * (R + 0.6);
 
-    if (cx !== this.lastCx || cz !== this.lastCz) {
+    if (cx !== this.lastCx || cz !== this.lastCz || ax !== this.lastAx || az !== this.lastAz) {
       this.lastCx = cx;
       this.lastCz = cz;
+      this.lastAx = ax;
+      this.lastAz = az;
       this.pending = true;
       const wanted = [];
-      for (let dz = -R; dz <= R; dz++) {
-        for (let dx = -R; dx <= R; dx++) {
-          if (dx * dx + dz * dz > (R + 0.6) * (R + 0.6)) continue;
+      for (let z = Math.min(cz, az) - R; z <= Math.max(cz, az) + R; z++) {
+        for (let x = Math.min(cx, ax) - R; x <= Math.max(cx, ax) + R; x++) {
+          const dx = x - cx;
+          const dz = z - cz;
+          const ex = x - ax;
+          const ez = z - az;
+          if (dx * dx + dz * dz > within && ex * ex + ez * ez > within) continue;
           const ring = Math.max(Math.abs(dx), Math.abs(dz));
-          wanted.push({ cx: cx + dx, cz: cz + dz, lod: this.lodFor(ring), d2: dx * dx + dz * dz });
+          wanted.push({ cx: x, cz: z, lod: this.lodFor(ring), d2: dx * dx + dz * dz });
         }
       }
       wanted.sort((a, b) => a.d2 - b.d2);
       this.wanted = wanted;
 
+      const keep = (R + 1.6) * (R + 1.6);
       for (const [k, ch] of this.chunks) {
         const dx = ch.cx - cx;
         const dz = ch.cz - cz;
-        if (dx * dx + dz * dz > (R + 1.6) * (R + 1.6)) {
+        const ex = ch.cx - ax;
+        const ez = ch.cz - az;
+        if (dx * dx + dz * dz > keep && ex * ex + ez * ez > keep) {
           this.disposeChunk(ch);
           this.chunks.delete(k);
         }

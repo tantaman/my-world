@@ -19,7 +19,7 @@ import { Landform, packHeights, unpackHeights, packShore, unpackShore, packCover
 import { winterSnow, snowlineFrom } from '../tools/hike/snow.js';
 import { growWorld, LANDS } from '../src/world/lands.js';
 import { generateVegetation, generateTerrain } from '../src/world/chunkGen.js';
-import { sampleFar } from '../src/hikes/farGrid.js';
+import { sampleFar } from '../src/far/grid.js';
 import { NO_WATER, LANDFORM_REACH, LANDFORM_DRY } from '../src/world/water.js';
 import { NET } from '../src/world/drainage.js';
 import { HIKES } from '../src/world/hikes.js';
@@ -700,7 +700,7 @@ for (const land of LANDS) test(`where the map says what covers the land, it is s
   // a chunk of it carries how high and snowy it is; one of the forest's, as ever
   const [cx, cz] = [Math.floor(AT[0] / 64), Math.floor(AT[1] / 64)];
   assert.ok(generateTerrain(gen, cx, cz, 2, 64).high, 'on the mountain');
-  assert.equal(!!generateTerrain(gen, 0, 0, 2, 64).high, land > 1, 'in the forest, only if the land has high ground of its own');
+  assert.equal(!!generateTerrain(gen, 0, 0, 2, 64).high, world([], land).highGround, 'in the forest, only if the land has high ground of its own');
   // boulders all over the scree, more willows in the thicket
   const count = (g, e, n, kind) => {
     const [x, z] = at(e, n);

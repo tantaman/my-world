@@ -3,7 +3,7 @@
 // you at its own pace, down riffles and little cascades, round boulders, and
 // across the lakes on the way to where the water runs out of them, and on
 // down. Paddle with your hands (W A S D) to hurry it along or make for a
-// bank, and P again climbs out wherever you are. Where the river ends (a
+// bank, and V again climbs out wherever you are. Where the river ends (a
 // lake that keeps its water, or the sea) you're told so, and where the
 // nearest river that runs on somewhere else is.
 //
@@ -48,7 +48,7 @@ const SPARE = 0.05;
 const HOP = { time: 0.75, up: 0.45 };
 // Getting out: onto a bank this far (m) from the tube's middle at most,
 // where the water is no deeper than WADE m and the bank stands no more than
-// CLIFF m over it. P again within SLIP s slips you out into deep water.
+// CLIFF m over it. V again within SLIP s slips you out into deep water.
 const OUT_REACH = 2.6;
 const WADE = 0.45;
 const CLIFF = 1.2;
@@ -111,7 +111,7 @@ function duration(s) {
 
 // The features this uses, so it is installed after them (game/features.js).
 // And after boats, fishing and mounts, whose words on what a key would do
-// are said every frame, so that what P would do is said over them.
+// are said every frame, so that what V would do is said over them.
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'splashes', 'boats', 'fishing', 'mounts'];
 export function installTubing(game) {
   const { scene, chunks, gen, solids, player, input, hud, commands, save, sound, builder, splashes, peers } = game;
@@ -318,7 +318,7 @@ export function installTubing(game) {
     if (hopping) splash(at.x, at.z, 18, 1.2);
     else sound.sfx('tube-in');
     ran = flowing;
-    const how = input.isTouch ? 'the stick paddles' : 'W A S D to paddle · P to get out';
+    const how = input.isTouch ? 'the stick paddles' : 'W A S D to paddle · V to get out';
     hud.flash(`into your tube · ${flowing ? 'the river carries you along' : 'you drift across the still water'} · ${how}`, SAY);
     tell();
     save.touch();
@@ -332,7 +332,7 @@ export function installTubing(game) {
     const spot = bankBy(tube.x, tube.z, tube.level);
     if (!spot && time - slipAt > SLIP) {
       slipAt = time;
-      hud.flash(`no bank within reach to climb out onto · paddle to the side, or ${input.isTouch ? '“get out”' : 'P'} again to slip out into the water`, SAY);
+      hud.flash(`no bank within reach to climb out onto · paddle to the side, or ${input.isTouch ? '“get out”' : 'V'} again to slip out into the water`, SAY);
       return false;
     }
     const at = spot || { x: tube.x, z: tube.z };
@@ -447,7 +447,7 @@ export function installTubing(game) {
       guideTo(r);
       said += ` · the nearest ${r.river ? 'river' : 'stream'} that runs on somewhere else is ${formatDistance(r.d)} ${way(r.x - tube.x, r.z - tube.z)}, and runs ${formatDistance(r.far)}`;
     }
-    hud.flash(input.isTouch ? said : `${said} · P to get out`, SAY + 2400);
+    hud.flash(input.isTouch ? said : `${said} · V to get out`, SAY + 2400);
   }
 
   // ── Somewhere to go and float ─────────────────────────────────────────────
@@ -487,7 +487,7 @@ export function installTubing(game) {
     hud.flash(`no water deep enough to float in here · the nearest ${r.river ? 'river' : 'stream'} to float down is ${formatDistance(r.d)} ${way(r.x - p.x, r.z - p.z)}, and runs ${formatDistance(r.far)} from there`, SAY);
     return false;
   }
-  commands.add({ id: 'tube', keys: ['KeyP', 'PadL3'], group: 'WANDER', label: 'inner tube: pull it out and float down the river · get out', run: press });
+  commands.add({ id: 'tube', keys: ['KeyV', 'PadR3'], group: 'WANDER', label: 'inner tube: pull it out and float down the river · get out', run: press });
   commands.describe({ group: 'WANDER', help: 'in the tube', label: 'W A S D paddle with your hands · shift paddle hard' });
 
   // On a touch screen, a button for it, named for what it would do.
@@ -530,7 +530,7 @@ export function installTubing(game) {
     let word = '';
     const K = (w) => {
       word = w;
-      return touch ? w : 'P';
+      return touch ? w : 'V';
     };
     if (active) {
       const out = K('get out');

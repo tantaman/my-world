@@ -13,13 +13,37 @@ you scrape to a halt and step out. **I** puts them on anywhere there's snow,
 even on the flat, where **W** poles you along (they stay on until **I** takes
 them off), and **I** takes them off wherever you are.
 
-The forest's own mountains hold snow on their tops, enough for a pitch of
-fifty metres or so. For a run worth the name, go to a snowy real place: the
-hikes tab beside the map (**M**), and *the view*, which stands you where the
-photo was taken. The longest of them is the Vallée Blanche, where that is the
-top of the Aiguille du Midi, with Mont Blanc behind you, three hundred metres
-of fall line down to the glacier, and the Chamonix valley five hundred
-further below.
+Where to go. The forest's own mountains hold snow on their tops, enough for a
+pitch of fifty metres or so — a few seconds, and you are back on the turf.
+The **high country** is the real thing: massifs standing 1,400 m over their
+valleys, with a snowy cap, and a snow line that comes *below* the treeline, so
+off the top you cross open snow, carry on down through snowy woods, and only
+then run out of it. That is 800 m of vertical in one go, the flanks mostly
+23–25° with steeper faces on them, which tucked is somewhere around 85 km/h.
+
+The runs themselves are the **troughs** the ice cut, down where the water
+runs: broad U-shaped valleys with a floor well below the stream's own bed and
+walls a couple of hundred metres out, which hold you to the line. Water only
+ever runs downhill, so a trough does too, from its head to where the snow
+gives out — the best of them are 500 m of descent over a kilometre at 27°,
+about 90 km/h tucked, without a counter-slope in them. Drop into one at its
+head and let it take you down.
+They are a long way apart, so find one on the map (**M**) — a massif is hard
+to miss on it — and walk in. See [the world](../world/README.md#the-world).
+
+Or go to a snowy real place: the hikes tab beside the map, and *the view*,
+which stands you where the photo was taken. The longest of those is the Vallée
+Blanche, where that is the top of the Aiguille du Midi, with Mont Blanc behind
+you, three hundred metres of fall line down to the glacier, and the Chamonix
+valley five hundred further below.
+
+**The descent.** On the adventures board (**N**) there is a run to be timed.
+It sends you to the top of one in the high country — the biggest drop within
+a couple of kilometres of you, off any real place — and the clock starts when
+you get there. Ski down to where the snow gives out before it gets away from
+you; what is kept is how long it took, so it is a race against the hill and
+then against your own best time down it. Ask for one in the rolling forest
+and it will tell you to go and find a mountain.
 
 | | on the snow | in the air |
 |---|---|---|
@@ -79,6 +103,7 @@ run.js                a run's tally: how far, how fast, how far down, points and
 pose.js               how you stand on skis or a board, lean into turns, tip with the snow and tumble
 gear.js               skis, poles and a snowboard
 spray.js              snow thrown up off your edges, landing and falling
+descent.js            the descent, on the adventures board: a run found, and timed
 sound.js              the snow and the wind as you go; bindings, landings, falls
 others.js             what other people here are on
 skiing.css            the readout

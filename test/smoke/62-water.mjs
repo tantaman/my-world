@@ -31,12 +31,21 @@ export default async function ({ page, step, shot }) {
     const got = await page.evaluate(async (s) => {
       await world.teleport(s.x, s.z, Math.atan2(-s.fx, -s.fz));
       const p = world.player;
+      // The ground has to be there before standing in it means anything, and
+      // how deep you are standing is read straight away: a stream is a few
+      // metres wide, and given a moment the current carries you out of the
+      // deep of it and into the shallows at the side, which is not the
+      // question being asked.
+      await T.until(() => world.game.chunks.isFullyLoaded(), 60000);
+      await T.frames(4);
+      const wade = p.wade;
+      const current = Math.hypot(p.current.x, p.current.z);
       const x0 = p.pos.x;
       const z0 = p.pos.z;
       await T.frames(40);
       const carried = (p.pos.x - x0) * s.fx + (p.pos.z - z0) * s.fz;
       const water = world.chunks.waterAround(p.pos.x, p.pos.z, 45, { sources: [] });
-      return { wade: p.wade, current: Math.hypot(p.current.x, p.current.z), carried, sources: water.count };
+      return { wade, current, carried, sources: water.count };
     }, spot);
     assert.ok(got.wade > 0.2, `standing in the water (${got.wade.toFixed(2)} m)`);
     assert.ok(got.carried > 0.01, `the current carries you downstream (${got.carried.toFixed(3)} m)`);

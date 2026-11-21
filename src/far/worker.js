@@ -1,8 +1,9 @@
-// Web Worker: samples the land round a hike for its far view (farGrid.js),
-// off the main thread.
+// Web Worker: samples the land for the far view (grid.js), off the main
+// thread. It grows a world of its own from the same seed, so what it samples
+// is the land you will walk on.
 
 import { growWorld } from '../world/lands.js';
-import { sampleFar } from './farGrid.js';
+import { sampleFar } from './grid.js';
 
 let gen = null;
 
@@ -12,7 +13,9 @@ self.onmessage = (e) => {
     gen = growWorld(m.seed, m.structures, m.land, m.hikes);
     return;
   }
-  if (m.type === 'hike') {
+  // a real place's land has been fetched: this world needs it too, or the
+  // far view would draw the forest where the real land now is
+  if (m.type === 'land') {
     gen.addHike(m.def);
     return;
   }

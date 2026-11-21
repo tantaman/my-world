@@ -1,8 +1,8 @@
 // Towns: find the nearest one with people in it on the map, track it, go
 // there, be said hello to, and walk in through a front door.
 //
-// Leaves: you back where it found you, so what comes after plays as it would
-// without it.
+// Leaves: you back where it found you and nothing tracked on the HUD, so
+// what comes after plays as it would without it.
 
 import assert from 'node:assert/strict';
 
@@ -95,8 +95,14 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.equal(inside.on, 'boards', `you walk in over the threshold onto its floor (${JSON.stringify(inside)})`);
     assert.ok(inside.depth < inside.front, 'and you are inside its walls');
     await shot('town-indoors');
-    // and back to where this started
-    await page.evaluate((p) => world.teleport(p.x, p.z, p.yaw), from);
+    // and back to where this started, tracking nothing: this part says what
+    // comes after it plays as it would without it, and a town left tracked
+    // holds the HUD's guide (the first source with one wins, ui/hud.js), so
+    // the next feature to point the way somewhere would never get a look in.
+    await page.evaluate((p) => {
+      world.marks.setTracked(null);
+      world.teleport(p.x, p.z, p.yaw);
+    }, from);
     return inside;
   });
 }

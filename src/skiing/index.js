@@ -31,6 +31,7 @@ import { makeGear } from './gear.js';
 import { Spray } from './spray.js';
 import { skiSounds } from './sound.js';
 import { Skiers } from './others.js';
+import { descent } from './descent.js';
 import './skiing.css';
 import { segDist, waterSample } from '../core/geom.js';
 import { clamp, smoothstep } from '../noise.js';
@@ -69,9 +70,9 @@ const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
 const fmt = (n) => Math.round(n).toLocaleString('en');
 
 // The features this uses, so it is installed after them (game/features.js).
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save'];
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'adventures'];
 export function installSkiing(game) {
-  const { scene, chunks, gen, solids, player, input, hud, commands, settings, save, sound, builder, peers } = game;
+  const { scene, chunks, gen, solids, player, input, hud, commands, settings, save, sound, builder, peers, adventures } = game;
   const height = (x, z) => chunks.heightAt(x, z);
 
   // ── The snow, and what stands on it ───────────────────────────────────────
@@ -310,6 +311,9 @@ export function installSkiing(game) {
     sound.sfx('binding');
     hud.flash(`on your ${NAMES[kind]} now`);
   }
+  // On the adventures board: sent to the top of a run, and timed down it.
+  adventures.define(descent(() => active));
+
   commands.add({ id: 'skis', keys: ['KeyI'], group: 'WANDER', label: 'skis on · off (they go on by themselves heading down steep snow)', run: toggle });
   commands.add({ id: 'snowboard', keys: ['Backquote'], help: '`', group: 'WANDER', label: 'skis or a snowboard', run: swap });
   commands.describe({ group: 'WANDER', help: 'on skis', label: 'A D turn · W tuck · S brake · space jump' });

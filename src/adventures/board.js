@@ -107,10 +107,11 @@ export class AdventureBoard {
     else if (act.dataset.act === 'go') this.onGo(act.dataset.kind);
   }
 
-  // Escape or I closes it; up and down move between the adventures.
+  // Escape or N closes it (the board has the keyboard, so the key that
+  // opened it cannot come through the commands); up and down move between them.
   _onKey(e) {
     if (!this.isOpen) return;
-    if (e.key === 'Escape' || e.code === 'KeyI') {
+    if (e.key === 'Escape' || e.code === 'KeyN') {
       e.preventDefault();
       this.close();
       return;

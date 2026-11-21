@@ -1,7 +1,7 @@
-// Tubing: away from the water, P says where the nearest river to float down
-// is and points the way there; on its bank, P tosses the tube in and you drop
+// Tubing: away from the water, V says where the nearest river to float down
+// is and points the way there; on its bank, V tosses the tube in and you drop
 // into it; the river carries you on down, and your hands paddle you along
-// faster; P climbs out (onto the bank, or out in deep water, asked twice,
+// faster; V climbs out (onto the bank, or out in deep water, asked twice,
 // into the water); and you're back in your tube after a reload.
 //
 // Needs nothing from earlier parts: it finds its own river. Leaves you on
@@ -47,7 +47,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
       return at;
     });
     assert.ok(dry, 'somewhere dry to start');
-    await key('KeyP');
+    await key('KeyV');
     const said = await toast();
     assert.match(said, /^no water deep enough to float in here · the nearest (river|stream) to float down is [\d.]+ k?m (N|NE|E|SE|S|SW|W|NW), and runs [\d.]+ k?m from there$/, `(said: "${said}")`);
     assert.equal(await page.evaluate(() => world.tubing.active), false, 'and not in a tube');
@@ -68,8 +68,8 @@ export default async function ({ page, step, key, frames, open, shot }) {
       return { at, prompt: T.prompt() };
     }, river);
     assert.ok(bank, 'a bank to stand on, beside the river');
-    assert.match(bank.prompt, /^P float down it in your inner tube$/, `walking by, the prompt says so (${bank.prompt})`);
-    await key('KeyP');
+    assert.match(bank.prompt, /^V float down it in your inner tube$/, `walking by, the prompt says so (${bank.prompt})`);
+    await key('KeyV');
     const ok = await page.evaluate(() => T.until(() => world.tubing.state() && !world.tubing.state().hopping, 10000));
     assert.ok(ok, 'hopped in');
     await frames(10);
@@ -92,8 +92,8 @@ export default async function ({ page, step, key, frames, open, shot }) {
     assert.ok(now.seated && now.rest === 1, 'sat in it, arms over the sides');
     assert.ok(now.level !== null && Math.abs(now.hips - now.level) < 0.3, `down in it at the water (hips ${now.hips.toFixed(2)}, water ${now.level?.toFixed(2)})`);
     assert.ok(now.idle, 'the tools put away');
-    assert.match(now.said, /^into your tube · the river carries you along · W A S D to paddle · P to get out$/);
-    assert.match(now.prompt, /^W A S D paddle · shift hard · P get out$/);
+    assert.match(now.said, /^into your tube · the river carries you along · W A S D to paddle · V to get out$/);
+    assert.match(now.prompt, /^W A S D paddle · shift hard · V get out$/);
     assert.match(now.readout, /^[\d.]+ km\/h/);
     await shot('tubing-in');
     return { state: now.state };
@@ -127,9 +127,9 @@ export default async function ({ page, step, key, frames, open, shot }) {
   });
 
   await step('out of the tube', async () => {
-    await key('KeyP');
+    await key('KeyV');
     let said = await toast();
-    if (/no bank within reach/.test(said)) await key('KeyP');
+    if (/no bank within reach/.test(said)) await key('KeyV');
     said = await toast();
     const out = await page.evaluate(() => ({ active: world.tubing.active, aboard: !!world.player.aboard, seated: world.player.character.seated }));
     assert.equal(out.active, false, 'out of it');
@@ -140,15 +140,15 @@ export default async function ({ page, step, key, frames, open, shot }) {
   });
 
   await step('back in your tube after a reload', async () => {
-    await key('KeyP');
+    await key('KeyV');
     assert.ok(await page.evaluate(() => T.until(() => world.tubing.state() && !world.tubing.state().hopping, 10000)), 'in again');
     await page.evaluate(() => T.frames(140)); // long enough for the change to be written down
     await open();
     const back = await page.evaluate(() => ({ s: world.tubing.state(), seated: !!world.player.character.seated }));
     assert.ok(back.s && !back.s.hopping, 'in your tube');
     assert.ok(back.seated, 'sat in it');
-    await key('KeyP');
-    if (await page.evaluate(() => world.tubing.active)) await key('KeyP');
+    await key('KeyV');
+    if (await page.evaluate(() => world.tubing.active)) await key('KeyV');
     assert.equal(await page.evaluate(() => world.tubing.active), false, 'and out of it again');
     return { far: back.s.far };
   });

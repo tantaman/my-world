@@ -1,7 +1,7 @@
 # The world
 
 - **Varied.** Over a few kilometres the country changes
-  (`src/world/land2.js`):
+  (`src/world/worldgen.js`):
   - **Lake country** lies low, in broad smooth hollows that each gather a lot
     of water, so there's a pond or a lake in every other one, and the lakes are
     the biggest anywhere (well over 100 m across). It's wetter, more open, and
@@ -14,6 +14,25 @@
     shrubs, and snow lying on the tops from about 120 m. Rock shows on the
     steep faces, no tree grows on a cliff, and the trails give out about where
     the trees do.
+  - **The high country** is where the mountains are mountains: massifs that
+    stand 1,400 m and more over their valleys, one ridge to a massif, far
+    enough apart that walking from one to the next is a day of it. The trees
+    climb to about 900 m before they thin out, the cap above is bare rock, and
+    the snow line comes *below* the treeline, at about 600 m — so coming down
+    off the top you leave the open snow, carry on through snowy woods, and
+    only then run out of it. That is where a descent is 800 m of vertical
+    rather than the fifty metres the forest's own tops hold ([skiing](../skiing/README.md)).
+    A massif's valley floors stay down at forest height, which is what gives
+    the whole drop. Up there the water is ice: a channel is filled to its
+    level and snowed over, a hollow holds a snowfield instead of a tarn, and
+    the channels that carry enough of it are cut into **glacial troughs** —
+    broad U-shaped valleys, a floor below the stream's own bed and walls
+    rising a couple of hundred metres out. The drainage network only ever
+    runs downhill, so a trough does too, the whole way: the best of them give
+    500 m of descent at 27° without ever turning back uphill. And because the
+    point of standing up there is what you can see, the land round a massif is
+    drawn a kilometre out rather than the couple of hundred metres the chunks
+    reach, and the air clears with it ([the far view](../far/README.md)).
   - **Benches** step the land into level shelves with a rock face between
     each and the next, here and there in the hills and mountains.
 
@@ -22,7 +41,7 @@
   **open parkland**, where the meadows run together, the odd lone tree grows
   big, and scrub grows in the open. You start on level ground among the
   trees.
-- **The sea** (the third land, `src/world/land3.js`, `sea.js`). A walk from
+- **The sea** (`src/world/worldgen.js`, `sea.js`). A walk from
   the start, about half a kilometre to a kilometre off in a direction of the
   seed's own, the land goes down to the sea. Far out the land falls away
   under a sea that stands at one level everywhere; how far it falls is a
@@ -38,7 +57,13 @@
 - **Deterministic.** The same seed always produces the same hills, paths
   and trees. This matters because structures will be placed at fixed
   coordinates. The HUD shows your `x, z`, your heading and the time.
-- **Endless.** The world streams in 64 m chunks around you. Terrain uses three
+- **Endless.** The world streams in 64 m chunks around you, and around where
+  you are *going*: at a walk those are the same place and nothing changes, but
+  tucked on skis at 90 km/h you cross the loaded ground in nine seconds, so
+  the chunks reach up to the view radius again ahead of you and the ground is
+  grown before it is skied onto. How detailed a chunk is still goes by how far
+  it is from you, not from where you are heading, so you never stand on the
+  coarse kind, and the nearest are still grown first. Terrain uses three
   levels of detail with skirts to hide the seams. Trees switch between three
   mesh LODs, and ferns and bushes drop out with distance. Chunk generation
   (noise, geometry buffers, vegetation placement) runs in Web Workers, so
@@ -72,7 +97,7 @@
     below; on a river, riffles. A channel widens into pools and narrows
     between them. A pond or lake fills its hollow to just under the lowest
     point of its rim, with a beach that rises gently to meet the land. On
-    the third land most lakes are deep tarns: a shelf a metre or two deep
+    Most lakes are deep tarns: a shelf a metre or two deep
     out from the shore, then a steep drop to a floor 15 to 30-odd metres
     down.
   - **The water itself** is meshed per chunk on the main thread from the
@@ -119,18 +144,22 @@ a new **land**, and every world keeps the land it was first grown on
 
 | land | |
 |---|---|
-| 1 | rolling hills and mixed woods everywhere (`world/worldgen.js`) — every world saved before there was a second |
-| 2 | lake country, hills and mountains, benches, and different woods (`world/land2.js`) |
-| 3 | all of that, and the sea a walk from the start, and deep lakes (`world/land3.js`, `sea.js`) |
+| 1 | lake country, hills, mountains and benches, the woods changing with the country, the sea a walk from the start, and deep lakes (`world/worldgen.js`, `sea.js`) |
 
 New worlds are grown on the newest. A shared world says which land it is on
 in its save, beside its name (`land` → 2); one that says nothing is land 1,
 which is every world saved before lands were counted. A world that lives only
 in your browser is known by its seed and its land, so the world you built in
-before is still there, at `?land=1` or `?land=2`; the first time you open the
-new land where one is kept, the game says so. What each land grows is pinned
-by `test/golden/` (land 2's files end in `-land2`, land 3's in `-land3`), and
-never changes: something new goes in a land of its own.
+before is still there, at `?land=1`; the first time you open the new land
+where one is kept, the game says so.
+
+How far that is pinned is `FROZEN` in `world/lands.js`. A frozen land's
+golden files are for good, because worlds people keep are grown on it: if one
+fails, the code is wrong. The lands past it are drafts — the land is still
+being shaped, `UPDATE_GOLDEN=1 npm test` re-records them, and the diff is
+what a change did. Nothing is frozen yet, so the land is still ours to
+change; once it is, something that changes how the forest grows goes in a
+land of its own (a land 2's files end in `-land2`).
 
 ## Real places
 
@@ -183,11 +212,9 @@ On the settings panel (**O**), under *time*:
 
 ```
 index.js              plugs it into the game: the land, the sky, the hour
-worldgen.js           pure world description: height, paths, forest, species (land 1)
-land2.js              the second land: lake country, mountains, benches, kinds of woods
-land3.js              the third land: the second, by the sea, with deep lakes
+worldgen.js           the land: height, paths, country, woods, forest, species
 sea.js                the sea: where the land falls away to it, its beaches
-lands.js              which land a world is grown on; growWorld()
+lands.js              which land a world is grown on, and how far they are pinned; growWorld()
 drainage.js           where water runs and gathers: the drainage network
 water.js              streams, rivers, ponds, lakes and the sea on the ground, from that network
 landform.js           a piece of real land (a hike): its heights, trails, lakes, streams

@@ -3,7 +3,7 @@
 An inner tube in your pack, for floating down a river for as long as you
 like.
 
-Stand at the edge of a stream or a river (or in it) and press **P**: you
+Stand at the edge of a stream or a river (or in it) and press **V**: you
 toss the tube onto the water and drop into it, legs over the front and arms
 out over the sides. From there the river does the work. It carries you at
 its own pace, which is slow and easy on the long pools and quicker down the
@@ -15,11 +15,11 @@ water to where it runs out again, and on down.
 
 | | |
 |---|---|
-| **P** | pull out your tube and get in · get out |
+| **V** | pull out your tube and get in · get out |
 | **W A S D** | paddle with your hands, the way the camera faces |
 | **shift** | paddle hard |
 
-On a game controller, clicking the left stick is **P**.
+On a game controller, clicking the right stick is **V**.
 
 **Paddling.** Your hands only go so fast, but the river is slow too, so a
 little paddling hurries you along nicely; it's also how you make for a bank
@@ -27,9 +27,9 @@ to get out, or push off when you've run aground in the shallows. The camera
 swings round behind the way you're going, and round the bends with you,
 unless you're looking about.
 
-**Getting out.** **P** climbs out onto the nearest bank, or into shallows you
+**Getting out.** **V** climbs out onto the nearest bank, or into shallows you
 can stand in. Out in deep water with no bank in reach, paddle over to one, or
-press **P** twice to slip out into the water and swim. You're told how far you
+press **V** twice to slip out into the water and swim. You're told how far you
 floated and how long it took; your longest float in each world is kept.
 
 **How much river is left.** While you float, how fast you're going, how far
@@ -39,7 +39,7 @@ its water, or out in the sea. When you get there you're told so, and where the
 nearest river is that runs on somewhere else, and the way to it is shown under
 the coordinates.
 
-**Finding a river.** Press **P** away from the water and you're told where the
+**Finding a river.** Press **V** away from the water and you're told where the
 nearest stream or river big enough to float down is, and how far it runs from
 there, and the way to it is shown under the coordinates. Most run a few
 hundred metres before they end; the longest run on for a kilometre or two.

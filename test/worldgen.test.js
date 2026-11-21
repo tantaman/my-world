@@ -3,7 +3,8 @@
 // up floating over (or buried in) somebody's hillside.
 //
 // Each land (src/world/lands.js) is pinned on its own: land 1's files are
-// fields-<seed>.json and so on, land 2's fields-<seed>-land2.json.
+// fields-<seed>.json and so on, a second land's fields-<seed>-land2.json.
+// A land that is still a draft (FROZEN in lands.js) may be re-recorded.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -23,9 +24,12 @@ const named = (name, land) => (land > 1 ? `${name}-land${land}` : name);
 
 for (const land of LANDS) for (const seed of SEEDS) {
   const on = land > 1 ? ` on land ${land}` : '';
-  // Land 1 has always been pinned on a small square round the middle; the
-  // second changes over kilometres, so it is pinned over a wider one too.
-  const spans = land > 1 ? [300, 2400] : [300];
+  // The land changes country over kilometres, so it is pinned over wide
+  // squares as well as a small one round the middle: 2.4 km catches the lake
+  // country, the hills and the forest's own mountains, and 20 km catches the
+  // high country, whose massifs are 26 km apart and so can sit entirely
+  // outside the smaller squares (they do, for one of these seeds).
+  const spans = [300, 2400, 20000];
 
   test(`seed ${seed}${on}: the fields of the land`, () => {
     const gen = growWorld(seed, [], land);
@@ -36,7 +40,7 @@ for (const land of LANDS) for (const seed of SEEDS) {
           const h = gen.height(x, z);
           const w = gen.water;
           const p = { x, z, h, water: w.region ? [w.region, w.level] : 0, path: gen.pathMask(x, z), forest: gen.forest(x, z), species: gen.species(x, z), moist: gen.moisture(x, z) };
-          if (land > 1) Object.assign(p, { groves: gen.groves(x, z), above: gen.above(x, z, h), snow: gen.snow(x, z, h) });
+          Object.assign(p, { groves: gen.groves(x, z), above: gen.above(x, z, h), snow: gen.snow(x, z, h) });
           out.push(p);
         }
       }
@@ -92,23 +96,70 @@ for (const land of LANDS) test(`the map is drawn from the same world${land > 1 ?
   matchesGolden(named('map-tiles', land), out);
 });
 
-// ── The sea (land 3 on) ─────────────────────────────────────────────────────
+// ── The sea ─────────────────────────────────────────────────────────────────
+// Which lands have one: a land grown without a sea leaves gen.sea null, and
+// the tests below are only for the lands that have one.
 const SEA_LANDS = LANDS.filter((land) => growWorld(SEEDS[0], [], land).sea);
 
-test('only a land with a sea has one, and the ones before it are as they were', () => {
-  assert.deepEqual(SEA_LANDS, LANDS.filter((land) => land >= 3));
-  for (const land of LANDS.filter((l) => l < 3)) {
-    const gen = growWorld(SEEDS[0], [], land);
-    assert.equal(gen.sea, null);
-    for (const [x, z] of [[0, 0], [700, -300], [-1500, 900], [2500, 2500]]) {
-      gen.height(x, z);
-      assert.notEqual(gen.water.kind, 'sea');
+test('the land goes down to a sea, and knows which way it lies', () => {
+  assert.deepEqual(SEA_LANDS, LANDS, 'every land this build grows has a sea');
+  for (const land of SEA_LANDS) {
+    const { sea } = growWorld(SEEDS[0], [], land);
+    assert.ok(Number.isFinite(sea.level), `land ${land}: the sea stands at a level`);
+    assert.ok(Math.abs(Math.hypot(sea.dirX, sea.dirZ) - 1) < 1e-9, `land ${land}: it lies in a direction`);
+  }
+});
+
+// ── The high country ────────────────────────────────────────────────────────
+// Massifs are 26 km apart, so where one is depends on the seed; the test
+// finds the highest of them from the country field alone (which is cheap, and
+// needs no water), and pins the land over a square of it. That square is
+// where the ice cut its troughs, so this is what pins them — and it pins
+// where the massif is, too, since a moved massif moves every height in it.
+for (const seed of SEEDS) {
+  test(`seed ${seed}: the high country, and the troughs cut down it`, () => {
+    const gen = growWorld(seed, [], 1);
+    let at = null;
+    for (let x = -45000; x <= 45000; x += 1000) {
+      for (let z = -45000; z <= 45000; z += 1000) {
+        if (gen.country(x, z).alp < 0.95) continue;
+        const h = gen.broadHeight(x, z, 0);
+        if (!at || h > at[2]) at = [x, z, h];
+      }
     }
+    assert.ok(at, 'there is high country to be found');
+    assert.ok(at[2] > 500, `and it stands up (${at[2].toFixed(0)} m)`);
+    const out = { at: [at[0], at[1]], points: [] };
+    for (let dz = -800; dz <= 800; dz += 200) {
+      for (let dx = -800; dx <= 800; dx += 200) {
+        const [x, z] = [at[0] + dx, at[1] + dz];
+        const h = gen.height(x, z);
+        const w = gen.water;
+        out.points.push({ dx, dz, h, water: w.region ? [w.region, w.level] : 0, snow: gen.snow(x, z, h), above: gen.above(x, z, h), forest: gen.forest(x, z) });
+      }
+    }
+    matchesGolden(`alpine-${seed}`, out, { tolerance: TOL });
+  });
+}
+
+test('the sea’s soft floor holds however high the land stands', () => {
+  // Inland the sea lays a soft floor under the land, log(1 + e^t). Written
+  // the obvious way, e^t overflows past t = 709 — about 1400 m up, which the
+  // high country reaches — and every height there came out infinite.
+  const gen = growWorld(SEEDS[0], [], 1);
+  const [x, z] = [-gen.sea.dirX * 3000, -gen.sea.dirZ * 3000]; // away from the sea
+  assert.ok(gen.sea.drop(x, z) < SEA.inland[0], 'well inland, where the floor is laid');
+  let last = -Infinity;
+  for (const h of [-50, 0, 120, 1400, 1421, 1500, 3000, 50000]) {
+    const got = gen.sea.shape(h, x, z);
+    assert.ok(Number.isFinite(got), `${h} m of land stands at a height at all (${got})`);
+    assert.ok(got > last, `and higher land stands higher (${h} m -> ${got})`);
+    last = got;
   }
 });
 
 for (const land of SEA_LANDS) for (const seed of SEEDS) {
-  const on = ` on land ${land}`;
+  const on = land > 1 ? ` on land ${land}` : '';
 
   // Pinned along the way from the start to the sea, where the chunks near
   // the middle don't reach.
@@ -134,7 +185,7 @@ for (const land of SEA_LANDS) for (const seed of SEEDS) {
   });
 }
 
-test('a real place out at sea stands as an island, and on the lands before, where the forest is', () => {
+test('a real place out at sea stands as an island, and inland where the forest is', () => {
   for (const land of LANDS) {
     const gen = growWorld(SEEDS[0], [], land);
     assert.equal(gen.datumLevel(12.5), 12.5, `land ${land}: above the sea, where the forest is`);
@@ -144,7 +195,7 @@ test('a real place out at sea stands as an island, and on the lands before, wher
 });
 
 for (const land of SEA_LANDS) for (const seed of [...SEEDS, 7]) {
-  const on = ` on land ${land}`;
+  const on = land > 1 ? ` on land ${land}` : '';
 
   test(`seed ${seed}${on}: you start on land, with the sea a walk away`, () => {
     const gen = growWorld(seed, [], land);

@@ -11,7 +11,7 @@ import { SPECIES } from '../src/wildlife/species.js';
 import { SPECIES as TIMBER, treeName } from '../src/build/forestry.js';
 import { growWorld, LANDS } from '../src/world/lands.js';
 import { generateTerrain, generateSurface, generateVegetation, SURFACE_STRIDE } from '../src/world/chunkGen.js';
-import { sampleFar } from '../src/hikes/farGrid.js';
+import { sampleFar } from '../src/far/grid.js';
 import { localFrame } from '../tools/hike/geo.js';
 import { buildHike, splitHike } from '../tools/hike/build.js';
 import { parseOsm, beaches } from '../tools/hike/osm.js';
@@ -204,12 +204,12 @@ for (const land of LANDS) test(`what grows is what grows there${onLand(land)}`, 
 });
 
 test('what a land has high up stops at the edge of a real place', () => {
-  // The second land has a treeline, and snow above it (land2.js). The island
+  // The land has a treeline, and snow above it (worldgen.js). The island
   // stands 200 m over the sea, higher than either: but it is a tropical
   // island, wooded to the top, and no snow lies on it.
   const def = island({ country: 'cloud forest', trees: { cover: 0.85, species: -0.7 } });
-  const gen = world([def], 2);
-  const bare = world([], 2);
+  const gen = world([def]);
+  const bare = world([]);
   const [x, z] = at(-100, 0);
   const h = gen.height(x, z);
   assert.ok(h > gen.landforms[0].offset + 150, `near the top (${h - gen.landforms[0].offset} m over the sea)`);
@@ -238,15 +238,14 @@ test('snowy mountains: snow on all of it; and a hike can say where its own lies'
   assert.ok(L.realHeight(...top) > 800 && snowAt(winter, top) > 0.99, `its own line: snow on the top (${Math.round(L.realHeight(...top))} m)`);
   assert.ok(L.realHeight(...low) < 600 && snowAt(winter, low) === 0, `and none down at ${Math.round(L.realHeight(...low))} m`);
   assert.equal(snowAt(none, top), 0, 'or none at all');
-  // land with no high ground of its own has some, once a snowy place is set into it
+  // the land has high ground of its own, and a snowy place set into it has some too
   const box = (gen, [x, z]) => gen.highIn(x - 32, z - 32, x + 32, z + 32);
-  assert.deepEqual([box(world(), top), box(forest, top), box(snowy, top), box(winter, top)], [false, false, true, true]);
+  assert.deepEqual([box(world(), top), box(snowy, top), box(winter, top)], [true, true, true]);
   const t = generateTerrain(snowy, Math.floor(top[0] / 64), Math.floor(top[1] / 64), 1, 64);
   assert.ok(t.high && Math.max(...t.high.filter((_, i) => i % 2)) > 0.99, 'and the ground knows it, to be painted white');
-  // past its edge it's the forest's again: none on land 1, the land's own on land 2
+  // past its edge the snow is the land's own again, not the hike's
   const out = [AT[0], AT[1] + snowy.landforms[0].outer + 50];
-  assert.equal(snowy.snow(...out, 300), 0);
-  assert.equal(world([island({ country: 'snowy mountains' })], 2).snow(...out, 300), world([], 2).snow(...out, 300));
+  assert.equal(snowy.snow(...out, 300), world().snow(...out, 300));
   // and snow lies on what grows there; it doesn't change it
   const [cx, cz] = [Math.floor(top[0] / 64), Math.floor(top[1] / 64)];
   const v0 = generateVegetation(none, cx, cz, 64, TRUNK);

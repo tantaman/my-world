@@ -82,17 +82,27 @@ don't edit the same lines:
 ## What must not drift
 
 - **World generation is part of the save format.** A save is only the diff
-  from what a seed grows. `world/worldgen.js`, `land2.js`, `land3.js`,
-  `sea.js`, `chunkGen.js`, `water.js`, `drainage.js`, `noise.js` and the
-  order of `world/flora.js` are pinned by `test/golden/`. If those tests
-  fail, fix the code; do not re-record. (A new plant appended to `flora.js`
-  adds entries to the vegetation files: ask first, then add only those,
-  leaving every existing entry as it is.) Every world keeps the *land* it
-  was first grown on (`world/lands.js`): to change how the forest grows, add
-  a land (a class
-  grown from the newest, listed in `lands.js`, with golden files of its own)
-  and leave the old ones growing exactly as they did. Hooks the newer lands
-  need go into `WorldGen` as methods that change nothing on land 1.
+  from what a seed grows. `world/worldgen.js`, `sea.js`, `chunkGen.js`,
+  `water.js`, `drainage.js`, `noise.js` and the order of `world/flora.js`
+  are pinned by `test/golden/`, and every world keeps the *land* it was
+  first grown on (`world/lands.js`).
+
+  How far that is pinned is `FROZEN` in `world/lands.js`. A **frozen**
+  land's golden files are for good, because worlds people keep are grown on
+  it: if one of its tests fails, fix the code — `UPDATE_GOLDEN=1` refuses to
+  write them. The lands past it are **drafts**, and nothing is frozen yet,
+  so while the land is a draft change it in place, re-record with
+  `UPDATE_GOLDEN=1 npm test`, and say in the commit what moved: the diff is
+  there to show what the change did to the land, so read it. (A new plant
+  appended to `flora.js` adds entries to the vegetation files: ask first,
+  then add only those, leaving every existing entry as it is.)
+
+  Once a land is frozen, something that changes how the forest grows is a
+  land of its own: a class grown from the newest, listed in `lands.js`, with
+  golden files of its own, leaving the frozen ones growing exactly as they
+  did — and hooks it needs go into the older land as methods that change
+  nothing there.
+
   The old places in `landmarks/` are grown from the seed too, and never
   change the land or the plants: they stand on it as it is. Where they are
   is pinned in `test/golden/landmarks-*.json`, because the places people
@@ -100,10 +110,11 @@ don't edit the same lines:
   the same: grown from the seed without changing the land, and pinned in
   `test/golden/caves-*.json`. So are the railways in `railway/`, whose
   stations are pinned in `test/golden/railway-*.json`.
-- **Element spelling is for good.** Keys and values in
-  `test/golden/save-elements.json` are what is on the save server and in
-  people's browsers. Add new element kinds; never change existing ones. The
-  `localStorage` layouts in `test/local.test.js` likewise.
+- **Element spelling is for good**, whatever the lands are doing. Keys and
+  values in `test/golden/save-elements.json` are what is on the save server
+  and in people's browsers. Add new element kinds; never change existing ones
+  — `UPDATE_GOLDEN=1` allows only additions to that file. The `localStorage`
+  layouts in `test/local.test.js` likewise.
 - **Hikes are part of the world description too**, where each one is. Don't
   move one (`at`), change its `datum`, or edit its files by hand: re-import
   with `--force`, which keeps it in place. Hikes go where they really are

@@ -31,7 +31,7 @@ happens once the camera follows you under.)
   nothing about them is saved or shared.
 
 Any water deep enough to swim in can be dived in: the forest's own lakes,
-the deep lakes and the sea of the third land (`src/world/land3.js`,
+the deep lakes and the sea (`src/world/worldgen.js`,
 `sea.js`), or the sea of a hike by the sea. A sea is told from a lake by its
 level (the forest's) or by its chop (a real place's), and it's the sea's
 fish and weed that live there.
