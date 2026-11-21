@@ -3,7 +3,7 @@
 // the camera, and when it goes under (see README.md):
 //
 //   - tells the shaders (UNDER in render/uniforms.js): the water's fog and
-//     light take over from the air's (render/pixelPipeline.js), and the
+//     light take over from the air's (render/pipeline.js), and the
 //     surface is seen from below (world/waterSurface.js)
 //   - dulls everything heard from above and plays the water's own hush
 //   - lets drifting specks show, and your breath go up in bubbles

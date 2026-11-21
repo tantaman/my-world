@@ -20,10 +20,10 @@ const KEYS = [
   { e: -18, zen: [0.004, 0.007, 0.022], hor: [0.014, 0.02, 0.045], sun: [0.0, 0.0, 0.0], amb: [0.04, 0.055, 0.11], gnd: [0.012, 0.014, 0.018], light: [0.32, 0.4, 0.62], li: 0.5, ai: 1.2, exp: 2.2 },
   { e: -6, zen: [0.02, 0.03, 0.08], hor: [0.18, 0.1, 0.12], sun: [0.6, 0.2, 0.1], amb: [0.07, 0.07, 0.12], gnd: [0.02, 0.02, 0.02], light: [0.4, 0.42, 0.6], li: 0.25, ai: 1.1, exp: 1.6 },
   { e: 0, zen: [0.07, 0.11, 0.25], hor: [0.95, 0.42, 0.2], sun: [1.6, 0.55, 0.2], amb: [0.22, 0.2, 0.28], gnd: [0.05, 0.04, 0.03], light: [1.0, 0.45, 0.2], li: 0.9, ai: 1.2, exp: 1.25 },
-  { e: 8, zen: [0.12, 0.22, 0.48], hor: [1.0, 0.68, 0.42], sun: [1.5, 0.85, 0.45], amb: [0.36, 0.38, 0.48], gnd: [0.07, 0.06, 0.04], light: [1.0, 0.7, 0.42], li: 2.4, ai: 1.5, exp: 1.1 },
-  { e: 20, zen: [0.08, 0.21, 0.6], hor: [0.62, 0.64, 0.64], sun: [1.2, 0.95, 0.7], amb: [0.42, 0.48, 0.6], gnd: [0.08, 0.08, 0.05], light: [1.0, 0.86, 0.66], li: 3.1, ai: 1.6, exp: 1.08 },
-  { e: 45, zen: [0.06, 0.19, 0.6], hor: [0.48, 0.58, 0.72], sun: [1.0, 0.95, 0.85], amb: [0.45, 0.52, 0.65], gnd: [0.08, 0.09, 0.05], light: [1.0, 0.95, 0.86], li: 3.3, ai: 1.6, exp: 1.0 },
-  { e: 90, zen: [0.05, 0.17, 0.58], hor: [0.45, 0.56, 0.72], sun: [1.0, 0.97, 0.9], amb: [0.45, 0.52, 0.66], gnd: [0.08, 0.09, 0.05], light: [1.0, 0.97, 0.92], li: 3.4, ai: 1.6, exp: 1.0 },
+  { e: 8, zen: [0.12, 0.22, 0.48], hor: [1.0, 0.68, 0.42], sun: [1.5, 0.85, 0.45], amb: [0.36, 0.38, 0.48], gnd: [0.1, 0.085, 0.055], light: [1.0, 0.7, 0.42], li: 2.4, ai: 1.5, exp: 1.1 },
+  { e: 20, zen: [0.08, 0.21, 0.6], hor: [0.62, 0.64, 0.64], sun: [1.2, 0.95, 0.7], amb: [0.42, 0.48, 0.6], gnd: [0.11, 0.11, 0.07], light: [1.0, 0.86, 0.66], li: 3.1, ai: 1.6, exp: 1.08 },
+  { e: 45, zen: [0.06, 0.19, 0.6], hor: [0.48, 0.58, 0.72], sun: [1.0, 0.95, 0.85], amb: [0.45, 0.52, 0.65], gnd: [0.11, 0.12, 0.07], light: [1.0, 0.95, 0.86], li: 3.3, ai: 1.6, exp: 1.0 },
+  { e: 90, zen: [0.05, 0.17, 0.58], hor: [0.45, 0.56, 0.72], sun: [1.0, 0.97, 0.9], amb: [0.45, 0.52, 0.66], gnd: [0.11, 0.12, 0.07], light: [1.0, 0.97, 0.92], li: 3.4, ai: 1.6, exp: 1.0 },
 ];
 
 function sampleKeys(elev) {
@@ -51,6 +51,9 @@ function sampleKeys(elev) {
     exp: lerp(a.exp, b.exp, t),
   };
 }
+
+// Shadow map texels the edge of a shadow is spread over.
+const SHADOW_SOFT = 2;
 
 // How bright the picture is made deep in a cave, whatever the hour outside.
 const DARK_EXPOSURE = 2.1;
@@ -96,12 +99,19 @@ export class Sky {
           float mdot = dot(rd, md);
           col += vec3(0.7, 0.75, 0.9) * smoothstep(0.9994, 0.9997, mdot) * 1.6 * uNight;
           col += vec3(0.1, 0.12, 0.2) * pow(max(mdot, 0.0), 60.0) * 0.4 * uNight;
-          // stars
+          // stars: one in a few hundred cells of the sky has one, somewhere
+          // in it, a point a pixel or so across however finely it's drawn
           if (rd.y > 0.0 && uNight > 0.01) {
-            vec3 sp = floor(rd * 260.0);
-            float s = hash13(sp);
-            float tw = 0.6 + 0.4 * sin(uTime * (2.0 + s * 5.0) + s * 40.0);
-            col += vec3(0.8, 0.85, 1.0) * step(0.9975, s) * tw * uNight * smoothstep(0.0, 0.25, rd.y) * 1.4;
+            vec3 sp = rd * 260.0;
+            vec3 cell = floor(sp);
+            float s = hash13(cell);
+            if (s > 0.9975) {
+              vec3 at = cell + 0.5 + (vec3(hash13(cell + 1.7), hash13(cell + 5.3), hash13(cell + 9.1)) - 0.5) * 0.5;
+              float px = length(fwidth(sp)) * 0.7; // a pixel, in cells
+              float star = 1.0 - smoothstep(0.0, max(px, 0.05) * 1.3, length(sp - at));
+              float tw = 0.6 + 0.4 * sin(uTime * (2.0 + s * 5.0) + s * 40.0);
+              col += vec3(0.8, 0.85, 1.0) * star * tw * uNight * smoothstep(0.0, 0.25, rd.y) * 1.6;
+            }
           }
           // clouds: a soft drifting layer
           if (rd.y > 0.0) {
@@ -138,6 +148,8 @@ export class Sky {
     this.sun.shadow.mapSize.set(CONFIG.shadowMapSize, CONFIG.shadowMapSize);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.06;
+    // a little soft at the edge, as the sun's own width makes a real one
+    this.sun.shadow.radius = SHADOW_SOFT;
     scene.add(this.sun);
     scene.add(this.sun.target);
 

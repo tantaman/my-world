@@ -32,9 +32,9 @@ function frond(b, from, dir, { L, rise, droop, width, segs, base, tip, sway, rng
     const sw = sway * t * t;
     // a shallow V along the midrib, so it catches the light on one side
     const keel = w * 0.35;
-    ids.push(b.vertex(c.clone().addScaledVector(side, w).setY(c.y + keel), n, col, sw));
-    ids.push(b.vertex(c.clone().addScaledVector(side, -w).setY(c.y + keel), n, col, sw));
-    ids.push(b.vertex(c, n, col.clone().multiplyScalar(0.8), sw));
+    ids.push(b.vertex(c.clone().addScaledVector(side, w).setY(c.y + keel), n, col, sw, true));
+    ids.push(b.vertex(c.clone().addScaledVector(side, -w).setY(c.y + keel), n, col, sw, true));
+    ids.push(b.vertex(c, n, col.clone().multiplyScalar(0.8), sw, true));
   }
   for (let s = 0; s < segs; s++) {
     // two faces either side of the midrib
@@ -51,7 +51,7 @@ export function makePalm(seed = 81) {
     const b = new GeoBuilder();
     const barkA = lin(0x8a7a66);
     const barkD = lin(0x4a3f33);
-    const leafDark = lin(0x1f4a16);
+    const leafDark = lin(0x2a521f);
     const leafTip = lin(0x7fa234);
     // where the trunk is at height y: it leans, and straightens towards the top
     const lean = (y) => {
@@ -115,7 +115,7 @@ export function makeIronwood(seed = 83) {
     const b = new GeoBuilder();
     const barkA = lin(0x6b5a4c);
     const barkD = lin(0x2c231c);
-    const dark = lin(0x243524);
+    const dark = lin(0x2e4030);
     const mid = lin(0x4d6646);
     const light = lin(0x8ba07a);
     const trunkH = H * 0.92;
@@ -163,6 +163,7 @@ export function makeIronwood(seed = 83) {
           return jitter(_c.multiplyScalar(0.7 + 0.3 * t), p, 0.25);
         },
         sway: (p) => Math.pow(p.y / H, 2) * 0.9 + 0.08,
+        leaf: true,
       });
       if (!lod) {
         // the sprays that hang off it
@@ -185,8 +186,8 @@ export function makeTreeFern(seed = 85) {
     const rng = mulberry32(seed);
     const b = new GeoBuilder();
     const fibre = lin(0x4a2f1c);
-    const fibreD = lin(0x1c120b);
-    const base = lin(0x1c3d12);
+    const fibreD = lin(0x2e2015);
+    const base = lin(0x284a1e);
     const tip = lin(0x6c9a2e);
     const trunkH = 1.5;
     const trunk = new THREE.CylinderGeometry(0.2, 0.16, trunkH + 0.3, lod ? 4 : 6, 1, true);
@@ -238,9 +239,9 @@ export function makeSilversword(seed = 87) {
       const shade = 0.75 + rng() * 0.35;
       const c0 = _c.copy(core).multiplyScalar(shade).clone();
       const c1 = _c.copy(silver).multiplyScalar(shade).clone();
-      const i0 = b.vertex(root.clone().add(side), n, c0, 0);
-      const i1 = b.vertex(root.clone().sub(side), n, c0, 0);
-      const i2 = b.vertex(end, n, c1, 0.03);
+      const i0 = b.vertex(root.clone().add(side), n, c0, 0, true);
+      const i1 = b.vertex(root.clone().sub(side), n, c0, 0, true);
+      const i2 = b.vertex(end, n, c1, 0.03, true);
       b.idx.push(i0, i1, i2);
     }
     return b.build();

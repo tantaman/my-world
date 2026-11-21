@@ -14,9 +14,8 @@ import { SEA } from './sea.js';
 // The ground colour is computed per pixel from where it is in the world:
 // meadow grass, leaf litter and moss under the trees, packed dirt on the
 // paths, bare rock on steep slopes, and, on a land with high ground, thin
-// turf and stones above the trees and snow on the tops. At low resolution
-// this reads as
-// hand-placed pixel texture.
+// turf and stones above the trees and snow on the tops. (As pixel art this
+// reads as hand-placed pixel texture.)
 // Under water it turns to silt, pebbles and cobbles, darkening (reds first)
 // with depth, with the light netted over it by the ripples, and a damp band
 // and a little beach along the shore. By the sea the beach is sand, and so is
@@ -26,6 +25,8 @@ import { SEA } from './sea.js';
 // With the camera under water, the post-process does the darkening (for
 // everything down there, not just the ground), and the net of light reaches
 // further down.
+const RELIEF_NEAR = 25; // m: the ground's lumps show in full this close
+const RELIEF_FAR = 80; // and are gone this far off
 export function createTerrainMaterial() {
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
   mat.onBeforeCompile = (shader) => {
@@ -126,6 +127,30 @@ export function createTerrainMaterial() {
           }
           return best;
         }
+        // How the ground stands up and down within a metre or so (m): lumps
+        // and tussocks, and crags where it's rock, which a low sun picks out.
+        // Each scale fades as it gets finer than a few pixels (fw: metres to
+        // a pixel here), before it can shimmer.
+        float relief(vec2 wp, float slope, float fw) {
+          float h = wnoise(wp, 0.7, vec2(9.0)) * 0.07 * (1.0 - smoothstep(0.15, 0.4, fw * 0.7));
+          h += wnoise(wp, 2.3, vec2(3.0)) * 0.03 * (1.0 - smoothstep(0.15, 0.4, fw * 2.3));
+          h += wnoise(wp, 7.1, vec2(-5.0)) * 0.01 * (1.0 - smoothstep(0.15, 0.4, fw * 7.1));
+          float rock = smoothstep(0.28, 0.45, slope);
+          h += rock * (wnoise(wp, 1.1, vec2(2.0)) * 0.22 + wnoise(wp, 3.4, vec2(-1.0)) * 0.06 * (1.0 - smoothstep(0.15, 0.4, fw * 3.4)));
+          return h;
+        }
+        // The normal (in view space) of a surface whose height over it is h
+        // here, from how h changes from pixel to pixel.
+        vec3 reliefNormal(vec3 n, float h) {
+          vec3 pos = -vViewPosition;
+          vec3 dpx = dFdx(pos);
+          vec3 dpy = dFdy(pos);
+          vec3 r1 = cross(dpy, n);
+          vec3 r2 = cross(n, dpx);
+          float det = dot(dpx, r1);
+          vec3 grad = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+          return normalize(abs(det) * n - grad);
+        }
         // Light gathered into a moving net by the ripples overhead.
         float causticAt(vec2 wp, float t) {
           float m = cellsIn(1.3);
@@ -216,9 +241,20 @@ export function createTerrainMaterial() {
             if (uUnder < 0.5) diffuseColor.rgb *= exp(-wd * vec3(1.15, 0.6, 0.48));
           }
         }`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        {
+          // lumps and crags, gone smooth in the distance (and under snow, a
+          // little smoother)
+          float fw = length(fwidth(wp));
+          float near = 1.0 - smoothstep(${RELIEF_NEAR.toFixed(1)}, ${RELIEF_FAR.toFixed(1)}, length(vViewPosition));
+          if (near > 0.0) normal = reliefNormal(normal, relief(wp, 1.0 - vWorldNormal.y, fw) * near * (1.0 - 0.6 * vHigh.y));
+        }`,
       );
   };
-  mat.customProgramCacheKey = () => 'terrain-v8';
+  mat.customProgramCacheKey = () => 'terrain-v9';
   return mat;
 }
 
@@ -239,9 +275,38 @@ export function createTerrainDepthMaterial() {
   return mat;
 }
 
+// ── Light through leaves ───────────────────────────────────────────────────
+// A leaf passes on about as much of the sunlight as it reflects, greener and
+// yellower. So foliage seen from its shaded side isn't dark: it glows with
+// what came through it, most of all looking towards the sun. (Its own
+// canopy's shadow still counts: deep inside a crown, little comes through.)
+// `weight` is a GLSL expression, 0..1: how far this is a leaf.
+const LEAF_THROUGH = [1.0, 1.2, 0.5]; // what comes through, for what is reflected
+const LEAF_BEHIND = 0.6; // lit from straight behind, as a share of lit from in front
+const LEAF_GLOW = 0.9; // and more again looking towards the sun through it
+function throughLeaves(shader, weight) {
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <lights_physical_pars_fragment>',
+    `#include <lights_physical_pars_fragment>
+    void RE_Direct_Leaf(const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight) {
+      RE_Direct_Physical(directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
+      float leaf = ${weight};
+      if (leaf > 0.0) {
+        float behind = saturate(-dot(geometryNormal, directLight.direction));
+        float toward = pow(saturate(dot(-geometryViewDir, directLight.direction)), 4.0);
+        vec3 through = vec3(${LEAF_THROUGH.map((v) => v.toFixed(2)).join(', ')});
+        reflectedLight.directDiffuse += directLight.color * BRDF_Lambert(material.diffuseColor) * through * leaf * (behind * ${LEAF_BEHIND.toFixed(2)} + toward * ${LEAF_GLOW.toFixed(2)});
+      }
+    }
+    #undef RE_Direct
+    #define RE_Direct RE_Direct_Leaf`,
+  );
+}
+
 // ── Vegetation (trees, bushes, ferns, rocks, logs) ─────────────────────────
 // Vertex coloured, gently swaying in the wind. Foliage uses "spherical"
-// normals baked into the geometry so canopies shade as soft volumes.
+// normals baked into the geometry so canopies shade as soft volumes, and
+// lets the light through (aLeaf, see models.js).
 // Pass { sway: false } for a tree that's been felled (it shouldn't wave about).
 export function createVegetationMaterial({ sway = true } = {}) {
   const mat = new THREE.MeshStandardMaterial({
@@ -259,6 +324,8 @@ export function createVegetationMaterial({ sway = true } = {}) {
         '#include <common>',
         `#include <common>
         attribute float aSway;
+        attribute float aLeaf;
+        varying float vLeaf;
         uniform float uTime;
         uniform float uWind;
         ${WORLD_GLSL}`,
@@ -266,6 +333,7 @@ export function createVegetationMaterial({ sway = true } = {}) {
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
+        vLeaf = aLeaf;
         {
           // Where the plant stands in the world sets when the wind reaches
           // it. (An instance is placed from its mesh, a chunk's corner; the
@@ -297,13 +365,16 @@ export function createVegetationMaterial({ sway = true } = {}) {
       );
     // Double sided foliage: keep the baked normal on back faces instead of
     // flipping it, otherwise leaf cards turn black from behind.
-    shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <normal_fragment_begin>',
-      `#include <normal_fragment_begin>
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vLeaf;')
+      .replace(
+        '#include <normal_fragment_begin>',
+        `#include <normal_fragment_begin>
       normal = normalize(vNormal);`,
-    );
+      );
+    throughLeaves(shader, 'vLeaf');
   };
-  mat.customProgramCacheKey = () => 'vegetation-v2';
+  mat.customProgramCacheKey = () => 'vegetation-v3';
   return mat;
 }
 
@@ -399,7 +470,9 @@ export function createGrassMaterial() {
         `#include <normal_fragment_begin>
         normal = normalize(vNormal);`,
       );
+    // (a blade is a leaf; a flower, not so much)
+    throughLeaves(shader, 'vGround.x > -0.5 ? 1.0 : 0.4');
   };
-  mat.customProgramCacheKey = () => 'grass-v5';
+  mat.customProgramCacheKey = () => 'grass-v6';
   return mat;
 }
