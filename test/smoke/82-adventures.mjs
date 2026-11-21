@@ -34,7 +34,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
     await key('KeyH');
     const help = await page.evaluate(() => [...document.querySelectorAll('#help .row')].map((r) => r.textContent));
     await key('KeyH');
-    assert.ok(help.some((r) => /^Iadventures · start one, or give it up$/.test(r)), 'it is on the help panel');
+    assert.ok(help.some((r) => /^Jadventures · start one, or give it up$/.test(r)), 'it is on the help panel');
     // the corner button opens it too
     await page.click('#adventure-btn');
     assert.ok(await page.evaluate(() => document.getElementById('adventures').classList.contains('open')));
