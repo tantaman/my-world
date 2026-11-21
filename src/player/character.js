@@ -142,6 +142,7 @@ export const SEAT_HIPS = HIPS_Y;
 const HIP_X = 0.095; // hip joints either side of the pelvis
 const HIP_Y = -0.04;
 const NECK = 0.145; // centre of the head above the base of the neck
+const BACK_OF_PACK = 0.11; // m from the middle of the daypack to the back of it
 const THIGH = 0.42;
 const SHIN = 0.43;
 const REACH = (THIGH + SHIN) * 0.985; // a planted leg never quite locks straight
@@ -321,6 +322,8 @@ export class Character {
 
     // black daypack
     const bp = group(this.chest, 0, 0.27, -0.232);
+    // what is worn over it goes on the back of it (addOnBack)
+    this.back = group(bp, 0, 0, -BACK_OF_PACK);
     const bag = cap(0.13, 0.2, pack, 10);
     bag.scale.set(1.25, 1, 0.62);
     bp.add(bag);
@@ -469,6 +472,14 @@ export class Character {
   addWorn(object, { band = null } = {}) {
     this.cap.brow.add(object);
     if (band) this.cap.brow.parent.add(band);
+  }
+
+  // Something the hiker wears on the back, over the daypack (a jetpack),
+  // placed in the frame of the back of the pack: +z into the pack (towards
+  // the hiker's front), y up the spine, +x to the hiker's left. It rides with
+  // the chest however the body leans. Its owner shows and hides it.
+  addOnBack(object) {
+    this.back.add(object);
   }
 
   // Something the hiker can raise to the face in the left hand, whatever the
