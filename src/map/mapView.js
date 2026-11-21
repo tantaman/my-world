@@ -16,6 +16,16 @@
 //     shown()  it has just come into view: bring it up to date
 //   map.open(tab)   open the map with that tab showing (or the last one shown)
 //
+// Under the lists is a row of options another feature puts there, for the
+// things you ask of the world as a whole rather than of somewhere on it:
+//   map.addAction({ id, label, title, run, enabled })
+//     run()       the button was pressed
+//     enabled()   whether there is anything in it to do: asked each time the
+//                 map opens, and again after any option is pressed
+//
+// `go here`, on a mark's and a place's card, is the map's own: travel(x, z,
+// label) is handed where you chose, and takes you there (src/map/index.js).
+//
 // Other features can draw on it too, over the land and under you and the
 // marks: map.addLayer((pen) => ...), where pen is
 //   ctx              the canvas (device pixels)
@@ -72,6 +82,7 @@ const TEMPLATE = /* html */ `
         <div class="where" id="mark-where"></div>
         <div class="actions">
           <button type="button" data-act="track" aria-pressed="false">track</button>
+          <button type="button" data-act="go" title="Go there now">go here</button>
           <button type="button" data-act="delete">delete</button>
           <button type="button" data-act="done" class="done">done</button>
         </div>
@@ -83,6 +94,7 @@ const TEMPLATE = /* html */ `
         <div class="where" id="place-where"></div>
         <div class="actions">
           <button type="button" data-act="place-track" aria-pressed="false">track</button>
+          <button type="button" data-act="place-go" title="Go there now">go here</button>
           <button type="button" data-act="place-done" class="done">done</button>
         </div>
       </div>
@@ -97,15 +109,18 @@ const TEMPLATE = /* html */ `
         <div class="side-head"><h3>NEARBY</h3></div>
         <ul id="place-list"></ul>
       </div>
+      <div class="side-acts" role="group" aria-label="Options" hidden></div>
     </aside>
     <div class="map-foot"><b>click</b> to mark · <b>drag</b> to pan · <b>scroll</b> to zoom · <b>C</b> find me · <b>M</b> close</div>
   </div>`;
 
 export class MapView {
   // onOpen(): it's about to open (so whatever else is up can close first)
-  constructor({ seed, land = 1, structures = [], hikes = [], ready, marks, player, input, places = new Places(), onOpen = () => {} }) {
+  // travel(x, z, label): take the player to somewhere chosen on the map
+  constructor({ seed, land = 1, structures = [], hikes = [], ready, marks, player, input, places = new Places(), onOpen = () => {}, travel = () => false }) {
     this.marks = marks;
     this.onOpen = onOpen;
+    this.travel = travel;
     this.places = places;
     this.placeSel = null; // the place whose card is open
     this._placesShown = []; // [{ place, r }] drawn last frame, for hits and labels
@@ -131,6 +146,7 @@ export class MapView {
     this.viewKey = '';
     this.t = 0;
     this.layers = [];
+    this.actions = []; // the options under the lists: [{ id, run, enabled, button }]
     const view = this;
     this.pen = {
       get ctx() {
@@ -180,6 +196,7 @@ export class MapView {
     this.colorsEl = root.querySelector('#mark-colors');
     this.side = root.querySelector('#map-side');
     this.tabBar = root.querySelector('.side-tabs');
+    this.actsEl = root.querySelector('.side-acts');
     // the lists beside the map: [{ id, button, pane, shown }]
     this.tabs = [{ id: 'places', button: this.tabBar.firstElementChild, pane: root.querySelector('[data-pane="places"]'), shown: () => {} }];
     this.tab = 'places'; // the one showing
@@ -256,6 +273,7 @@ export class MapView {
     this._resize();
     this.scale = this._stopScale(this.stop);
     this._renderList();
+    this._refreshActions();
     this._current().shown();
     this.frame.focus({ preventScroll: true });
   }
@@ -301,8 +319,26 @@ export class MapView {
     pane.setAttribute('role', 'tabpanel');
     pane.hidden = true;
     pane.appendChild(el);
-    this.side.appendChild(pane);
+    this.side.insertBefore(pane, this.actsEl); // the options row stays last
     this.tabs.push({ id, button, pane, shown });
+  }
+
+  // An option under the lists: see the top of this file.
+  addAction({ id, label, title = '', run, enabled = () => true }) {
+    if (this.actions.some((a) => a.id === id)) throw new Error(`the map already has an option called "${id}"`);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.action = id;
+    button.textContent = label;
+    if (title) button.title = title;
+    this.actsEl.appendChild(button);
+    this.actsEl.hidden = false;
+    this.actions.push({ id, run, enabled, button });
+    this._refreshActions();
+  }
+
+  _refreshActions() {
+    for (const a of this.actions) a.button.disabled = !a.enabled();
   }
 
   showTab(id) {
@@ -1171,6 +1207,11 @@ export class MapView {
     const b = e.target.closest('button');
     if (!b || !this.root.contains(b)) return;
     if (b.dataset.tab) return this.showTab(b.dataset.tab);
+    if (b.dataset.action) {
+      const a = this.actions.find((x) => x.id === b.dataset.action);
+      if (a) a.run();
+      return this._refreshActions();
+    }
     if (b.dataset.icon) return this._edit({ icon: b.dataset.icon }, true);
     if (b.dataset.color) return this._edit({ color: b.dataset.color }, true);
     if (b.dataset.place) {
@@ -1212,6 +1253,11 @@ export class MapView {
         this.isNew = false;
         return this._fillEditor();
       }
+      case 'go': {
+        const m = this.marks.get(this.selected);
+        if (m) this.travel(m.x, m.z, markLabel(m));
+        return;
+      }
       case 'delete': {
         const id = this.selected;
         this.closeEditor();
@@ -1224,6 +1270,11 @@ export class MapView {
         const id = this.placeSel;
         this.marks.setTracked(this.marks.tracked === id ? null : id);
         return this._fillCard();
+      }
+      case 'place-go': {
+        const p = this.places.get(this.placeSel);
+        if (p) this.travel(p.x, p.z, p.name);
+        return;
       }
       case 'place-done':
         return this.closePlace();

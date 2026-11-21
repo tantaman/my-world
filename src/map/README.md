@@ -23,6 +23,16 @@ such as the [hikes](../hikes/README.md) and the [railway's stations](../railway/
 Going to one from its list closes the map. The map opens on the tab you last
 had (on a phone, the lists are behind the *lists* button).
 
+**Go here** takes you to the mark or the old place you've picked, rather than
+leaving you the walk: press it on its card and you're standing there, looking
+the way you were. Not while something is carrying you or moving you (a mount,
+a boat, a train) — get off first, or it would be left behind under you.
+
+**Options** are under the lists: whatever other features ask of the world as a
+whole rather than of one spot on it, such as *acquire all mounts* (see
+[Mounts](../mounts/README.md)). One greys out when there's nothing left in it
+to do.
+
 **Old places** — the cabins, wells, docks and so on that the forest has (see
 [Old places](../landmarks/README.md)) — are on the map as little square badges with
 their names under them, paler once you've been. Close up, the map draws what
@@ -46,11 +56,11 @@ them (handy for copying out).
 ## Files
 
 ```
-index.js              plugs it into the game
+index.js              plugs it into the game, and goes where you pick (travel)
 mapRender.js          pure top-down tile renderer (runs in a worker)
 mapWorker.js          Web Worker wrapper around mapRender
 tiles.js              tile cache + worker scheduling
-mapView.js            the map overlay: pan/zoom, pins, mark editor, the lists beside it (map.addTab)
+mapView.js            the map overlay: pan/zoom, pins, mark editor, the lists beside it (map.addTab) and the options under them (map.addAction)
 marks.js              the marks, their icons and colours
 places.js             places other features put on the map (an old cabin), to look up and track
 markers.js            your marks as pennants in the world

@@ -25,6 +25,8 @@
 // From the console:
 //   world.mounts.list()          where they are and how they're doing
 //   world.mounts.tame('horse')   skip the finding and the taming
+//   world.mounts.tameAll()       all three at once, each where it lives
+//                                (the map's "acquire all mounts")
 
 import * as THREE from 'three';
 import { MOUNTS, REACH, NEAR, COME } from './kinds.js';
@@ -55,6 +57,9 @@ const SAY = 5200;
 const NEXT_CALL = 4;
 // While you fly, how often (s) everyone here is told how high you are.
 const TELL_EVERY = 0.25;
+
+// 'the horse, the turtle and the eagle', as you would say it.
+const listOf = (items) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
 
 const _v = new THREE.Vector3();
 const _o = new THREE.Vector3();
@@ -435,6 +440,16 @@ export function installMounts(game) {
     }),
   );
 
+  // An option under the lists beside the map, for skipping the looking and
+  // the winning over: all three at once, each left where it lives.
+  map.addAction({
+    id: 'mounts-all',
+    label: 'acquire all mounts',
+    title: 'the horse, the turtle and the eagle, without the finding and the taming',
+    run: tameAll,
+    enabled: () => tameOnes().length < all.length,
+  });
+
   // ── Saving ────────────────────────────────────────────────────────────────
   // { known: { horse: 0..3, … }, tame: { horse: { x, z, yaw }, … }, riding, last }
   let ridePending = null;
@@ -556,16 +571,34 @@ export function installMounts(game) {
     },
   });
 
-  function won(m) {
+  // It's yours from now on, and stays where it is. (What is said about it is
+  // the caller's: one of them wins over three at once.)
+  function claim(m) {
     m.tame = true;
     m.taming.trust = 1;
     m.rest();
     hints.won(m.kind);
     last = last || m.kind;
+  }
+
+  function won(m) {
+    claim(m);
     if (m.kind === 'horse') sound.call('nicker', m.x, m.y + 1.5, m.z);
     if (m.kind === 'eagle') sound.call('eagle', m.x, m.y + 1, m.z, { gain: 0.5 });
     hud.flash(`the ${m.def.name} trusts you: it's yours · Z to get on, and Z to whistle for it from anywhere`, SAY);
     save.touch();
+  }
+
+  // All of them at once, from the map, for whoever would rather not go
+  // looking. Each stays where it lives, so a whistle (Z) is what brings the
+  // first one to you.
+  function tameAll() {
+    const wild = all.filter((m) => !m.tame);
+    if (!wild.length) return hud.flash(`all ${all.length} are yours already · Z whistles for one`, SAY);
+    for (const m of wild) claim(m);
+    save.touch();
+    const names = wild.map((m) => `the ${m.def.name}`);
+    hud.flash(`${listOf(names)} ${wild.length > 1 ? 'are' : 'is'} yours · Z whistles for one, wherever you are`, SAY);
   }
 
   // What Z would do here, said in place of the tool's prompt.
@@ -627,6 +660,11 @@ export function installMounts(game) {
         z: Math.round(m.z),
         dist: Math.round(Math.hypot(m.x - player.pos.x, m.z - player.pos.z)),
       })),
+    // all three at once, each left where it lives: the map's option
+    tameAll: () => {
+      tameAll();
+      return all.map((m) => m.kind);
+    },
     // skip finding and taming it: it's yours, beside you
     tame(kind) {
       const m = mounts[kind];

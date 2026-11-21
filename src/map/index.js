@@ -1,7 +1,12 @@
 // The map (M), and the marks you leave on it: listed beside the map, tracked
 // on the HUD, and standing in the world as pennants. Other features put
-// places on it too, through map.places (places.js), and lists of where to go
-// beside it, through map.addTab (mapView.js): it's where you go from.
+// places on it too, through map.places (places.js), lists of where to go
+// beside it, through map.addTab, and options under those lists, through
+// map.addAction (mapView.js): it's where you go from.
+//
+// `go here`, on the card of the mark or the place you picked, is that taken
+// at its word: you are set down there once the ground has grown (travel()
+// below), as the stations and the hikes set you down at theirs.
 
 import { MarkStore, marksSave, markLabel } from './marks.js';
 import { MapView } from './mapView.js';
@@ -26,7 +31,7 @@ export function installMap(game) {
   // One panel at a time: opening the map, on whichever tab, closes whatever
   // else is up.
   const onOpen = () => game.emit('panel', 'map');
-  const map = new MapView({ seed: gen.seed, land: gen.land, structures, hikes: gen.hikes, ready: (x0, z0, x1, z1, ask) => landforms.ready(x0, z0, x1, z1, ask), marks, player, input, places, onOpen });
+  const map = new MapView({ seed: gen.seed, land: gen.land, structures, hikes: gen.hikes, ready: (x0, z0, x1, z1, ask) => landforms.ready(x0, z0, x1, z1, ask), marks, player, input, places, onOpen, travel });
   landforms.on('land', (def) => map.addHike(def));
   game.provide('marks', marks);
   game.provide('map', map);
@@ -41,6 +46,23 @@ export function installMap(game) {
     restore: (id) => marks.setTracked(typeof id === 'string' ? id : null),
   });
   marks.subscribe(() => save.touch());
+
+  // Off to somewhere picked on the map. You are put down there as soon as it
+  // is asked for and the camera stays where it was looking; the wait is only
+  // for the ground to grow round you, and for a hike's land to arrive if the
+  // spot is on one (the chunks send for it as they ask whether they may grow).
+  // Not while something is carrying you or moving you: get off it first, or
+  // it would be left behind with you still sitting on it.
+  async function travel(x, z, label) {
+    if (player.carrier || player.aboard) {
+      hud.flash('get off first');
+      return false;
+    }
+    map.close();
+    await game.api.teleport(x, z);
+    if (label) hud.flash(label);
+    return true;
+  }
 
   game.on('panel', (which) => which !== 'map' && map.close());
   commands.add({ id: 'map', keys: ['KeyM'], group: 'WANDER', label: 'map · mark places · where to go', run: () => map.open() });
