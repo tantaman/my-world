@@ -7,6 +7,7 @@
 //   buildings  what has been built (raycast), or null
 //   wildlife   the animals (aimed), or null
 //   which      (animal) -> whether a shot can hit it (what is game)
+//   targets    anything else a shot can hit (Targets, below), or null
 
 import { groundRay, rayCircle } from '../build/aim.js';
 import { SPECIES } from '../build/forestry.js';
@@ -19,12 +20,59 @@ const STRETCH = 8;
 const ROCK = { r: 0.6, h: 0.8 };
 const PLANTS = [...TREE_KINDS, 'rock'];
 
+// Things other than the animals that a shot can hit, from whatever feature
+// put them in the world: a man on a watchtower, a bear that is hunting you,
+// the stockade he stands behind. Each is a source:
+//
+//   {
+//     aimed(o, d, far, near) -> { t, label?, hit?, solid? } or null
+//                       the first of its things along the ray, between near
+//                       and far metres. label: what the prompt calls it when
+//                       the crosshair is on it; solid: it only stops the shot
+//                       (a wall), with nothing to be hit
+//     struck?(hit, at) -> a word for the HUD, or nothing
+//                       the shot hit it (hit as aimed gave it; at: where)
+//     heard?(x, z)      a shot was fired from (x, z), whatever it hit
+//   }
+//
+//   const off = hunting.targets.add(source);   ...   off();
+export class Targets {
+  constructor() {
+    this.list = [];
+  }
+
+  add(source) {
+    this.list.push(source);
+    return () => this.remove(source);
+  }
+
+  remove(source) {
+    const i = this.list.indexOf(source);
+    if (i >= 0) this.list.splice(i, 1);
+  }
+
+  // The nearest thing of any source along the ray. -> { t, label, hit, solid, source } or null
+  aimed(o, d, far, near = 0) {
+    let best = null;
+    for (const source of this.list) {
+      const a = source.aimed(o, d, best ? best.t : far, near);
+      if (a && a.t >= near && a.t < (best ? best.t : far)) best = { ...a, source };
+    }
+    return best;
+  }
+
+  heard(x, z) {
+    for (const source of [...this.list]) if (source.heard) source.heard(x, z);
+  }
+}
+
 // The first thing between `near` and `far` metres along the ray from o in
 // direction d (unit).
 // -> { t, what, hit }: what is 'animal' | 'ground' | 'tree' | 'rock' |
-//    'building', or null if nothing is in range; hit is the animal's (for
-//    wildlife.kill), when it was one.
-export function traceShot({ chunks, buildings = null, wildlife = null, which = null }, o, d, near = 0, far = RANGE) {
+//    'building' | 'target' | 'wall', or null if nothing is in range; hit is
+//    the animal's (for wildlife.kill), when it was one, or a target's (for
+//    its source's struck, which is `source`).
+export function traceShot({ chunks, buildings = null, wildlife = null, which = null, targets = null }, o, d, near = 0, far = RANGE) {
   let best = { t: far, what: null, hit: null };
   const g = groundRay(chunks, o, d, far);
   if (g && g.t >= near) best = { t: g.t, what: 'ground', hit: null };
@@ -46,6 +94,10 @@ export function traceShot({ chunks, buildings = null, wildlife = null, which = n
   if (wildlife) {
     const a = wildlife.aimed(o, d, best.t, near, which);
     if (a) best = { t: a.t, what: 'animal', hit: a };
+  }
+  if (targets) {
+    const a = targets.aimed(o, d, best.t, near);
+    if (a) best = { t: a.t, what: a.solid ? 'wall' : 'target', hit: a.hit ?? null, source: a.source, label: a.label ?? null };
   }
   return best;
 }

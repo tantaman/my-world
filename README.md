@@ -168,6 +168,7 @@ place in that order, not at the end:
 
 | in | to add… | …call |
 |---|---|---|
+| `adventures/adventures.js` | an adventure to start from the board | `game.adventures.define({ id, title, blurb, where?, start })` |
 | `audio/calls.js` | an animal's voice | `defineCall(kind, reach, play)` |
 | `audio/footsteps.js` | a kind of ground underfoot | `defineSurface(name, { thump, step })` |
 | `audio/sfx.js` | a one-off sound | `defineSfx(kind, play)` |
@@ -181,6 +182,7 @@ place in that order, not at the end:
 | `game/commands.js` | a key, and its line on the help panel | `game.commands.add({ keys, run, group, label })` |
 | `game/game.js` | something done every frame | `game.addSystem({ name, phase, update })` |
 | `game/settings.js` | a remembered preference | `game.settings.get / set` |
+| `hunting/shot.js` | something else the rifle can hit (a man, a wall that stops a shot) | `game.hunting.targets.add({ aimed, struck?, heard? })` |
 | `map/mapView.js` | something drawn on the map | `map.addLayer((pen) => …)` |
 | `map/mapView.js` | a list of somewhere to go, beside the map | `game.map.addTab({ id, label, el, shown })`, `map.open(id)` |
 | `map/places.js` | a place on the map, to look up and track | `game.map.places.addSource({ within, get })` |

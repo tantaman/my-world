@@ -18,10 +18,12 @@
 // From the console:
 //   world.hunting.carcasses.list    what you've shot and not yet dressed
 //   world.hunting.spits.serialize() what's roasting, and how done
+//   world.hunting.targets.list      what else a shot can hit, by whoever put it there
 
 import { Carcasses } from './carcasses.js';
 import { Spits, validateSpits } from './roasting.js';
 import { rifleTool } from './rifle.js';
+import { Targets } from './shot.js';
 import { isGame } from './quarry.js';
 import { ScopeView } from './scope.js';
 import { makeRoast } from './models.js';
@@ -46,13 +48,16 @@ export function installHunting(game) {
   // ── Kills, and spits ──────────────────────────────────────────────────────
   const carcasses = new Carcasses({ scene, ground: (x, z) => chunks.heightAt(x, z) });
   const spits = new Spits({ scene, fires });
-  const hunting = { carcasses, spits };
+  // Anything besides the animals a shot can hit, from whichever feature put
+  // it in the world (see Targets in shot.js).
+  const targets = new Targets();
+  const hunting = { carcasses, spits, targets };
   game.provide('hunting', hunting);
 
   // ── The rifle ─────────────────────────────────────────────────────────────
   const scope = new ScopeView(document.getElementById('hud') || document.body);
   const eatHint = () => (input.isTouch ? 'tap eat' : 'U to eat');
-  const rifle = builder.register(rifleTool({ wildlife, fires, carcasses, spits, scope, which: (a) => isGame(a.kind), eatHint }));
+  const rifle = builder.register(rifleTool({ wildlife, fires, carcasses, spits, scope, which: (a) => isGame(a.kind), eatHint, targets }));
   hunting.rifle = rifle;
   // its key is wherever its slot is on the tool bar (0 for the tenth)
   const rifleKey = () => {
