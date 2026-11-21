@@ -676,6 +676,8 @@ export class ChunkManager extends Emitter {
       mesh.computeBoundingSphere();
       mesh.castShadow = FLORA[kind].shadow;
       mesh.receiveShadow = true;
+      // its shadow has the gaps between its leaves in it
+      if (this.materials.vegetationShadow) mesh.customDepthMaterial = this.materials.vegetationShadow;
       mesh.position.set(ch.x0, 0, ch.z0);
       mesh.matrixAutoUpdate = false;
       mesh.updateMatrix();

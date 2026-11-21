@@ -106,6 +106,7 @@ to build in it with other people — see [Building together](src/save/README.md)
 | `levels` | `36` | colour levels per channel before dithering |
 | `sharp` | `1080` | the most lines the picture is drawn in without pixel art |
 | `ao` | `0.85` | ambient occlusion, 0–1 (`0`: not worked out at all) |
+| `msaa` | `4` | samples per pixel without pixel art (`0`: none, hard-edged leaves) |
 | `time` | `16.6` | starting hour of the day |
 | `seed` | `20261119` | a completely different world |
 | `land` | newest | which [land](src/world/README.md#lands) a local world is grown on: `1` for the first |

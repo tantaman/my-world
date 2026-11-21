@@ -180,6 +180,7 @@ export class Forestry extends Emitter {
       mesh.scale.set(w, f.s, w);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      if (this.mat.stillShadow) mesh.customDepthMaterial = this.mat.stillShadow;
       const pivot = new THREE.Group();
       pivot.position.set(f.x, f.y, f.z);
       pivot.add(mesh);
