@@ -22,7 +22,7 @@ import { normalize, place } from '../src/blueprints/plan.js';
 import { ghostGeometry } from '../src/blueprints/ghost.js';
 import { Splashes } from '../src/splashes/splashes.js';
 import { FireFx } from '../src/fires/look.js';
-import { FarView } from '../src/hikes/farView.js';
+import { FarView } from '../src/far/view.js';
 import { ChunkManager } from '../src/world/chunks.js';
 import { WorldGen } from '../src/world/worldgen.js';
 import { createVegetationMaterial } from '../src/world/materials.js';
@@ -34,8 +34,9 @@ import { buildCave, finish } from '../src/caves/build.js';
 import { caveKit, caveObject } from '../src/caves/look.js';
 import { CUTS, setCuts } from '../src/world/cuts.js';
 
-// Game metres: about as far as the world goes, and not a round number.
-const FAR = [3_987_654, -2_345_678];
+// Game metres: about as far as the world goes, and not a round number. Well
+// inland and in the woods, so that a chunk grown out here has plants on it.
+const FAR = [4_463_354, 1_112_838];
 // Nothing handed to the card should be further from zero than this (m): the
 // origin's reach, and as far as anything is drawn from it.
 const SMALL = 4096;

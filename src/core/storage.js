@@ -6,7 +6,8 @@
 // was under the old one.
 
 // A world that is only local is known by its seed and, past the first land
-// (see world/lands.js), the land it is grown on: 20261119, 20261119:land2.
+// (see world/lands.js), the land it is grown on: 20261119, or 20261119:land2
+// for a world grown on a second land.
 export const localWorld = (seed, land = 1) => (land > 1 ? `${seed}:land${land}` : `${seed}`);
 
 export const KEYS = {

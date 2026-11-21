@@ -20,7 +20,7 @@ import { HIKES } from '../src/world/hikes.js';
 import { Landforms, reachOf } from '../src/world/landforms.js';
 
 const SEED = 20261119;
-// The first land, and a few squares near the start there that have caves
+// The land, and a few squares near the start there that have caves
 // (checked below): most of what follows is about these.
 const gen = growWorld(SEED, [], 1);
 const SQUARES = [[-1, 0], [0, -1], [0, 1], [-1, -1]];
@@ -139,8 +139,12 @@ function openEdges(mesh) {
   return open;
 }
 
-// Faces turned away from the cave's air (slivers where a quad folded can lie
-// edge-on, so only faces with some area are judged).
+// Faces turned away from the cave's air. Where a quad folds, the mesh can
+// leave a tiny face lying all but edge-on to the smoothed rock around it — a
+// couple of centimetres across and a fraction of a degree past square, which
+// is the fold, not a face looking the wrong way. So a face is judged only
+// once it has some area and points away by more than EDGE_ON.
+const EDGE_ON = 0.05; // cosine: about 3° past edge-on
 function facingAway(mesh) {
   const P = mesh.position;
   const N = mesh.normal;
@@ -152,7 +156,9 @@ function facingAway(mesh) {
     const e2 = [P[d * 3] - P[a * 3], P[d * 3 + 1] - P[a * 3 + 1], P[d * 3 + 2] - P[a * 3 + 2]];
     const f = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
     const n = [0, 1, 2].map((k) => N[a * 3 + k] + N[b * 3 + k] + N[d * 3 + k]);
-    if (Math.hypot(f[0], f[1], f[2]) / 2 > 0.02 && f[0] * n[0] + f[1] * n[1] + f[2] * n[2] <= 0) away++;
+    const fl = Math.hypot(f[0], f[1], f[2]);
+    const nl = Math.hypot(n[0], n[1], n[2]);
+    if (fl / 2 > 0.02 && nl > 1e-9 && (f[0] * n[0] + f[1] * n[1] + f[2] * n[2]) / (fl * nl) < -EDGE_ON) away++;
   }
   return away;
 }

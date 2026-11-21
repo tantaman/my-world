@@ -225,9 +225,6 @@ OpenStreetMap contributors, under the
 
 ```
 index.js              plugs it into the game: the hikes tab, the way to the view, signpost, cairn and chains
-farView.js            the land past the loaded chunks, seen from up high
-farGrid.js            that land, sampled coarsely (pure)
-farWorker.js          Web Worker wrapper around farGrid
 waymarks.js           the cairn, the signpost and the chains
 hikesPanel.js         the list of hikes (a tab beside the map), and the way to each
 hikes.css             its styles

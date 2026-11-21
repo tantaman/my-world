@@ -51,11 +51,13 @@ test('a world grown on a later land says so beside its name, and one that says n
   assert.equal(before.get(LOOSE).has('land'), false, 'land 1 is never written down');
   assert.equal(domains.fromElements(before).land, 1);
   assert.equal(landIn(before), 1);
-  // one grown on the second land
+  // one grown on a later land is written down beside the name. This build
+  // grows only land 1, so reading it back falls to the land it can grow —
+  // the same as a land it has never heard of.
   const later = domains.toElements({ ...state(), land: 2 });
-  assert.equal(later.get(LOOSE).get('land'), 2);
-  assert.equal(domains.fromElements(later).land, 2);
-  assert.equal(landIn(later), 2);
+  assert.equal(later.get(LOOSE).get('land'), 2, 'a later land is written down');
+  assert.equal(domains.fromElements(later).land, 1);
+  assert.equal(landIn(later), 1);
   // a land this build has never heard of is grown as the first
   assert.equal(landIn(new Map([[LOOSE, new Map([['land', 99]])]])), 1);
   assert.equal(landIn(new Map()), 1);

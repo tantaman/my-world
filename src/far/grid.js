@@ -1,8 +1,8 @@
-// The land round a hike, sampled coarsely, for drawing it far off: from the
-// top of a real mountain you can see a long way, much further than the
-// forest is streamed in around you (see farView.js). Pure, so a worker can
-// do it, and the same world description the chunks are grown from, so the
-// far land is the land you'll walk on.
+// A square of land, sampled coarsely, for drawing it far off (see view.js):
+// from the top of a mountain you can see a long way, much further than the
+// forest is streamed in around you. Pure, so a worker can do it, and the same
+// world description the chunks are grown from, so the far land is the land
+// you'll walk on.
 
 import { NO_WATER } from '../world/water.js';
 
