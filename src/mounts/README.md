@@ -6,7 +6,7 @@ Three animals in every world will carry you, each its own way:
 |---|---|---|
 | **a wild horse** | the widest meadow within a long walk of the start | trots, gallops (**shift**) at 11 m/s and jumps (**space**) more than a metre; swims, slowly |
 | **a great snapping turtle** | a lake, or a good big pond | crawls on land, hardly faster than a snail, and swims at 5 m/s, or 8 with **shift**, against any current |
-| **a great golden eagle** | a high, bare summit, a good way off | flies: **space** takes off and climbs, **shift** stoops (fast and down), let go of both to glide; **Z** in the air comes in to land |
+| **a great golden eagle** | a high, bare summit, a good way off | flies: **space** takes off and climbs, **shift** stoops (fast and down), let go of both to glide; **Z** low in the air comes in to land, and high up lets go of it: your hang glider opens and you glide down |
 
 **Finding one.** You start knowing nothing. A little while in, word comes of
 the nearest (*a wild horse has been seen grazing in a big meadow, about 250 m
@@ -34,6 +34,12 @@ has to: a horse at a gallop, an eagle down out of the sky, a turtle up out of
 the nearest water, which it needs to reach you). Tame more than one, and **Z**
 again just after a whistle calls the next instead. On a game controller, **X**
 does all that Z does, and **A** and **B** are space and shift.
+
+**Letting go of the eagle.** More than fifteen metres up, **Z** lets go of
+it, and your hang glider opens over you (see [Gliding](../gliding/README.md)).
+The eagle flies on, peels off, and comes down to wait somewhere ahead. Whistle
+(**Z**) while you're still gliding and it comes to catch you: it swoops in
+under you, and you're flying it again.
 
 **Not going looking.** Under the lists beside the map (**M**) is *acquire all
 mounts*: the horse, the turtle and the eagle are yours at once, each left

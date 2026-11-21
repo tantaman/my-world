@@ -7,7 +7,9 @@
 //           and it's off; stand with it, hand out, and it comes round
 //           (taming.js).
 //   tame    yours: waiting where you left it (grazing, basking, perched), or
-//           coming when you whistle
+//           coming when you whistle. An eagle you let go of in the air flies
+//           off and comes down to wait somewhere ahead; whistled for while
+//           you're still up there, it swoops in under you and catches you.
 //   ridden  carrying you: you move (Player.carrier), and it is posed from that
 //
 // It has a body (bodies.js) only while you're near enough to see it.
@@ -22,8 +24,9 @@
 //   place(kind, x, z, minD, maxD) -> { x, z } somewhere out of sight round
 //                        (x, z) that suits it (dry for a horse, water for a turtle), or null
 //   waterNear(x, z)      -> { x, z } water deep enough to swim in near there, or null
-// and `you` each frame: { x, z, d (m from it), speed (m/s), holding (your
-// hand is out to it) }.
+// and `you` each frame: { x, y, z, d (m from it, along the ground), speed
+// (m/s), holding (your hand is out to it), vx, vy, vz (how you're moving),
+// air (you're up in the air, not on the ground) }.
 
 import { sense } from './taming.js';
 import { shore } from './haunts.js';
@@ -35,8 +38,15 @@ import { rand, wrapAngle as wrap } from '../core/geom.js';
 const PACE = {
   horse: { wander: 1.4, trot: 4, come: 9.5, bolt: 10 },
   turtle: { swim: 1.1, crawl: 0.5, come: 5, bolt: 4.5 },
-  eagle: { fly: 12, come: 14 },
+  eagle: { fly: 12, come: 14, catch: 26 },
 };
+// Catching you in the air: it comes up from `behind` m behind and a little
+// below you until it's `close`, then in under you, its back `under` m below
+// your feet, and has you once its back is within `reach` m. It closes in at
+// up to `ease` m/s for each metre still to go, turning toward that at `turn`
+// (1/s), and matching your speed at `match` (1/s) once it's close. After
+// `time` s it gives up and comes to you on the ground instead.
+const CATCH = { behind: 7, close: 10, under: 1.0, reach: 2.2, time: 45, ease: 1.0, turn: 2.5, match: 4.5 };
 // How quickly it turns (rad/s) walking and swimming.
 const TURN = { horse: 2.4, turtle: 1.2, eagle: 2.5 };
 // The eagle circles this high (m) over its summit, this wide (m).
@@ -84,6 +94,7 @@ export class Mount {
     this.shy = false;
     this.stuck = { t: 0, d: Infinity };
     this.placed = false;
+    this.caught = false; // it has caught you in the air (catch())
     // basking: a spot on its lake's shore
     if (haunt.lake) {
       const a = rand(0, Math.PI * 2);
@@ -188,6 +199,24 @@ export class Mount {
     }
     this.set('come', 60, null);
     return true;
+  }
+
+  // Let go of in the air, flying at (vx, vy, vz): off to come down at goal
+  // ({ x, z }) and wait for you there.
+  letGo(goal, vx, vy, vz) {
+    this.vx = vx;
+    this.vy = vy;
+    this.vz = vz;
+    this.flying = true;
+    this.grounded = false;
+    this.set('land', 60, goal);
+  }
+
+  // Whistled for while you're up in the air: come and catch you. (Once it
+  // has, `caught` says so, for whoever whistled to notice.)
+  catch() {
+    this.caught = false;
+    this.set('catch', CATCH.time);
   }
 
   // ── Getting about ──────────────────────────────────────────────────────────
@@ -462,7 +491,16 @@ export class Mount {
         break;
       }
       case 'land':
-        if (this.#flyDown(dt, ctx, this.goal.x, this.goal.z, P.fly)) this.set('perch', rand(30, 70));
+        if (this.#flyDown(dt, ctx, this.goal.x, this.goal.z, P.fly)) {
+          if (this.tame) this.rest();
+          else this.set('perch', rand(30, 70));
+        }
+        break;
+      case 'catch':
+        watching = true;
+        // down already: come to you on the ground, as it would anyway
+        if (!you.air || this.t > this.dur) this.set('come', 60, null);
+        else if (this.#chase(dt, ctx, you)) this.caught = true;
         break;
       case 'come': {
         watching = true;
@@ -515,6 +553,51 @@ export class Mount {
     this.speed = h;
     this.climbing = this.vy > 0.8;
     return d;
+  }
+
+  // Catch you up in the air: come up behind and below you, then in under you,
+  // going as you go. -> true once you're on its back.
+  #chase(dt, ctx, you) {
+    const ux = you.x - this.x;
+    const uz = you.z - this.z;
+    const near = Math.hypot(ux, you.y - CATCH.under - this.y, uz) < CATCH.close;
+    // from behind (the way you're going), until it's close
+    const along = Math.hypot(you.vx, you.vz);
+    const back = near ? 0 : CATCH.behind;
+    const bx = along > 1 ? -(you.vx / along) * back : 0;
+    const bz = along > 1 ? -(you.vz / along) * back : 0;
+    const dx = you.x + bx - this.x;
+    const dy = you.y - CATCH.under - (near ? 0 : 2) - this.y;
+    const dz = you.z + bz - this.z;
+    const d = Math.hypot(dx, dy, dz) + 1e-4;
+    // closing in as fast as it can, slowing to match you as it comes alongside
+    const close = Math.min(PACE.eagle.catch, d * CATCH.ease + 0.5);
+    const k = 1 - Math.exp(-dt * (near ? CATCH.match : CATCH.turn));
+    this.vx = lerp(this.vx, you.vx + (dx / d) * close, k);
+    this.vy = lerp(this.vy, you.vy + (dy / d) * close, k);
+    this.vz = lerp(this.vz, you.vz + (dz / d) * close, k);
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.z += this.vz * dt;
+    if (!this.flying) {
+      this.flying = true;
+      this.grounded = false;
+    }
+    const floor = ctx.stand(this.x, this.z, this.def.carrier.depth);
+    if (this.y < floor + 0.5) {
+      this.y = floor + 0.5;
+      this.vy = Math.max(0, this.vy);
+    }
+    const h = Math.hypot(this.vx, this.vz);
+    if (h > 0.3) {
+      const dyaw = wrap(Math.atan2(this.vx, this.vz) - this.yaw);
+      const step = dyaw * Math.min(1, dt * 4);
+      this.yaw += step;
+      this.turn = lerp(this.turn, step / Math.max(dt, 1e-4), 1 - Math.exp(-dt * 4));
+    }
+    this.speed = h;
+    this.climbing = this.vy > you.vy + 0.8;
+    return Math.hypot(you.x - this.x, you.y - CATCH.under - this.y, you.z - this.z) < CATCH.reach;
   }
 
   // Fly in high over the trees, come down and land at (tx, tz). -> true once down.
