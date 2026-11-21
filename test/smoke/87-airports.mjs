@@ -7,8 +7,8 @@
 // (Over the clouds and in them, it's hurried along, as P does over them.)
 //
 // Needs: nothing in particular (there's an airfield for where you first arrive).
-// Leaves: you on the apron of an airfield in another part of the world,
-// beside the plane you came on.
+// Leaves: you on the apron of an airfield in another part of the world, a
+// few steps from the plane you came on.
 
 import assert from 'node:assert/strict';
 
@@ -25,13 +25,16 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.waitForFunction(() => !world.map.isOpen && world.chunks.isFullyLoaded(), null, { timeout: 60000 });
     await frames(20);
     const there = await page.evaluate(() => {
-      const p = world.player.pos;
       const near = world.airports.list()[0];
-      return { name: near.name, d: Math.round(near.dist), on: world.player.underfoot && world.player.underfoot.surface, prompt: T.prompt() };
+      return { name: near.name, d: Math.round(near.dist), on: world.player.underfoot && world.player.underfoot.surface };
     });
     assert.ok(there.on === 'tarmac' && there.d < 60, `on the apron at ${there.name} (${JSON.stringify(there)})`);
-    assert.match(there.prompt, /fly from/, 'and P would fly from here');
     await shot('the airfield');
+    // up to the plane's steps, where P would fly from here
+    await page.evaluate(() => (world.player.steer = { ...world.airports.steps(), run: false }));
+    await page.waitForFunction(() => /fly from/.test(T.prompt()), null, { timeout: 60000 });
+    await page.evaluate(() => (world.player.steer = null));
+    assert.match(await page.evaluate(() => T.prompt()), /fly from/, 'at the steps, P would fly from here');
     made.from = there.name;
     return { airfield: there.name };
   });
@@ -86,6 +89,12 @@ export default async function ({ page, step, key, frames, shot }) {
     }, to);
     assert.ok(off.on === 'tarmac' && off.d < 40 && !off.aboard && off.seen, `stepped out onto the apron at ${off.name} (${JSON.stringify(off)})`);
     await shot('arrived');
+    // and a few steps off, away from the plane (toward the camera, which is
+    // out in front looking back at you)
+    await page.keyboard.down('KeyS');
+    const away = await page.waitForFunction(() => !/fly from/.test(T.prompt()), null, { timeout: 60000 }).then(() => true, () => false);
+    await page.keyboard.up('KeyS');
+    assert.ok(away, 'away from its steps, the tools have the prompt again');
     return { from: made.from, to: off.name };
   });
 }

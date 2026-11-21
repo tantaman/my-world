@@ -58,7 +58,7 @@ const HIDE = 950; // ...and taken down again past this
 const AT = 320; // m from the middle of its strip that counts as being at an airfield
 const ARRIVE = 140; // m: coming this near one on foot, you're told its name
 const PUMP_MS = [1.5, 8]; // ms a frame looking for airfields: usually, and with the map open
-const BOARD_NEAR = 16; // m from the parked plane, the HUD says P would fly
+const BOARD_NEAR = 5; // m from the foot of the parked plane's steps, the HUD says P would fly
 const GO_TO = { x: 27, z: -13 }; // where you're put, going to an airfield: on its apron, in the field's frame
 const BACK = 16; // m further back the camera sits, to take the plane in
 const BEHIND = 0.8; // 1/s: how quickly the camera swings round behind it, left alone
@@ -387,7 +387,9 @@ export function installAirports(game) {
     // (off to the side of the plane's tail, clear of its wing, looking at it)
     toWorld(site, GO_TO.x, GO_TO.z, _w);
     const spot = { x: _w.x, z: _w.z };
-    toWorld(site, PARK.x, PARK.z, _o);
+    const foot = doorFoot(parkedPose(site));
+    _o.x = foot.x;
+    _o.z = foot.z;
     reached.add(site.id);
     await game.api.teleport(spot.x, spot.z, Math.atan2(_o.x - spot.x, _o.z - spot.z));
     hud.flash(`${site.name} · ${input.isTouch ? 'the flights tab' : 'P'} for where to fly`, SAY);
@@ -685,10 +687,9 @@ export function installAirports(game) {
       }
     } else {
       const s = fieldHere();
-      if (s) {
-        const e = shown.get(s.id);
-        const pp = e && parkedPose(s);
-        if (pp && Math.hypot(pp.x - player.pos.x, pp.z - player.pos.z) < BOARD_NEAR) html = `${K}fly from ${s.name}`;
+      if (s && shown.has(s.id)) {
+        const foot = doorFoot(parkedPose(s));
+        if (Math.hypot(foot.x - player.pos.x, foot.z - player.pos.z) < BOARD_NEAR) html = `${K}fly from ${s.name}`;
       }
     }
     if (html) hud.cue({ html });
@@ -731,6 +732,13 @@ export function installAirports(game) {
     hurry() {
       if (trip) trip.flight.hurry();
       return trip ? trip.flight.part : null;
+    },
+    // the foot of the steps up into the plane at the airfield you're at
+    steps() {
+      const s = fieldHere();
+      if (!s) return null;
+      const foot = doorFoot(parkedPose(s));
+      return { x: foot.x, z: foot.z };
     },
     panel,
   });
