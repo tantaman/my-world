@@ -42,7 +42,7 @@ export const SKY = {
 // A sandstone country's cliffs are banded by real height (ground.layers),
 // so the ground also needs to know how the real place you're on stands in the
 // game: uRealY, set by the country feature as you come onto one.
-export const MAX_COUNTRIES = 8;
+export const MAX_COUNTRIES = 10;
 const each = (r, g, b) => ({ value: Array.from({ length: MAX_COUNTRIES }, () => new THREE.Color(r, g, b)) });
 export const LAND = {
   uTint: each(1, 1, 1), // what grass green is multiplied by

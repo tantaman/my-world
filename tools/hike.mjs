@@ -32,6 +32,9 @@
 //   --middle lat,lon  where to centre the land, if not on the photo: so that
 //                     --radius can take in the whole of a long trail with the
 //                     photo part way along it
+//   --snow 1200       the height snow lies above, or `none`. Unsaid, it's
+//                     where it would lie in winter if the photo was taken
+//                     then (hike/snow.js), else where its country has it
 //   --at x,z          where in the game world (game metres; default: where it
 //                     really is, at the same scale, from the middle of the world
 //                     in the Hoh rain forest: see hike/place.js)
@@ -52,6 +55,7 @@ import { blockOf, blockTiles, missing } from './hike/usgs.js';
 import { parseOsm, mergeOsm, trails, waters, coastlines, roads, beaches, streams, covers, peaks, incompleteWaters } from './hike/osm.js';
 import { buildHike, splitHike, fineBox, DEFAULTS } from './hike/build.js';
 import { placeHike } from './hike/place.js';
+import { winterSnow, snowlineFrom } from './hike/snow.js';
 import { COUNTRY } from '../src/world/country.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -83,6 +87,10 @@ if (files.length !== 1) {
 const num = (k, d) => (flags[k] !== undefined ? Number(flags[k]) : d);
 if (flags.country !== undefined && !COUNTRY[flags.country]) {
   console.error(`There is no country called "${flags.country}". There is: ${Object.keys(COUNTRY).join(', ')}.`);
+  process.exit(1);
+}
+if (flags.snow !== undefined && flags.snow !== 'none' && !(Number(flags.snow) >= 0)) {
+  console.error(`--snow is a height in metres above the sea, or none (not "${flags.snow}").`);
   process.exit(1);
 }
 
@@ -124,6 +132,9 @@ const opt = {
   country: flags.country || null,
   // a finer grid along the walk: real metres between its heights, and how far round the walk
   fine: flags.fine !== undefined ? { cell: num('fine'), margin: num('fine-margin', DEFAULTS.fineMargin) } : null,
+  // where snow lies: as said, or as it would in winter if the photo was taken
+  // then; unsaid (undefined), where its country has it
+  snowline: flags.snow === 'none' ? null : flags.snow !== undefined ? snowlineFrom(Number(flags.snow)) : winterSnow(photo),
 };
 
 // ── Fetching, kept ───────────────────────────────────────────────────────────
@@ -352,6 +363,7 @@ const unnamed = (def.streams || []).filter((s) => !s.name).length;
 const running = [...flowing, ...(unnamed ? [`${unnamed} unnamed stream${unnamed > 1 ? 's' : ''}`] : [])];
 console.log(`  water: ${[...def.lakes.map((l) => l.name || 'an unnamed lake'), ...running].join(', ') || 'none'}${def.beaches ? `; ${def.beaches.length} beach${def.beaches.length > 1 ? 'es' : ''}` : ''}`);
 if (def.country) console.log(`  country: ${def.country}`);
+if ('snowline' in def) console.log(`  snow: ${def.snowline === null ? 'none' : `lying from ${def.snowline[0]} m`}${flags.snow === undefined ? ' (the photo was taken in winter: --snow to say otherwise)' : ''}`);
 console.log(`  a picture of it: ${previewFile}`);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

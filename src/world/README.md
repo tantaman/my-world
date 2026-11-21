@@ -167,7 +167,8 @@ one country among them, and looks the way it always has. Where the map says
 what covers a real place's land (woods, willow scrub, scree, bare rock,
 tundra, ice), that is where each is: a scree is strewn with boulders, a
 thicket is thick with shrubs, and a country with a treeline and a snow line
-has them at their real heights (`landform.js`).
+has them at their real heights (`landform.js`). A hike can have a snow line
+of its own, where it lay when the photo was taken in winter.
 
 ## Keys
 
