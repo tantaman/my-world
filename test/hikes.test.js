@@ -16,6 +16,7 @@ import { parseOsm, trails, waters, coastlines, roads, streams, covers } from '..
 import { buildHike, splitHike, fineBox, simplify, signedDistance, coastDistance, walkFromRoad, fillRings } from '../tools/hike/build.js';
 import { placeHike, project, centreOf, ORIGIN } from '../tools/hike/place.js';
 import { Landform, packHeights, unpackHeights, packShore, unpackShore, packCover, unpackCover } from '../src/world/landform.js';
+import { winterSnow, snowlineFrom } from '../tools/hike/snow.js';
 import { growWorld, LANDS } from '../src/world/lands.js';
 import { generateVegetation, generateTerrain } from '../src/world/chunkGen.js';
 import { sampleFar } from '../src/hikes/farGrid.js';
@@ -50,6 +51,23 @@ for (const [kind, wrap] of [
     near(p.hour, 9.75, 1e-9, 'hour');
   });
 }
+
+test('a photo taken in winter has snow lying on the place, lower the further it is from the equator', () => {
+  const from = (lat, month) => winterSnow({ lat, taken: `2025:${String(month).padStart(2, '0')}:18 10:42:07` })?.[0];
+  assert.equal(from(47, 7), undefined, 'in July in the Cascades: not winter, so its country says');
+  assert.ok(from(47, 1) > 500 && from(47, 1) < 1200, `in January, a ski resort's lower slopes and up (${from(47, 1)} m)`);
+  assert.ok(from(39, 2) > from(47, 2) && from(39, 2) < 2100, `further south, higher up: Tahoe's (${from(39, 2)} m)`);
+  assert.ok(from(47, 4) > from(47, 2), 'in April, higher than in February');
+  assert.equal(from(-45, 7), from(45, 1), 'south of the equator, winter is in July');
+  assert.equal(from(-45, 1), undefined);
+  assert.ok(from(20.7, 1) > 3100, 'Haleakalā in January: none on a 3,055 m top');
+  assert.equal(from(70, 1), 0, 'in the Arctic, down to the sea');
+  assert.equal(winterSnow({ lat: 47, taken: null }), undefined, "a photo that doesn't say when: its country says");
+  // a snow line as a country has one, and on the card, where the land reads it
+  const line = snowlineFrom(800);
+  assert.ok(line[0] === 800 && line[1] > 800);
+  assert.deepEqual(splitHike({ id: 'x', snowline: line, ground: {}, lakes: [] }).card.snowline, line);
+});
 
 test('a photo with no EXIF is said to have none', () => {
   assert.throws(() => readPhoto(Uint8Array.of(0xff, 0xd8, 0xff, 0xda, 0, 2)), /no EXIF/);

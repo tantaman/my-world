@@ -392,6 +392,8 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
     trees: o.trees,
     // what kind of country it is (src/world/country.js); unsaid, forest
     ...(o.country ? { country: o.country } : {}),
+    // where snow lies on it ([from, to], real m), if not where its country has it: null for none
+    ...(o.snowline !== undefined ? { snowline: o.snowline } : {}),
     lakes: lakes.map((l) => ({ name: l.name, ...(l.sea ? { sea: true } : {}), level: round((l.levelReal - base) * s, 100), ...(l.own || { box: l.box }), shore: packShore(l.d) })),
     ...(strands.length ? { beaches: strands } : {}),
     ...(runs.length ? { streams: runs } : {}),

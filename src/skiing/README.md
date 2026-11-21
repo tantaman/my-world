@@ -4,7 +4,9 @@ Head down a steep, snowy slope and your skis go on by themselves, with a
 click of the bindings, and down you go. Or your snowboard, if that's what you
 ride: **`** swaps one for the other, and it's remembered.
 
-Where there's snow lying (up on the mountains, above the snow line) and it's
+Where there's snow lying (up on the mountains, above the snow line, and on
+a real place where it really lies: a ski resort brought in from a photo you
+took in winter is under snow, see [Hikes](../hikes/README.md)) and it's
 steeper than about 18°, walk downhill and you're off. Stop on gentler ground
 and they come off again; ski off the edge of the snow onto rock or turf and
 you scrape to a halt and step out. **I** puts them on anywhere there's snow,

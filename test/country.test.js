@@ -221,6 +221,45 @@ test('what a land has high up stops at the edge of a real place', () => {
   assert.deepEqual([gen.above(ox, oz, 200), gen.snow(ox, oz, 200), gen.forest(ox, oz), gen.species(ox, oz)], [bare.above(ox, oz, 200), bare.snow(ox, oz, 200), bare.forest(ox, oz), bare.species(ox, oz)]);
 });
 
+test('snowy mountains: snow on all of it; and a hike can say where its own lies', () => {
+  // The island again, a thousand metres high. Snowy mountains are under snow
+  // top to bottom; the forest has none; a hike can say where its own lies
+  // (the photo was taken in winter), or that none does.
+  const snowy = world([island({ country: 'snowy mountains' })]);
+  const forest = world([island()]);
+  const winter = world([island({ snowline: [600, 800] })]);
+  const none = world([island({ country: 'snowy mountains', snowline: null })]);
+  const top = at(-100, 0);
+  const low = at(-1300, 0);
+  const snowAt = (gen, [x, z]) => gen.snow(x, z, gen.height(x, z));
+  const L = winter.landforms[0];
+  assert.ok(snowAt(snowy, top) > 0.99 && snowAt(snowy, low) > 0.99, 'snowy mountains: top to bottom');
+  assert.equal(snowAt(forest, top), 0, 'the forest: none');
+  assert.ok(L.realHeight(...top) > 800 && snowAt(winter, top) > 0.99, `its own line: snow on the top (${Math.round(L.realHeight(...top))} m)`);
+  assert.ok(L.realHeight(...low) < 600 && snowAt(winter, low) === 0, `and none down at ${Math.round(L.realHeight(...low))} m`);
+  assert.equal(snowAt(none, top), 0, 'or none at all');
+  // land with no high ground of its own has some, once a snowy place is set into it
+  const box = (gen, [x, z]) => gen.highIn(x - 32, z - 32, x + 32, z + 32);
+  assert.deepEqual([box(world(), top), box(forest, top), box(snowy, top), box(winter, top)], [false, false, true, true]);
+  const t = generateTerrain(snowy, Math.floor(top[0] / 64), Math.floor(top[1] / 64), 1, 64);
+  assert.ok(t.high && Math.max(...t.high.filter((_, i) => i % 2)) > 0.99, 'and the ground knows it, to be painted white');
+  // past its edge it's the forest's again: none on land 1, the land's own on land 2
+  const out = [AT[0], AT[1] + snowy.landforms[0].outer + 50];
+  assert.equal(snowy.snow(...out, 300), 0);
+  assert.equal(world([island({ country: 'snowy mountains' })], 2).snow(...out, 300), world([], 2).snow(...out, 300));
+  // and snow lies on what grows there; it doesn't change it
+  const [cx, cz] = [Math.floor(top[0] / 64), Math.floor(top[1] / 64)];
+  const v0 = generateVegetation(none, cx, cz, 64, TRUNK);
+  const v1 = generateVegetation(snowy, cx, cz, 64, TRUNK);
+  for (const k of Object.keys(v0.lists)) assert.deepEqual(v1.lists[k], v0.lists[k], k);
+  // the firs thin out to none at the tree line: an island whose top is over it
+  const [from, to] = COUNTRY['snowy mountains'].treeline;
+  const raised = (lat, lon) => cone(lat, lon) + to - 900;
+  const alpine = world([island({ country: 'snowy mountains', elevation: raised, coast: [], beaches: [], roads: [] })]);
+  assert.ok(alpine.landforms[0].realHeight(...top) > to && alpine.forest(...top) < 0, 'over the tree line, nothing stands');
+  assert.ok(alpine.landforms[0].realHeight(...low) < from && alpine.forest(...low) > 0.5, `under it, wooded (${alpine.forest(...low).toFixed(2)})`);
+});
+
 test('high mountains: woods up to the treeline, turf and stones over it, snow on the tops', () => {
   // A mountain a kilometre high on ground 2,400 m up: its top is over the
   // treeline, where the snow starts to lie.

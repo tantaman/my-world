@@ -55,7 +55,9 @@
 //            trees thin out to none, and the ground above is thin turf among
 //            stones; or null for none
 //   snowline [from, to]: the real heights over which snow comes to lie on all
-//            the gentle ground, in drifts at first; or null for none
+//            the gentle ground, in drifts at first; or null for none. A hike
+//            can say otherwise for itself, on its card (a photo taken in
+//            winter: landform.js)
 //
 // Each also gets an id, its place in the table: the ground carries it vertex
 // by vertex, so the shaders, which are handed every country's colours, know
@@ -220,6 +222,29 @@ export const COUNTRY = {
     tints: { rock: [1.45, 1.43, 1.36], pine: [0.85, 0.9, 0.95], bush: [0.62, 0.72, 0.66] },
     treeline: [2950, 3250],
     snowline: [3050, 3750],
+  }),
+
+  // High mountains in winter, where people go to ski (the Alps in February):
+  // snow lying on all of it but the crags, dark firs in the valleys thinning
+  // out to none a little over 2,000 m, the odd bush poking through, and a
+  // hard, clear sky.
+  'snowy mountains': kind({
+    ground: {
+      tint: [0.8, 0.88, 0.85],
+      dirt: [0.15, 0.115, 0.085],
+      rock: [0.11, 0.11, 0.115],
+      bare: [[0.13, 0.12, 0.11], [0.09, 0.085, 0.08]],
+    },
+    trees: [['pine', 1]],
+    under: { fern: [], bush: [['bush', 0.06]] },
+    rocks: 0.16,
+    haze: 0.7,
+    animals: ['elk', 'deer', 'fox', 'rabbit', 'wolf', 'crows', 'hawk', 'owl'],
+    names: { pine: ['fir', 'a fir'] },
+    slim: { pine: 0.35 },
+    treeline: [1800, 2050],
+    // (all the way down to the sea: it's winter)
+    snowline: [-100, 0],
   }),
 };
 

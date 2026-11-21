@@ -59,6 +59,9 @@
 //   photo, middle   { lat, lon }: where the photo was taken, and where the
 //                   land is centred if not there (the importer's `--middle`):
 //                   what `at` is the real place of
+//   snowline        [from, to]: the real heights over which snow comes to lie
+//                   on it, where that isn't where its country has it (a photo
+//                   taken in winter); null for none whatever its country says
 //   base            the real height (m) the heights are measured up from
 //   datum           { at, outer, anchor, base }: what sets its heights in the
 //                   world. The first hike in a part of the world is its own
@@ -370,10 +373,13 @@ export class Landform {
     this._cw = new Float64Array(COVER.length + 1);
     this._cqx = NaN;
     this._cqz = NaN;
+    // where snow lies on it: where it says (a photo taken in winter), or
+    // where its country has it
+    const c = this.country;
+    this.snowline = 'snowline' in def ? def.snowline : c.snowline;
     // whether it has ground above the trees, or snow: a treeline, a snow
     // line, tundra or ice
-    const c = this.country;
-    this.high = !!(c.treeline || c.snowline || (this.cover && this.cover.some((v) => v && (COVER_IS[COVER[v - 1]].above || COVER_IS[COVER[v - 1]].ice))));
+    this.high = !!(c.treeline || this.snowline || (this.cover && this.cover.some((v) => v && (COVER_IS[COVER[v - 1]].above || COVER_IS[COVER[v - 1]].ice))));
     this._bucketPaths(def.paths || []);
     // its streams, as pieces of channel: made by settled(), once it's known
     // how high the land stands
@@ -871,11 +877,11 @@ export class Landform {
   }
 
   // How much snow lies at (x, z), 0..1: all of it on the map's glaciers and
-  // snowfields; elsewhere, by the country's snow line, more the higher up
-  // (patchy at first: the ground shader lays it in drifts).
+  // snowfields; elsewhere, by its snow line (its own, or its country's), more
+  // the higher up (patchy at first: the ground shader lays it in drifts).
   snow(x, z) {
     if (!this.high) return 0;
-    const s = this.country.snowline;
+    const s = this.snowline;
     const ice = this._covered(x, z, 'ice');
     const lying = s ? smoothstep(s[0], s[1], this.realHeight(x, z)) : 0;
     return ice + (1 - ice) * lying;

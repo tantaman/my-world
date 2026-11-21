@@ -115,6 +115,14 @@ sky over it is doing, each as one entry in one table
 | `lava coast` | wind-cropped grass and red dirt down to a black rock shelf | a few ironwoods, low bushes | overcast |
 | `red rock canyon` | red sand and slickrock; sandstone cliffs in beds, streaked dark, turning white towards the rim | ponderosa pines and oaks over scrub | clear and dry, fair-weather cloud over the rims |
 | `high mountains` | granite cliffs, talus of broken stone, pale grit paths; turf and stones over a treeline at 3,000 m, snow lying above it | slim spruces and firs, a few aspens, willow thickets | clear, thin air |
+| `snowy mountains` | snow on all of it but the crags: a ski resort in winter | firs in the valleys, thinning out to none at 2,050 m; the odd bush | clear and crisp |
+
+**Snow** lies where a real place's country has a snow line, at its real
+height: up on high mountains, everywhere on snowy mountains. A photo taken in
+winter brings it down to where it lay then, lower the further from the
+equator (about 800 m in the Alps or the Cascades in January, 1,800 m at
+Tahoe), and `--snow` says where for yourself (`--snow 1500`, or `--snow
+none`). Steep snow is for skiing: see [Skiing](../skiing/README.md).
 
 The cloud is a layer at its real height, so you can be under it or over it:
 walk up through it and it closes round you. A rocky shore keeps its cliffs
@@ -199,6 +207,8 @@ each wait for it.
 | `--dem` | `terrain` | where the heights come from: `terrain` (AWS Terrain Tiles) or `3dep` (USGS, US only) |
 | `--cover`, `--species` | `0.85`, `0.6` | how wooded (0–1), and broadleaf (−1) to conifers (1), where the map doesn't say |
 | `--middle lat,lon` | the photo | where to centre the land: somewhere along a long trail, to take in the whole of it |
+| `--country "…"` | forest | what kind of country it is (above) |
+| `--snow` | in winter, where it lay then; else the country's | the real height snow lies from, or `none` |
 | `--lat --lon --bearing --hour` | from the photo | for a photo that doesn't say |
 
 Downloads are kept in `node_modules/.cache/hike`. To take a hike out, delete
