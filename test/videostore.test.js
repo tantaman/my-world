@@ -68,7 +68,7 @@ test('the video store is grown from the seed: the same every time, on flat dry g
 });
 
 test('the video store keeps off somewhere it is told to', () => {
-  const gen = growWorld(SEED, [], 2);
+  const gen = growWorld(SEED);
   const start = gen.findSpawn(0, 0);
   const first = findSite(gen, start);
   const box = first.box;
