@@ -94,6 +94,11 @@ const STANCE_TUCK = 0.32;
 const HANG_FEET = { up: [0.15, 0.07, 0.25], flat: [0.08, -0.03, 1.15] };
 // ...lying flat from this tilt of the body to this one (radians)
 const HANG_FLAT = [0.35, 1.2];
+// Sitting with the arms out over the sides of what you sit in (seat's rest):
+// the shoulder's pitch (sh) and how far out to the side it swings (out), and
+// the elbow; in a stroke, the shoulder's pitch reaching forward (reach), and
+// how far the arm comes in and down as the hand pulls through the water (dip).
+const REST = { sh: 0.05, reach: -0.5, out: 0.95, dip: 0.4, el: -0.5 };
 
 // The left arm holding something up to the mouth (Character.addRaised): the
 // shoulder's pitch (sh), twist (tw) and swing inward (inw), the elbow, and the
@@ -506,8 +511,13 @@ export class Character {
   //   spread  half the width of what is between the knees (m)
   //   hang    how far below the hips the feet hang (m)
   //   fwd     how far ahead of the hips the feet are (m)
-  //   lean    how far forward the body leans (radians)
+  //   lean    how far forward the body leans (radians; back, if negative)
   //   reins   0..1 how much the hands are held out in front
+  //   rest    0..1 how much the arms rest out on what you sit in (a tube's
+  //           rim), wide to the sides
+  //   stroke  null, or how far through a stroke of the hands in the water
+  //           over the sides (0..1, read every frame): reaching forward,
+  //           pulling back, and lifting out to reach again
   seat(s) {
     this.seated = s || null;
     if (s) this._seat = s;
@@ -857,6 +867,23 @@ export class Character {
         A.elbow.rotation.x = lerp(A.elbow.rotation.x, -1.1, reins);
       }
       this.hand.rotation.x = lerp(this.hand.rotation.x, 0, reins);
+      // the arms out over the sides, resting on the rim, or reaching down
+      // into the water and pulling back
+      const rest = (S.rest ?? 0) * sit;
+      if (rest) {
+        const st = S.stroke;
+        const u = st === null || st === undefined ? null : fract(st);
+        // through a stroke: reach forward, pull back down in the water, lift
+        // out and come forward again over it
+        const reach = u === null ? 0 : u < 0.6 ? 1 - u / 0.6 : (u - 0.6) / 0.4;
+        const pull = u === null ? 0 : Math.sin(Math.min(1, u / 0.6) * Math.PI);
+        for (const [A, s] of [[this.armL, 1], [this.armR, -1]]) {
+          A.shoulder.rotation.x = lerp(A.shoulder.rotation.x, lerp(REST.sh, REST.reach, reach), rest);
+          A.shoulder.rotation.y = lerp(A.shoulder.rotation.y, 0, rest);
+          A.shoulder.rotation.z = lerp(A.shoulder.rotation.z, s * (REST.out - REST.dip * pull), rest);
+          A.elbow.rotation.x = lerp(A.elbow.rotation.x, REST.el * (1 - 0.5 * pull), rest);
+        }
+      }
     }
 
     // ── Standing on something that slides ──────────────────────────────────
