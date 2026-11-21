@@ -215,7 +215,8 @@ export default async function ({ page, step, key, take, frames, open, shot }) {
     const help = await page.evaluate(() => [...document.querySelectorAll('#help .row')].map((r) => r.textContent));
     await key('KeyH');
     assert.ok(help.some((r) => /^Ueat something you've roasted$/.test(r)), 'eating is on the help panel');
-    assert.ok(help.some((r) => /^0the rifle/.test(r)), 'and the rifle');
+    const rifleKey = String((await page.evaluate(() => world.builder.slotOf('rifle'))) % 10);
+    assert.ok(help.some((r) => r.startsWith(`${rifleKey}the rifle`)), `and the rifle, on ${rifleKey}`);
     return { line };
   });
 
