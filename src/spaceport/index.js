@@ -158,6 +158,7 @@ export function installSpaceport(game) {
       return place;
     };
     map.places.addSource({
+      destinations: () => [asPlace()],
       within: (x0, z0, x1, z1) => (site.x >= x0 && site.x <= x1 && site.z >= z0 && site.z <= z1 ? [asPlace()] : []),
       get: (id) => (id === site.id ? asPlace() : null),
     });

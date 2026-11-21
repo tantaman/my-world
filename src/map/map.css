@@ -75,9 +75,9 @@
   background: var(--bg);
 }
 /* the lists beside the map, one tab each */
-#map .side-tabs { display: flex; gap: 4px; padding: 8px 10px 0 12px; border-bottom: 1px solid var(--line); }
+#map .side-tabs { display: flex; flex-wrap: wrap; gap: 0; padding: 8px 5px 0; border-bottom: 1px solid var(--line); }
 #map .side-tabs[hidden] { display: none; }
-#map .side-tabs button { border-color: transparent; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 4px 8px 5px; }
+#map .side-tabs button { border-color: transparent; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 4px 2px 5px; flex: 1 0 auto; }
 #map .side-tabs button[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--accent); }
 #map .side-pane { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; overflow-y: auto; }
 #map .side-pane[hidden] { display: none; }
@@ -193,3 +193,22 @@
   }
 }
 @media (hover: none) { #map .map-foot { display: none; } }
+
+#map .route-panel { padding: 12px 14px; }
+#map .route-panel h3 { margin: 2px 0 12px; text-transform: uppercase; }
+#map .route-options { display: grid; gap: 3px; }
+#map .route-options button {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  border-color: transparent; padding: 6px; color: var(--ink);
+}
+#map .route-options button:hover { border-color: var(--line); }
+#map .route-options small { display: block; margin-top: 3px; color: var(--ink-dim); }
+#map .route-options strong { font-weight: 500; }
+#map .route-detail h3 { margin-top: 20px; margin-bottom: 6px; }
+#map .route-detail h4 { font-size: 16px; margin: 0 0 6px; }
+#map .route-note { margin: 0; color: var(--ink-dim); line-height: 1.5; }
+#map .route-detail ol { padding-left: 22px; line-height: 1.55; }
+#map .route-detail li { padding: 4px 0 4px 2px; }
+#map .route-detail li::marker { color: var(--accent); }
+#map .route-detail li button { display: block; margin-top: 3px; min-height: 24px; padding: 1px 5px; }
+#map [data-route="follow"] { border-color: var(--accent); color: var(--ink); }

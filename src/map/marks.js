@@ -61,6 +61,7 @@ export class MarkStore {
   constructor() {
     this.marks = [];
     this.tracked = null;
+    this.routing = false; // follow the itinerary to the tracked pin
     this.listeners = new Set();
     // Somewhere that isn't a mark can be tracked too: a place another feature
     // put on the map (places.js). id -> something shaped like a mark, or null.
@@ -102,12 +103,13 @@ export class MarkStore {
 
   remove(id) {
     this.marks = this.marks.filter((m) => m.id !== id);
-    if (this.tracked === id) this.tracked = null;
+    if (this.tracked === id) return this.setTracked(null);
     this._changed();
   }
 
-  setTracked(id) {
+  setTracked(id, routing = false) {
     this.tracked = id && (this.get(id) || this.findPlace(id)) ? id : null;
+    this.routing = !!this.tracked && routing;
     this._changed();
   }
 
@@ -121,7 +123,7 @@ export class MarkStore {
   // kept if it's still there.
   load(list) {
     this.marks = usable(list);
-    if (this.tracked && !this.get(this.tracked) && !this.findPlace(this.tracked)) this.tracked = null;
+    if (this.tracked && !this.get(this.tracked) && !this.findPlace(this.tracked)) return this.setTracked(null);
     this._changed();
   }
 

@@ -70,6 +70,7 @@ export function installHikes(game) {
   // map (map/places.js): named, and there to be tracked like a mark.
   const spots = [];
   map.places.addSource({
+    destinations: () => spots.filter((p) => p.id.endsWith(':view')),
     within: (x0, z0, x1, z1) => spots.filter((p) => p.x >= x0 && p.x <= x1 && p.z >= z0 && p.z <= z1),
     get: (id) => spots.find((p) => p.id === id) || null,
   });
@@ -92,7 +93,8 @@ export function installHikes(game) {
     sign.rotation.y = t.yaw - Math.PI / 2;
     stand(sign, t.x + Math.cos(t.yaw) * SIGN_ASIDE, t.z - Math.sin(t.yaw) * SIGN_ASIDE);
     const trail = c.trail && c.trail.name;
-    spots.push({ id: `hike:${c.id}:view`, x: v.x, z: v.z, name: c.name, kind: 'view', note: 'where the photo was taken', glyph: PEAK });
+    const ski = c.country === 'snowy mountains';
+    spots.push({ id: `hike:${c.id}:view`, x: v.x, z: v.z, name: c.name, kind: ski ? 'ski peak' : 'view', note: ski ? 'Follow the snow downhill to start skiing.' : 'where the photo was taken', glyph: PEAK });
     spots.push({ id: `hike:${c.id}:trailhead`, x: t.x, z: t.z, name: trail || `${c.name} trailhead`, kind: 'trailhead', note: `where the walk up ${c.name} begins`, glyph: SIGN });
   }
 

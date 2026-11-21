@@ -24,6 +24,16 @@ such as the [hikes](../hikes/README.md) and the [railway's stations](../railway/
 Going to one from its list closes the map. The map opens on the tab you last
 had (on a phone, the lists are behind the *lists* button).
 
+**Routes** lists the ski peaks at Tignes and Vallée Blanche, the launch site,
+the video store and the hike viewpoints. A snowy high-country run near your
+starting region also gets a pin when the terrain supports one. Pick a destination
+to see its pin and directions from your position. You can also choose *directions* on any place or mark.
+Walking legs give straight-line distances and compass bearings. When a flight
+saves a long walk, the route shows the departure and arrival airfields. Walk
+to the first, choose the second in *flights*, then follow the last bearing.
+*Follow route* puts the next leg on the HUD. The destination stays tracked
+when you reopen the world. Use *stop guidance* in its route to clear it.
+
 **Go here** takes you to the mark or the old place you've picked, rather than
 leaving you the walk: press it on its card and you're standing there, looking
 the way you were (or, at a place with a way in, such as the doors of the
@@ -64,6 +74,8 @@ mapRender.js          pure top-down tile renderer (runs in a worker)
 mapWorker.js          Web Worker wrapper around mapRender
 tiles.js              tile cache + worker scheduling
 mapView.js            the map overlay: pan/zoom, pins, mark editor, the lists beside it (map.addTab) and the options under them (map.addAction)
+routePanel.js         destination list, directions and HUD guidance
+routes.js             walking and flight legs and their lines on the map
 marks.js              the marks, their icons and colours
 places.js             places other features put on the map (an old cabin), to look up and track
 markers.js            your marks as pennants in the world

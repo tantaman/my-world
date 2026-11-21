@@ -242,6 +242,7 @@ export function installVideostore(game) {
       return place;
     };
     map.places.addSource({
+      destinations: () => [asPlace()],
       within: (x0, z0, x1, z1) => (site.door.x >= x0 && site.door.x <= x1 && site.door.z >= z0 && site.door.z <= z1 ? [asPlace()] : []),
       get: (id) => (id === site.id ? asPlace() : null),
     });

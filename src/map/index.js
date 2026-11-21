@@ -8,7 +8,7 @@
 // at its word: you are set down there once the ground has grown (travel()
 // below), as the stations and the hikes set you down at theirs.
 
-import { MarkStore, marksSave, markLabel } from './marks.js';
+import { MarkStore, marksSave } from './marks.js';
 import { MapView } from './mapView.js';
 import { Markers } from './markers.js';
 import { Places } from './places.js';
@@ -44,6 +44,13 @@ export function installMap(game) {
     local: 'marks',
     collect: () => marks.tracked,
     restore: (id) => marks.setTracked(typeof id === 'string' ? id : null),
+  });
+  save.register({
+    id: 'routeGuidance',
+    scope: 'yours',
+    local: 'marks',
+    collect: () => marks.routing,
+    restore: (on) => marks.setTracked(marks.tracked, on === true),
   });
   marks.subscribe(() => save.touch());
 
@@ -107,8 +114,5 @@ export function installMap(game) {
   });
 
   // The mark or the place you're tracking: shown on the HUD ahead of anything else.
-  hud.guide(() => {
-    const m = marks.trackedMark();
-    return m && { id: m.id, label: markLabel(m), color: m.color, x: m.x, z: m.z };
-  });
+  hud.guide(() => map.routes.guide());
 }

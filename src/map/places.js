@@ -6,6 +6,7 @@
 //   map.places.addSource({                       // from src/landmarks/index.js
 //     within(x0, z0, x1, z1) -> [place],          // what's in that part of the world
 //     get(id) -> place | null,
+//     destinations() -> [place],                  // optional: offer these in Routes from anywhere
 //   });
 //
 // `within` may answer with only what it knows so far, and know more next
@@ -41,6 +42,11 @@ export class Places {
     const out = [];
     for (const s of this.sources) for (const p of s.within(x0, z0, x1, z1)) out.push(dress(p));
     return out;
+  }
+
+  // Sources with named destinations can list them without scanning a region.
+  destinations() {
+    return this.sources.flatMap((s) => s.destinations ? s.destinations().map(dress) : []);
   }
 
   get(id) {

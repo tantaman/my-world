@@ -36,6 +36,26 @@ const FOOT_OVER = 15;
 const SLACK = 25;
 const PACE = 6; // m of descent a second
 
+// Find a snowy start on the forest's own terrain, for the race or the map.
+export function findRunTop(gen, landforms, from, reach = REACH, step = STEP) {
+  let best = null;
+  for (let r = step; r <= reach; r += step) {
+    const n = Math.max(8, Math.round((2 * Math.PI * r) / step));
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const x = from.x + Math.cos(a) * r;
+      const z = from.z + Math.sin(a) * r;
+      if (gen.country(x, z).alp < ALPINE) continue;
+      // the broad height and the snow line, which are cheap: no water
+      const drop = gen.broadHeight(x, z, 0) - gen.snowline(x, z);
+      if (drop < DROP_LEAST) continue;
+      if (landforms.reaches(x - OFF, z - OFF, x + OFF, z + OFF)) continue;
+      if (!best || drop > best.drop) best = { x, z, drop };
+    }
+  }
+  return best;
+}
+
 // onSkis(): whether the skis are on, for the word under the objective.
 export function descent(onSkis) {
   return {
@@ -44,21 +64,7 @@ export function descent(onSkis) {
     blurb: 'A run comes off the top of a massif, a few hundred metres of it under snow. Get to the bottom before it gets away from you.',
     where(kit, from) {
       const { gen, landforms } = kit;
-      let best = null;
-      for (let r = STEP; r <= REACH; r += STEP) {
-        const n = Math.max(8, Math.round((2 * Math.PI * r) / STEP));
-        for (let i = 0; i < n; i++) {
-          const a = (i / n) * Math.PI * 2;
-          const x = from.x + Math.cos(a) * r;
-          const z = from.z + Math.sin(a) * r;
-          if (gen.country(x, z).alp < ALPINE) continue;
-          // the broad height and the snow line, which are cheap: no water
-          const drop = gen.broadHeight(x, z, 0) - gen.snowline(x, z);
-          if (drop < DROP_LEAST) continue;
-          if (landforms.reaches(x - OFF, z - OFF, x + OFF, z + OFF)) continue;
-          if (!best || drop > best.drop) best = { x, z, drop };
-        }
-      }
+      const best = findRunTop(gen, landforms, from);
       if (!best) {
         return { none: 'no run near here · the long ones are up in the high country, so find a massif on the map and try it from there' };
       }

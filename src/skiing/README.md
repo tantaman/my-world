@@ -28,8 +28,8 @@ ever runs downhill, so a trough does too, from its head to where the snow
 gives out — the best of them are 500 m of descent over a kilometre at 27°,
 about 90 km/h tucked, without a counter-slope in them. Drop into one at its
 head and let it take you down.
-They are a long way apart, so find one on the map (**M**) — a massif is hard
-to miss on it — and walk in. See [the world](../world/README.md#the-world).
+Open **M → routes** for the High Country ski run when there is one in the
+forest around the starting region. Pick it for directions to the snow. See [the world](../world/README.md#the-world).
 
 Or go to a snowy real place: the hikes tab beside the map, and *the view*,
 which stands you where the photo was taken. The longest of those is the Vallée

@@ -486,6 +486,9 @@ export function installAirports(game) {
     },
   });
 
+  // Only offer flights between fields that actually stand in this world.
+  map.routes.flights = () => ({ fields: known(), here: fieldHere(), landing: trip?.to, surveying: airports.queue.size > 0 });
+
   // ── Everyone else here ────────────────────────────────────────────────────
   // They're told when you're flying, and don't see you while you are.
   const flying = new Map(); // peer id -> region id they're flying to

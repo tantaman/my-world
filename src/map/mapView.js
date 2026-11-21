@@ -41,6 +41,7 @@ import './map.css';
 import { TILE, MIN_LEVEL, MAX_LEVEL } from './mapRender.js';
 import { MapTiles, tileKey } from './tiles.js';
 import { ICONS, COLORS, PIN, iconById, iconSvg, glyphSvg, markLabel } from './marks.js';
+import { RoutePanel } from './routePanel.js';
 import { Places } from './places.js';
 import { formatDistance } from '../core/format.js';
 
@@ -83,6 +84,7 @@ const TEMPLATE = /* html */ `
         <div class="where" id="mark-where"></div>
         <div class="actions">
           <button type="button" data-act="track" aria-pressed="false">track</button>
+          <button type="button" data-act="route">directions</button>
           <button type="button" data-act="go" title="Go there now">go here</button>
           <button type="button" data-act="delete">delete</button>
           <button type="button" data-act="done" class="done">done</button>
@@ -95,6 +97,7 @@ const TEMPLATE = /* html */ `
         <div class="where" id="place-where"></div>
         <div class="actions">
           <button type="button" data-act="place-track" aria-pressed="false">track</button>
+          <button type="button" data-act="place-route">directions</button>
           <button type="button" data-act="place-go" title="Go there now">go here</button>
           <button type="button" data-act="place-done" class="done">done</button>
         </div>
@@ -201,6 +204,8 @@ export class MapView {
     // the lists beside the map: [{ id, button, pane, shown }]
     this.tabs = [{ id: 'places', button: this.tabBar.firstElementChild, pane: root.querySelector('[data-pane="places"]'), shown: () => {} }];
     this.tab = 'places'; // the one showing
+
+    this.routes = new RoutePanel(this);
 
     for (const ic of ICONS) {
       const b = document.createElement('button');
@@ -417,6 +422,32 @@ export class MapView {
     this.fly = null;
   }
 
+  // A route can preview a different continent. Request tiles at its endpoint.
+  showOnMap(point, hideList = false) {
+    this.cx = point.x;
+    this.cz = point.z;
+    this.anchor = this.fly = null;
+    if (hideList) {
+      this._setSide(false);
+      this.frame.focus({ preventScroll: true });
+    }
+  }
+
+  // Frame a local trip with both ends visible. For a longer trip the map
+  // keeps its local scale and opens at the destination.
+  previewRoute(point) {
+    this.showOnMap(point);
+    const p = this.player.pos;
+    const room = 48 * this.dpr; // space around the two pins, in device pixels
+    const fit = Math.min((this.W - room) / (Math.abs(point.x - p.x) || 1),
+      (this.H - room) / (Math.abs(point.z - p.z) || 1));
+    if (fit < this._stopScale(0)) return;
+    while (this.stop > 0 && this._stopScale(this.stop) > fit) this.stop--;
+    this.scale = this._stopScale(this.stop);
+    this.cx = (point.x + p.x) / 2;
+    this.cz = (point.z + p.z) / 2;
+  }
+
   centerOn(x, z) {
     this.anchor = null;
     this.fly = { x, z };
@@ -446,6 +477,7 @@ export class MapView {
     this._nearbyIn = (this._nearbyIn ?? NEARBY.every) - dt;
     if (this._nearbyIn <= 0) {
       this._nearbyIn = NEARBY.every;
+      if (this.tab === 'routes') this.routes.refresh();
       const items = this._nearbyPlaces();
       if (items.map((i) => i.place.id).join(' ') !== this._nearbyKey) this._renderPlaces(items);
     }
@@ -564,7 +596,7 @@ export class MapView {
       this.ctx.restore();
     }
     this._drawPlaces();
-    this._drawTrackLine();
+    this.routes.draw();
     this._drawPlayer();
     this._drawMarks();
     this._drawPlaceLabels();
@@ -736,7 +768,7 @@ export class MapView {
     for (const place of list.sort((u, v) => u.z - v.z)) {
       const r = this._badgeRect(place);
       if (r.x > W || r.y > H || r.x + r.w < 0 || r.y + r.h < 0) continue;
-      const sel = place.id === this.placeSel;
+      const sel = place.id === this.placeSel || (this.tab === 'routes' && place.id === this.routes.id);
       if (place.id === this.marks.tracked) {
         const ph = (this.t * 0.9) % 1;
         ctx.strokeStyle = place.color;
@@ -761,7 +793,7 @@ export class MapView {
     ctx.font = `${10.5 * d}px ui-monospace, 'SF Mono', Menlo, Consolas, monospace`;
     ctx.textBaseline = 'top';
     const rank = ({ place, r }) =>
-      place.id === this.placeSel ? -2 : place.id === this.marks.tracked ? -1 : Math.hypot(r.sx - this.W / 2, r.sy - this.H / 2);
+      place.id === this.placeSel || (this.tab === 'routes' && place.id === this.routes.id) ? -2 : place.id === this.marks.tracked ? -1 : Math.hypot(r.sx - this.W / 2, r.sy - this.H / 2);
     const list = [...this._placesShown].sort((a, b) => rank(a) - rank(b));
     for (const { place, r } of list) {
       const text = place.name + (place.id === this.marks.tracked ? ' ◆' : '');
@@ -831,30 +863,6 @@ export class MapView {
     const top = Math.max(8, Math.min(vh - eh - 8, r.y / d - 10));
     this.card.style.left = `${Math.round(left)}px`;
     this.card.style.top = `${Math.round(top)}px`;
-  }
-
-  _drawTrackLine() {
-    const m = this.marks.trackedMark();
-    if (!m) return;
-    const p = this.toScreen(this.player.pos.x, this.player.pos.z);
-    const q = this.toScreen(m.x, m.z);
-    const ctx = this.ctx;
-    const d = this.dpr;
-    ctx.save();
-    ctx.setLineDash([2 * this.unit * 2, 3 * this.unit * 2]);
-    ctx.lineDashOffset = -this.t * 20 * d;
-    ctx.lineWidth = 2 * this.unit;
-    ctx.strokeStyle = 'rgba(21, 20, 15, 0.55)';
-    ctx.beginPath();
-    ctx.moveTo(p.sx + d, p.sy + d);
-    ctx.lineTo(q.sx + d, q.sy + d);
-    ctx.stroke();
-    ctx.strokeStyle = m.color;
-    ctx.beginPath();
-    ctx.moveTo(p.sx, p.sy);
-    ctx.lineTo(q.sx, q.sy);
-    ctx.stroke();
-    ctx.restore();
   }
 
   _drawPlayer() {
@@ -1254,6 +1262,10 @@ export class MapView {
         this.isNew = false;
         return this._fillEditor();
       }
+      case 'route':
+        return this.routes.pick(this.selected);
+      case 'place-route':
+        return this.routes.pick(this.placeSel);
       case 'go': {
         const m = this.marks.get(this.selected);
         if (m) this.travel(m.x, m.z, markLabel(m));

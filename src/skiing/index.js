@@ -31,10 +31,12 @@ import { makeGear } from './gear.js';
 import { Spray } from './spray.js';
 import { skiSounds } from './sound.js';
 import { Skiers } from './others.js';
-import { descent } from './descent.js';
+import { descent, findRunTop } from './descent.js';
 import './skiing.css';
 import { segDist, waterSample } from '../core/geom.js';
 import { clamp, smoothstep } from '../noise.js';
+
+const SURVEY = { reach: 30000, step: 750 }; // metres, for the ski run on the map
 
 // The skis go on by themselves on snow this deep (0..1), this steep (rise
 // over run, about 18°), heading down it at this many m/s.
@@ -70,9 +72,9 @@ const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
 const fmt = (n) => Math.round(n).toLocaleString('en');
 
 // The features this uses, so it is installed after them (game/features.js).
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'adventures'];
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'adventures', 'map'];
 export function installSkiing(game) {
-  const { scene, chunks, gen, solids, player, input, hud, commands, settings, save, sound, builder, peers, adventures } = game;
+  const { scene, chunks, gen, solids, player, input, hud, commands, settings, save, sound, builder, peers, adventures, map, landforms } = game;
   const height = (x, z) => chunks.heightAt(x, z);
 
   // ── The snow, and what stands on it ───────────────────────────────────────
@@ -311,6 +313,23 @@ export function installSkiing(game) {
     sound.sfx('binding');
     hud.flash(`on your ${NAMES[kind]} now`);
   }
+  // Survey once from the world's starting point so the forest run has the
+  // same pin when someone reloads or looks for it from overseas.
+  const top = findRunTop(gen, landforms, player.start, SURVEY.reach, SURVEY.step);
+  if (top && snowAt(top.x, top.z) >= CLIP_IN.snow) {
+    const peak = {
+      id: `ski:${Math.round(top.x)}:${Math.round(top.z)}`,
+      x: top.x, z: top.z, kind: 'ski peak', name: 'High Country ski run',
+      note: 'A snowy run in the forest. Head downhill to clip in.',
+      glyph: ['.......', '...#...', '..#.#..', '..###..', '.#####.', '.#####.', '#######'],
+    };
+    map.places.addSource({
+      destinations: () => [peak],
+      get: (id) => id === peak.id ? peak : null,
+      within: (x0, z0, x1, z1) => peak.x >= x0 && peak.x <= x1 && peak.z >= z0 && peak.z <= z1 ? [peak] : [],
+    });
+  }
+
   // On the adventures board: sent to the top of a run, and timed down it.
   adventures.define(descent(() => active));
 
