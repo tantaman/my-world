@@ -1,0 +1,15 @@
+[
+ {
+  "id": "airfield:-520:560",
+  "region": "home",
+  "name": "Thibodeau Airstrip",
+  "x": -520,
+  "z": 560,
+  "yaw": 0,
+  "mid": 11.031,
+  "clear": [
+   true,
+   true
+  ]
+ }
+]

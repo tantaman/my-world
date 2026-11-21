@@ -16,6 +16,12 @@ another gathers with a low rumble, breaks in a wash and runs up the shore
 hissing before it drains away, a few seconds apart and no two the same size.
 It's heard from where the white water is, and fades as you walk inland.
 
+Something else can lay a cloud of its own over everything for a while, as a
+flight does climbing up through it and over the top
+(`country.cloud(fn)`: fn() says where it lies and how much of it there is,
+or null). While one does, it has the sky; when it goes, the real place's
+weather comes back over you.
+
 From the console: `world.country.name`.
 
 ## Files
