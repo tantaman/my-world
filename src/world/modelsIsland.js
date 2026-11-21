@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { mulberry32, phash } from '../noise.js';
 import { GeoBuilder, mat, jitter, barkColor, lin } from './models.js';
+import { CARD } from './foliage.js';
 
 const _c = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -170,7 +171,7 @@ export function makeIronwood(seed = 83) {
         for (let k = 0; k < 7; k++) {
           const d = new THREE.Vector3(rng() * 2 - 1, -0.2 - rng() * 0.9, rng() * 2 - 1).normalize();
           const pc = c.clone().addScaledVector(d, r * (0.8 + rng() * 0.5));
-          b.leaf(pc, 0.7, UP, _c.copy(mid).lerp(light, rng() * 0.6).multiplyScalar(0.7 + 0.3 * t).clone(), Math.pow(pc.y / H, 2) + 0.15, rng);
+          b.leaf(pc, 0.7, UP, _c.copy(mid).lerp(light, rng() * 0.6).multiplyScalar(0.7 + 0.3 * t).clone(), Math.pow(pc.y / H, 2) + 0.15, rng, CARD.SPRAY);
         }
       }
     }

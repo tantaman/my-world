@@ -3,6 +3,7 @@ import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, GROUND_GLSL, wave } from '../
 import { SHARED, LAND, UNDER } from '../render/uniforms.js';
 import { CUTS, CUT_GLSL, SHRINK, RIM } from './cuts.js';
 import { SEA } from './sea.js';
+import { FOLIAGE_GLSL, FOLIAGE_DEPTH_GLSL } from './foliage.js';
 
 // A shader here that needs to know where in the world something is asks
 // worldXZ() (render/glsl.js), never modelMatrix alone: while a frame is drawn
@@ -306,75 +307,145 @@ function throughLeaves(shader, weight) {
 // ── Vegetation (trees, bushes, ferns, rocks, logs) ─────────────────────────
 // Vertex coloured, gently swaying in the wind. Foliage uses "spherical"
 // normals baked into the geometry so canopies shade as soft volumes, and
-// lets the light through (aLeaf, see models.js).
+// lets the light through (aLeaf, see models.js). What each surface is, and
+// the needles and leaves cut out of its cards, is in foliage.js (aCard).
 // Pass { sway: false } for a tree that's been felled (it shouldn't wave about).
+
+// The wind in a plant, and what the fragment shader needs to know of it: its
+// own and its shadow's vertex shader both do this.
+function plantVertex(shader, sway) {
+  shader.uniforms.uTime = SHARED.uTime;
+  shader.uniforms.uWind = sway ? SHARED.uWind : { value: 0 };
+  shader.uniforms.uOrigin = SHARED.uOrigin;
+  shader.vertexShader = shader.vertexShader
+    .replace(
+      '#include <common>',
+      `#include <common>
+      attribute float aSway;
+      attribute float aLeaf;
+      attribute vec4 aCard;
+      varying float vLeaf;
+      varying vec4 vCard;
+      varying vec3 vLocal;
+      uniform float uTime;
+      uniform float uWind;
+      ${WORLD_GLSL}`,
+    )
+    .replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+      vLeaf = aLeaf;
+      vCard = aCard;
+      vLocal = position;
+      {
+        // Where the plant stands in the world sets when the wind reaches
+        // it. (An instance is placed from its mesh, a chunk's corner; the
+        // wavenumbers come round on the period, so nothing jumps when the
+        // drawing origin moves.)
+        #ifdef USE_INSTANCING
+          vec2 iPos = worldXZ(modelMatrix[3].xyz + instanceMatrix[3].xyz);
+        #else
+          vec2 iPos = vec2(0.0);
+        #endif
+        vec2 wdir = normalize(vec2(1.0, 0.45));
+        float ph = iPos.x * ${wave(0.041)} + iPos.y * ${wave(0.0185)};
+        float gust = 0.55 + 0.45 * sin(uTime * 0.37 + iPos.x * ${wave(0.0287)} + iPos.y * ${wave(0.0129)});
+        float bend = sin(uTime * 1.25 + ph + iPos.x * ${wave(0.21)}) * 0.65 + sin(uTime * 2.3 + iPos.y * ${wave(0.37)}) * 0.35;
+        vec3 wd = vec3(wdir.x, 0.0, wdir.y) * bend * gust * uWind * aSway;
+        // leafy flutter
+        wd += vec3(
+          sin(uTime * 5.1 + position.y * 2.7 + iPos.x * ${wave(1.0)}),
+          sin(uTime * 4.3 + position.x * 3.1) * 0.5,
+          cos(uTime * 4.7 + position.z * 2.9 + iPos.y * ${wave(1.0)})
+        ) * 0.035 * uWind * step(0.001, aSway) * min(aSway * 4.0, 1.0);
+        #ifdef USE_INSTANCING
+          mat3 im = mat3(instanceMatrix);
+          transformed += (transpose(im) * wd) / max(dot(im[0], im[0]), 1e-4);
+        #else
+          transformed += wd;
+        #endif
+      }`,
+    );
+}
+
+// How much of the pixel the surface covers (cov), and how lit its bit is
+// (shade): see foliage.js.
+const PLANT_COVER = /* glsl */ `
+float shade;
+float cov = cover(vCard, vLocal, fwidth(vCard.xy), max(length(fwidth(vLocal)), 1e-5), shade);`;
+
 export function createVegetationMaterial({ sway = true } = {}) {
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 0.92,
     metalness: 0,
     side: THREE.DoubleSide,
+    // where the picture is multisampled, a leaf's edge covers part of a pixel
+    alphaToCoverage: true,
   });
   mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uTime = SHARED.uTime;
-    shader.uniforms.uWind = sway ? SHARED.uWind : { value: 0 };
-    shader.uniforms.uOrigin = SHARED.uOrigin;
-    shader.vertexShader = shader.vertexShader
+    plantVertex(shader, sway);
+    shader.uniforms.uAlphaCut = SHARED.uAlphaCut;
+    shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
         `#include <common>
-        attribute float aSway;
-        attribute float aLeaf;
         varying float vLeaf;
-        uniform float uTime;
-        uniform float uWind;
-        ${WORLD_GLSL}`,
+        varying vec4 vCard;
+        varying vec3 vLocal;
+        uniform float uAlphaCut;
+        ${NOISE_GLSL}
+        ${FOLIAGE_GLSL}`,
       )
       .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
-        vLeaf = aLeaf;
-        {
-          // Where the plant stands in the world sets when the wind reaches
-          // it. (An instance is placed from its mesh, a chunk's corner; the
-          // wavenumbers come round on the period, so nothing jumps when the
-          // drawing origin moves.)
-          #ifdef USE_INSTANCING
-            vec2 iPos = worldXZ(modelMatrix[3].xyz + instanceMatrix[3].xyz);
-          #else
-            vec2 iPos = vec2(0.0);
-          #endif
-          vec2 wdir = normalize(vec2(1.0, 0.45));
-          float ph = iPos.x * ${wave(0.041)} + iPos.y * ${wave(0.0185)};
-          float gust = 0.55 + 0.45 * sin(uTime * 0.37 + iPos.x * ${wave(0.0287)} + iPos.y * ${wave(0.0129)});
-          float bend = sin(uTime * 1.25 + ph + iPos.x * ${wave(0.21)}) * 0.65 + sin(uTime * 2.3 + iPos.y * ${wave(0.37)}) * 0.35;
-          vec3 wd = vec3(wdir.x, 0.0, wdir.y) * bend * gust * uWind * aSway;
-          // leafy flutter
-          wd += vec3(
-            sin(uTime * 5.1 + position.y * 2.7 + iPos.x * ${wave(1.0)}),
-            sin(uTime * 4.3 + position.x * 3.1) * 0.5,
-            cos(uTime * 4.7 + position.z * 2.9 + iPos.y * ${wave(1.0)})
-          ) * 0.035 * uWind * step(0.001, aSway) * min(aSway * 4.0, 1.0);
-          #ifdef USE_INSTANCING
-            mat3 im = mat3(instanceMatrix);
-            transformed += (transpose(im) * wd) / max(dot(im[0], im[0]), 1e-4);
-          #else
-            transformed += wd;
-          #endif
-        }`,
-      );
-    // Double sided foliage: keep the baked normal on back faces instead of
-    // flipping it, otherwise leaf cards turn black from behind.
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vLeaf;')
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+        ${PLANT_COVER}
+        if (cov < uAlphaCut) discard;`,
+      )
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        diffuseColor.rgb *= shade;
+        diffuseColor.a = clamp((cov - 0.5) * 1.5 + 0.5, 0.0, 1.0);`,
+      )
+      // Double sided foliage: keep the baked normal on back faces instead of
+      // flipping it, otherwise leaf cards turn black from behind.
       .replace(
         '#include <normal_fragment_begin>',
         `#include <normal_fragment_begin>
-      normal = normalize(vNormal);`,
+        normal = normalize(vNormal);`,
       );
     throughLeaves(shader, 'vLeaf');
   };
-  mat.customProgramCacheKey = () => 'vegetation-v3';
+  mat.customProgramCacheKey = () => 'vegetation-v4';
+  return mat;
+}
+
+// A plant as the sun sees it, for its shadow: with the same gaps between its
+// needles and leaves (at the scale of the shadow map), so light comes through
+// a crown in flecks.
+export function createVegetationDepthMaterial({ sway = true } = {}) {
+  const mat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  mat.onBeforeCompile = (shader) => {
+    plantVertex(shader, sway);
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        varying vec4 vCard;
+        varying vec3 vLocal;
+        ${NOISE_GLSL}
+        ${FOLIAGE_DEPTH_GLSL}`,
+      )
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+        ${PLANT_COVER}
+        if (cov < 0.5) discard;`,
+      );
+  };
+  mat.customProgramCacheKey = () => `vegetation-depth-v1-${sway}`;
   return mat;
 }
 

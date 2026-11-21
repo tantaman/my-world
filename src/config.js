@@ -40,6 +40,9 @@ export const CONFIG = {
   // Ambient occlusion: how much a nook or a foot of a trunk is shut off from
   // the sky's light, 0..1 (0 = not worked out at all).
   ao: num('ao', low ? 0 : 0.85),
+  // Samples per pixel without pixel art: smooth edges, and the edges of
+  // leaves cut from their cards (0 = none).
+  msaa: num('msaa', low ? 0 : 4),
 
   // Pixel art: ?pixel turns it on (it's on the settings panel too).
   pixelArt: params.has('pixel') && params.get('pixel') !== '0',

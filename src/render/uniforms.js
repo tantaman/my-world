@@ -22,6 +22,9 @@ export const SHARED = {
   uGrassRadius: { value: 40 },
   uOrigin: { value: new THREE.Vector2() },
   uLines: { value: 1080 }, // how many lines tall the picture is drawn (set by the pipeline)
+  // Below how much of a pixel a leaf's cutout is cut away: a half, unless the
+  // picture is multisampled, when the rest is coverage (set by the pipeline).
+  uAlphaCut: { value: 0.5 },
 };
 
 // Set every frame by the sky (world/sky.js) from the hour of the day.

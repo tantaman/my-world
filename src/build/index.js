@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { growRect } from '../core/geom.js';
-import { createVegetationMaterial } from '../world/materials.js';
+import { createVegetationMaterial, createVegetationDepthMaterial } from '../world/materials.js';
 import { TREE_KINDS } from '../world/flora.js';
 import { Builder } from './builder.js';
 import { TerrainEdits, terrainSave } from './terrainEdits.js';
@@ -37,7 +37,7 @@ export function installBuild(game) {
   const { scene, camera, gen, chunks, grass, solids, player, input, hud, sound, commands, save } = game;
 
   const wood = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
-  const materials = { wood, still: createVegetationMaterial({ sway: false }) };
+  const materials = { wood, still: createVegetationMaterial({ sway: false }), stillShadow: createVegetationDepthMaterial({ sway: false }) };
 
   // ── What has been changed about the world ─────────────────────────────────
   // Edits are laid over whatever the chunk workers grow, as it arrives.

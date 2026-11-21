@@ -12,7 +12,7 @@ import { Solids } from './solids.js';
 import { Spaces } from './spaces.js';
 import { CUTS } from './cuts.js';
 import { createParticles } from './particles.js';
-import { createTerrainMaterial, createTerrainDepthMaterial, createVegetationMaterial, createGrassMaterial } from './materials.js';
+import { createTerrainMaterial, createTerrainDepthMaterial, createVegetationMaterial, createVegetationDepthMaterial, createGrassMaterial } from './materials.js';
 import { SHARED, UNDER } from '../render/uniforms.js';
 import { createWaterMaterial } from './waterSurface.js';
 import { makePine, makeBroadleaf, makeBirch, makeBush, makeFern, makeRock, makeLog } from './models.js';
@@ -39,6 +39,7 @@ export function installWorld(game) {
     terrain: createTerrainMaterial(),
     terrainShadow: createTerrainDepthMaterial(),
     vegetation: createVegetationMaterial(),
+    vegetationShadow: createVegetationDepthMaterial(),
     grass: createGrassMaterial(),
     water: createWaterMaterial(),
   };
