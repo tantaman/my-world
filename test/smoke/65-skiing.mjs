@@ -1,6 +1,7 @@
 // Skiing: walk down a steep snowy slope and find your skis on, ski on down,
 // brake, turn, jump, hear it, swap them for a snowboard, fall into a boulder,
-// and take them off again.
+// and take them off again. Then the descent, on the adventures board: sent to
+// the top of a run in the high country, and timed down it.
 //
 // Leaves: you on foot, on the mountain.
 
@@ -227,5 +228,85 @@ export default async function ({ page, step, key, frames, shot }) {
     await frames(30);
     assert.equal(await page.evaluate(() => world.skiing.active), false);
     return s;
+  });
+
+  // ── The descent ───────────────────────────────────────────────────────────
+  await step('no descent to be had in the woods', async () => {
+    const got = await page.evaluate(async () => {
+      const s = world.player.start;
+      await world.teleport(s.x, s.z, 0);
+      // nothing of the high country within the reach it searches
+      let most = 0;
+      for (let x = -3000; x <= 3000; x += 250) for (let z = -3000; z <= 3000; z += 250) most = Math.max(most, world.gen.country(s.x + x, s.z + z).alp);
+      return { most, why: world.adventures.begin('descent') };
+    });
+    assert.ok(got.most < 0.5, `no high country round the start (${got.most.toFixed(2)})`);
+    assert.match(got.why, /high country/, 'and it says where to go for one');
+    return got;
+  });
+
+  await step('sent to the top of a run, and timed down it', async () => {
+    const was = await page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z, yaw: world.player.yaw }));
+    // the high country, found from the country field alone (cheap: no water)
+    const top = await page.evaluate(() => {
+      let best = null;
+      for (let x = -45000; x <= 45000; x += 1000) for (let z = -45000; z <= 45000; z += 1000) {
+        if (world.gen.country(x, z).alp < 0.95) continue;
+        const h = world.gen.broadHeight(x, z, 0);
+        if (!best || h > best[2]) best = [x, z, h];
+      }
+      return best;
+    });
+    assert.ok(top, 'there is high country out there');
+    await page.evaluate(async (t) => void (await world.teleport(t[0], t[1], 0)), top);
+    await page.evaluate(() => T.until(() => world.game.chunks.isFullyLoaded(), 90000));
+
+    // it begins, sending us to the top if we are not on one already
+    const begun = await page.evaluate(() => world.adventures.begin('descent'));
+    assert.equal(begun, null, 'it begins');
+    const there = await page.evaluate(() =>
+      T.until(() => {
+        const v = world.adventures.view();
+        if (v.state === 'on') return true;
+        if (v.state === 'travel' && v.guide) world.teleport(v.guide.x, v.guide.z, 0); // the climb is not what is being tested
+        return false;
+      }, 60000),
+    );
+    assert.ok(there, 'and we are at the top of the run, on it');
+    const on = await page.evaluate(() => world.adventures.view());
+    assert.match(on.objective, /ski down to \d+ m/, `the objective names a height (${on.objective})`);
+    assert.ok(on.left > 20, `and the clock is running (${Math.round(on.left)} s)`);
+    const foot = Number(/ski down to (\d+) m/.exec(on.objective)[1]);
+    // let the clock run a little, so the time it keeps is a real one
+    const ran = await page.evaluate((was) => T.until(() => world.adventures.view().left < was - 2, 30000), on.left);
+    assert.ok(ran, 'the clock counts down');
+
+    // down to the foot of it. Skiing the whole way is not what this checks:
+    // what it checks is that getting there wins it, and is timed.
+    const won = await page.evaluate(async (f) => {
+      const p = world.player.pos;
+      for (let r = 500; r < 6000; r += 250) {
+        for (let a = 0; a < 6.28; a += 0.4) {
+          const x = p.x + Math.cos(a) * r;
+          const z = p.z + Math.sin(a) * r;
+          if (world.gen.height(x, z) > f - 40) continue;
+          await world.teleport(x, z, 0);
+          await T.until(() => world.game.chunks.isFullyLoaded(), 60000);
+          await T.frames(10);
+          const v = world.adventures.view();
+          if (v.outcome) return { outcome: v.outcome, line: v.line, best: world.adventures.record.descent };
+        }
+      }
+      return { outcome: null };
+    }, foot);
+    assert.equal(won.outcome, 'won', `down to the foot wins it (${won.line})`);
+    assert.match(won.line, /down \d+ m of it in \d+ s/, 'and says how far and how long');
+    assert.ok(won.best && won.best.won === 1 && won.best.best > 0, `with a time kept (${JSON.stringify(won.best)})`);
+    await shot('descent');
+
+    // back on the mountain, where the part before this left us
+    await page.evaluate(async (w) => void (await world.teleport(w.x, w.z, w.yaw)), was);
+    await page.evaluate(() => T.frames(10));
+    return { foot, ...won };
   });
 }

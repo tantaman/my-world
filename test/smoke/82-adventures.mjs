@@ -26,7 +26,11 @@ export default async function ({ page, step, key, frames, open, shot }) {
       rec: document.querySelector('#adventures .adv-board-rec').textContent,
     }));
     assert.ok(board.open, 'I opens the board');
-    assert.deepEqual(board.rows, ['tornado', 'hurricane', 'wildfire', 'avalanche', 'bear', 'lion', 'stronghold', 'cave']);
+    // the ones this feature defines, in the order it defines them. Another
+    // feature may add its own (adventures.define), and they come after these:
+    // adding one shouldn't mean editing this part.
+    const own = ['tornado', 'hurricane', 'wildfire', 'avalanche', 'bear', 'lion', 'stronghold', 'cave'];
+    assert.deepEqual(board.rows.slice(0, own.length), own);
     assert.equal(board.rec, 'not yet tried');
     await shot('board');
     await key('Escape');

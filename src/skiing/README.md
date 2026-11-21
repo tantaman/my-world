@@ -37,6 +37,14 @@ Blanche, where that is the top of the Aiguille du Midi, with Mont Blanc behind
 you, three hundred metres of fall line down to the glacier, and the Chamonix
 valley five hundred further below.
 
+**The descent.** On the adventures board (**J**) there is a run to be timed.
+It sends you to the top of one in the high country — the biggest drop within
+a couple of kilometres of you, off any real place — and the clock starts when
+you get there. Ski down to where the snow gives out before it gets away from
+you; what is kept is how long it took, so it is a race against the hill and
+then against your own best time down it. Ask for one in the rolling forest
+and it will tell you to go and find a mountain.
+
 | | on the snow | in the air |
 |---|---|---|
 | **A D** | carve left and right; at a standstill, pivot round | spin |
@@ -95,6 +103,7 @@ run.js                a run's tally: how far, how fast, how far down, points and
 pose.js               how you stand on skis or a board, lean into turns, tip with the snow and tumble
 gear.js               skis, poles and a snowboard
 spray.js              snow thrown up off your edges, landing and falling
+descent.js            the descent, on the adventures board: a run found, and timed
 sound.js              the snow and the wind as you go; bindings, landings, falls
 others.js             what other people here are on
 skiing.css            the readout
