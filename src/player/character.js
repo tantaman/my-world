@@ -1,5 +1,5 @@
 // A small procedurally-built hiker with a procedural gait. No assets, just
-// capsules, a little trigonometry and a two-bone IK for each leg.
+// tailored meshes, a little trigonometry and a two-bone IK for each leg.
 //
 // The walk is built the way a real one works rather than from sines on the
 // joints: each foot follows a path on the ground, planted while it carries
@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { smoothstep, lerp, clamp } from '../noise.js';
+import { tailored, sleeve, trouserLeg, bootUpper, outsole, handShape, textile, foldAt } from './clothing.js';
 import { buildHead } from './head.js';
 
 // Work poses as keyframes over one swing (p = 0..1). Angles in radians:
@@ -153,7 +154,7 @@ export const SEAT_HIPS = HIPS_Y;
 const HIP_X = 0.095; // hip joints either side of the pelvis
 const HIP_Y = -0.04;
 const NECK = 0.145; // centre of the head above the base of the neck
-const BACK_OF_PACK = 0.11; // m from the middle of the daypack to the back of it
+const BACK_OF_PACK = 0.182; // m from the middle of the daypack to the back of it
 const THIGH = 0.42;
 const SHIN = 0.43;
 const REACH = (THIGH + SHIN) * 0.985; // a planted leg never quite locks straight
@@ -252,9 +253,21 @@ export class Character {
     this.footL = foot(1);
     this.footR = foot(-1);
 
+    // The model owns these resources. A peer can later have borrowed gear
+    // attached to the same joints; keep that gear out of model disposal.
+    this.resources = new Set();
     this.root.traverse((o) => {
-      if (o.isMesh) o.receiveShadow = true;
+      if (!o.isMesh) return;
+      o.receiveShadow = true;
+      this.resources.add(o.geometry);
+      this.resources.add(o.material);
+      if (o.isSkinnedMesh) this.resources.add(o.skeleton);
     });
+  }
+
+  dispose() {
+    for (const resource of this.resources) resource.dispose();
+    this.resources.clear();
   }
 
   // ── The model ─────────────────────────────────────────────────────────────
@@ -264,28 +277,28 @@ export class Character {
   // and a full dark beard.
   #build() {
     const skin = M(0xc68c6c, 0.7);
-    const shell = M(0xd65a20, 0.6);
-    const shellDark = M(0xa8431a, 0.65);
-    const hood = M(0xa9aba8, 0.75);
-    const pants = M(0xa47836);
-    const pantsDark = M(0x86602b);
-    const boot = M(0x5b3a26, 0.8);
-    const sole = M(0x2a211b, 0.95);
-    const pack = M(0x1d1d20, 0.75);
-    const packDark = M(0x111113, 0.8);
-    const logo = M(0x9a9a9a, 0.7);
-    const hose = M(0x74b8dc, 0.4);
-    const tag = M(0xe0662a, 0.7);
+    const shell = M(0xc85a26, 0.63, { vertexColors: true, ...textile('ripstop') });
+    const trim = M(0x793c24, 0.72);
+    const hood = M(0x787b74, 0.84, textile('ripstop'));
+    const pants = M(0xa98b60, 0.96, { vertexColors: true, ...textile('twill') });
+    const boot = M(0x654633, 0.69);
+    const sole = M(0x302e2a, 0.94);
+    const pack = M(0x424844, 0.88, textile('canvas'));
+    const webbing = M(0x313530, 0.97, textile('canvas'));
+    const binding = M(0x505650, 0.76);
+    const hose = M(0x66888d, 0.36);
 
-    const cast = (m) => {
-      m.castShadow = true;
-      return m;
+    const piece = (parent, geometry, material, x = 0, y = 0, z = 0) => {
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.castShadow = true;
+      mesh.position.set(x, y, z);
+      parent.add(mesh);
+      return mesh;
     };
-    const cap = (r, len, mat, segs = 8) => cast(new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 3, segs), mat));
-    const box = (x, y, z, mat) => cast(new THREE.Mesh(new THREE.BoxGeometry(x, y, z), mat));
-    const ball = (r, mat, ws = 10, hs = 8) => cast(new THREE.Mesh(new THREE.SphereGeometry(r, ws, hs), mat));
-    const cyl = (rt, rb, h, mat, segs = 12, open = false) =>
-      cast(new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, segs, 1, open), mat));
+    const cord = (parent, material, radius, points) => {
+      const path = new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
+      return piece(parent, new THREE.TubeGeometry(path, points.length * 3, radius, 6), material);
+    };
     const group = (parent, x, y, z) => {
       const g = new THREE.Group();
       g.position.set(x, y, z);
@@ -293,124 +306,155 @@ export class Character {
       return g;
     };
 
-    // pelvis / torso
-    this.hips = group(this.root, 0, HIPS_Y, 0);
-    const pelvis = cap(0.15, 0.1, pants);
-    pelvis.rotation.z = Math.PI / 2;
-    pelvis.scale.set(1, 1, 0.8);
-    this.hips.add(pelvis);
-
+    const joint = (parent, x, y) => {
+      const bone = new THREE.Bone();
+      bone.position.set(x, y, 0);
+      parent.add(bone);
+      return bone;
+    };
+    this.hips = joint(this.root, 0, HIPS_Y);
     this.spine = group(this.hips, 0, 0.06, 0);
-    this.chest = group(this.spine, 0, 0.0, 0);
-    const torso = cap(0.185, 0.26, shell, 12);
-    torso.position.y = 0.26;
-    torso.scale.set(1.1, 1, 0.8);
-    this.chest.add(torso);
-    // the shell hangs loose over the hips
-    const hem = cyl(0.2, 0.214, 0.16, shell, 14);
-    hem.position.y = 0.04;
-    hem.scale.z = 0.82;
-    this.chest.add(hem);
-    // the storm flap over the front zip
-    const placket = box(0.022, 0.42, 0.012, shellDark);
-    placket.position.set(0, 0.25, 0.149);
-    this.chest.add(placket);
-
-    // high zipped collar, with the hood rolled up behind it
-    const collar = cyl(0.1, 0.122, 0.12, shell, 14, true);
-    collar.material = shell.clone();
-    collar.material.side = THREE.DoubleSide;
-    collar.position.y = 0.5;
-    this.chest.add(collar);
-    const hoodRoll = new THREE.TorusGeometry(0.118, 0.048, 6, 14, Math.PI * 1.25);
-    hoodRoll.rotateZ(Math.PI * 1.5 - Math.PI * 0.625);
-    hoodRoll.rotateX(Math.PI / 2);
-    const hoodM = cast(new THREE.Mesh(hoodRoll, hood));
-    hoodM.position.set(0, 0.53, -0.012);
-    hoodM.scale.set(1.05, 1.2, 1);
-    this.chest.add(hoodM);
-    const hoodBulk = ball(0.075, hood, 10, 6);
-    hoodBulk.scale.set(1.5, 0.85, 0.75);
-    hoodBulk.position.set(0, 0.52, -0.13);
-    this.chest.add(hoodBulk);
-
-    // black daypack
-    const bp = group(this.chest, 0, 0.27, -0.232);
-    // what is worn over it goes on the back of it (addOnBack)
-    this.back = group(bp, 0, 0, -BACK_OF_PACK);
-    const bag = cap(0.13, 0.2, pack, 10);
-    bag.scale.set(1.25, 1, 0.62);
-    bp.add(bag);
-    const front = cap(0.1, 0.06, packDark, 10);
-    front.scale.set(1.15, 1, 0.32);
-    front.position.set(0, -0.1, -0.075);
-    bp.add(front);
-    const mark = box(0.07, 0.014, 0.006, logo);
-    mark.position.set(0, -0.035, -0.11);
-    bp.add(mark);
-    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.025, 0.007, 4, 8, Math.PI), packDark);
-    handle.position.set(0, 0.24, -0.01);
-    bp.add(handle);
-    const tagM = box(0.018, 0.07, 0.035, tag);
-    tagM.position.set(0.15, -0.02, -0.01);
-    tagM.rotation.z = 0.12;
-    bp.add(tagM);
-    // shoulder straps: down the chest, and over the top of each shoulder
-    const strapPath = (sx) =>
-      new THREE.CatmullRomCurve3([
-        new THREE.Vector3(sx * 0.1, 0.4, -0.16),
-        new THREE.Vector3(sx * 0.11, 0.535, -0.09),
-        new THREE.Vector3(sx * 0.115, 0.56, 0.0),
-        new THREE.Vector3(sx * 0.11, 0.5, 0.11),
-        new THREE.Vector3(sx * 0.1, 0.38, 0.14),
-        new THREE.Vector3(sx * 0.1, 0.2, 0.142),
-      ]);
-    for (const sx of [-1, 1]) {
-      const strap = cast(new THREE.Mesh(new THREE.TubeGeometry(strapPath(sx), 14, 0.018, 4), packDark));
-      strap.scale.x = 1.4;
-      this.chest.add(strap);
+    this.chest = joint(this.spine, 0, 0);
+    const jacket = tailored([
+      [-0.065, 0.188, 0.141, -0.005], [-0.052, 0.202, 0.152, -0.005, 0.006],
+      [-0.034, 0.209, 0.156, -0.004, 0.01], [0.018, 0.20, 0.15, 0, 0.023],
+      [0.043, 0.184, 0.14, 0, 0.025], [0.065, 0.19, 0.147, 0, 0.023],
+      [0.13, 0.173, 0.138, 0, -0.018], [0.18, 0.181, 0.141, 0, -0.018],
+      [0.25, 0.189, 0.144], [0.34, 0.207, 0.151, 0.003],
+      [0.395, 0.221, 0.144], [0.43, 0.221, 0.132], [0.46, 0.183, 0.117],
+      [0.487, 0.126, 0.10], [0.502, 0.09, 0.083],
+    ], { segments: 48, squareness: 0.88,
+      crease: (y, across, front) => {
+        const ax = Math.abs(across);
+        const pocket = 0.008 * foldAt(y - 0.12 - 0.075 * across, 0.019);
+        const shoulder = 0.006 * foldAt(y - 0.41 + 0.12 * ax, 0.013);
+        const gather = 0.006 * foldAt(y - 0.056 + 0.045 * across, 0.012);
+        const strap = Math.exp(-(((ax - 0.63) / 0.11) ** 2)) * smoothstep(0.16, 0.30, y);
+        return pocket + gather + shoulder - Math.max(front, 0) * strap * 0.012;
+      },
+      surface: (x, y, front) => {
+        const panel = Math.abs(x) > 0.15 && y < 0.39 ? 0.79 : 1;
+        const tone = y < -0.035 ? 0.75 : panel;
+        return [tone, tone * (front < -0.5 ? 0.95 : 1), tone];
+      },
+    });
+    piece(this.chest, jacket, shell);
+    const collar = tailored([[0.464, 0.112, 0.105], [0.502, 0.103, 0.094],
+      [0.535, 0.094, 0.085], [0.548, 0.085, 0.078]]);
+    piece(this.chest, collar, M(0xb44a20, 0.56));
+    cord(this.chest, trim, 0.004, [[0, -0.05, 0.149], [0, 0.04, 0.147],
+      [0, 0.13, 0.14], [0, 0.255, 0.146], [0, 0.34, 0.156],
+      [0, 0.43, 0.134], [0, 0.49, 0.103], [0, 0.545, 0.081]]);
+    for (const side of [-1, 1]) {
+      cord(this.chest, trim, 0.0035, [[side * 0.126, 0, 0.124],
+        [side * 0.14, 0.075, 0.10], [side * 0.149, 0.143, 0.079]]);
     }
-    // hydration hose: out of the top of the pack, over the left shoulder and
-    // down the front of the strap
-    const hosePath = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0.05, 0.5, -0.17),
-      new THREE.Vector3(0.1, 0.585, -0.08),
-      new THREE.Vector3(0.13, 0.585, 0.01),
-      new THREE.Vector3(0.13, 0.52, 0.12),
-      new THREE.Vector3(0.125, 0.4, 0.162),
-      new THREE.Vector3(0.12, 0.33, 0.165),
-    ]);
-    this.chest.add(cast(new THREE.Mesh(new THREE.TubeGeometry(hosePath, 18, 0.0095, 5), hose)));
+    piece(this.chest, tailored([[0.38, 0.035, 0.026, -0.138],
+      [0.403, 0.084, 0.043, -0.141], [0.448, 0.128, 0.054, -0.131, 0.01],
+      [0.463, 0.125, 0.047, -0.128, 0.012], [0.486, 0.142, 0.061, -0.111, 0.007],
+      [0.515, 0.131, 0.063, -0.09], [0.532, 0.095, 0.047, -0.09]], { crease: (y, x, front) =>
+        0.009 * foldAt(y - 0.456 - 0.023 * x, 0.01) +
+        0.007 * foldAt(y - 0.485 + 0.016 * front, 0.009) }), hood);
 
-    // head: raised clear of the collar so the chin and beard show
+    // The back panel rests against the shell. The loaded pack is deepest
+    // near its base, with a separately bound shovel pocket on its outer face.
+    const bp = group(this.chest, 0, 0.258, -0.158);
+    this.back = group(bp, 0, 0, -BACK_OF_PACK);
+    piece(bp, tailored([[-0.224, 0.099, 0.055, -0.037], [-0.207, 0.145, 0.083, -0.045],
+      [-0.159, 0.159, 0.096, -0.054], [-0.065, 0.162, 0.104, -0.055],
+      [0.035, 0.15, 0.095, -0.047], [0.143, 0.138, 0.081, -0.034],
+      [0.196, 0.105, 0.058, -0.025], [0.209, 0.062, 0.034, -0.025]],
+    { squareness: 0.76 }), pack);
+    piece(bp, tailored([[-0.195, 0.096, 0.024, -0.127], [-0.162, 0.134, 0.032, -0.137],
+      [-0.07, 0.139, 0.036, -0.146], [0.004, 0.117, 0.031, -0.134],
+      [0.04, 0.088, 0.021, -0.132]], { squareness: 0.78 }), webbing);
+    cord(bp, binding, 0.004, [[-0.124, -0.039, -0.159], [-0.09, 0.019, -0.153],
+      [0, 0.04, -0.153], [0.09, 0.019, -0.153], [0.124, -0.039, -0.159]]);
+    cord(bp, trim, 0.005, [[0.089, 0.018, -0.157], [0.097, -0.016, -0.167], [0.091, -0.032, -0.173]]);
+    cord(bp, webbing, 0.009, [[-0.046, 0.186, -0.024], [-0.026, 0.234, -0.023],
+      [0.023, 0.235, -0.023], [0.047, 0.186, -0.024]]);
+    // Daisy chains stitched to the pocket, with a reflective bar tack at
+    // each end. Two side compression straps draw the shell down over its load.
+    const stitch = M(0x8c9185, 0.78);
+    for (const side of [-1, 1]) {
+      const pocketWeb = cord(bp, binding, 0.0075, [[side * 0.072, -0.154, -0.167],
+        [side * 0.081, -0.123, -0.173], [side * 0.086, -0.085, -0.176],
+        [side * 0.089, -0.046, -0.171]]);
+      for (const t of [0.1, 0.49, 0.89]) {
+        const at = pocketWeb.geometry.parameters.path.getPointAt(t);
+        piece(bp, new THREE.BoxGeometry(0.015, 0.003, 0.004), stitch, at.x, at.y, at.z - 0.007);
+      }
+      cord(bp, webbing, 0.009, [[side * 0.116, 0.134, -0.098],
+        [side * 0.14, 0.083, -0.082], [side * 0.15, 0.058, -0.039],
+        [side * 0.146, 0.075, -0.009]]);
+      cord(bp, binding, 0.0035, [[side * 0.143, -0.143, -0.102],
+        [side * 0.148, -0.011, -0.095], [side * 0.135, 0.101, -0.085],
+        [side * 0.101, 0.165, -0.089], [side * 0.042, 0.184, -0.092], [0, 0.187, -0.088]]);
+    }
+    for (const side of [-1, 1]) {
+      // Sweep a flattened strap over the shoulder and back to the hip belt.
+      const strap = cord(this.chest, webbing, 0.011, [[side * 0.098, 0.40, -0.17],
+        [side * 0.112, 0.466, -0.089], [side * 0.127, 0.492, -0.008],
+        [side * 0.133, 0.461, 0.091], [side * 0.135, 0.37, 0.117],
+        [side * 0.124, 0.242, 0.12], [side * 0.164, 0.15, 0.078],
+        [side * 0.179, 0.09, -0.012], [side * 0.145, 0.07, -0.159]]);
+      // Widen just the cross section, keeping its centre on the path.
+      const vertices = strap.geometry.attributes.position;
+      const path = strap.geometry.parameters.path;
+      for (let ring = 0; ring <= strap.geometry.parameters.tubularSegments; ring++) {
+        const centre = path.getPointAt(ring / strap.geometry.parameters.tubularSegments);
+        for (let k = 0; k <= 6; k++) {
+          const i = ring * 7 + k;
+          vertices.setX(i, centre.x + (vertices.getX(i) - centre.x) * 2.3);
+        }
+      }
+      strap.geometry.computeVertexNormals();
+    }
+    cord(this.chest, hose, 0.006, [[0.087, 0.433, -0.15], [0.117, 0.49, -0.071],
+      [0.129, 0.506, -0.002], [0.141, 0.467, 0.10], [0.141, 0.388, 0.132],
+      [0.128, 0.305, 0.141]]);
     this.neck = group(this.chest, 0, 0.5, 0);
-    const neckM = cyl(0.058, 0.065, 0.13, skin, 8);
-    neckM.position.y = 0.055;
-    this.neck.add(neckM);
+    piece(this.neck, new THREE.CylinderGeometry(0.054, 0.064, 0.13, 16), skin, 0, 0.055);
     this.head = group(this.neck, 0, NECK, 0);
     // what is worn on the head goes on the cap (addWorn)
     this.cap = buildHead(this.head, skin);
 
-    // arms
+    // Keep the gait and all the attachment frames. Only the cloth bridges
+    // the moving joints, with a short blend through the elbow or kneecap.
+    const dressLimb = (upper, lower, geometry, material, bendWidth, anchorStart) => {
+      const p = geometry.attributes.position;
+      const weights = new Float32Array(p.count * 4);
+      const indices = new Uint16Array(p.count * 4);
+      for (let i = 0; i < p.count; i++) {
+        const w = smoothstep(-bendWidth, bendWidth, lower.position.y - p.getY(i));
+        const anchor = smoothstep(anchorStart, 0.05, p.getY(i));
+        weights[i * 4] = 1 - w - anchor;
+        weights[i * 4 + 2] = anchor;
+        indices[i * 4 + 2] = 2;
+        weights[i * 4 + 1] = w;
+        indices[i * 4 + 1] = 1;
+      }
+      geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(indices, 4));
+      geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weights, 4));
+      const cloth = new THREE.SkinnedMesh(geometry, material);
+      upper.add(cloth);
+      upper.updateWorldMatrix(true, true);
+      cloth.bind(new THREE.Skeleton([upper, lower, upper.parent]));
+      // The straight rest pose's sphere doesn't cover all the swimming and
+      // crouching poses. Bound the full sweep about the upper joint.
+      geometry.computeBoundingSphere();
+      cloth.boundingSphere = new THREE.Sphere(new THREE.Vector3(),
+        geometry.boundingSphere.radius + geometry.boundingSphere.center.length());
+      cloth.castShadow = true;
+    };
     const arm = (side) => {
-      const shoulder = group(this.chest, side * 0.235, 0.42, 0);
-      const delt = ball(0.072, shell, 10, 8);
-      delt.position.set(-side * 0.008, -0.01, 0);
-      shoulder.add(delt);
-      const upper = cap(0.062, 0.2, shell);
-      upper.position.y = -0.14;
-      shoulder.add(upper);
-      const elbow = group(shoulder, 0, -0.28, 0);
-      const fore = cap(0.054, 0.18, shell);
-      fore.position.y = -0.12;
-      elbow.add(fore);
-      const cuff = cyl(0.058, 0.058, 0.045, shellDark, 8);
-      cuff.position.y = -0.22;
-      elbow.add(cuff);
-      const hand = ball(0.048, skin, 8, 6);
-      hand.position.y = -0.27;
-      hand.scale.set(0.85, 1.1, 0.95);
-      elbow.add(hand);
+      const shoulder = joint(this.chest, side * 0.201, 0.420);
+      const elbow = joint(shoulder, 0, -0.28);
+      dressLimb(shoulder, elbow, sleeve(side, (x, y, front) => {
+        const tone = y < -0.49 ? 0.44 : front < -0.5 && y < -0.23 && y > -0.40 ? 0.80 : 1;
+        return [tone, tone, tone];
+      }), shell, 0.062, -0.035);
+      piece(elbow, handShape(side), skin, 0, -0.229);
       return { shoulder, elbow };
     };
     this.armL = arm(1);
@@ -431,32 +475,19 @@ export class Character {
 
     // legs
     const leg = (side) => {
-      const hip = group(this.hips, side * HIP_X, HIP_Y, 0);
-      hip.rotation.order = 'ZXY'; // roll the leg's plane, then swing within it
-      const thigh = cap(0.082, 0.27, pants);
-      thigh.position.y = -0.2;
-      hip.add(thigh);
-      const knee = group(hip, 0, -THIGH, 0);
-      const shin = cap(0.068, 0.27, pants);
-      shin.position.y = -0.19;
-      knee.add(shin);
-      const hemM = cyl(0.074, 0.076, 0.05, pantsDark, 8);
-      hemM.position.y = -0.36;
-      knee.add(hemM);
+      const hip = joint(this.hips, side * HIP_X, HIP_Y);
+      hip.rotation.order = 'ZXY';
+      const knee = joint(hip, 0, -THIGH);
+      dressLimb(hip, knee, trouserLeg(side, (x, y, front) => {
+        const kneePanel = y >= -0.48 && y <= -0.31 && front > 0.15;
+        const tone = kneePanel ? 0.72 : y < -0.78 ? 0.64 : 1;
+        return [tone, tone, tone];
+      }), pants, 0.087, -0.18);
       const ankle = group(knee, 0, -SHIN, 0);
-      const cuff = cyl(0.068, 0.066, 0.1, boot, 8);
-      cuff.position.y = 0.035;
-      ankle.add(cuff);
-      const upperB = box(0.104, 0.06, 0.2, boot);
-      upperB.position.set(0, -0.03, 0.035);
-      ankle.add(upperB);
-      const toe = ball(0.052, boot, 8, 5);
-      toe.scale.set(1, 0.62, 1);
-      toe.position.set(0, -0.04, 0.12);
-      ankle.add(toe);
-      const soleM = box(0.114, 0.024, 0.245, sole);
-      soleM.position.set(0, -ANKLE_H + 0.012, 0.045);
-      ankle.add(soleM);
+      piece(ankle, bootUpper(), boot);
+      piece(ankle, outsole(), sole);
+      cord(ankle, sole, 0.003, [[-0.033, -0.006, 0.112], [0.032, 0.008, 0.094],
+        [-0.031, 0.023, 0.082], [0.029, 0.038, 0.067], [-0.029, 0.05, 0.059]]);
       return { side, hip, knee, ankle };
     };
     this.legL = leg(1);

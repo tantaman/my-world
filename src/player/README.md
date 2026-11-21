@@ -1,9 +1,12 @@
 # The hiker
 
-The hiker is built from primitives: an orange rain shell with the hood
-rolled at the collar, a black daypack with a hydration hose, tan trousers,
-a brown snapback with a maroon brim, white sunglasses and a beard. The
-walk is solved, not keyframed. Each foot follows a path on the ground,
+The hiker wears an orange rain shell with the hood gathered at the collar,
+a loaded daypack with a hydration hose, tan trousers,
+a brown snapback with a maroon brim, white sunglasses and a beard. The shell, pack and trousers
+have woven surfaces generated in code. Sleeves and trouser legs bend with the
+elbows and knees, and folds catch the light as the hiker moves.
+
+The walk is solved, not keyframed. Each foot follows a path on the ground,
 rolling heel to toe while it's planted and arcing forward when it swings.
 Two-bone IK bends the hip and knee to reach it, so planted feet don't
 skate. Stride and cadence grow with speed (about 110 steps a minute
@@ -63,6 +66,7 @@ A feature gives a command a pad button by listing it with its keys
 index.js              plugs it into the game: controls, the hiker, where you arrive
 player.js             movement, collision, wading, swimming and diving, third-person camera
 character.js          procedural hiker model, IK gait, work poses, swimming, things raised to the face, a stance on skis or a board
+clothing.js           garment sections, cloth folds, boots and generated weave
 head.js               the hiker's face and beard, sunglasses and snapback
 input.js              keyboard, mouse, touch, and a pad's buttons as keys
 gamepad.js            game controllers: reading them, what their buttons are called, typing into panels

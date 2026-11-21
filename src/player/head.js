@@ -9,6 +9,8 @@
 // a cylinder, so they wrap the face the way sport glasses do.
 
 import * as THREE from 'three';
+import { textile } from './clothing.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TessellateModifier } from 'three/addons/modifiers/TessellateModifier.js';
 import { smoothstep, lerp } from '../noise.js';
 
@@ -18,7 +20,7 @@ const TAU = Math.PI * 2;
 // Half-sizes of the face ellipsoid: width, height, depth. The eyes are at
 // about the middle of a head, so y = 0 is eye level.
 const FACE = new THREE.Vector3(0.11, 0.126, 0.114);
-const JAW_TAPER = 0.08; // the jaw this much narrower than the brow
+const JAW_TAPER = 0.20; // the jaw this much narrower than the brow
 
 // The beard, in directions from the centre (unit vector components):
 // its upper edge runs from the sideburns, level with the top of the ear,
@@ -59,7 +61,12 @@ const _c = new THREE.Color();
 // The point on the face in unit direction n.
 function facePoint(n, out) {
   const jaw = 1 - JAW_TAPER * smoothstep(0, -0.9, n.y);
-  return out.set(n.x * FACE.x * jaw, n.y * FACE.y, n.z * FACE.z);
+  const x = Math.abs(n.x);
+  const cheek = Math.exp(-(((x - 0.55) / 0.25) ** 2) - (((n.y + 0.13) / 0.19) ** 2));
+  const ridge = Math.exp(-((x / 0.18) ** 2) - (((n.y + 0.01) / 0.35) ** 2));
+  const muzzle = Math.exp(-((x / 0.39) ** 2) - (((n.y + 0.42) / 0.23) ** 2));
+  return out.set(n.x * FACE.x * jaw, n.y * FACE.y,
+    n.z * FACE.z + smoothstep(0.35, 0.75, n.z) * (0.007 * cheek + 0.016 * ridge + 0.005 * muzzle));
 }
 
 // The face's outward normal at direction n (near enough: the taper is gentle).
@@ -72,7 +79,8 @@ function faceNormal(n, out) {
 // and not over the lips.
 function beardAt(n) {
   const line = lerp(BEARD_SIDEBURN, BEARD_UNDER_NOSE, smoothstep(0, 0.9, n.z));
-  let m = smoothstep(line + 0.09, line - 0.09, n.y);
+  const edge = line + 0.024 * Math.sin(32 * n.x + 10 * n.z);
+  let m = smoothstep(edge + 0.09, edge - 0.09, n.y);
   m *= smoothstep(-0.12, 0.12, n.z - 0.6 * Math.min(0, n.y + 0.2));
   const lip = (n.x / 0.2) ** 2 + ((n.y - MOUTH_Y) / 0.04) ** 2;
   m *= 1 - smoothstep(1, 0.6, lip) * smoothstep(0.6, 0.8, n.z);
@@ -159,13 +167,16 @@ export function buildHead(head, skin) {
       const m = beardAt(_n);
       let t = BEARD_THICK + BEARD_JAW * smoothstep(-0.2, -0.8, _n.y);
       t += MOUSTACHE * Math.exp(-((_n.x / 0.3) ** 2) - ((_n.y + 0.33) / 0.09) ** 2) * smoothstep(0.7, 0.9, _n.z);
+      const grain = hash3(_n.x * 9, _n.y * 9, _n.z * 9);
+      t += 0.0025 * (grain - 0.5);
       facePoint(_n, _p).addScaledVector(faceNormal(_n, _q), lerp(-BEARD_DIP, t, m));
       // the chin hangs down and forward
       const hang = BEARD_HANG * m * smoothstep(-0.45, -0.95, _n.y) * smoothstep(-0.3, 0.6, _n.z);
       _p.y -= hang * 0.6;
       _p.z += hang * 0.8;
       p.setXYZ(i, _p.x, _p.y, _p.z);
-      _c.copy(cBeard).multiplyScalar(0.88 + 0.24 * hash3(_n.x * 9, _n.y * 9, _n.z * 9));
+      const cheekFade = smoothstep(-0.55, 0.02, _n.y) * 0.28;
+      _c.copy(cBeard).lerp(cStubble, cheekFade).multiplyScalar(0.66 + 0.76 * grain);
       _c.toArray(col, i * 3);
     }
     beardGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -175,8 +186,8 @@ export function buildHead(head, skin) {
 
   // ── Nose and ears ──
   const nose = cast(new THREE.Mesh(new THREE.SphereGeometry(0.019, 10, 8), skin));
-  nose.scale.set(0.8, 1.15, 1);
-  nose.position.set(0, -0.012, 0.107);
+  nose.scale.set(0.90, 1.31, 1.04);
+  nose.position.set(0, -0.019, 0.123);
   nose.rotation.x = -0.25;
   head.add(nose);
   for (const sx of [-1, 1]) {
@@ -185,11 +196,28 @@ export function buildHead(head, skin) {
     ear.position.set(sx * 0.106, -0.008, -0.012);
     head.add(ear);
   }
-  // hair: just what shows below the hat at the back and sides
-  const hair = cast(new THREE.Mesh(new THREE.SphereGeometry(0.123, 14, 10), M(0x221913, 0.95)));
-  hair.scale.set(0.95, 0.92, 0.96);
-  hair.position.set(0, 0.01, -0.02);
-  head.add(hair);
+  // The cropped hair follows the skull and tapers into the nape. Trace its
+  // lower edge around the ears, with a little variation along the hairline.
+  const hairGeo = new THREE.SphereGeometry(1, 60, 16, -Math.PI / 2, TAU, 0, Math.PI / 2);
+  {
+    const p = hairGeo.attributes.position;
+    const colors = new Float32Array(p.count * 3);
+    const hairColor = new THREE.Color(0x38281e);
+    for (let i = 0; i < p.count; i++) {
+      const angle = Math.atan2(p.getX(i), p.getZ(i));
+      const front = Math.cos(angle), side = Math.sin(angle);
+      const edge = -0.71 + 1.12 * smoothstep(-0.56, 0.67, front) - 0.23 * Math.exp(-(((front - 0.12) / 0.16) ** 2));
+      const theta = Math.acos(p.getY(i)) / (Math.PI / 2) * Math.acos(edge + 0.015 * Math.sin(angle * 32));
+      _n.set(Math.sin(theta) * side, Math.cos(theta), Math.sin(theta) * front);
+      const grain = hash3(_n.x, _n.y, _n.z);
+      facePoint(_n, _p).addScaledVector(_n, 0.003 + 0.002 * grain);
+      p.setXYZ(i, _p.x, _p.y, _p.z);
+      _c.copy(hairColor).multiplyScalar(0.7 + 0.65 * grain).toArray(colors, 3 * i);
+    }
+    hairGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    hairGeo.computeVertexNormals();
+  }
+  head.add(cast(new THREE.Mesh(hairGeo, M(0xffffff, 0.89, { vertexColors: true }))));
 
   // ── Sunglasses ──
   // One side is drawn (u along the face from the bridge, v up from the lens
@@ -244,7 +272,7 @@ export function buildHead(head, skin) {
   }
 
   // ── Snapback ──
-  const crownMat = M(0x6c5932, 0.95, { side: THREE.DoubleSide });
+  const crownMat = M(0x6c5932, 0.95, { side: THREE.DoubleSide, ...textile('twill') });
   const hat = new THREE.Group();
   hat.position.y = HAT_Y;
   hat.rotation.x = HAT_TILT;
@@ -271,6 +299,19 @@ export function buildHead(head, skin) {
     crownGeo.computeVertexNormals();
   }
   hat.add(cast(new THREE.Mesh(crownGeo, crownMat)));
+  const seam = M(0x56452f, 0.94);
+  const seams = [];
+  for (let panel = 0; panel < 6; panel++) {
+    const a = (panel + 0.5) * TAU / 6;
+    const path = [];
+    for (let i = 0; i <= 10; i++) {
+      const h = Math.sin(i * Math.PI / 20) * 0.998;
+      const v = crownAt(Math.sin(a), Math.cos(a), h, new THREE.Vector3());
+      path.push(v);
+    }
+    seams.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(path), 14, 0.0012, 4));
+  }
+  hat.add(cast(new THREE.Mesh(mergeGeometries(seams), seam)));
   // flat brim, the back half tucked inside the crown
   const brim = cast(new THREE.Mesh(new THREE.CylinderGeometry(BRIM_W, BRIM_W, 0.008, 28), M(0x7a2233, 0.9)));
   brim.scale.z = (BRIM_L + 0.012) / BRIM_W;

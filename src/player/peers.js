@@ -63,6 +63,7 @@ export class Peers extends Emitter {
     const p = this.all.get(id);
     if (!p) return;
     this.scene.remove(p.character.root);
+    p.character.dispose();
     this.scene.remove(p.flag);
     p.flag.geometry.dispose();
     p.flag.material.dispose();
