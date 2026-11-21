@@ -95,6 +95,23 @@ export function padNames(codes, kind = 'xbox') {
   return out;
 }
 
+// Which of the first four axes are away from the middle, as a bit each. On a
+// pad without the standard layout they are not reliably the two sticks: a
+// trigger is often among them, and a trigger sits at -1 until it is pulled (a
+// DualShock in Firefox says left x, left y, right x, L2, R2, right y). Taken
+// for a stick it would turn the camera for ever, so an axis resting over isn't
+// one. Read once, when the pad is first counted, so a pad is only ever read
+// against how it was then; a stick held at that moment is given up on, which
+// is the lesser of the two.
+export function restingAxes(axes = []) {
+  let mask = 0;
+  for (let i = 0; i < 4; i++) if (Math.abs(axes[i] || 0) > STICK.dead) mask |= 1 << i;
+  return mask;
+}
+
+// Axis i of a pad, or nothing if restingAxes said it isn't a stick.
+const axis = (axes, resting, i) => (((resting >> i) & 1) ? 0 : axes[i]);
+
 const browserPads = () => (typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : []);
 
 // Every pad plugged in, read as one: a button is down if it is down on any of
@@ -111,8 +128,9 @@ export class Pads {
     this.connected = false;
     // A pad that doesn't say it has the standard layout may be anything
     // (some keyboards and wheels say they are pads), so it counts only once
-    // one of its buttons has been pressed.
-    this._woken = new Set();
+    // one of its buttons has been pressed. Each pad it knows, by index and
+    // id, against which of its first four axes aren't sticks (restingAxes).
+    this._woken = new Map();
     this._spare = new Set();
     this._s = { x: 0, y: 0 };
   }
@@ -143,14 +161,18 @@ export class Pads {
         }
       }
       const key = `${p.index}:${p.id}`;
-      if (p.mapping !== 'standard' && !this._woken.has(key)) {
-        if (!pressed) continue;
-        this._woken.add(key);
+      let skip = this._woken.get(key);
+      if (skip === undefined) {
+        if (p.mapping !== 'standard') {
+          if (!pressed) continue;
+          skip = restingAxes(p.axes); // where they sit now is where they rest
+        } else skip = 0;
+        this._woken.set(key, skip);
       }
       this.connected = true;
       const a = p.axes || [];
       let touched = pressed;
-      stick(a[0], a[1], 1, s);
+      stick(axis(a, skip, 0), axis(a, skip, 1), 1, s);
       let m = Math.hypot(s.x, s.y);
       if (m > moveM) {
         moveM = m;
@@ -158,7 +180,7 @@ export class Pads {
         move.y = s.y;
       }
       touched ||= m > 0;
-      stick(a[2], a[3], LOOK_CURVE, s);
+      stick(axis(a, skip, 2), axis(a, skip, 3), LOOK_CURVE, s);
       m = Math.hypot(s.x, s.y);
       if (m > lookM) {
         lookM = m;

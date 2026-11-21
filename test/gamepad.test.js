@@ -4,7 +4,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Pads, PadTyping, PAD_BUTTONS, STICK, REPEAT, FOCUS_NEXT, FOCUS_BACK, stick, padKind, padName, padNames } from '../src/player/gamepad.js';
+import { Pads, PadTyping, PAD_BUTTONS, STICK, REPEAT, FOCUS_NEXT, FOCUS_BACK, stick, restingAxes, padKind, padName, padNames } from '../src/player/gamepad.js';
 import { Commands } from '../src/game/commands.js';
 import { renameKeys } from '../src/ui/hud.js';
 
@@ -92,6 +92,31 @@ test('a pad that might be anything counts only once a button on it is pressed', 
   odd.press('PadB', false);
   pads.read();
   assert.equal(pads.connected, true, 'and goes on counting');
+  assert.deepEqual(pads.move, { x: 0, y: 0 }, 'and its axes are still not sticks');
+  assert.deepEqual(pads.look, { x: 0, y: 0 });
+});
+
+test('an axis resting away from the middle is a trigger, not a stick', () => {
+  assert.equal(restingAxes([0, 0, 0, 0]), 0, 'sticks at rest are sticks');
+  assert.equal(restingAxes([0, 0, 0, -1]), 0b1000);
+  assert.equal(restingAxes([0, 0, 0, STICK.dead / 2]), 0, 'inside the dead zone is at rest');
+  assert.equal(restingAxes([]), 0, 'a pad with no axes');
+
+  // A DualShock as a browser without the standard layout gives it: the
+  // triggers sit between the sticks, at -1 until they are pulled.
+  const ds = fakePad({ id: 'Wireless Controller (Vendor: 054c Product: 09cc)', mapping: '' });
+  ds.axes = [0, 0, 0, -1, -1, 0];
+  const pads = new Pads(() => [ds]);
+  pads.read();
+  ds.press('PadA'); // picked up, which is when its axes are read for where they rest
+  pads.read();
+  assert.deepEqual(pads.look, { x: 0, y: 0 }, 'a resting trigger does not turn the camera');
+  ds.axes[2] = -1; // the right stick still looks
+  pads.read();
+  assert.ok(pads.look.x < -0.9 && pads.look.y === 0);
+  ds.axes[3] = 1; // and pulling the trigger still does not
+  pads.read();
+  assert.equal(pads.look.y, 0);
 });
 
 test('no pads, or not allowed to ask, is no pads', () => {
