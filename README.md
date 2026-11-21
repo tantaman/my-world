@@ -190,6 +190,7 @@ place in that order, not at the end:
 | `player/character.js` | something the hiker holds up to the face | `character.addRaised(name, object, { stowed })`, `raise(name)` |
 | `player/character.js` | sitting astride what carries you | `character.seat({ spread, hang, lean })` |
 | `player/character.js` | standing on something that slides (skis, a board) | `character.stance({ feet, crouch, lean, arms, shod, board, … })` |
+| `player/character.js` | hanging in a harness under something (a hang glider) | `character.hang({ tilt, reach, spread })` |
 | `player/character.js` | something the hiker wears on the cap | `character.addWorn(object, { band })` |
 | `player/character.js` | a way of standing to the work (a rifle shouldered) | `definePose(kind, keyframes)`, `character.play(kind, dur)` |
 | `player/player.js` | walking the hiker somewhere | `player.steer = { x, z, run }` |

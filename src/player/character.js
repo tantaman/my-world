@@ -88,6 +88,12 @@ const STANCE_FEET = [[0.11, 0], [-0.11, 0]];
 const STANCE_OUT = [0, 0];
 const STANCE_PLANT = [0, 0];
 const STANCE_TUCK = 0.32;
+// Hanging in a harness (Character.hang): where the ankles go and how far the
+// toes point (y, z m, and pitch, radians), upright with the knees a little
+// bent ready to land, and lying flat with the legs trailing straight behind.
+const HANG_FEET = { up: [0.15, 0.07, 0.25], flat: [0.08, -0.03, 1.15] };
+// ...lying flat from this tilt of the body to this one (radians)
+const HANG_FLAT = [0.35, 1.2];
 
 // The left arm holding something up to the mouth (Character.addRaised): the
 // shoulder's pitch (sh), twist (tw) and swing inward (inw), the elbow, and the
@@ -230,6 +236,9 @@ export class Character {
     this.stood = null; // what the hiker stands on that slides (stance())
     this._stance = null; // ...or last stood on, while stepping off
     this.std = 0; // blend into standing on it
+    this.hung = null; // what the hiker hangs from in a harness (hang())
+    this._hang = null; // ...or last hung from, while letting go
+    this.hng = 0; // blend into hanging
 
     // Per-foot state: target ankle position (root space), foot pitch, toe-out,
     // whether it's carrying weight, and the smoothed ground height under it.
@@ -540,6 +549,22 @@ export class Character {
     }
   }
 
+  // Hang in a harness under something (a hang glider), or with null, let
+  // go. The legs hang straight from the hips, the hands reach out ahead to a
+  // bar, and whatever carries the hiker owns the root: it puts it where the
+  // harness holds the body, and pitches it (from upright to lying flat) and
+  // rolls it as it banks. Read every frame, so its owner can change it:
+  //   tilt    how far the owner has pitched the root forward (radians: 0
+  //           upright, about pi/2 lying flat). Lying flat the legs trail
+  //           behind, toes pointed, and the head comes up to look ahead
+  //   reach   how far below straight ahead the hands reach out (radians, in
+  //           the world, whichever way the body lies)
+  //   spread  how far out to the sides the arms go to the bar (radians)
+  hang(h) {
+    this.hung = h || null;
+    if (h) this._hang = h;
+  }
+
   #gear(s, on) {
     if (!s) return;
     const put = (parent, o) => {
@@ -753,7 +778,7 @@ export class Character {
     // Lean into the turn (unless standing on something whose owner tilts
     // the root itself).
     const turnLean = clamp(-turn * v * 0.018, -0.2, 0.2) * (1 - ab * 0.5);
-    if (!this.stood) this.root.rotation.z = lerp(this.root.rotation.z, turnLean, k);
+    if (!this.stood && !this.hung) this.root.rotation.z = lerp(this.root.rotation.z, turnLean, k);
 
     // How the tool rides when you're just carrying it.
     const held = this.tool ? this.tools[this.tool] : null;
@@ -896,6 +921,52 @@ export class Character {
       }
     }
 
+    // ── Hanging in a harness ───────────────────────────────────────────────
+    // The legs straight from the hips, trailing behind lying flat; the body
+    // straight, the head up to see ahead; the arms out to the bar.
+    this.hng = lerp(this.hng, this.hung ? 1 : 0, 1 - Math.exp(-dt * (this.hung ? 8 : 6)));
+    const hng = this._hang && this.hng > 0.001 ? ease(this.hng) : 0;
+    if (hng) {
+      const H = this._hang;
+      const tilt = H.tilt ?? 0;
+      const flat = smoothstep(HANG_FLAT[0], HANG_FLAT[1], tilt);
+      hx *= 1 - hng;
+      hz *= 1 - hng;
+      hy = lerp(hy, HIPS_Y, hng);
+      hPitch *= 1 - hng;
+      hYaw *= 1 - hng;
+      hRoll *= 1 - hng;
+      const [uy, uz, up] = HANG_FEET.up;
+      const [fy, fz, fp] = HANG_FEET.flat;
+      for (const F of [this.footL, this.footR]) {
+        F.x = lerp(F.x, F.side * lerp(0.1, 0.075, flat), hng);
+        F.y = lerp(F.y, lerp(uy, fy, flat), hng);
+        F.z = lerp(F.z, lerp(uz, fz, flat), hng);
+        F.p = lerp(F.p, lerp(up, fp, flat), hng);
+        F.out = lerp(F.out, F.side * 0.05, hng);
+        F.load *= 1 - hng;
+      }
+      const arch = -0.1 * flat; // lying flat, the back arches a little
+      this.spine.rotation.x = lerp(this.spine.rotation.x, arch, hng);
+      this.spine.rotation.y *= 1 - hng;
+      this.spine.rotation.z *= 1 - hng;
+      this.head.rotation.x = lerp(this.head.rotation.x, -(tilt + arch) * 0.85, hng);
+      this.head.rotation.y *= 1 - hng;
+      this.head.rotation.z *= 1 - hng;
+      // the shoulder's pitch is the body's, so take the tilt back out of it to
+      // reach the same way in the world however the body lies
+      const sh = -(Math.PI / 2 - (H.reach ?? 0.6)) - tilt - arch;
+      const spread = H.spread ?? 0.4;
+      for (const [A, s] of [[this.armL, 1], [this.armR, -1]]) {
+        A.shoulder.rotation.x = lerp(A.shoulder.rotation.x, sh, hng);
+        A.shoulder.rotation.y = lerp(A.shoulder.rotation.y, 0, hng);
+        A.shoulder.rotation.z = lerp(A.shoulder.rotation.z, s * spread, hng);
+        A.elbow.rotation.x = lerp(A.elbow.rotation.x, -0.3, hng);
+      }
+      this.hand.rotation.set(this.hand.rotation.x * (1 - hng), this.hand.rotation.y * (1 - hng), this.hand.rotation.z * (1 - hng));
+      this.handL.rotation.set(this.handL.rotation.x * (1 - hng), 0, 0);
+    }
+
     // ── Something held up to the face, in the left hand ────────────────────
     const raising = this.raised !== null;
     this.lift = lerp(this.lift, raising ? 1 : 0, 1 - Math.exp(-dt * (raising ? 9 : 5)));
@@ -926,11 +997,12 @@ export class Character {
     else if (this.root.rotation.x) this.root.rotation.x = 0;
 
     // ── Meet the ground ────────────────────────────────────────────────────
-    if (this.groundAt && ab < 0.999 && sit < 0.999 && swim < 0.5 && std < 0.999) this.#feelGround(dt, (1 - ab) * (1 - sit) * (1 - swim * 2) * (1 - std));
+    if (this.groundAt && ab < 0.999 && sit < 0.999 && swim < 0.5 && std < 0.999 && hng < 0.999) this.#feelGround(dt, (1 - ab) * (1 - sit) * (1 - swim * 2) * (1 - std) * (1 - hng));
 
     // The body banks into turns about the feet; keep the feet on the ground.
-    // (Standing on skis, the feet tip with the root: they're on edge.)
-    const bank = this.root.rotation.z * (1 - std);
+    // (Standing on skis, the feet tip with the root: they're on edge. Hanging
+    // in a harness, the whole body rolls with what it hangs from.)
+    const bank = this.root.rotation.z * (1 - std) * (1 - hng);
     if (bank) {
       const cb = Math.cos(bank);
       const sb = Math.sin(bank);
