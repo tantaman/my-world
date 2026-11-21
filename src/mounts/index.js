@@ -15,7 +15,9 @@
 //   others.js   what other people here are riding
 //
 // Riding, the mount carries you (Player.carrier), you sit astride it
-// (Character.seat), and the tools are put away (builder.idleWhile).
+// (Character.seat), and the tools are put away (builder.idleWhile). High up
+// on the eagle, Z lets go of it and your hang glider opens (gliding); Z again
+// while you glide whistles it back to catch you.
 //
 // Which ones are yours, where you left them and what you've heard is yours,
 // not the world's (the 'mounts' domain): in a shared world each person finds
@@ -57,6 +59,13 @@ const SAY = 5200;
 const NEXT_CALL = 4;
 // While you fly, how often (s) everyone here is told how high you are.
 const TELL_EVERY = 0.25;
+// Higher than this (m) over the ground on the eagle, Z lets go of it and your
+// glider opens (with room to fill and clear the trees); lower, it comes in to land.
+const GLIDE_FROM = 15;
+// Let go of, the eagle comes down to wait about this far (m) ahead of where
+// you let go of it, and this far off to the side, out of your way.
+const WAIT_AHEAD = [60, 160];
+const WAIT_ASIDE = 30;
 
 // 'the horse, the turtle and the eagle', as you would say it.
 const listOf = (items) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
@@ -69,9 +78,9 @@ const _sphere = new THREE.Sphere();
 const _pm = new THREE.Matrix4();
 
 // The features this uses, so it is installed after them (game/features.js).
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'splashes'];
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'splashes', 'gliding'];
 export function installMounts(game) {
-  const { scene, camera, gen, chunks, solids, player, input, hud, commands, save, sound, builder, map, splashes, peers } = game;
+  const { scene, camera, gen, chunks, solids, player, input, hud, commands, save, sound, builder, map, splashes, peers, gliding } = game;
 
   // ── Where they live, and what you know of it ──────────────────────────────
   const start = player.start;
@@ -155,10 +164,11 @@ export function installMounts(game) {
   };
 
   // What you sound like to a mount: where you are, how fast you're going,
-  // and whether your hand is out to it.
+  // whether your hand is out to it, and whether you're up in the air.
   const youFor = (m, holding) => {
     const p = player.pos;
-    return { x: p.x, z: p.z, d: Math.hypot(m.x - p.x, m.z - p.z), speed: Math.hypot(player.vel.x, player.vel.z), holding };
+    const v = player.vel;
+    return { x: p.x, y: p.y, z: p.z, d: Math.hypot(m.x - p.x, m.z - p.z), speed: Math.hypot(v.x, v.z), holding, vx: v.x, vy: v.y, vz: v.z, air: !player.grounded };
   };
 
   // Hooves, feet, strokes and wingbeats.
@@ -181,12 +191,15 @@ export function installMounts(game) {
 
   function ride(m) {
     if (!m.body) m.show(scene, ctx).onStep = stepSound(m);
+    gliding.stow(); // (caught in the air: off the glider and onto its back)
     riding = m;
     m.riding = true;
+    m.caught = false;
     const c = m.def.carrier;
     player.carrier = { ...c, fly: c.fly ? { ...c.fly } : null, landing: false };
     player.pos.set(m.x, m.y, m.z);
-    player.vel.set(0, 0, 0);
+    if (m.flying) player.vel.set(m.vx, m.vy, m.vz);
+    else player.vel.set(0, 0, 0);
     player.yaw = m.yaw;
     player.grounded = !m.flying;
     player.character.seat(m.body.seat);
@@ -227,6 +240,62 @@ export function installMounts(game) {
     m.rest();
     save.touch();
     tell();
+  }
+
+  // High up on the eagle: let go of it, and your glider opens over you. It
+  // flies on, peels off and comes down to wait for you somewhere ahead.
+  function jumpOff() {
+    const m = riding;
+    const v = player.vel;
+    const p = player.pos;
+    riding = null;
+    m.riding = false;
+    player.carrier = null;
+    player.flying = false;
+    player.character.seat(null);
+    player.character.root.rotation.x = 0;
+    m.letGo(waitFor(p.x, p.z, player.yaw), v.x, v.y, v.z);
+    gliding.open({ x: p.x, y: p.y, z: p.z, vx: v.x, vy: v.y, vz: v.z, yaw: player.yaw });
+    calling = null;
+    hud.flash(`you let go of your ${m.def.name}, and your hang glider opens · Z whistles it back to catch you`, SAY);
+    save.touch();
+    tell();
+  }
+
+  // Somewhere dry for an eagle you've let go of to come down and wait: out
+  // ahead the way you were going, off to one side. -> { x, z }
+  function waitFor(x, z, yaw) {
+    const side = Math.random() < 0.5 ? 1 : -1;
+    for (let i = 0; i < 8; i++) {
+      const ahead = rand(...WAIT_AHEAD);
+      const aside = side * WAIT_ASIDE * (1 + i * 0.5);
+      const wx = x + Math.sin(yaw) * ahead + Math.cos(yaw) * aside;
+      const wz = z + Math.cos(yaw) * ahead - Math.sin(yaw) * aside;
+      if (water(wx, wz) < 0.3) return { x: wx, z: wz };
+    }
+    return { x, z };
+  }
+
+  // Whistled for while you glide: it comes to catch you, from out of sight
+  // if it has to (behind you, a little higher).
+  function whistleToCatch(m) {
+    sound.sfx('whistle');
+    const you = youFor(m, false);
+    if (you.d > COME || !m.body) {
+      const back = player.yaw + Math.PI + rand(-0.6, 0.6);
+      const d = rand(50, 70);
+      m.moveTo(you.x + Math.sin(back) * d, you.z + Math.cos(back) * d, ctx, player.yaw);
+      m.y = Math.max(m.y, you.y + 8);
+      m.flying = true;
+      m.grounded = false;
+      m.vx = you.vx;
+      m.vy = 0;
+      m.vz = you.vz;
+      if (!m.body) m.show(scene, ctx).onStep = stepSound(m);
+    }
+    m.catch();
+    calling = { kind: m.kind, t: time };
+    hud.flash(`you whistle for your ${m.def.name}: it's coming to catch you`, 2400);
   }
 
   // Each frame you ride: it goes where you go, and you sit on its back.
@@ -310,10 +379,21 @@ export function installMounts(game) {
 
   function press() {
     if (riding) {
-      if (player.flying) {
+      if (player.flying && player.height > GLIDE_FROM && riding.kind === 'eagle') jumpOff();
+      else if (player.flying) {
         player.carrier.landing = true;
         hud.flash('coming in to land');
       } else getOff();
+      return;
+    }
+    // gliding: the eagle, if it's yours, comes to catch you (and none of
+    // them is in reach to climb on, whatever is under you)
+    if (gliding.active) {
+      const eagle = mounts.eagle;
+      if (eagle && eagle.tame) {
+        if (eagle.mode !== 'catch') whistleToCatch(eagle);
+      } else if (tameOnes().length) whistle();
+      else tellWhereToLook();
       return;
     }
     const mine = nearest(tameOnes(), REACH + 0.6);
@@ -403,6 +483,15 @@ export function installMounts(game) {
     label: 'ride · get off · whistle for yours · hold to calm a wild one',
     run: press,
     hold: () => (held = true),
+  });
+  commands.describe({ group: 'WANDER', help: 'Z, high on the eagle', pad: ['PadX'], label: 'let go of it and glide down · Z again: it catches you' });
+
+  // While you glide, what Z does.
+  gliding.cueAlso(() => {
+    const eagle = mounts.eagle;
+    if (!eagle || !eagle.tame) return '';
+    if (eagle.mode === 'catch') return `your ${eagle.def.name} is coming`;
+    return `<b>${input.isTouch ? 'call' : 'Z'}</b> call your ${eagle.def.name}`;
   });
 
   // On a touch screen, a button for it, named for what it would do.
@@ -526,7 +615,7 @@ export function installMounts(game) {
       const target = riding ? null : wildInReach();
       for (const m of all) {
         const d = Math.hypot(m.x - player.pos.x, m.z - player.pos.z);
-        const want = m.riding || (m.tame ? d < NEAR : d < PRESENT) || m.mode === 'come';
+        const want = m.riding || (m.tame ? d < NEAR : d < PRESENT) || m.mode === 'come' || m.mode === 'catch';
         if (want && !m.body) m.show(scene, ctx).onStep = stepSound(m);
         else if (!want && m.body) m.hide(scene);
         if (m.riding || !m.body) continue;
@@ -538,6 +627,12 @@ export function installMounts(game) {
           if (m.kind === 'eagle') sound.call('eagle', m.x, m.y + 1, m.z);
         }
         if (!m.tame && m.taming.trust >= 1) won(m);
+        // it has caught you in the air: on its back again
+        if (m.caught && !riding) {
+          calling = null;
+          ride(m);
+          continue;
+        }
         if (m.tame && m.arrived) {
           m.arrived = false;
           if (calling && calling.kind === m.kind) {
@@ -613,9 +708,19 @@ export function installMounts(game) {
       word = w;
       return touch ? w : 'Z';
     };
+    if (gliding.active) {
+      // (the glider says what the keys do, Z among them: see cueAlso above)
+      const eagle = mounts.eagle;
+      if (eagle && eagle.tame && eagle.mode !== 'catch') K('call');
+      btn.hidden = !touch || !word;
+      if (word && btn.textContent !== word) btn.textContent = word;
+      cued = false;
+      return;
+    }
     if (riding) {
       const d = riding.def;
       if (player.carrier.landing) html = 'coming in to land…';
+      else if (player.flying && riding.kind === 'eagle' && player.height > GLIDE_FROM) html = `<b>space</b> climb · <b>shift</b> stoop · <b>${K('let go')}</b> let go and glide`;
       else if (player.flying) html = `<b>space</b> climb · <b>shift</b> stoop · <b>${K('land')}</b> land`;
       else if (riding.kind === 'turtle' && !player.swimming) html = `<b>${K('get off')}</b> get off · slow on land: find water`;
       else html = `<b>${K('get off')}</b> get off · ${d.keys}`;

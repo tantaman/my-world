@@ -150,12 +150,14 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.equal(flew, 'eagle');
     await page.keyboard.down('Space');
     await page.keyboard.down('KeyW');
-    const up = await page.evaluate(() => T.until(() => world.player.flying && world.player.height > 15, 60000));
+    const up = await page.evaluate(() => T.until(() => world.player.flying && world.player.height > 6, 60000));
     await page.keyboard.up('KeyW');
     await page.keyboard.up('Space');
     assert.ok(up, 'up into the air');
     await shot('eagle');
-    // Z in the air brings it down, and you're let off when it lands
+    // Z low in the air brings it down, and you're let off when it lands
+    // (higher up, Z lets go of it and you glide: that's the gliding part)
+    assert.match(await page.evaluate(() => T.prompt()), /Z land/);
     await key('KeyZ');
     const down = await page.evaluate(() => T.until(() => !world.mounts.riding, 60000));
     assert.ok(down, 'down, and off');

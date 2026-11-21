@@ -143,7 +143,7 @@ export function installAdventures(game) {
     board.toggle();
   };
   game.on('panel', (which) => which !== 'adventures' && board.close());
-  commands.add({ id: 'adventures', keys: ['KeyJ'], group: 'ADVENTURE', label: 'adventures · start one, or give it up', run: toggle });
+  commands.add({ id: 'adventures', keys: ['KeyN'], group: 'ADVENTURE', label: 'adventures · start one, or give it up', run: toggle });
 
   // A button for it in the corner, beside the map's.
   const btn = document.createElement('button');

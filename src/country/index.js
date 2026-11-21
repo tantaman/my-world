@@ -13,6 +13,12 @@
 // cliffs (uRealY). And it adds the sound of its sea (surf.js). In the
 // forest, far from any, it has nothing to do.
 //
+// Something else can lay its own cloud over everything for a while (a
+// flight climbing up through it and over the top): country.cloud(fn), where
+// fn() -> null, or { at (m), cover (0..1), x, z (the middle its billows are
+// measured from) }. The first that has one has the sky; when none does, the
+// real place's weather comes back over you as you'd expect.
+//
 // From the console: world.country.name, world.country.here
 
 import { LAND, DECK, MAX_COUNTRIES } from '../render/uniforms.js';
@@ -27,7 +33,8 @@ export const after = ['render', 'world', 'audio'];
 export function installCountry(game) {
   const { gen, pipeline, sky, camera, sound } = game;
   const names = new Map(Object.entries(COUNTRY).map(([name, c]) => [c, name]));
-  const state = { here: COUNTRY.forest, land: null, name: 'forest' };
+  const clouds = [];
+  const state = { here: COUNTRY.forest, land: null, name: 'forest', cloud: (fn) => clouds.push(fn) };
   game.provide('country', state);
   // the sea, where a real place has one, is heard breaking on its shore
   sound.addLayer(surf());
@@ -70,7 +77,14 @@ export function installCountry(game) {
       // its weather, as far as you are onto it
       const w = weatherAt(land, at.x, at.z, camera.position.y);
       const k = 1 - Math.exp(-dt * EASE);
-      DECK.uDeckCover.value += (w.cover - DECK.uDeckCover.value) * k;
+      let own = null;
+      for (const fn of clouds) if ((own = fn())) break;
+      if (own) {
+        DECK.uDeck.value = own.at;
+        DECK.uDeckMid.value.set(own.x, own.z);
+        DECK.uDeckCover.value = own.cover;
+        state.land = undefined; // so the real place's is set again when this goes
+      } else DECK.uDeckCover.value += (w.cover - DECK.uDeckCover.value) * k;
       pipeline.haze += (w.haze - pipeline.haze) * k;
       sky.overcast += (w.overcast - sky.overcast) * k;
     },

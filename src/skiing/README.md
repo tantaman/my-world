@@ -37,7 +37,7 @@ Blanche, where that is the top of the Aiguille du Midi, with Mont Blanc behind
 you, three hundred metres of fall line down to the glacier, and the Chamonix
 valley five hundred further below.
 
-**The descent.** On the adventures board (**J**) there is a run to be timed.
+**The descent.** On the adventures board (**N**) there is a run to be timed.
 It sends you to the top of one in the high country — the biggest drop within
 a couple of kilometres of you, off any real place — and the clock starts when
 you get there. Ski down to where the snow gives out before it gets away from

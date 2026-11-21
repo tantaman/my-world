@@ -1,6 +1,6 @@
 # Adventures
 
-The forest is quiet until you ask it not to be. Press **J** (or the
+The forest is quiet until you ask it not to be. Press **N** (or the
 *adventure* button in the corner) for the board, pick one, and for a few
 minutes the world turns on you: a storm, a fire, something with teeth,
 outlaws with rifles, a cave with something asleep at the bottom of it.
@@ -67,7 +67,7 @@ tried each, made it, and your best time), with your map marks.
 
 | | |
 |---|---|
-| **J** | the board: start an adventure, or give up the one you're on |
+| **N** | the board: start an adventure, or give up the one you're on |
 | **0** | the rifle, for the bear, the lion, the outlaws and what's in the cave |
 | **K** | headlamp, in the cave |
 

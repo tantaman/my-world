@@ -88,6 +88,17 @@ const STANCE_FEET = [[0.11, 0], [-0.11, 0]];
 const STANCE_OUT = [0, 0];
 const STANCE_PLANT = [0, 0];
 const STANCE_TUCK = 0.32;
+// Hanging in a harness (Character.hang): where the ankles go and how far the
+// toes point (y, z m, and pitch, radians), upright with the knees a little
+// bent ready to land, and lying flat with the legs trailing straight behind.
+const HANG_FEET = { up: [0.15, 0.07, 0.25], flat: [0.08, -0.03, 1.15] };
+// ...lying flat from this tilt of the body to this one (radians)
+const HANG_FLAT = [0.35, 1.2];
+// Sitting with the arms out over the sides of what you sit in (seat's rest):
+// the shoulder's pitch (sh) and how far out to the side it swings (out), and
+// the elbow; in a stroke, the shoulder's pitch reaching forward (reach), and
+// how far the arm comes in and down as the hand pulls through the water (dip).
+const REST = { sh: 0.05, reach: -0.5, out: 0.95, dip: 0.4, el: -0.5 };
 
 // The left arm holding something up to the mouth (Character.addRaised): the
 // shoulder's pitch (sh), twist (tw) and swing inward (inw), the elbow, and the
@@ -142,6 +153,7 @@ export const SEAT_HIPS = HIPS_Y;
 const HIP_X = 0.095; // hip joints either side of the pelvis
 const HIP_Y = -0.04;
 const NECK = 0.145; // centre of the head above the base of the neck
+const BACK_OF_PACK = 0.11; // m from the middle of the daypack to the back of it
 const THIGH = 0.42;
 const SHIN = 0.43;
 const REACH = (THIGH + SHIN) * 0.985; // a planted leg never quite locks straight
@@ -230,6 +242,9 @@ export class Character {
     this.stood = null; // what the hiker stands on that slides (stance())
     this._stance = null; // ...or last stood on, while stepping off
     this.std = 0; // blend into standing on it
+    this.hung = null; // what the hiker hangs from in a harness (hang())
+    this._hang = null; // ...or last hung from, while letting go
+    this.hng = 0; // blend into hanging
 
     // Per-foot state: target ankle position (root space), foot pitch, toe-out,
     // whether it's carrying weight, and the smoothed ground height under it.
@@ -321,6 +336,8 @@ export class Character {
 
     // black daypack
     const bp = group(this.chest, 0, 0.27, -0.232);
+    // what is worn over it goes on the back of it (addOnBack)
+    this.back = group(bp, 0, 0, -BACK_OF_PACK);
     const bag = cap(0.13, 0.2, pack, 10);
     bag.scale.set(1.25, 1, 0.62);
     bp.add(bag);
@@ -471,6 +488,14 @@ export class Character {
     if (band) this.cap.brow.parent.add(band);
   }
 
+  // Something the hiker wears on the back, over the daypack (a jetpack),
+  // placed in the frame of the back of the pack: +z into the pack (towards
+  // the hiker's front), y up the spine, +x to the hiker's left. It rides with
+  // the chest however the body leans. Its owner shows and hides it.
+  addOnBack(object) {
+    this.back.add(object);
+  }
+
   // Something the hiker can raise to the face in the left hand, whatever the
   // right is doing: a radio to talk into.
   //   object  a three.js object, gripped at its origin, its top along -y
@@ -497,8 +522,13 @@ export class Character {
   //   spread  half the width of what is between the knees (m)
   //   hang    how far below the hips the feet hang (m)
   //   fwd     how far ahead of the hips the feet are (m)
-  //   lean    how far forward the body leans (radians)
+  //   lean    how far forward the body leans (radians; back, if negative)
   //   reins   0..1 how much the hands are held out in front
+  //   rest    0..1 how much the arms rest out on what you sit in (a tube's
+  //           rim), wide to the sides
+  //   stroke  null, or how far through a stroke of the hands in the water
+  //           over the sides (0..1, read every frame): reaching forward,
+  //           pulling back, and lifting out to reach again
   seat(s) {
     this.seated = s || null;
     if (s) this._seat = s;
@@ -538,6 +568,22 @@ export class Character {
       this._stance = s;
       this.#gear(s, true);
     }
+  }
+
+  // Hang in a harness under something (a hang glider), or with null, let
+  // go. The legs hang straight from the hips, the hands reach out ahead to a
+  // bar, and whatever carries the hiker owns the root: it puts it where the
+  // harness holds the body, and pitches it (from upright to lying flat) and
+  // rolls it as it banks. Read every frame, so its owner can change it:
+  //   tilt    how far the owner has pitched the root forward (radians: 0
+  //           upright, about pi/2 lying flat). Lying flat the legs trail
+  //           behind, toes pointed, and the head comes up to look ahead
+  //   reach   how far below straight ahead the hands reach out (radians, in
+  //           the world, whichever way the body lies)
+  //   spread  how far out to the sides the arms go to the bar (radians)
+  hang(h) {
+    this.hung = h || null;
+    if (h) this._hang = h;
   }
 
   #gear(s, on) {
@@ -753,7 +799,7 @@ export class Character {
     // Lean into the turn (unless standing on something whose owner tilts
     // the root itself).
     const turnLean = clamp(-turn * v * 0.018, -0.2, 0.2) * (1 - ab * 0.5);
-    if (!this.stood) this.root.rotation.z = lerp(this.root.rotation.z, turnLean, k);
+    if (!this.stood && !this.hung) this.root.rotation.z = lerp(this.root.rotation.z, turnLean, k);
 
     // How the tool rides when you're just carrying it.
     const held = this.tool ? this.tools[this.tool] : null;
@@ -832,6 +878,23 @@ export class Character {
         A.elbow.rotation.x = lerp(A.elbow.rotation.x, -1.1, reins);
       }
       this.hand.rotation.x = lerp(this.hand.rotation.x, 0, reins);
+      // the arms out over the sides, resting on the rim, or reaching down
+      // into the water and pulling back
+      const rest = (S.rest ?? 0) * sit;
+      if (rest) {
+        const st = S.stroke;
+        const u = st === null || st === undefined ? null : fract(st);
+        // through a stroke: reach forward, pull back down in the water, lift
+        // out and come forward again over it
+        const reach = u === null ? 0 : u < 0.6 ? 1 - u / 0.6 : (u - 0.6) / 0.4;
+        const pull = u === null ? 0 : Math.sin(Math.min(1, u / 0.6) * Math.PI);
+        for (const [A, s] of [[this.armL, 1], [this.armR, -1]]) {
+          A.shoulder.rotation.x = lerp(A.shoulder.rotation.x, lerp(REST.sh, REST.reach, reach), rest);
+          A.shoulder.rotation.y = lerp(A.shoulder.rotation.y, 0, rest);
+          A.shoulder.rotation.z = lerp(A.shoulder.rotation.z, s * (REST.out - REST.dip * pull), rest);
+          A.elbow.rotation.x = lerp(A.elbow.rotation.x, REST.el * (1 - 0.5 * pull), rest);
+        }
+      }
     }
 
     // ── Standing on something that slides ──────────────────────────────────
@@ -896,6 +959,52 @@ export class Character {
       }
     }
 
+    // ── Hanging in a harness ───────────────────────────────────────────────
+    // The legs straight from the hips, trailing behind lying flat; the body
+    // straight, the head up to see ahead; the arms out to the bar.
+    this.hng = lerp(this.hng, this.hung ? 1 : 0, 1 - Math.exp(-dt * (this.hung ? 8 : 6)));
+    const hng = this._hang && this.hng > 0.001 ? ease(this.hng) : 0;
+    if (hng) {
+      const H = this._hang;
+      const tilt = H.tilt ?? 0;
+      const flat = smoothstep(HANG_FLAT[0], HANG_FLAT[1], tilt);
+      hx *= 1 - hng;
+      hz *= 1 - hng;
+      hy = lerp(hy, HIPS_Y, hng);
+      hPitch *= 1 - hng;
+      hYaw *= 1 - hng;
+      hRoll *= 1 - hng;
+      const [uy, uz, up] = HANG_FEET.up;
+      const [fy, fz, fp] = HANG_FEET.flat;
+      for (const F of [this.footL, this.footR]) {
+        F.x = lerp(F.x, F.side * lerp(0.1, 0.075, flat), hng);
+        F.y = lerp(F.y, lerp(uy, fy, flat), hng);
+        F.z = lerp(F.z, lerp(uz, fz, flat), hng);
+        F.p = lerp(F.p, lerp(up, fp, flat), hng);
+        F.out = lerp(F.out, F.side * 0.05, hng);
+        F.load *= 1 - hng;
+      }
+      const arch = -0.1 * flat; // lying flat, the back arches a little
+      this.spine.rotation.x = lerp(this.spine.rotation.x, arch, hng);
+      this.spine.rotation.y *= 1 - hng;
+      this.spine.rotation.z *= 1 - hng;
+      this.head.rotation.x = lerp(this.head.rotation.x, -(tilt + arch) * 0.85, hng);
+      this.head.rotation.y *= 1 - hng;
+      this.head.rotation.z *= 1 - hng;
+      // the shoulder's pitch is the body's, so take the tilt back out of it to
+      // reach the same way in the world however the body lies
+      const sh = -(Math.PI / 2 - (H.reach ?? 0.6)) - tilt - arch;
+      const spread = H.spread ?? 0.4;
+      for (const [A, s] of [[this.armL, 1], [this.armR, -1]]) {
+        A.shoulder.rotation.x = lerp(A.shoulder.rotation.x, sh, hng);
+        A.shoulder.rotation.y = lerp(A.shoulder.rotation.y, 0, hng);
+        A.shoulder.rotation.z = lerp(A.shoulder.rotation.z, s * spread, hng);
+        A.elbow.rotation.x = lerp(A.elbow.rotation.x, -0.3, hng);
+      }
+      this.hand.rotation.set(this.hand.rotation.x * (1 - hng), this.hand.rotation.y * (1 - hng), this.hand.rotation.z * (1 - hng));
+      this.handL.rotation.set(this.handL.rotation.x * (1 - hng), 0, 0);
+    }
+
     // ── Something held up to the face, in the left hand ────────────────────
     const raising = this.raised !== null;
     this.lift = lerp(this.lift, raising ? 1 : 0, 1 - Math.exp(-dt * (raising ? 9 : 5)));
@@ -926,11 +1035,12 @@ export class Character {
     else if (this.root.rotation.x) this.root.rotation.x = 0;
 
     // ── Meet the ground ────────────────────────────────────────────────────
-    if (this.groundAt && ab < 0.999 && sit < 0.999 && swim < 0.5 && std < 0.999) this.#feelGround(dt, (1 - ab) * (1 - sit) * (1 - swim * 2) * (1 - std));
+    if (this.groundAt && ab < 0.999 && sit < 0.999 && swim < 0.5 && std < 0.999 && hng < 0.999) this.#feelGround(dt, (1 - ab) * (1 - sit) * (1 - swim * 2) * (1 - std) * (1 - hng));
 
     // The body banks into turns about the feet; keep the feet on the ground.
-    // (Standing on skis, the feet tip with the root: they're on edge.)
-    const bank = this.root.rotation.z * (1 - std);
+    // (Standing on skis, the feet tip with the root: they're on edge. Hanging
+    // in a harness, the whole body rolls with what it hangs from.)
+    const bank = this.root.rotation.z * (1 - std) * (1 - hng);
     if (bank) {
       const cb = Math.cos(bank);
       const sb = Math.sin(bank);

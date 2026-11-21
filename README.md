@@ -179,6 +179,7 @@ place in that order, not at the end:
 | `build/builder.js` | hands too full for tools | `builder.idleWhile(fn)` |
 | `build/inventory.js` | a material to carry (`optional`: on the HUD only while you have some) | `game.builder.stock.define({ id, label, optional })` |
 | `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)` |
+| `country/index.js` | a layer of cloud of your own over everything, for a while (a flight's) | `game.country.cloud(() => ({ at, cover, x, z }))` |
 | `far/index.js` | land drawn past where the forest is streamed in, to be seen from high ground | `game.far.want(id, x0, z0, x1, z1, step)`, `far.drop(id)` |
 | `game/commands.js` | a key or a pad's button, and its line on the help panel | `game.commands.add({ keys, run, group, label })` |
 | `game/game.js` | something done every frame | `game.addSystem({ name, phase, update })` |
@@ -189,13 +190,15 @@ place in that order, not at the end:
 | `map/mapView.js` | an option under those lists (a button) | `game.map.addAction({ id, label, title, run, enabled })` |
 | `map/places.js` | a place on the map, to look up and track | `game.map.places.addSource({ within, get })` |
 | `player/character.js` | something the hiker holds up to the face | `character.addRaised(name, object, { stowed })`, `raise(name)` |
-| `player/character.js` | sitting astride what carries you | `character.seat({ spread, hang, lean })` |
+| `player/character.js` | sitting astride what carries you, or in it with your arms over the sides | `character.seat({ spread, hang, lean, rest, stroke })` |
 | `player/character.js` | standing on something that slides (skis, a board) | `character.stance({ feet, crouch, lean, arms, shod, board, … })` |
+| `player/character.js` | hanging in a harness under something (a hang glider) | `character.hang({ tilt, reach, spread })` |
 | `player/character.js` | something the hiker wears on the cap | `character.addWorn(object, { band })` |
+| `player/character.js` | something the hiker wears on the back, over the pack | `character.addOnBack(object)` |
 | `player/character.js` | a way of standing to the work (a rifle shouldered) | `definePose(kind, keyframes)`, `character.play(kind, dur)` |
 | `player/player.js` | walking the hiker somewhere | `player.steer = { x, z, run }` |
 | `player/player.js` | something that carries you (how fast, how deep, whether it flies or floats) | `player.carrier = { walk, run, swim, depth, fly, keel, … }` |
-| `player/player.js` | something that moves you itself (a train you sit in, skis you steer) | `player.aboard = { place(out, dt) }` |
+| `player/player.js` | something that moves you itself (a train you sit in, skis you steer, a tube the river carries) | `player.aboard = { place(out, dt) }` |
 | `player/player.js` | something held to the eye: look through it, magnified | `player.sight = { zoom }` |
 | `render/origin.js` | a uniform that says where something is | `game.origin.place(uniform)` |
 | `save/domains.js` | something that is saved | `game.save.register({ id, collect, restore, … })` |
