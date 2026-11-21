@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "An open-world forest you can walk around in, rendered as soft, realistic pixel art with three.js.",
+  "description": "An open-world forest you can walk around in, drawn to look real with three.js.",
   "scripts": {
     "dev": "vite",
     "api": "mkdir -p dist && wrangler dev --port 8787",

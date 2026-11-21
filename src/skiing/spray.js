@@ -9,13 +9,15 @@
 // (render/origin.js).
 
 import * as THREE from 'three';
-import { SKY } from '../render/uniforms.js';
+import { SKY, SHARED } from '../render/uniforms.js';
+import { POINT_GLSL, POINT_DISC_GLSL } from '../render/glsl.js';
 import { anchor } from '../render/origin.js';
 
 const POOL = 512;
 const GRAVITY = 6; // m/s²: powder falls slowly...
 const DRAG = 2.6; // 1/s: ...and the air soon stops it
 const LIFE = 1.6; // s: the most a grain lasts
+const PUFF = 0.05; // m: a puff of it, as it's seen
 
 export class Spray {
   constructor(scene) {
@@ -29,15 +31,18 @@ export class Spray {
     geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
     geo.setAttribute('aFade', new THREE.BufferAttribute(this.fade, 1).setUsage(THREE.DynamicDrawUsage));
     const mat = new THREE.ShaderMaterial({
-      uniforms: { uZenith: SKY.uZenith, uHorizon: SKY.uHorizon, uSunColor: SKY.uSunColor, uSunDir: SKY.uSunDir },
+      uniforms: { uZenith: SKY.uZenith, uHorizon: SKY.uHorizon, uSunColor: SKY.uSunColor, uSunDir: SKY.uSunDir, uLines: SHARED.uLines },
       vertexShader: /* glsl */ `
+        ${POINT_GLSL}
         attribute float aFade;
         varying float vFade;
+        varying float vPx;
         void main() {
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * mv;
           vFade = aFade;
-          gl_PointSize = aFade > 0.0 ? (-mv.z < 5.0 ? 4.0 : -mv.z < 12.0 ? 3.0 : 2.0) : 0.0;
+          vPx = pointPx(${PUFF}, -mv.z);
+          gl_PointSize = aFade > 0.0 ? vPx : 0.0;
         }`,
       fragmentShader: /* glsl */ `
         uniform vec3 uZenith;
@@ -45,11 +50,13 @@ export class Spray {
         uniform vec3 uSunColor;
         uniform vec3 uSunDir;
         varying float vFade;
+        varying float vPx;
+        ${POINT_DISC_GLSL}
         void main() {
           if (vFade <= 0.0) discard;
           // white, lit by the sky and the sun
           vec3 c = mix(uHorizon, uZenith, 0.3) * 0.9 + uSunColor * 0.75 * clamp(uSunDir.y * 2.5, 0.0, 1.0) + 0.08;
-          gl_FragColor = vec4(c, 0.8 * vFade);
+          gl_FragColor = vec4(c, 0.8 * vFade * pointDisc(vPx));
         }`,
       transparent: true,
       depthWrite: false,

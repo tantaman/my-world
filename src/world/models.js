@@ -1,6 +1,12 @@
 // Procedural vegetation models. Everything is built from primitives with
-// baked vertex colours (including fake ambient occlusion) and a per-vertex
-// "sway" weight that drives the wind shader.
+// baked vertex colours (including a little fake ambient occlusion: the real
+// thing is done on the picture, render/pipeline.js), a per-vertex "sway"
+// weight that drives the wind shader, and whether it's a leaf (aLeaf), which
+// lets sunlight through it from behind.
+//
+// The colours are what the thing reflects, in linear light, and are kept near
+// what real ones do: needles and dark bark about 2-5 %, leaves 5-20 % in the
+// green, birch bark over half. Darker than that and shade goes black.
 //
 // Each builder returns { lod0, lod1, lod2 } geometries sharing the same
 // attributes so instanced meshes can swap between them as you walk.
@@ -26,6 +32,7 @@ export class GeoBuilder {
     this.nor = [];
     this.col = [];
     this.sway = [];
+    this.leafy = [];
     this.idx = [];
     this.count = 0;
   }
@@ -35,7 +42,8 @@ export class GeoBuilder {
   //   normal(p, n)   world-space normal override after the matrix
   //   color(p, n)    -> THREE.Color (linear)
   //   sway(p)        -> number
-  add(geo, { matrix = _m.identity(), deform, normal, color, sway }) {
+  //   leaf           true for foliage: it lets the light through
+  add(geo, { matrix = _m.identity(), deform, normal, color, sway, leaf = false }) {
     const pos = geo.attributes.position;
     const nor = geo.attributes.normal;
     const nm = new THREE.Matrix3().getNormalMatrix(matrix);
@@ -52,6 +60,7 @@ export class GeoBuilder {
       const c = color(_gv, _gn);
       this.col.push(c.r, c.g, c.b);
       this.sway.push(sway ? sway(_gv) : 0);
+      this.leafy.push(leaf ? 1 : 0);
       this.count++;
     }
     if (geo.index) {
@@ -62,11 +71,12 @@ export class GeoBuilder {
     geo.dispose();
   }
 
-  vertex(p, n, c, sway) {
+  vertex(p, n, c, sway, leaf = false) {
     this.pos.push(p.x, p.y, p.z);
     this.nor.push(n.x, n.y, n.z);
     this.col.push(c.r, c.g, c.b);
     this.sway.push(sway);
+    this.leafy.push(leaf ? 1 : 0);
     return this.count++;
   }
 
@@ -81,10 +91,10 @@ export class GeoBuilder {
     const p1 = center.clone().addScaledVector(w, b);
     const p2 = center.clone().addScaledVector(u, -a);
     const p3 = center.clone().addScaledVector(w, -b);
-    const i0 = this.vertex(p0, normal, color, sway);
-    const i1 = this.vertex(p1, normal, color, sway);
-    const i2 = this.vertex(p2, normal, color, sway);
-    const i3 = this.vertex(p3, normal, color, sway);
+    const i0 = this.vertex(p0, normal, color, sway, true);
+    const i1 = this.vertex(p1, normal, color, sway, true);
+    const i2 = this.vertex(p2, normal, color, sway, true);
+    const i3 = this.vertex(p3, normal, color, sway, true);
     this.idx.push(i0, i1, i2, i0, i2, i3);
   }
 
@@ -94,6 +104,7 @@ export class GeoBuilder {
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     g.setAttribute('aSway', new THREE.Float32BufferAttribute(this.sway, 1));
+    g.setAttribute('aLeaf', new THREE.Float32BufferAttribute(this.leafy, 1));
     g.setIndex(this.idx);
     g.computeBoundingSphere();
     g.computeBoundingBox();
@@ -126,10 +137,10 @@ export function makePine(seed = 1) {
     const b = new GeoBuilder();
     const H = 15;
     const barkA = lin(0x5a3e2b);
-    const barkD = lin(0x241811);
-    const needleDark = lin(0x10261a);
-    const needleMid = lin(0x1f4527);
-    const needleTip = lin(0x3b6a33);
+    const barkD = lin(0x3a2a1e);
+    const needleDark = lin(0x253c29);
+    const needleMid = lin(0x2f4d30);
+    const needleTip = lin(0x456538);
 
     const trunkH = H * 0.9;
     const trunk = new THREE.CylinderGeometry(0.05, 0.32, trunkH, lod === 2 ? 3 : lod ? 4 : 6, lod ? 1 : 3, true);
@@ -183,12 +194,13 @@ export function makePine(seed = 1) {
         color: (p) => {
           const rad = Math.hypot(p.x, p.z);
           const outer = Math.min(1, rad / r);
-          const ao = 0.55 + 0.45 * t;
+          const ao = 0.72 + 0.28 * t;
           _c.copy(needleDark).lerp(needleMid, Math.min(1, outer * 1.4));
           if (outer > 0.6) _c.lerp(needleTip, (outer - 0.6) * 1.2);
           return jitter(_c.multiplyScalar(ao), p, 0.25);
         },
         sway: (p) => Math.pow(p.y / H, 2) + Math.hypot(p.x, p.z) * 0.06,
+        leaf: true,
       });
     }
     return b.build();
@@ -202,10 +214,10 @@ export function makeBroadleaf(seed = 2) {
     const rng = mulberry32(seed);
     const b = new GeoBuilder();
     const barkA = lin(0x5d4a3a);
-    const barkD = lin(0x2a2018);
-    const leafDark = lin(0x1d3511);
+    const barkD = lin(0x3e3226);
+    const leafDark = lin(0x2c451d);
     const leafMid = lin(0x3c5f1d);
-    const leafLight = lin(0x6f8f2c);
+    const leafLight = lin(0x597930);
     const trunkH = 5.2;
 
     const trunk = new THREE.CylinderGeometry(0.17, 0.4, trunkH + 1.2, lod === 2 ? 4 : lod ? 5 : 7, lod ? 1 : 4, true);
@@ -289,8 +301,9 @@ export function makeBroadleaf(seed = 2) {
           p.multiplyScalar(k);
         },
         normal: sphereNormal,
-        color: (p) => leafColor(p).multiplyScalar(0.78),
+        color: (p) => leafColor(p).multiplyScalar(0.86),
         sway: leafSway,
+        leaf: true,
       });
       if (!lod) {
         const cards = 22;
@@ -318,7 +331,7 @@ export function makeBirch(seed = 3) {
     const white = lin(0xd8d2c4);
     const mark = lin(0x2b2722);
     const leafDark = lin(0x3b5418);
-    const leafLight = lin(0x9aae3e);
+    const leafLight = lin(0x688734);
     const H = 12;
     const trunk = new THREE.CylinderGeometry(0.07, 0.2, H, lod === 2 ? 3 : lod ? 4 : 6, lod === 2 ? 1 : lod ? 2 : 10, true);
     trunk.translate(0, H / 2 - 0.3, 0);
@@ -356,8 +369,9 @@ export function makeBirch(seed = 3) {
       b.add(blob, {
         matrix: mat(c.x, c.y, c.z, rng(), rng() * 6, 0, 1, 1.25, 1),
         normal: (p, n) => n.multiplyScalar(0.3).addScaledVector(_v.copy(p).sub(center).normalize(), 0.7).normalize(),
-        color: (p) => leafColor(p).multiplyScalar(0.75),
+        color: (p) => leafColor(p).multiplyScalar(0.86),
         sway: leafSway,
+        leaf: true,
       });
       if (!lod) {
         for (let k = 0; k < 16; k++) {
@@ -385,7 +399,7 @@ export function makeBush(seed = 4) {
 function buildBush(seed, cards) {
   const rng = mulberry32(seed);
   const b = new GeoBuilder();
-  const dark = lin(0x1c3412);
+  const dark = lin(0x2a4420);
   const light = lin(0x55762a);
   const center = new THREE.Vector3(0, 0.45, 0);
   const color = (p) => {
@@ -400,8 +414,9 @@ function buildBush(seed, cards) {
     b.add(new THREE.IcosahedronGeometry(r * (cards ? 1 : 1.12), 0), {
       matrix: mat(c.x, c.y, c.z, rng(), rng() * 6, 0, 1, 0.8, 1),
       normal: (p, n) => n.multiplyScalar(0.3).addScaledVector(_v.copy(p).sub(center).normalize(), 0.7).normalize(),
-      color: (p) => color(p).multiplyScalar(0.75),
+      color: (p) => color(p).multiplyScalar(0.86),
       sway,
+      leaf: true,
     });
     for (let k = 0; k < (cards ? 12 : 0); k++) {
       const d = new THREE.Vector3(rng() * 2 - 1, rng() * 1.6 - 0.4, rng() * 2 - 1).normalize();
@@ -417,7 +432,7 @@ function buildBush(seed, cards) {
 export function makeFern(seed = 5) {
   const rng = mulberry32(seed);
   const b = new GeoBuilder();
-  const base = lin(0x1e3a12);
+  const base = lin(0x2a4a1e);
   const tip = lin(0x5e8a2a);
   const fronds = 9;
   const segs = 6;
@@ -436,8 +451,8 @@ export function makeFern(seed = 5) {
       const n = new THREE.Vector3(0, 1, 0).addScaledVector(dir, -0.2).normalize();
       const col = _c.copy(base).lerp(tip, t).multiplyScalar(0.9 + rng() * 0.2).clone();
       const sway = t * t * 0.25;
-      ids.push(b.vertex(c.clone().addScaledVector(side, w), n, col, sway));
-      ids.push(b.vertex(c.clone().addScaledVector(side, -w), n, col, sway));
+      ids.push(b.vertex(c.clone().addScaledVector(side, w), n, col, sway, true));
+      ids.push(b.vertex(c.clone().addScaledVector(side, -w), n, col, sway, true));
     }
     for (let s = 0; s < segs; s++) {
       const i = s * 2;
@@ -453,7 +468,7 @@ export function makeRock(seed = 6) {
   const noise = createSimplex2(seed);
   const b = new GeoBuilder();
   const stone = lin(0x77736b);
-  const dark = lin(0x3d3a36);
+  const dark = lin(0x4a4741);
   const moss = lin(0x3b5220);
   const geo = new THREE.IcosahedronGeometry(1, 1); // already non-indexed: flat facets
   const pos = geo.attributes.position;
@@ -480,7 +495,7 @@ export function makeRock(seed = 6) {
 export function makeLog(seed = 7) {
   const b = new GeoBuilder();
   const bark = lin(0x4a3627);
-  const dark = lin(0x1f1610);
+  const dark = lin(0x33261b);
   const moss = lin(0x40581f);
   const wood = lin(0x9c7a52);
   const L = 4.5;

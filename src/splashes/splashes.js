@@ -13,13 +13,15 @@
 // whenever that has moved away (see render/origin.js).
 
 import * as THREE from 'three';
-import { SKY } from '../render/uniforms.js';
+import { SKY, SHARED } from '../render/uniforms.js';
+import { POINT_GLSL, POINT_DISC_GLSL } from '../render/glsl.js';
 import { anchor } from '../render/origin.js';
 
 const POOL = 384;
 const GRAVITY = 9.8; // m/s²
 const DRAG = 1.6; // 1/s: how fast the air slows a drop
 const LIFE = 1.4; // s: the most a drop lasts, if it never comes down
+const DROP = 0.03; // m: how big a drop looks, blurred by its flight
 
 export class Splashes {
   constructor(scene) {
@@ -34,16 +36,19 @@ export class Splashes {
     geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
     geo.setAttribute('aFade', new THREE.BufferAttribute(this.fade, 1).setUsage(THREE.DynamicDrawUsage));
     const mat = new THREE.ShaderMaterial({
-      uniforms: { uZenith: SKY.uZenith, uHorizon: SKY.uHorizon, uSunColor: SKY.uSunColor, uSunDir: SKY.uSunDir },
+      uniforms: { uZenith: SKY.uZenith, uHorizon: SKY.uHorizon, uSunColor: SKY.uSunColor, uSunDir: SKY.uSunDir, uLines: SHARED.uLines },
       vertexShader: /* glsl */ `
+        ${POINT_GLSL}
         attribute float aFade;
         varying float vFade;
+        varying float vPx;
         void main() {
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * mv;
           vFade = aFade;
-          // a pixel or two of the low-res render, bigger close up
-          gl_PointSize = aFade > 0.0 ? (-mv.z < 4.5 ? 3.0 : -mv.z < 9.0 ? 2.0 : 1.0) : 0.0;
+          // a drop, blurred by its flight
+          vPx = pointPx(${DROP}, -mv.z);
+          gl_PointSize = aFade > 0.0 ? vPx : 0.0;
         }`,
       fragmentShader: /* glsl */ `
         uniform vec3 uZenith;
@@ -51,11 +56,13 @@ export class Splashes {
         uniform vec3 uSunColor;
         uniform vec3 uSunDir;
         varying float vFade;
+        varying float vPx;
+        ${POINT_DISC_GLSL}
         void main() {
           if (vFade <= 0.0) discard;
           // a drop is a little bead of sky, with the sun caught in it
           vec3 c = mix(uHorizon, uZenith, 0.35) * 1.3 + uSunColor * 0.5 * clamp(uSunDir.y * 3.0, 0.0, 1.0);
-          gl_FragColor = vec4(c, 0.85 * vFade);
+          gl_FragColor = vec4(c, 0.85 * vFade * pointDisc(vPx));
         }`,
       transparent: true,
       depthWrite: false,

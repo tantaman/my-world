@@ -7,9 +7,9 @@ their faces, a treeline, alpine meadows and snow on the tops; and its woods
 turn from dark conifer forest to birch groves to open parkland. Streams run
 down its valleys, join and grow into rivers, and gather in ponds and lakes in
 the hollows. It's built with
-three.js. The art is pixelated but lit and shaded like a real scene, and the
-pixels are softened just enough that you can't quite tell whether it's pixel
-art trying to look real or a painting made of pixels.
+three.js, and is drawn to look real: lit, coloured and exposed the way a
+photograph of a real wood would be. (Or as soft pixel art, if you'd rather:
+it's a setting.) See [the look](src/render/README.md).
 
 You can also **build**: fell trees, buck them into logs, hew timbers, clear
 and grade the ground, set stone footings, and raise a notched log cabin with
@@ -98,11 +98,14 @@ to build in it with other people — see [Building together](src/save/README.md)
 
 | param | default | |
 |---|---|---|
+| `pixel` | | draw it as pixel art (the next five are for that) |
 | `soft` | `0.55` | pixel softness, 0–1 |
 | `px` | auto | screen pixels per art pixel |
 | `lines` | `300` | target art-pixel height when `px` is auto |
 | `outline` | `0.28` | outline strength |
 | `levels` | `36` | colour levels per channel before dithering |
+| `sharp` | `1080` | the most lines the picture is drawn in without pixel art |
+| `ao` | `0.85` | ambient occlusion, 0–1 (`0`: not worked out at all) |
 | `time` | `16.6` | starting hour of the day |
 | `seed` | `20261119` | a completely different world |
 | `land` | newest | which [land](src/world/README.md#lands) a local world is grown on: `1` for the first |
@@ -115,7 +118,7 @@ to build in it with other people — see [Building together](src/save/README.md)
 | `clearbuild` | | forget everything you've built and changed in this world |
 | `debug` | | show stats from the start |
 
-Example: `/?soft=0.3&px=5&time=7.5`
+Example: `/?pixel&soft=0.3&px=5&time=7.5`
 
 ## How it's put together
 

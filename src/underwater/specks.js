@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { SHARED, SKY, UNDER } from '../render/uniforms.js';
+import { POINT_GLSL } from '../render/glsl.js';
 import { anchor } from '../render/origin.js';
 import { rand } from '../core/geom.js';
 
@@ -18,6 +19,8 @@ const mod = (a, n) => ((a % n) + n) % n;
 
 const SPECKS = 700;
 const BOX = new THREE.Vector3(18, 12, 18); // m, around the camera
+const SPECK = 0.008; // m across
+const BUBBLE = 0.5; // how big a bubble looks, for its size (s)
 const MAX_BUBBLES = 96;
 // m/s a bubble rises at, and how far (m) it wobbles from side to side
 const RISE = [0.45, 0.85];
@@ -38,8 +41,9 @@ export function createSpecks() {
   const mat = new THREE.ShaderMaterial({
     // uPhase: where the middle is within the box's own repeat (x, z); uEye:
     // how high it is
-    uniforms: { uTime: SHARED.uTime, uPhase: { value: new THREE.Vector2() }, uEye: { value: 0 }, uBox: { value: BOX }, ...UNDER, ...SKY },
+    uniforms: { uTime: SHARED.uTime, uPhase: { value: new THREE.Vector2() }, uEye: { value: 0 }, uBox: { value: BOX }, uLines: SHARED.uLines, ...UNDER, ...SKY },
     vertexShader: /* glsl */ `
+      ${POINT_GLSL}
       attribute float aSeed;
       uniform float uTime;
       uniform vec2 uPhase;
@@ -60,7 +64,7 @@ export function createSpecks() {
         // only under water, and never above the surface
         if (uUnder < 0.5 || p.y > uUnderLevel) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
         vSeed = aSeed;
-        gl_PointSize = -mv.z < 3.0 ? 2.0 : 1.0;
+        gl_PointSize = pointPx(${SPECK}, -mv.z);
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uSunColor;
@@ -96,13 +100,14 @@ export function createBubbles() {
   geo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
   geo.setDrawRange(0, 0); // only the bubbles there are: the rest are never drawn
   const mat = new THREE.ShaderMaterial({
-    uniforms: { ...SKY },
+    uniforms: { uLines: SHARED.uLines, ...SKY },
     vertexShader: /* glsl */ `
+      ${POINT_GLSL}
       attribute float aSize;
       void main() {
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = clamp(aSize * 60.0 / -mv.z, 1.0, 4.0);
+        gl_PointSize = pointPx(aSize * ${BUBBLE}, -mv.z);
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uZenith;

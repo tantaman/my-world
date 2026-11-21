@@ -18,7 +18,9 @@
 
 import * as THREE from 'three';
 import { SHARED } from '../render/uniforms.js';
-import { NOISE_GLSL } from '../render/glsl.js';
+import { NOISE_GLSL, POINT_GLSL } from '../render/glsl.js';
+
+const GLOW = 0.008; // m: a glowworm's light
 
 // Shared by every cave: 1 / Sky.open, set each frame (see index.js).
 export const ROCK = { uSkyFill: { value: 1 } };
@@ -133,12 +135,13 @@ export function createCrystalMaterial() {
   return mat;
 }
 
-// Glowworms: one art pixel each, blue-green, brightening and fading slowly.
+// Glowworms: specks of blue-green, brightening and fading slowly.
 // Only dim things: you see them best with your lamp off.
 export function createGlowMaterial() {
   return new THREE.ShaderMaterial({
-    uniforms: { uTime: SHARED.uTime },
+    uniforms: { uTime: SHARED.uTime, uLines: SHARED.uLines },
     vertexShader: /* glsl */ `
+      ${POINT_GLSL}
       attribute float aPhase;
       uniform float uTime;
       varying float vGlow;
@@ -147,7 +150,7 @@ export function createGlowMaterial() {
         gl_Position = projectionMatrix * mv;
         float dist = -mv.z;
         vGlow = (0.55 + 0.45 * sin(uTime * (0.25 + fract(aPhase * 7.3) * 0.3) + aPhase)) * (1.0 - smoothstep(18.0, 34.0, dist));
-        gl_PointSize = dist < 8.0 ? 2.0 : 1.0;
+        gl_PointSize = pointPx(${GLOW}, dist);
       }`,
     fragmentShader: /* glsl */ `
       varying float vGlow;

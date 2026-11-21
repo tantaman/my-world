@@ -33,7 +33,16 @@ export const CONFIG = {
   grassTile: 16,
   grassDensity: num('grassDensity', low ? 4.5 : 7), // max blades per m²
 
-  // Pixel look
+  // The picture. Without pixel art it is drawn as fine as the screen, but no
+  // more than this many lines tall: past that it's drawn smaller and blown up
+  // smoothly, which a big, dense screen barely shows and the card feels a lot.
+  sharpLines: num('sharp', low ? 720 : 1080),
+  // Ambient occlusion: how much a nook or a foot of a trunk is shut off from
+  // the sky's light, 0..1 (0 = not worked out at all).
+  ao: num('ao', low ? 0 : 0.85),
+
+  // Pixel art: ?pixel turns it on (it's on the settings panel too).
+  pixelArt: params.has('pixel') && params.get('pixel') !== '0',
   // Target height (in "art pixels") of the low-resolution render.
   pixelTargetHeight: num('lines', 300),
   // Explicit pixel size (screen px per art pixel). 0 = derive from pixelTargetHeight.

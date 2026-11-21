@@ -1,5 +1,6 @@
-// The picture: renderer, scene, camera and the pixel pipeline, and the
-// settings that change how it looks.
+// The picture: renderer, scene, camera and the pipeline that turns a drawn
+// scene into the picture (pipeline.js), and the settings that change how it
+// looks.
 //
 // The scene is in world coordinates, and so is everything the game does with
 // it. Only while a frame is being drawn is it slid to sit round an origin
@@ -8,7 +9,7 @@
 
 import * as THREE from 'three';
 import { CONFIG, urlHas } from '../config.js';
-import { PixelPipeline } from './pixelPipeline.js';
+import { Pipeline } from './pipeline.js';
 import { Origin } from './origin.js';
 import { SHARED, DECK } from './uniforms.js';
 import { PERIOD } from './glsl.js';
@@ -31,7 +32,7 @@ export function installRender(game) {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 1200);
-  const pipeline = new PixelPipeline(renderer);
+  const pipeline = new Pipeline(renderer);
   const origin = new Origin();
   origin.place(SHARED.uPlayer);
   origin.place(DECK.uDeckMid);
@@ -46,6 +47,8 @@ export function installRender(game) {
   const soft = settings.get('softness', 'number');
   const px = settings.get('pixelSize', 'number');
   const outline = settings.get('outline', 'number');
+  const pixelArt = settings.get('pixelArt', 'boolean');
+  if (pixelArt !== undefined && !urlHas('pixel')) pipeline.enabled = pixelArt;
   if (soft !== undefined && !urlHas('soft')) pipeline.softness = soft;
   if (px !== undefined && !urlHas('px')) pipeline.pixelSize = px;
   if (outline !== undefined) pipeline.outline = outline;
@@ -69,6 +72,7 @@ export function installRender(game) {
     set(on) {
       pipeline.enabled = on;
       pipeline.lowW = 0;
+      settings.set('pixelArt', on);
       resize();
     },
   });
@@ -125,7 +129,7 @@ export function installRender(game) {
   game.addSystem({
     name: 'render',
     phase: 'render',
-    update() {
+    update({ dt }) {
       renderer.info.reset();
       // Something (the map) may be covering the whole view.
       if (game.covered) return;
@@ -133,7 +137,7 @@ export function installRender(game) {
       origin.wrapped(PERIOD, SHARED.uOrigin.value);
       origin.begin(scene, camera);
       try {
-        pipeline.render(scene, camera, game.sky ? game.sky.exposure : 1, game.sky ? game.sky.open : 1);
+        pipeline.render(scene, camera, game.sky ? game.sky.exposure : 1, game.sky ? game.sky.open : 1, dt);
       } finally {
         origin.end(scene, camera);
       }

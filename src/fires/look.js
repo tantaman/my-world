@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { SHARED } from '../render/uniforms.js';
 import { anchor } from '../render/origin.js';
-import { NOISE_GLSL } from '../render/glsl.js';
+import { NOISE_GLSL, POINT_GLSL, POINT_DISC_GLSL } from '../render/glsl.js';
 
 // Which way smoke drifts and flames lean, as the trees sway.
 export const WIND = new THREE.Vector2(1, 0.45).normalize();
@@ -118,6 +118,7 @@ export function createFlameMaterial(seed) {
 // that rise, swell, drift downwind and thin out, and catch the firelight low
 // down.
 const MAX_SPARKS = 160;
+const SPARK = 0.015; // m: how big a spark looks, glowing
 const MAX_PUFFS = 110;
 
 export class FireFx {
@@ -131,21 +132,27 @@ export class FireFx {
     this.sparksMesh = new THREE.Points(
       spGeo,
       new THREE.ShaderMaterial({
+        uniforms: { uLines: SHARED.uLines },
         vertexShader: /* glsl */ `
+          ${POINT_GLSL}
           attribute float aLife;
           varying float vLife;
+          varying float vPx;
           void main() {
             vLife = aLife;
             vec4 mv = modelViewMatrix * vec4(position, 1.0);
             gl_Position = projectionMatrix * mv;
-            gl_PointSize = -mv.z < 7.0 ? 2.0 : 1.0;
+            vPx = pointPx(${SPARK}, -mv.z);
+            gl_PointSize = vPx;
           }`,
         fragmentShader: /* glsl */ `
           varying float vLife;
+          varying float vPx;
+          ${POINT_DISC_GLSL}
           void main() {
             if (vLife <= 0.0) discard;
             vec3 hot = mix(vec3(3.2, 0.7, 0.12), vec3(5.0, 2.6, 0.7), smoothstep(0.4, 1.0, vLife));
-            gl_FragColor = vec4(hot * smoothstep(0.0, 0.35, vLife), 1.0);
+            gl_FragColor = vec4(hot * smoothstep(0.0, 0.35, vLife) * pointDisc(vPx), 1.0);
           }`,
         transparent: true,
         depthWrite: false,
