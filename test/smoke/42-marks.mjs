@@ -1,7 +1,8 @@
 // A mark left on the map: named, tracked on the HUD, still there after a
 // reload, and somewhere to go back to with `go here`.
 //
-// Leaves: the world opened with &creative, and you standing on the mark.
+// Leaves: the world opened with &creative, and you back where it found you
+// (so that what follows starts where it always did).
 
 import assert from 'node:assert/strict';
 
@@ -34,6 +35,7 @@ export default async function ({ page, step, key, frames, open }) {
 
   await step('go to it from the map', async () => {
     const mark = await page.evaluate(() => world.marks.list()[0]);
+    const was = await page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z, yaw: world.player.yaw }));
     const away = await page.evaluate(async (m) => {
       await world.teleport(m.x + 300, m.z - 240);
       return Math.hypot(world.player.pos.x - m.x, world.player.pos.z - m.z);
@@ -51,6 +53,7 @@ export default async function ({ page, step, key, frames, open }) {
     const shut = await page.evaluate(() => ({ map: world.map.isOpen, said: document.getElementById('toast').textContent }));
     assert.equal(shut.map, false, 'and closes the map');
     assert.match(shut.said, /the level spot/, 'saying where you are');
+    await page.evaluate((w) => world.teleport(w.x, w.z, w.yaw), was); // back where the next part expects you
     return { away: Math.round(away), said: shut.said };
   });
 }
