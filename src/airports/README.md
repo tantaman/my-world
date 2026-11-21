@@ -97,6 +97,7 @@ await world.airports.go()           // onto the apron of the airfield for where 
 world.airports.fly('waihee-ridge')  // fly from the one you're at to another (by its id, or its region's)
 world.airports.hurry()              // skip on to the end of this part of the flight
 world.airports.trip                 // where you're flying, and how far through it
+world.airports.steps()              // the foot of the plane's steps, at the airfield you're at
 ```
 
 ## Files
