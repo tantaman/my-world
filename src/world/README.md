@@ -23,7 +23,13 @@
     only then run out of it. That is where a descent is 800 m of vertical
     rather than the fifty metres the forest's own tops hold ([skiing](../skiing/README.md)).
     A massif's valley floors stay down at forest height, which is what gives
-    the whole drop.
+    the whole drop. Up there the water is ice: a channel is filled to its
+    level and snowed over, a hollow holds a snowfield instead of a tarn, and
+    the channels that carry enough of it are cut into **glacial troughs** —
+    broad U-shaped valleys, a floor below the stream's own bed and walls
+    rising a couple of hundred metres out. The drainage network only ever
+    runs downhill, so a trough does too, the whole way: the best of them give
+    500 m of descent at 27° without ever turning back uphill.
   - **Benches** step the land into level shelves with a rock face between
     each and the next, here and there in the hills and mountains.
 

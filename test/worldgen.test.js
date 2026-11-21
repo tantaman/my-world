@@ -110,6 +110,38 @@ test('the land goes down to a sea, and knows which way it lies', () => {
   }
 });
 
+// ── The high country ────────────────────────────────────────────────────────
+// Massifs are 26 km apart, so where one is depends on the seed; the test
+// finds the highest of them from the country field alone (which is cheap, and
+// needs no water), and pins the land over a square of it. That square is
+// where the ice cut its troughs, so this is what pins them — and it pins
+// where the massif is, too, since a moved massif moves every height in it.
+for (const seed of SEEDS) {
+  test(`seed ${seed}: the high country, and the troughs cut down it`, () => {
+    const gen = growWorld(seed, [], 1);
+    let at = null;
+    for (let x = -45000; x <= 45000; x += 1000) {
+      for (let z = -45000; z <= 45000; z += 1000) {
+        if (gen.country(x, z).alp < 0.95) continue;
+        const h = gen.broadHeight(x, z, 0);
+        if (!at || h > at[2]) at = [x, z, h];
+      }
+    }
+    assert.ok(at, 'there is high country to be found');
+    assert.ok(at[2] > 500, `and it stands up (${at[2].toFixed(0)} m)`);
+    const out = { at: [at[0], at[1]], points: [] };
+    for (let dz = -800; dz <= 800; dz += 200) {
+      for (let dx = -800; dx <= 800; dx += 200) {
+        const [x, z] = [at[0] + dx, at[1] + dz];
+        const h = gen.height(x, z);
+        const w = gen.water;
+        out.points.push({ dx, dz, h, water: w.region ? [w.region, w.level] : 0, snow: gen.snow(x, z, h), above: gen.above(x, z, h), forest: gen.forest(x, z) });
+      }
+    }
+    matchesGolden(`alpine-${seed}`, out, { tolerance: TOL });
+  });
+}
+
 test('the sea’s soft floor holds however high the land stands', () => {
   // Inland the sea lays a soft floor under the land, log(1 + e^t). Written
   // the obvious way, e^t overflows past t = 709 — about 1400 m up, which the

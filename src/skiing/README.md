@@ -20,6 +20,14 @@ valleys, with a snowy cap, and a snow line that comes *below* the treeline, so
 off the top you cross open snow, carry on down through snowy woods, and only
 then run out of it. That is 800 m of vertical in one go, the flanks mostly
 23–25° with steeper faces on them, which tucked is somewhere around 85 km/h.
+
+The runs themselves are the **troughs** the ice cut, down where the water
+runs: broad U-shaped valleys with a floor well below the stream's own bed and
+walls a couple of hundred metres out, which hold you to the line. Water only
+ever runs downhill, so a trough does too, from its head to where the snow
+gives out — the best of them are 500 m of descent over a kilometre at 27°,
+about 90 km/h tucked, without a counter-slope in them. Drop into one at its
+head and let it take you down.
 They are a long way apart, so find one on the map (**M**) — a massif is hard
 to miss on it — and walk in. See [the world](../world/README.md#the-world).
 

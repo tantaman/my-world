@@ -63,6 +63,36 @@ export const LAKE = { acc: 30, accFull: 260, r: [22, 60], depth: [2.5, 5.5] };
 //   shelf    how deep (m) the shelf is before the drop
 //   deeper   and the rest are this many times as deep as they'd otherwise be
 export const DEEP = { chance: 0.7, depth: [14, 38], shelf: 1.6, deeper: 2 };
+// Up above the snow line a channel is not a stream cutting a notch but a
+// glacial trough: a floor cut below the stream's own bed, and walls rising to
+// the rim hundreds of metres out (water.js carves it). The shape is here,
+// beside the other channel shapes, because the network has to know how far a
+// channel can change the ground in order to offer it to every cell it reaches
+// into — which is what `reach` is for.
+//   acc    catchment over which a trough grows from nothing to its full size.
+//          Up above the snow line there is not much land to gather, so even a
+//          trunk channel carries little: most carry a tenth of this and get a
+//          gully a few metres deep, and the few that carry it all get a
+//          trough. A massif ends up with a handful of big ones and a lot of
+//          small ones, which is what a mountain looks like.
+//   deep   how far (m) the ice cuts below the stream's bed, at full size
+//   wide   half-width (m), from coming in to full size
+//   from   m above the snow line over which it comes in
+//   above  a height (m) under which no trough is ever cut. Whether there is
+//          one really turns on the snow line and the high country, which this
+//          file knows nothing of (water.js decides); this is a cheap, safe
+//          bound on it — well over the forest's own tops, well under the high
+//          country's snow line — so that a lowland river is left exactly as
+//          it was, reach and all.
+export const TROUGH = { acc: [10, 55], deep: 55, wide: [60, 300], from: 150, above: 400 };
+// 0 for a channel no trough is cut from, 1 for one that carries a glacier.
+export const troughFlow = (acc) => Math.max(0, Math.min(1, (acc - TROUGH.acc[0]) / (TROUGH.acc[1] - TROUGH.acc[0])));
+// How far (m) past its own valley a trough reaches, and how far past its
+// banks a channel can change the ground at all: a stream's valley is tens of
+// metres (90 covers the widest water.js cuts), a trough hundreds.
+export const troughReach = (acc, level) => (level > TROUGH.above ? TROUGH.wide[1] * troughFlow(acc) : 0);
+export const channelReach = (acc, level) => 90 + troughReach(acc, level);
+
 // On a land with a sea, a hollow whose lake would stand less than this (m)
 // above the sea is open to the sea, and holds none of its own.
 const SEA_LAKE = 0.4;
@@ -524,7 +554,8 @@ export class Drainage {
         W[q] = Math.max(LB, Math.min(U, lin));
       }
     }
-    const reach = Math.max(w0, w1) + 90;
+    const accB = mainB ? this.acc(b) : accA;
+    const reach = Math.max(w0, w1) + channelReach(Math.max(accA, accB), Math.max(LA, LB));
     return {
       a,
       b,
@@ -541,7 +572,7 @@ export class Drainage {
       w0,
       w1,
       acc0: accA,
-      acc1: mainB ? this.acc(b) : accA,
+      acc1: accB,
       minX: minX - reach,
       maxX: maxX + reach,
       minZ: minZ - reach,

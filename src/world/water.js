@@ -21,6 +21,14 @@
 //   - A pond or lake fills its hollow to just under the lowest point of its
 //     rim, with a beach that rises gently to meet the land. Streams come down
 //     to its level at the shore, and its outflow leaves at that level.
+//   - Up in the high country's snow (worldgen.js) there is ice instead of
+//     water: a channel is filled to its level and snowed over, a hollow holds
+//     a snowfield rather than a tarn, and a channel carrying enough of it is
+//     cut into a glacial trough — a floor below the stream's own bed and
+//     walls rising hundreds of metres out. Because the network only ever runs
+//     downhill and the ice cuts deeper the more of it there is, a trough falls
+//     from its head to its foot without a counter-slope: which is what you
+//     ski down (TROUGH in drainage.js, _carveTrough below).
 //
 // They keep away from structures: a basin isn't put near one, and running
 // water fades out before it reaches a structure's clearing.
@@ -37,7 +45,7 @@
 // its level. Rivers run out into it, and only ever deepen its bed.
 
 import { createSimplex2, smoothstep } from '../noise.js';
-import { Drainage, NET, basinRadius, channelSize } from './drainage.js';
+import { Drainage, NET, basinRadius, channelSize, TROUGH, troughFlow, troughReach } from './drainage.js';
 import { LAKE_REGION, ICE, seaSurf } from './landform.js';
 import { SHORE_BAND } from './sea.js';
 
@@ -56,6 +64,14 @@ export const NO_WATER = -1e4;
 //            under the leaves, a river is wide enough to see the sky
 const SMALL = { depth: 0.45, ramp: 0.28, valley: [5, 28, 3], region: 2, speed: [0.3, 5], open: 0.15 };
 const BIG = { depth: 1.5, ramp: 0.5, valley: [16, 80, 3.2], region: 2.5, speed: [0.35, 6], open: 0.7 };
+// Above the snow line a channel is not a stream cutting a notch: it is where
+// the ice went, and what it leaves is a glacial trough — a floor cut below
+// the stream's own bed, walls rising as a parabola to the rim. The drainage
+// network only ever runs downhill, all the way down, and a trough's floor
+// falls faster still, because the ice cuts deeper the more of it there is:
+// so a trough descends from its head to its foot without a counter-slope
+// anywhere, which is what makes a run of it rather than a slope that points
+// downhill and then doesn't. Its shape is TROUGH, in drainage.js.
 // Height (m) of each step between pools. One for all running water, so a
 // stream and the river it joins step at the same heights.
 const STEP = 0.45;
@@ -191,7 +207,7 @@ export class Water {
     const size = channelSize(acc);
     const v1 = mix(SMALL.valley[1], BIG.valley[1], size);
     let cw = s.w0 + (s.w1 - s.w0) * frac;
-    if (d > cw * (1 + WIDTH_VARY) + v1 + 2) return false;
+    if (d > cw * (1 + WIDTH_VARY) + v1 + troughReach(acc, s.W[bq]) + 2) return false;
     // wider here, narrower there (read on the centreline, so it's the same
     // from bank to bank), and giving way to a structure's clearing
     const px = P[bq * 2] + (P[bq * 2 + 2] - P[bq * 2]) * bt;
@@ -203,6 +219,31 @@ export class Water {
     hit.d = d;
     hit.cw = cw;
     hit.frozen = !!s.frozen;
+    // Up above the snow line it is ice, not water: the channel is filled to
+    // its level and snowed over, and its valley becomes a trough. The snow
+    // line is read at the point being shaped, not on the centreline, because
+    // it is already worked out there and moves by metres over a channel's
+    // width. A real place brings its own weather, and is left alone.
+    // Up in the high country's snow a channel is ice, not water: filled to
+    // its level and snowed over, and where it carries enough of it, cut into
+    // a trough. It takes the high country for that — snow that lies deep and
+    // lies all year. The forest's own tops hold fifty metres of it and keep
+    // their streams, and a real place brings its own weather and is left
+    // alone.
+    hit.trough = 0;
+    hit.flow = 0;
+    if (!s.real) {
+      const alp = this.gen.country ? this.gen.country(x, z).alp : 0;
+      const over = alp > 0 ? s.W[bq] - this.gen.snowline(x, z) : -1;
+      if (over > 0) {
+        hit.frozen = true;
+        // how much of a trough: how far above the snow line the channel runs,
+        // and how much ice it carries. A small channel up there is still
+        // frozen, but no trough is cut from it.
+        hit.flow = troughFlow(s.acc1);
+        hit.trough = smoothstep(0, TROUGH.from, over) * hit.flow * alp;
+      }
+    }
     // a stream fades in at its spring, valley and all
     hit.g = smoothstep(0, 0.35, cw);
     hit.size = size;
@@ -226,9 +267,36 @@ export class Water {
     return true;
   }
 
+  // The ground near a channel: what the stream cuts, and over it what the ice
+  // left, by how far above the snow line the channel runs. Blended rather
+  // than chosen between, so a channel coming down off a massif loses its
+  // trough and finds its notch without a seam where the two meet.
+  _carveLine(L, h, pm, lake) {
+    const stream = this._carveStream(L, h, pm, lake);
+    if (L.trough <= 0) return stream;
+    return stream + (this._carveTrough(L, h) - stream) * L.trough;
+  }
+
+  // A U-section: a floor cut below the stream's own bed, deeper and wider the
+  // more ice the channel carries, rising as a parabola to meet the land at the
+  // rim. It only ever cuts down — a trough never stands the ground higher than
+  // it found it.
+  _carveTrough(L, h) {
+    const V = mix(TROUGH.wide[0], TROUGH.wide[1], L.flow);
+    if (L.d >= V) return h;
+    const floor = L.Wq - TROUGH.deep * L.flow;
+    // The rim is the land, or the channel's own level where the land is below
+    // it: so the floor is where the ice put it however the ground happens to
+    // dip, and the walls still rise to meet whatever is standing there.
+    const rim = Math.max(h, L.Wq);
+    const t = L.d / V;
+    const u = floor + (rim - floor) * t * t;
+    return h + Math.min(0, u - h) * L.g;
+  }
+
   // The ground near a channel. lake: how far (m) the point is from the
   // shore of any pond or lake around it (negative in it).
-  _carveLine(L, h, pm, lake) {
+  _carveStream(L, h, pm, lake) {
     const { d, cw, g, W, Wq } = L;
     // fords where a footpath crosses
     const D = L.depth * (1 - 0.65 * pm);
@@ -335,6 +403,15 @@ export class Water {
       if (u < lake) lake = u;
       if (u > b.blend) continue;
       h = this._carveBasin(b, u, R, h);
+      // A hollow up above the snow line holds no tarn: it is a snowfield,
+      // flat at its level and snowed over, which is what a cirque at the head
+      // of a trough comes out as. (Read at its middle, so the whole of it
+      // decides together.) The drainage leaves a deep hollow without an
+      // outlet (drainage.js); up there that is the right answer.
+      if (this.gen.country && this.gen.country(b.x, b.z).alp > 0 && b.level > this.gen.snowline(b.x, b.z)) {
+        h = Math.max(h, b.level - ICE.under);
+        continue;
+      }
       this._offer(b.level, u < BASIN_REGION ? 1 : 0, u, b.kind, 0, 0, 0, OPEN[b.kind]);
     }
 
@@ -365,7 +442,10 @@ export class Water {
       // frozen: the channel filled to its water's level between its banks,
       // and no water in it
       if (L.frozen) {
-        if (L.d < L.cw + ICE.bank) h = Math.max(h, L.Wq - ICE.under);
+        // A trough's floor is the ground, cut below the channel's level on
+        // purpose; anything else frozen is filled up to its level and snowed
+        // over, with no water in it.
+        if (L.trough <= 0 && L.d < L.cw + ICE.bank) h = Math.max(h, L.Wq - ICE.under);
         continue;
       }
       const edge = L.d - L.cw;
