@@ -22,7 +22,7 @@ import { normalize, place } from '../src/blueprints/plan.js';
 import { ghostGeometry } from '../src/blueprints/ghost.js';
 import { Splashes } from '../src/splashes/splashes.js';
 import { FireFx } from '../src/fires/look.js';
-import { FarView } from '../src/hikes/farView.js';
+import { FarView } from '../src/far/view.js';
 import { ChunkManager } from '../src/world/chunks.js';
 import { WorldGen } from '../src/world/worldgen.js';
 import { createVegetationMaterial } from '../src/world/materials.js';

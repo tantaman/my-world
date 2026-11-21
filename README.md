@@ -179,6 +179,7 @@ place in that order, not at the end:
 | `build/builder.js` | hands too full for tools | `builder.idleWhile(fn)` |
 | `build/inventory.js` | a material to carry (`optional`: on the HUD only while you have some) | `game.builder.stock.define({ id, label, optional })` |
 | `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)` |
+| `far/index.js` | land drawn past where the forest is streamed in, to be seen from high ground | `game.far.want(id, x0, z0, x1, z1, step)`, `far.drop(id)` |
 | `game/commands.js` | a key or a pad's button, and its line on the help panel | `game.commands.add({ keys, run, group, label })` |
 | `game/game.js` | something done every frame | `game.addSystem({ name, phase, update })` |
 | `game/settings.js` | a remembered preference | `game.settings.get / set` |

@@ -19,7 +19,7 @@ import { Landform, packHeights, unpackHeights, packShore, unpackShore, packCover
 import { winterSnow, snowlineFrom } from '../tools/hike/snow.js';
 import { growWorld, LANDS } from '../src/world/lands.js';
 import { generateVegetation, generateTerrain } from '../src/world/chunkGen.js';
-import { sampleFar } from '../src/hikes/farGrid.js';
+import { sampleFar } from '../src/far/grid.js';
 import { NO_WATER, LANDFORM_REACH, LANDFORM_DRY } from '../src/world/water.js';
 import { NET } from '../src/world/drainage.js';
 import { HIKES } from '../src/world/hikes.js';

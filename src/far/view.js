@@ -1,12 +1,12 @@
-// The far view from a hike: the land beyond where the forest is streamed in.
+// The far view: the land beyond where the forest is streamed in.
 //
-// Chunks reach a couple of hundred metres from you, which in a forest is
-// plenty: the trees close in long before. From a real mountain top it isn't.
-// The lake you climbed above, the ridges across it, the valley running off
-// to the haze are a kilometre or more away. So round each hike the land is
-// drawn once more, coarsely (farGrid.js), as one mesh coloured the way the
-// forest looks from afar: dark crowns of conifers raised over the ground,
-// meadows, bare rock on the steeps, and water that mirrors the sky.
+// Chunks reach a couple of hundred metres from you, which among trees is
+// plenty: they close in long before. From a mountain top it isn't. The lake
+// you climbed above, the ridges across it, the valley running off to the haze
+// are a kilometre or more away. So the land is drawn once more, coarsely
+// (grid.js), as one mesh per square coloured the way the forest looks from
+// afar: dark crowns of conifers raised over the ground, meadows, bare rock on
+// the steeps, and water that mirrors the sky.
 //
 // Where the chunks are, it sinks out of sight under them, so near you the
 // real ground and the real trees are what you see, and it only shows past

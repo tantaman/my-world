@@ -11,7 +11,7 @@ import { SPECIES } from '../src/wildlife/species.js';
 import { SPECIES as TIMBER, treeName } from '../src/build/forestry.js';
 import { growWorld, LANDS } from '../src/world/lands.js';
 import { generateTerrain, generateSurface, generateVegetation, SURFACE_STRIDE } from '../src/world/chunkGen.js';
-import { sampleFar } from '../src/hikes/farGrid.js';
+import { sampleFar } from '../src/far/grid.js';
 import { localFrame } from '../tools/hike/geo.js';
 import { buildHike, splitHike } from '../tools/hike/build.js';
 import { parseOsm, beaches } from '../tools/hike/osm.js';

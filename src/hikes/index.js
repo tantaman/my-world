@@ -12,7 +12,7 @@
 //     following a mark of your own).
 //   - A signpost stands at the trailhead and a cairn at the view, and the
 //     map names them.
-//   - From up there you can see the whole of it (farView.js).
+//   - From up there you can see the whole of it (the far view, src/far/).
 //
 // It works from the hikes' cards (what and where each one is: world/landforms.js),
 // which are always here. A hike's land is fetched the first time anything
@@ -23,8 +23,6 @@
 import { CONFIG } from '../config.js';
 import { formatDistance } from '../core/format.js';
 import { hash2i } from '../noise.js';
-import { FarView, FAR_CLIP } from './farView.js';
-import { sampleFar } from './farGrid.js';
 import { makeCairn, makeSignpost, makeChains } from './waymarks.js';
 import { HikesPanel } from './hikesPanel.js';
 
@@ -32,8 +30,6 @@ const FAR_MARGIN = 700; // m of the forest round a hike that its far view takes 
 const FAR_STEP = 16; // m between the far view's heights
 const FAR_MAKE = 1500; // m past a hike's edge: nearer than this its far view is made…
 const FAR_DROP = 2500; // …and further than this, let go
-const FOG_SHORT = 80; // m: the fog closes in this far short of the far view's edge
-const FOG_EASE = 1.2; // 1/s: how quickly the fog follows
 const VIEW_PITCH = 0.18; // rad: the camera looks out, a little down, as a photo does
 const CAIRN_ASIDE = 1.4; // m to the left of where the photo was taken
 const SIGN_ASIDE = 1.6; // m to the side of the trail where it starts
@@ -44,9 +40,9 @@ const PEAK = ['.......', '...#...', '..###..', '..###..', '.#####.', '.#####.', 
 const SIGN = ['.......', '.####..', '.#####.', '.####..', '...#...', '...#...', '...#...'];
 
 // The features this uses, so it is installed after them (game/features.js).
-export const after = ['render', 'ui', 'world', 'player', 'map'];
+export const after = ['render', 'ui', 'world', 'player', 'map', 'far'];
 export function installHikes(game) {
-  const { scene, gen, landforms, chunks, player, hud, pipeline, camera, sky, map } = game;
+  const { scene, gen, landforms, chunks, player, hud, camera, sky, map, far } = game;
   const cards = landforms.cards;
   const deg = (b) => (b * Math.PI) / 180;
   const real = (c, m) => formatDistance(m / c.scale);
@@ -121,7 +117,7 @@ export function installHikes(game) {
     const s = spot(c, at);
     player.spawn(s.x, s.z, s.yaw, s.camYaw);
     arrivedOn = c;
-    makeFar(c);
+    far.want(c.id, ...farBox(c));
     if (at === 'view') {
       player.camPitch = VIEW_PITCH;
       if (Number.isFinite(c.view.hour)) sky.hours = c.view.hour;
@@ -167,15 +163,14 @@ export function installHikes(game) {
   });
 
   // ── The far view ─────────────────────────────────────────────────────────
-  // Made once the land it takes in is here: the hike's own, and any other
-  // hike's within reach of it. Until then, asking for it sends for that land.
-  const far = new FarView(scene);
-  game.origin.place(far.mid);
-  const asked = new Set();
-  let worker = null;
-  landforms.on('land', (def) => {
-    if (worker) worker.postMessage({ type: 'hike', def });
-  });
+  // From up here you can see the whole of it, which the streamed-in forest
+  // does not reach: so the land round the hike is drawn once more, coarsely
+  // (src/far/). Asking for a square whose land has not been fetched waits for
+  // it rather than drawing the forest in its place.
+  const farBox = (c) => {
+    const half = outer(c) + FAR_MARGIN;
+    return [c.at[0] - half, c.at[1] - half, c.at[0] + half, c.at[1] + half, FAR_STEP];
+  };
 
   // Chains along the stretches of trail that have them, put up once the land
   // they stand on is here. (They stand where the ground was when they went
@@ -188,46 +183,12 @@ export function installHikes(game) {
   });
   // The ground near it waits for its land: say why, rather than leave a gap.
   landforms.on('failed', (c) => hud.flash(`can't fetch ${c ? c.name : 'a hike'} yet · trying again (or reload the page)`));
-  function makeFar(c) {
-    if (far.has(c.id) || asked.has(c.id)) return;
-    const half = outer(c) + FAR_MARGIN;
-    const [x0, z0] = [c.at[0] - half, c.at[1] - half];
-    if (!landforms.ready(x0, z0, x0 + 2 * half, z0 + 2 * half)) return;
-    asked.add(c.id);
-    const n = Math.round((2 * half) / FAR_STEP) + 1;
-    const job = { type: 'far', id: c.id, x0, z0, n, step: FAR_STEP };
-    if (!worker && worker !== false) {
-      try {
-        worker = new Worker(new URL('./farWorker.js', import.meta.url), { type: 'module' });
-        worker.onmessage = (e) => {
-          asked.delete(e.data.id);
-          far.add(e.data.id, e.data.grid);
-        };
-        worker.onerror = (e) => {
-          console.warn('far view worker failed, drawing it on the main thread', e.message);
-          worker = false;
-        };
-        const structures = (game.structures || []).map((s) => ({ x: s.x, z: s.z, radius: s.radius }));
-        worker.postMessage({ type: 'init', seed: gen.seed, land: gen.land, structures, hikes: gen.hikes });
-      } catch (err) {
-        worker = false;
-      }
-    }
-    if (worker) worker.postMessage(job);
-    else {
-      far.add(c.id, sampleFar(gen, job.x0, job.z0, job.n, job.step));
-      asked.delete(c.id);
-    }
-  }
-
-  let fog = 0;
   game.addSystem({
     name: 'hikes',
     phase: 'world',
     update({ dt }) {
       const at = game.focus;
-      far.update(at);
-      // One far view at a time, the nearest hike's: hikes near each other
+      // One hike's far view at a time, the nearest: hikes near each other
       // would draw the same far land twice, and the two would fight. It
       // changes over once the new one is drawn.
       let nearest = null;
@@ -236,17 +197,11 @@ export function installHikes(game) {
         const d = Math.hypot(at.x - c.at[0], at.z - c.at[1]) - outer(c);
         if (d < nd) [nearest, nd] = [c, d];
       }
-      if (nearest && nd < FAR_MAKE) makeFar(nearest);
+      if (nearest && nd < FAR_MAKE) far.want(nearest.id, ...farBox(nearest));
       for (const c of cards) {
         const stale = c !== nearest && (!nearest || far.has(nearest.id) || nd >= FAR_MAKE);
-        if (stale || nd > FAR_DROP) far.remove(c.id);
+        if (stale || nd > FAR_DROP) far.drop(c.id);
       }
-
-      // As far as there's land drawn in every direction, the air is clear.
-      const base = (CONFIG.viewRadius - 0.15) * CONFIG.chunkSize;
-      const want = Math.min(FAR_CLIP - 30, Math.max(base, far.reach(camera.position.x, camera.position.z) - FOG_SHORT));
-      fog = fog ? fog + (want - fog) * (1 - Math.exp(-dt * FOG_EASE)) : want;
-      pipeline.fogFar = fog > base + 1 ? fog : 0;
 
       // Walking onto a hike, you're told which.
       const c = onHike(at.x, at.z);
