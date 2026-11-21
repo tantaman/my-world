@@ -1,0 +1,84 @@
+/* The trip to orbit and the arena: the glare, the big word, the arena's HUD. */
+
+#space { position: fixed; inset: 0; pointer-events: none; z-index: 11; font-family: var(--font); }
+#space .glare { position: absolute; inset: 0; background: #fffdf6; opacity: 0; }
+
+#space .big {
+  position: absolute; left: 0; right: 0; top: 30%; text-align: center; font-size: 30px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: lowercase; color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7), 0 0 18px rgba(0, 0, 0, 0.45);
+  opacity: 0; transition: opacity 0.25s; padding: 0 16px;
+}
+#space .big.show { opacity: 1; }
+#space .big small { display: block; font-size: 13px; font-weight: 400; letter-spacing: 0.08em; margin-top: 8px; color: rgba(255, 255, 255, 0.85); }
+#space .big.count { font-size: 64px; }
+#space .big.fight { font-size: 56px; color: #ffd76a; }
+
+/* While the trip has you (in-flight), and while you're up there (in-orbit),
+   the forest's HUD makes way. */
+body.in-flight #hotbar,
+body.in-flight #inv,
+body.in-flight #hint,
+body.in-flight #prompt,
+body.in-flight #crosshair,
+body.in-flight #progress,
+body.in-orbit #coords,
+body.in-orbit #track,
+body.in-orbit #corner,
+body.in-orbit #touch-act #act-stake,
+body.in-orbit #touch-act #act-dive,
+body.in-orbit #touch-act #act-alt { display: none !important; }
+
+#space .arena { position: absolute; inset: 0; color: #fff; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.45); }
+#space .arena[hidden] { display: none; }
+
+#space .cross { position: absolute; left: 50%; top: 50%; width: 32px; height: 32px; margin: -16px 0 0 -16px; }
+#space .cross i {
+  position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+#space .cross svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+#space .cross .charge { fill: none; stroke: rgba(160, 232, 255, 0.55); stroke-width: 2; }
+#space .cross .charge.ready { stroke: rgba(160, 232, 255, 0.9); }
+
+#space .feed { position: absolute; left: calc(16px + var(--inset-l)); top: calc(14px + var(--inset-t)); font-size: 12px; line-height: 1.6; max-width: 60vw; }
+#space .clock {
+  position: absolute; left: 0; right: 0; top: calc(12px + var(--inset-t)); text-align: center; font-size: 13px; letter-spacing: 0.1em;
+}
+#space .place {
+  position: absolute; right: calc(16px + var(--inset-r)); top: calc(40px + var(--inset-t)); font-size: 20px; font-weight: 700; text-align: right;
+}
+#space .place span { display: block; font-size: 11px; font-weight: 400; letter-spacing: 0.06em; opacity: 0.8; }
+
+#space .stat { position: absolute; bottom: calc(18px + var(--inset-b)); font-size: 30px; font-weight: 700; display: flex; align-items: baseline; gap: 8px; }
+#space .stat .icon { font-size: 22px; opacity: 0.85; }
+#space .stat .label { font-size: 11px; font-weight: 400; letter-spacing: 0.1em; opacity: 0.8; }
+#space .health { left: calc(18px + var(--inset-l)); }
+#space .health .icon { color: #ff8a7a; }
+#space .ammo { left: 50%; transform: translateX(-50%); }
+#space .ammo .icon { color: #a0e8ff; }
+#space .frags { right: calc(18px + var(--inset-r)); }
+
+#space .hurt { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0) 40%, rgba(200, 0, 0, 0.55) 100%); opacity: 0; }
+#space .hurt.on { animation: space-hurt 1.4s ease-out; }
+@keyframes space-hurt { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+#space .scores {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); min-width: min(380px, calc(100vw - 32px));
+  background: rgba(8, 12, 20, 0.78); border: 1px solid rgba(160, 232, 255, 0.25); padding: 16px 20px; font-size: 13px;
+}
+#space .scores[hidden] { display: none; }
+#space .scores h2 { margin: 0 0 10px; font-size: 18px; letter-spacing: 0.12em; text-transform: lowercase; text-align: center; }
+#space .scores table { width: 100%; border-collapse: collapse; }
+#space .scores th { font-weight: 400; font-size: 10px; letter-spacing: 0.1em; opacity: 0.7; text-align: right; }
+#space .scores td { padding: 3px 6px; text-align: right; }
+#space .scores td:nth-child(2) { text-align: left; }
+#space .scores tr.me td { background: rgba(255, 255, 255, 0.08); }
+#space .scores p { margin: 12px 0 0; text-align: center; font-size: 11px; letter-spacing: 0.06em; opacity: 0.85; }
+
+@media (max-width: 600px) {
+  #space .big { font-size: 22px; }
+  #space .big.count, #space .big.fight { font-size: 42px; }
+  #space .stat { font-size: 22px; }
+  #space .ammo { bottom: calc(70px + var(--inset-b)); }
+}
+@media (prefers-reduced-motion: reduce) { #space .big { transition: none; } #space .hurt.on { animation: none; } }
