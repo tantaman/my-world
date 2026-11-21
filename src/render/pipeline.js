@@ -74,34 +74,40 @@ uniform float uRadius;
 uniform float uMaxSpan;
 varying vec2 vUv;
 
-// Where the depth texel nearest uv is, in view space. (The middle of the
+// Where a depth texel is, in view space. (The middle of the
 // texel, whose depth it is: anywhere else, a slope seen edge on would seem
 // to stand up in front of itself. The sky's depth is 1, which is infinitely
 // far: it's read as just short of that, far enough to hide nothing.)
-vec3 viewPos(vec2 uv) {
-  uv = (floor(uv * uDepthRes) + 0.5) / uDepthRes;
-  float d = min(texture2D(tDepth, uv).x, 0.99999);
+vec3 viewPos(ivec2 texel) {
+  texel = clamp(texel, ivec2(0), ivec2(uDepthRes) - 1);
+  vec2 uv = (vec2(texel) + 0.5) / uDepthRes;
+  float d = min(texelFetch(tDepth, texel, 0).x, 0.99999);
   vec4 p = uProjInv * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
   return p.xyz / p.w;
 }
 
 void main() {
-  float d = texture2D(tDepth, vUv).x;
+  // At half resolution vUv can land exactly between depth texels. Choose
+  // the centre once so rounding can't make a neighbour coincide with it.
+  ivec2 centre = ivec2(vUv * uDepthRes);
+  float d = texelFetch(tDepth, centre, 0).x;
   if (d >= 0.99999) {
     gl_FragColor = vec4(1.0, 6.0e4, 0.0, 1.0); // (as far as half a float holds)
     return;
   }
-  vec3 p = viewPos(vUv);
+  vec3 p = viewPos(centre);
   float z = -p.z;
   // the surface's normal: from the neighbours on whichever side is nearer,
   // so an edge doesn't bend it
-  vec2 px = 1.0 / uDepthRes;
-  vec3 pl = viewPos(vUv - vec2(px.x, 0.0));
-  vec3 pr = viewPos(vUv + vec2(px.x, 0.0));
-  vec3 pd = viewPos(vUv - vec2(0.0, px.y));
-  vec3 pu = viewPos(vUv + vec2(0.0, px.y));
-  vec3 dx = abs(pr.z - p.z) < abs(p.z - pl.z) ? pr - p : p - pl;
-  vec3 dy = abs(pu.z - p.z) < abs(p.z - pd.z) ? pu - p : p - pd;
+  vec3 pl = viewPos(centre - ivec2(1, 0));
+  vec3 pr = viewPos(centre + ivec2(1, 0));
+  vec3 pd = viewPos(centre - ivec2(0, 1));
+  vec3 pu = viewPos(centre + ivec2(0, 1));
+  ivec2 last = ivec2(uDepthRes) - 1;
+  bool useRight = centre.x == 0 || (centre.x < last.x && abs(pr.z - p.z) < abs(p.z - pl.z));
+  bool useUp = centre.y == 0 || (centre.y < last.y && abs(pu.z - p.z) < abs(p.z - pd.z));
+  vec3 dx = useRight ? pr - p : p - pl;
+  vec3 dy = useUp ? pu - p : p - pd;
   vec3 n = normalize(cross(dx, dy));
 
   // the disc on screen, in uv (y); x is squeezed by the picture's shape
@@ -121,7 +127,7 @@ void main() {
     float t = (float(i) + 0.5) / ${AO_SAMPLES}.0;
     float a = float(i) * 2.39996 + turn;
     vec2 off = vec2(cos(a), sin(a)) * sqrt(t) * span * aspect;
-    vec3 v = viewPos(vUv + off) - p;
+    vec3 v = viewPos(ivec2(vec2(centre) + 0.5 + off * uDepthRes)) - p;
     float vv = dot(v, v);
     float c = dot(v, n) * inversesqrt(vv + 1.0e-4);
     occ += max(c - 0.12, 0.0) * max(1.0 - vv / r2, 0.0);
