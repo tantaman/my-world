@@ -107,7 +107,7 @@ const _r = {};
 
 // ── Building blocks ─────────────────────────────────────────────────────────
 // Vertex-coloured geometry, gathered into one mesh per material.
-class Kit {
+export class Kit {
   constructor() {
     this.pos = [];
     this.nor = [];

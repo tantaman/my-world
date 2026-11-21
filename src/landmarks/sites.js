@@ -368,7 +368,7 @@ export class Sites {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function boxOf(s) {
+export function boxOf(s) {
   let x0 = Infinity;
   let z0 = Infinity;
   let x1 = -Infinity;
