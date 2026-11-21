@@ -29,7 +29,10 @@
     broad U-shaped valleys, a floor below the stream's own bed and walls
     rising a couple of hundred metres out. The drainage network only ever
     runs downhill, so a trough does too, the whole way: the best of them give
-    500 m of descent at 27° without ever turning back uphill.
+    500 m of descent at 27° without ever turning back uphill. And because the
+    point of standing up there is what you can see, the land round a massif is
+    drawn a kilometre out rather than the couple of hundred metres the chunks
+    reach, and the air clears with it ([the far view](../far/README.md)).
   - **Benches** step the land into level shelves with a rock face between
     each and the next, here and there in the hills and mountains.
 

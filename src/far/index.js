@@ -32,6 +32,27 @@ import { CONFIG } from '../config.js';
 const FOG_SHORT = 80;
 const FOG_EASE = 1.2;
 
+// ── The forest's own far view ───────────────────────────────────────────────
+// One square round you, re-made once you have walked far enough off its
+// middle. One square and not a grid of them, because what is drawn reaches
+// only as far as the edge of the square you are standing in (view.js): a grid
+// of small ones would hold the fog in at the first edge it met.
+//
+// Only where there is something to see: in the high country (worldgen.js),
+// where the land stands a kilometre and more over its valleys. Everywhere
+// else the trees close in long before the chunks do, the fog stays where it
+// has always been, and nothing here is sampled, meshed or drawn at all. A
+// massif anywhere in the square counts, not only under your feet, so walking
+// up to one from the valley you see it before you are on it.
+const FOREST = {
+  id: 'the forest',
+  half: 1100, // m: half the square drawn round you
+  step: 22, // m between its heights
+  move: 300, // m you may walk off its middle before it is re-made
+  alpine: 0.15, // how much high country in the square makes it worth drawing
+  look: 5, // points each way the square is judged over
+};
+
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'world'];
 export function installFar(game) {
@@ -69,14 +90,20 @@ export function installFar(game) {
   }
 
   // Draw the land over this square, under this id, once it can be sampled.
-  // Asking again for one already drawn or on its way does nothing.
+  // Asking again for the same square, drawn or on its way, does nothing;
+  // asking for a different one replaces it, and what is already drawn stays
+  // up until the new square arrives, so there is no gap.
+  const square = new Map(); // id -> the square drawn, or gone for sampling
+  const same = (a, b) => !!a && a.x0 === b.x0 && a.z0 === b.z0 && a.x1 === b.x1 && a.z1 === b.z1 && a.step === b.step;
   function want(id, x0, z0, x1, z1, step) {
-    if (far.has(id) || sampling.has(id)) return;
-    waiting.set(id, { x0, z0, x1, z1, step });
+    const box = { x0, z0, x1, z1, step };
+    if (same(square.get(id), box) || same(waiting.get(id), box)) return;
+    waiting.set(id, box);
   }
 
   function drop(id) {
     waiting.delete(id);
+    square.delete(id);
     far.remove(id);
   }
 
@@ -86,6 +113,7 @@ export function installFar(game) {
     for (const [id, box] of [...waiting]) {
       if (!landforms.ready(box.x0, box.z0, box.x1, box.z1)) continue;
       waiting.delete(id);
+      square.set(id, box);
       const n = Math.round((box.x1 - box.x0) / box.step) + 1;
       start();
       if (worker) {
@@ -97,11 +125,55 @@ export function installFar(game) {
     }
   }
 
+  // Is there high country in the square round (x, z) — something worth
+  // drawing a long view of? Read from the country field alone, which is cheap
+  // and needs no water worked out.
+  function worthIt(x, z) {
+    for (let i = 0; i < FOREST.look; i++) {
+      for (let j = 0; j < FOREST.look; j++) {
+        const f = (k) => ((2 * k) / (FOREST.look - 1) - 1) * FOREST.half;
+        if (gen.country(x + f(i), z + f(j)).alp >= FOREST.alpine) return true;
+      }
+    }
+    return false;
+  }
+
+  let forestAt = null; // the middle of the square asked for, while it stands
+  function forestFar() {
+    // A square asked for by something else (a hike's) covers the same land,
+    // and the two would draw it twice and fight: the forest's gives way.
+    for (const id of far.meshes.keys()) {
+      if (id === FOREST.id) continue;
+      if (forestAt) {
+        drop(FOREST.id);
+        forestAt = null;
+      }
+      return;
+    }
+    const { x, z } = focus;
+    if (forestAt && Math.hypot(x - forestAt[0], z - forestAt[1]) < FOREST.move) return;
+    if (!worthIt(x, z)) {
+      if (forestAt) {
+        drop(FOREST.id);
+        forestAt = null;
+      }
+      return;
+    }
+    forestAt = [x, z];
+    // Snapped to its own step, so that walking about doesn't shift every
+    // height in it by a metre or two and shimmer the whole view.
+    const n = Math.round((2 * FOREST.half) / FOREST.step) + 1;
+    const x0 = Math.round((x - FOREST.half) / FOREST.step) * FOREST.step;
+    const z0 = Math.round((z - FOREST.half) / FOREST.step) * FOREST.step;
+    want(FOREST.id, x0, z0, x0 + (n - 1) * FOREST.step, z0 + (n - 1) * FOREST.step, FOREST.step);
+  }
+
   let fog = 0;
   game.addSystem({
     name: 'far',
     phase: 'world',
     update({ dt }) {
+      forestFar();
       sendReady();
       far.update(focus);
       // As far as there is land drawn in every direction, the air is clear.
@@ -122,6 +194,8 @@ export function installFar(game) {
   Object.assign(game.api, {
     far: {
       list: () => ({ drawn: [...far.meshes.keys()], sampling: [...sampling], waiting: [...waiting.keys()] }),
+      // whether the land round you has enough shape to be drawn far off
+      worthIt: () => worthIt(focus.x, focus.z),
       reach: () => Math.round(far.reach(camera.position.x, camera.position.z)),
     },
   });
