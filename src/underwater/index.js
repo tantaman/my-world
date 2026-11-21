@@ -16,6 +16,7 @@
 //                                      (or 'lake'), to teleport to
 //   world.underwater.spawn('perch')    a school turns up near you
 //   world.underwater.fish()            what's swimming about
+//   world.underwater.sea(x, z)         whether the water there is the sea
 
 import * as THREE from 'three';
 import { UNDER } from '../render/uniforms.js';
@@ -142,6 +143,8 @@ export function installUnderwater(game) {
     find,
     spawn,
     fish: () => fishes.list(),
+    // Is the water at (x, z) the sea (and not a lake, a pond or a river)?
+    sea: (x, z) => chunks.waterAt(x, z, _w) && _w.depth > 0 && salt(_w),
     get under() {
       return state.under === 1;
     },

@@ -19,6 +19,8 @@
 //     //   ok      a click would do it
 //     //   bad     it can't be done, and the prompt says why (shown in red)
 //     //   node    { x, z } the grid node aimed at (for tools with `grid`)
+//     //   progress  0..1 for the bar over the prompt, while no press-and-
+//     //           hold is under way (how far a fish has been reeled in)
 //     target(b) {},
 //
 //     // Every frame no swing is under way: act on the buttons.
@@ -32,6 +34,7 @@
 //     update(b, dt) {},       // every frame, in hand or not
 //     put(b) {},              // on putting it down, and on Esc: drop anything half-done
 //     held: { name, make, rest, elbow },   // what the hiker carries (see Character.addHeld)
+//     afloat: true,           // can be used out in a boat (see boats/), not only on foot
 //     stake: true,            // works to the grade stake: G and the grade plane apply
 //     grid: true,             // snaps to the 1 m grid: show the nodes around t.node
 //     roofs: true,            // can aim at roofs (otherwise the crosshair goes through them)
@@ -398,7 +401,7 @@ export class Builder extends Emitter {
         .replace(/<b>G<\/b>/g, '<b>stake</b>');
     }
     this.hud.setPrompt(prompt, t && t.bad);
-    this.hud.setProgress(this.hold ? this.hold.t / this.hold.dur : null);
+    this.hud.setProgress(this.hold ? this.hold.t / this.hold.dur : t && Number.isFinite(t.progress) ? t.progress : null);
     this.hud.setInventory(this.stock.line());
   }
 }

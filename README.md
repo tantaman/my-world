@@ -190,7 +190,7 @@ place in that order, not at the end:
 | `player/character.js` | something the hiker wears on the cap | `character.addWorn(object, { band })` |
 | `player/character.js` | a way of standing to the work (a rifle shouldered) | `definePose(kind, keyframes)`, `character.play(kind, dur)` |
 | `player/player.js` | walking the hiker somewhere | `player.steer = { x, z, run }` |
-| `player/player.js` | something that carries you (how fast, how deep, whether it flies) | `player.carrier = { walk, run, swim, depth, fly, … }` |
+| `player/player.js` | something that carries you (how fast, how deep, whether it flies or floats) | `player.carrier = { walk, run, swim, depth, fly, keel, … }` |
 | `player/player.js` | something that moves you itself (a train you sit in, skis you steer) | `player.aboard = { place(out, dt) }` |
 | `player/player.js` | something held to the eye: look through it, magnified | `player.sight = { zoom }` |
 | `render/origin.js` | a uniform that says where something is | `game.origin.place(uniform)` |

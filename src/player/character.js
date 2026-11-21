@@ -819,8 +819,10 @@ export class Character {
         F.out = lerp(F.out, F.side * 0.22, sit);
         F.load *= 1 - sit;
       }
-      this.spine.rotation.x = lerp(this.spine.rotation.x, lean, sit);
-      this.spine.rotation.y *= 1 - sit;
+      // (unless at work: a stroke of a paddle leans and turns the body itself)
+      const free = 1 - this.work;
+      this.spine.rotation.x = lerp(this.spine.rotation.x, lean, sit * free);
+      this.spine.rotation.y *= 1 - sit * free;
       this.spine.rotation.z *= 1 - sit;
       this.head.rotation.x = lerp(this.head.rotation.x, -lean * 0.8, sit);
       const reins = (S.reins ?? 1) * sit;
