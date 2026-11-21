@@ -14,6 +14,16 @@
     shrubs, and snow lying on the tops from about 120 m. Rock shows on the
     steep faces, no tree grows on a cliff, and the trails give out about where
     the trees do.
+  - **The high country** is where the mountains are mountains: massifs that
+    stand 1,400 m and more over their valleys, one ridge to a massif, far
+    enough apart that walking from one to the next is a day of it. The trees
+    climb to about 900 m before they thin out, the cap above is bare rock, and
+    the snow line comes *below* the treeline, at about 600 m — so coming down
+    off the top you leave the open snow, carry on through snowy woods, and
+    only then run out of it. That is where a descent is 800 m of vertical
+    rather than the fifty metres the forest's own tops hold ([skiing](../skiing/README.md)).
+    A massif's valley floors stay down at forest height, which is what gives
+    the whole drop.
   - **Benches** step the land into level shelves with a rock face between
     each and the next, here and there in the hills and mountains.
 

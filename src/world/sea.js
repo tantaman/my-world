@@ -116,7 +116,13 @@ export class Sea {
     // inland, no hollow below the floor
     const inland = 1 - smoothstep(SEA.inland[0], SEA.inland[1], D);
     if (inland > 0) {
-      const f = SEA.floor + SEA.soft * Math.log1p(Math.exp((u - SEA.floor) / SEA.soft));
+      // A soft floor: log(1 + e^t), which is t for a high t and 0 for a low
+      // one, rounded off between. Written the long way round because e^t
+      // overflows past t = 709 — about 1400 m up, which the high country
+      // reaches (worldgen.js) — and then the whole height came out infinite.
+      const t = (u - SEA.floor) / SEA.soft;
+      const soft = Math.max(t, 0) + Math.log1p(Math.exp(-Math.abs(t)));
+      const f = SEA.floor + SEA.soft * soft;
       u += (f - u) * inland;
     }
     // a beach at the waterline

@@ -24,9 +24,12 @@ const named = (name, land) => (land > 1 ? `${name}-land${land}` : name);
 
 for (const land of LANDS) for (const seed of SEEDS) {
   const on = land > 1 ? ` on land ${land}` : '';
-  // The land changes country over kilometres, so it is pinned over a wide
-  // square as well as a small one round the middle.
-  const spans = [300, 2400];
+  // The land changes country over kilometres, so it is pinned over wide
+  // squares as well as a small one round the middle: 2.4 km catches the lake
+  // country, the hills and the forest's own mountains, and 20 km catches the
+  // high country, whose massifs are 26 km apart and so can sit entirely
+  // outside the smaller squares (they do, for one of these seeds).
+  const spans = [300, 2400, 20000];
 
   test(`seed ${seed}${on}: the fields of the land`, () => {
     const gen = growWorld(seed, [], land);
@@ -104,6 +107,22 @@ test('the land goes down to a sea, and knows which way it lies', () => {
     const { sea } = growWorld(SEEDS[0], [], land);
     assert.ok(Number.isFinite(sea.level), `land ${land}: the sea stands at a level`);
     assert.ok(Math.abs(Math.hypot(sea.dirX, sea.dirZ) - 1) < 1e-9, `land ${land}: it lies in a direction`);
+  }
+});
+
+test('the sea’s soft floor holds however high the land stands', () => {
+  // Inland the sea lays a soft floor under the land, log(1 + e^t). Written
+  // the obvious way, e^t overflows past t = 709 — about 1400 m up, which the
+  // high country reaches — and every height there came out infinite.
+  const gen = growWorld(SEEDS[0], [], 1);
+  const [x, z] = [-gen.sea.dirX * 3000, -gen.sea.dirZ * 3000]; // away from the sea
+  assert.ok(gen.sea.drop(x, z) < SEA.inland[0], 'well inland, where the floor is laid');
+  let last = -Infinity;
+  for (const h of [-50, 0, 120, 1400, 1421, 1500, 3000, 50000]) {
+    const got = gen.sea.shape(h, x, z);
+    assert.ok(Number.isFinite(got), `${h} m of land stands at a height at all (${got})`);
+    assert.ok(got > last, `and higher land stands higher (${h} m -> ${got})`);
+    last = got;
   }
 });
 

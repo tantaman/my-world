@@ -22,6 +22,12 @@
 //                  snow lying on the tops
 //   benches        the land stepped into level shelves with rock along each
 //                  riser, here and there in the hills and mountains
+//   high country   massifs a kilometre and a half over their valleys, and a
+//                  long walk apart: a bare, snowy cap, and under it the snow
+//                  line comes *below* the treeline, so the way down runs out
+//                  of the open and on through snowy woods before the snow
+//                  gives out. That is where there is a run worth the name —
+//                  the forest's own tops hold fifty metres of it
 //
 // and the woods change over a kilometre or so, whatever the country: dark
 // conifer forest, birch groves, and open parkland where the meadows run
@@ -52,6 +58,20 @@ const MOUNTAINS = [0.12, 0.5];
 const MASSIF = 45;
 const RIDGE_WAVE = 1100;
 const RIDGE_HIGH = 170;
+// The high country: whole massifs, a thousand metres and more over the
+// valleys, far enough apart that one is a day's walk from the next. Over this
+// many metres, and where on its own field the forest gives way to them.
+const ALPINE_WAVE = 26000;
+const ALPINE = [0.42, 0.78];
+// A massif stands this high (m) over the valleys round it, with ridges and
+// the valleys between them this far apart (m) at their broadest — kilometres,
+// so that a fall line runs for kilometres rather than the few hundred metres
+// a forest ridge gives.
+const ALPINE_HIGH = 2000;
+const ALPINE_RIDGE = 34000;
+// and built from this many octaves (see _ridges): few, so a massif is one big
+// form rather than a flank that is steep at every scale at once.
+const ALPINE_OCTAVES = 2;
 // How much the crests are rounded off (on the ridged noise's own scale).
 const CREST = 0.012;
 // Benches: shelves this high (m) between risers. A riser takes up this much
@@ -63,6 +83,14 @@ const BENCH_RISER = 0.16;
 const TREELINE = 92;
 const TREE_FADE = 26;
 const SNOWLINE = 122;
+// Up a massif both lines are far higher, and they swap over: the snow line
+// lies *below* the treeline (m), so a descent comes down out of the open,
+// through snowy woods, and only then runs out of snow. That is what makes a
+// run long; above the forest's own tops there is nothing but the bare cap.
+const ALPINE_TREELINE = 900;
+const ALPINE_SNOWLINE = 600;
+// and the trees take longer to thin out, on that scale (m).
+const ALPINE_FADE = 160;
 // The steepest ground (rise over run) you start out on.
 const START_SLOPE = 0.2;
 // The woods: kinds of woodland, over this many metres.
@@ -122,10 +150,11 @@ export class WorldGen {
     this.nTreeline = n(33);
     this.nWoods = n(34);
     this.nGroves = n(35);
+    this.nAlpine = n(36);
     // the last height asked for, and the last country: both asked for over
     // and over at the same spot
     this._at = { x: NaN, z: NaN, h: 0 };
-    this._c = { x: NaN, z: NaN, low: 0, mtn: 0, bench: 0 };
+    this._c = { x: NaN, z: NaN, low: 0, mtn: 0, alp: 0, bench: 0 };
     // The sea lies over the land's own shape, so it is given that shape
     // rather than broadHeight(), which is the land with the sea already in it.
     this.sea = new Sea(this.seed, n, (x, z) => this._landHeight(x, z, 0));
@@ -133,8 +162,10 @@ export class WorldGen {
 
   // ── Country ───────────────────────────────────────────────────────────────
   // How much of each kind of country (x, z) is in: this._c.low (lake
-  // country), .mtn (mountains), .bench (stepped into shelves); hill country is
-  // what is left.
+  // country), .mtn (mountains), .alp (the high country), .bench (stepped into
+  // shelves); hill country is what is left. The high country has a field of
+  // its own, on a far broader scale than the rest, so a massif stands wherever
+  // the land is not low — in the hills or over the forest's own mountains.
   country(x, z) {
     const c = this._c;
     if (c.x === x && c.z === z) return c;
@@ -147,6 +178,9 @@ export class WorldGen {
     c.low = 1 - smoothstep(LOWLAND[0], LOWLAND[1], v);
     c.mtn = smoothstep(MOUNTAINS[0], MOUNTAINS[1], v);
     c.bench = smoothstep(0.32, 0.6, this.nBench(x * 0.00055, z * 0.00055)) * (1 - c.low);
+    const fa = 1 / ALPINE_WAVE;
+    const a = (this.nAlpine(wx * fa, wz * fa) + 0.35 * this.nAlpine(wx * fa * 2.7 - 11.3, wz * fa * 2.7 + 5.9)) / 1.2;
+    c.alp = smoothstep(ALPINE[0], ALPINE[1], a) * (1 - c.low);
     return c;
   }
 
@@ -168,11 +202,16 @@ export class WorldGen {
   // alone: the trails are worked out before the height.)
   _trailsHere(x, z) {
     const c = this.country(x, z);
-    if (c.mtn <= 0) return 1;
+    if (c.mtn <= 0 && c.alp <= 0) return 1;
     const wx = x + this.nWarpA(x * 0.0016, z * 0.0016) * 70;
     const wz = z + this.nWarpB(x * 0.0016, z * 0.0016) * 70;
-    const high = this.nBig(x * 0.0007, z * 0.0007) * 36 + c.mtn * (c.mtn * MASSIF + Math.pow(this._ridges(wx, wz, 500), 1.25) * RIDGE_HIGH - 12);
-    return 1 - smoothstep(TREELINE - 40, TREELINE - 5, high);
+    let high = this.nBig(x * 0.0007, z * 0.0007) * 36;
+    if (c.mtn > 0) high += c.mtn * (c.mtn * MASSIF + Math.pow(this._ridges(wx, wz, 500), 1.25) * RIDGE_HIGH - 12);
+    if (c.alp > 0) high += c.alp * c.alp * Math.pow(this._ridges(wx, wz, 1500, ALPINE_RIDGE, ALPINE_OCTAVES), 1.15) * ALPINE_HIGH;
+    // on a massif the trees, and the trails with them, go far higher
+    const line = TREELINE + c.alp * (ALPINE_TREELINE - TREELINE);
+    const fade = 40 + c.alp * (ALPINE_FADE * 1.5 - 40);
+    return 1 - smoothstep(line - fade, line - 5, high);
   }
 
   // 0..1: how much there is of a side trail here, where there is one. Fewer
@@ -240,6 +279,13 @@ export class WorldGen {
     // mountains: the range raised, and ridged, sharp along the crests
     if (c.mtn > 0) h += c.mtn * (c.mtn * MASSIF + Math.pow(this._ridges(wx, wz, minWavelength), 1.25) * RIDGE_HIGH - 12);
 
+    // the high country: the same ridging, kilometres across and a thousand
+    // metres high. Squared, so a massif comes up out of the forest rather
+    // than ending at a wall, and its valley floors stay down at forest height
+    // where the ridged field is near nothing — which is what gives a descent
+    // its whole drop.
+    if (c.alp > 0) h += c.alp * c.alp * Math.pow(this._ridges(wx, wz, minWavelength, ALPINE_RIDGE, ALPINE_OCTAVES), 1.15) * ALPINE_HIGH;
+
     // benches: level shelves, and a riser of rock up to the next
     if (c.bench > 0) {
       const f = h / BENCH_STEP;
@@ -263,12 +309,19 @@ export class WorldGen {
 
   // 0..~1: ridged noise, sharp along the crests (rounded off just enough to
   // walk along), its finer octaves only where there is a ridge to put them on.
-  _ridges(x, z, minWavelength) {
+  // Each octave is half the height of the last but a little over twice as
+  // close together, so each adds about as much *slope* as the one before. Over
+  // a forest ridge, where they are all a few hundred metres and less, that is
+  // the roughness you walk over. Over a massif kilometres across it would make
+  // the whole flank that steep, so the high country asks for fewer of them and
+  // gets one clean form, its small roughness coming from the hills and the
+  // detail as everywhere else does.
+  _ridges(x, z, minWavelength, wave = RIDGE_WAVE, octaves = 4) {
     let sum = 0;
     let amp = 1;
-    let freq = 1 / RIDGE_WAVE;
+    let freq = 1 / wave;
     let w = 1;
-    for (let o = 0; o < 4 && 1 / freq >= minWavelength; o++) {
+    for (let o = 0; o < octaves && 1 / freq >= minWavelength; o++) {
       const n = this.nRidge(x * freq + o * 31.1, z * freq - o * 11.7);
       let r = 1 - Math.sqrt(n * n + CREST);
       r *= r * w;
@@ -277,7 +330,8 @@ export class WorldGen {
       amp *= 0.5;
       freq *= 2.1;
     }
-    return sum / 1.875;
+    // what the amplitudes come to for this many octaves, whatever was reached
+    return sum / (2 - Math.pow(0.5, octaves - 1));
   }
 
   _baseHeight(x, z) {
@@ -393,7 +447,16 @@ export class WorldGen {
   }
 
   treeline(x, z) {
-    return TREELINE + this.nTreeline(x * 0.004, z * 0.004) * 10;
+    const line = TREELINE + this.nTreeline(x * 0.004, z * 0.004) * 10;
+    const { alp } = this.country(x, z);
+    return alp > 0 ? line + alp * (ALPINE_TREELINE - TREELINE) : line;
+  }
+
+  // (the snow line wanders with the treeline's field, on a finer scale)
+  snowline(x, z) {
+    const line = SNOWLINE + this.nTreeline(x * 0.011 + 40, z * 0.011) * 9;
+    const { alp } = this.country(x, z);
+    return alp > 0 ? line + alp * (ALPINE_SNOWLINE - SNOWLINE) : line;
   }
 
   // 0 = open meadow, 1 = dense forest
@@ -406,8 +469,9 @@ export class WorldGen {
     // lake country is wetter and a little more open
     v -= c.low * 0.06;
     let f = smoothstep(-0.34, 0.1, v);
-    // thinning out to the treeline (which only the mountains reach)
-    if (c.mtn > 0) f *= 1 - this.above(x, z, this._baseHeight(x, z));
+    // thinning out to the treeline (which only the mountains and the high
+    // country reach)
+    if (c.mtn > 0 || c.alp > 0) f *= 1 - this.above(x, z, this._baseHeight(x, z));
     return f;
   }
 
@@ -418,6 +482,7 @@ export class WorldGen {
     let sp = this.nSpecies(x * 0.0033, z * 0.0033) + this.nSpecies(x * 0.02 + 9, z * 0.02 - 4) * 0.15;
     sp += smoothstep(0.15, 0.55, this.woods(x, z)) * 0.6 - c.low * 0.35;
     if (c.mtn > 0) sp += c.mtn * smoothstep(10, 70, this._baseHeight(x, z)) * 1.2;
+    if (c.alp > 0) sp += c.alp * smoothstep(80, 600, this._baseHeight(x, z)) * 1.2;
     return sp;
   }
 
@@ -438,17 +503,17 @@ export class WorldGen {
   // Birch groves: whole stands of them, some way from any mountain.
   groves(x, z) {
     const c = this.country(x, z);
-    return smoothstep(0.2, 0.5, this.nGroves(x * 0.0011, z * 0.0011)) * (1 - c.mtn) * 0.85;
+    return smoothstep(0.2, 0.5, this.nGroves(x * 0.0011, z * 0.0011)) * (1 - c.mtn) * (1 - c.alp) * 0.85;
   }
 
   above(x, z, h) {
     const line = this.treeline(x, z);
-    return smoothstep(line - TREE_FADE, line + 6, h);
+    const fade = TREE_FADE + this.country(x, z).alp * (ALPINE_FADE - TREE_FADE);
+    return smoothstep(line - fade, line + 6, h);
   }
 
-  // (the snow line wanders with the treeline's field, on a finer scale)
   snow(x, z, h) {
-    const line = SNOWLINE + this.nTreeline(x * 0.011 + 40, z * 0.011) * 9;
+    const line = this.snowline(x, z);
     return smoothstep(line - 4, line + 6, h);
   }
 
