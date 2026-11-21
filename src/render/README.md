@@ -10,8 +10,10 @@ eye's) way of turning that into a picture. Pixel art is a setting.
    depth buffer, real-time sun shadows (a little soft at the edge, as the
    sun's own width makes them) and sky/ground ambient light. It's drawn as
    finely as the screen, up to 1080 lines (`?sharp=`); past that it's drawn
-   at 1080 and blown up smoothly. With pixel art on, it's about 300 "art
-   pixels" tall.
+   at 1080 and blown up smoothly. It's multisampled (`?msaa=`, 4 unless
+   `q=low`), so edges are smooth, and a leaf cut from its card covers as much
+   of a pixel as it really does. With pixel art on, it's about 300 "art
+   pixels" tall, and hard-edged.
 2. **Ambient occlusion**, at half that resolution, from the depth buffer
    alone: how much of the sky each spot is shut off from by what's right
    next to it. It sets trunks, rocks and the hiker into the ground.
@@ -48,11 +50,17 @@ pixel from world position: meadow grass with dry patches, leaf litter and
 moss under trees, packed-earth paths with worn edges, and rock on steep
 slopes; and close up it has lumps and tussocks, and crags on rock, that a
 low sun picks out. The grass blades use the same function, so they grow out
-of the ground they stand on. Trees and bushes have baked vertex-colour
-shading and spherical "canopy" normals so their foliage shades like a soft
-volume, and leaves let the sun through: from their shaded side, and most of
-all looking towards the sun, they glow. They also sway in the wind, and
-grass parts around your feet. Motes, sparks, drops and bubbles are sized in
+of the ground they stand on. Trees are built as they grow: a trunk with
+furrowed bark, whorls of branches on a conifer and limbs on a broadleaf, and
+on the branches flat cards from which the shader cuts sprays of needles,
+clusters of leaves or a fern's leaflets, with no texture anywhere
+(`world/foliage.js`). As the parts get smaller than a pixel or two they give
+way to the ragged, mottled mass they make together, so a distant crown
+doesn't shimmer; and the shadows have the same gaps in them, so sunlight
+comes through a crown in flecks. Foliage has spherical "canopy" normals so a
+crown shades like a soft volume, and leaves let the sun through: from their
+shaded side, and most of all looking towards the sun, they glow. They also
+sway in the wind, and grass parts around your feet. Motes, sparks, drops and bubbles are sized in
 metres (`pointPx` in `glsl.js`), so they're specks however finely the
 picture is drawn.
 

@@ -1,28 +1,45 @@
 // Procedural vegetation models. Everything is built from primitives with
 // baked vertex colours (including a little fake ambient occlusion: the real
 // thing is done on the picture, render/pipeline.js), a per-vertex "sway"
-// weight that drives the wind shader, and whether it's a leaf (aLeaf), which
-// lets sunlight through it from behind.
+// weight that drives the wind shader, whether it's a leaf (aLeaf), which lets
+// sunlight through it from behind, and what sort of surface it is and where
+// on it (aCard, foliage.js): the needles and leaves are cut out of flat cards
+// by the shader, and bark is furrowed there too.
+//
+// A tree is built the way one grows: a trunk, branches off it (in whorls on
+// a conifer; limbs and their branches on a broadleaf), and on the branches
+// cards carrying sprays of needles or clusters of leaves. Inside the crown
+// there's a ragged core (CARD.FILL), so you can't see straight through it.
 //
 // The colours are what the thing reflects, in linear light, and are kept near
 // what real ones do: needles and dark bark about 2-5 %, leaves 5-20 % in the
 // green, birch bark over half. Darker than that and shade goes black.
 //
 // Each builder returns { lod0, lod1, lod2 } geometries sharing the same
-// attributes so instanced meshes can swap between them as you walk.
+// attributes so instanced meshes can swap between them as you walk: lod0
+// close by (the whole tree, every card), lod1 further (fewer, bigger cards),
+// lod2 far off (a ragged silhouette).
 
 import * as THREE from 'three';
 import { mulberry32, createSimplex2, phash } from '../noise.js';
+import { CARD } from './foliage.js';
 
 const _v = new THREE.Vector3(); // scratch for callbacks
 const _gv = new THREE.Vector3(); // builder-internal
 const _gn = new THREE.Vector3();
+const _guv = new THREE.Vector2();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
 const _s = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _c = new THREE.Color();
+const _a = new THREE.Vector3(); // card builder
+const _b = new THREE.Vector3();
+const _cn = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
+
+const NO_CARD = [0, 0, 0, CARD.SOLID];
 
 export const lin = (hex) => new THREE.Color(hex); // sRGB hex -> linear colour
 
@@ -33,6 +50,7 @@ export class GeoBuilder {
     this.col = [];
     this.sway = [];
     this.leafy = [];
+    this.cards = [];
     this.idx = [];
     this.count = 0;
   }
@@ -43,14 +61,17 @@ export class GeoBuilder {
   //   color(p, n)    -> THREE.Color (linear)
   //   sway(p)        -> number
   //   leaf           true for foliage: it lets the light through
-  add(geo, { matrix = _m.identity(), deform, normal, color, sway, leaf = false }) {
+  //   card(p, n, uv) -> [x, y, length, sort], or one for all (foliage.js)
+  add(geo, { matrix = _m.identity(), deform, normal, color, sway, leaf = false, card = NO_CARD }) {
     const pos = geo.attributes.position;
     const nor = geo.attributes.normal;
+    const uv = geo.attributes.uv;
     const nm = new THREE.Matrix3().getNormalMatrix(matrix);
     const base = this.count;
     for (let i = 0; i < pos.count; i++) {
       _gv.fromBufferAttribute(pos, i);
       _gn.fromBufferAttribute(nor, i);
+      if (uv) _guv.fromBufferAttribute(uv, i);
       if (deform) deform(_gv, _gn);
       _gv.applyMatrix4(matrix);
       _gn.applyMatrix3(nm).normalize();
@@ -61,6 +82,7 @@ export class GeoBuilder {
       this.col.push(c.r, c.g, c.b);
       this.sway.push(sway ? sway(_gv) : 0);
       this.leafy.push(leaf ? 1 : 0);
+      this.cards.push(...(typeof card === 'function' ? card(_gv, _gn, _guv) : card));
       this.count++;
     }
     if (geo.index) {
@@ -71,31 +93,55 @@ export class GeoBuilder {
     geo.dispose();
   }
 
-  vertex(p, n, c, sway, leaf = false) {
+  vertex(p, n, c, sway, leaf = false, card = NO_CARD) {
     this.pos.push(p.x, p.y, p.z);
     this.nor.push(n.x, n.y, n.z);
     this.col.push(c.r, c.g, c.b);
     this.sway.push(sway);
     this.leafy.push(leaf ? 1 : 0);
+    this.cards.push(...card);
     return this.count++;
   }
 
-  // A leaf card: a small diamond facing a random direction.
-  leaf(center, size, normal, color, sway, rng) {
+  // A card: a strip len m long whose middle runs along spine(t, out) (t: 0
+  // where it grows .. 1 at its tip), halfW m either side of it along `side`,
+  // in segs pieces along its length so it can bend. The shader cuts `sort`
+  // out of it. normal(p, out) is how it's lit there; color(t), sway(p).
+  card({ spine, side, len, halfW, segs = 1, sort, normal, color, sway }) {
+    const first = this.count;
+    for (let s = 0; s <= segs; s++) {
+      const t = s / segs;
+      spine(t, _a);
+      const c = color(t);
+      for (const k of [-1, 1]) {
+        _b.copy(_a).addScaledVector(side, halfW * k);
+        normal(_b, _cn);
+        this.vertex(_b, _cn, c, sway(_b), true, [t * len, k * halfW, len, sort]);
+      }
+    }
+    for (let s = 0; s < segs; s++) {
+      const i = first + s * 2;
+      this.idx.push(i, i + 1, i + 2, i + 1, i + 3, i + 2);
+    }
+  }
+
+  // A leaf card about size m across, turned a random way, at center.
+  leaf(center, size, normal, color, sway, rng, sort = CARD.LEAVES) {
     const d = new THREE.Vector3(rng() * 2 - 1, rng() * 2 - 1, rng() * 2 - 1).normalize();
-    const u = new THREE.Vector3().crossVectors(d, Math.abs(d.y) < 0.9 ? THREE.Object3D.DEFAULT_UP : new THREE.Vector3(1, 0, 0)).normalize();
+    const u = new THREE.Vector3().crossVectors(d, Math.abs(d.y) < 0.9 ? UP : new THREE.Vector3(1, 0, 0)).normalize();
     const w = new THREE.Vector3().crossVectors(d, u).normalize();
-    const a = size * (0.55 + rng() * 0.3);
-    const b = size * (0.35 + rng() * 0.25);
-    const p0 = center.clone().addScaledVector(u, a);
-    const p1 = center.clone().addScaledVector(w, b);
-    const p2 = center.clone().addScaledVector(u, -a);
-    const p3 = center.clone().addScaledVector(w, -b);
-    const i0 = this.vertex(p0, normal, color, sway, true);
-    const i1 = this.vertex(p1, normal, color, sway, true);
-    const i2 = this.vertex(p2, normal, color, sway, true);
-    const i3 = this.vertex(p3, normal, color, sway, true);
-    this.idx.push(i0, i1, i2, i0, i2, i3);
+    const len = size * (1.2 + rng() * 0.4);
+    const from = center.clone().addScaledVector(u, -len / 2);
+    this.card({
+      spine: (t, out) => out.copy(from).addScaledVector(u, t * len),
+      side: w,
+      len,
+      halfW: len * 0.42,
+      sort,
+      normal: (p, out) => out.copy(normal),
+      color: () => color,
+      sway: () => sway,
+    });
   }
 
   build() {
@@ -105,6 +151,7 @@ export class GeoBuilder {
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     g.setAttribute('aSway', new THREE.Float32BufferAttribute(this.sway, 1));
     g.setAttribute('aLeaf', new THREE.Float32BufferAttribute(this.leafy, 1));
+    g.setAttribute('aCard', new THREE.Float32BufferAttribute(this.cards, 4));
     g.setIndex(this.idx);
     g.computeBoundingSphere();
     g.computeBoundingBox();
@@ -130,20 +177,67 @@ export function barkColor(base, dark, p, height) {
   return _c.multiplyScalar(0.85 + phash(p.x * 3, p.y * 7, p.z * 3) * 0.3);
 }
 
+// What a trunk's bark is, for the shader: round it, how high (m), and how
+// many furrows (or columns of marks) go round it.
+export const barkCard = (sort, furrows) => (p, n, uv) => [uv.x, p.y, furrows, sort];
+
+// A limb: a tapering cylinder from `from`, len m along dir, r0 thick at its
+// foot and r1 at its tip, with bark.
+function limb(b, from, dir, len, r0, r1, { sides = 4, segs = 1, color, sway, sort = CARD.BARK, furrows = 12 }) {
+  const geo = new THREE.CylinderGeometry(r1, r0, len, sides, segs, true);
+  geo.translate(0, len / 2, 0);
+  const q = new THREE.Quaternion().setFromUnitVectors(UP, _v.copy(dir).normalize());
+  const m = new THREE.Matrix4().compose(from, q, _s.set(1, 1, 1));
+  const y0 = from.y;
+  b.add(geo, { matrix: m, color, sway, card: (p, n, uv) => [uv.x, y0 + uv.y * len, furrows, sort] });
+}
+
+// The way a crown is lit: out from its middle (`center`), with a little of
+// the card's own face in it, so a crown shades as a soft volume.
+function crownNormal(center, squash = 1, up = 0.25) {
+  return (p, out) => {
+    out.set(p.x - center.x, (p.y - center.y) * squash, p.z - center.z);
+    if (out.lengthSq() < 1e-6) out.set(0, 1, 0);
+    out.normalize();
+    out.y += up;
+    return out.normalize();
+  };
+}
+
+// A ragged core for a crown: an icosahedron, squashed, its surface cut
+// full of holes (CARD.FILL).
+function core(b, center, r, { sy = 1, color, sway, detail = 1, normal }) {
+  b.add(new THREE.IcosahedronGeometry(r, detail), {
+    matrix: mat(center.x, center.y, center.z, 0, 0, 0, 1, sy, 1),
+    normal,
+    color,
+    sway,
+    leaf: true,
+    card: [0, 0, 0, CARD.FILL],
+  });
+}
+
 // ── Conifer ────────────────────────────────────────────────────────────────
+// A spruce-like tree: a straight trunk, whorls of branches all the way up,
+// longest at the bottom, drooping low down and lifting at their tips, each a
+// flat spray of needles with another across it so the crown has depth from
+// every side; a dark, dense core round the trunk.
 export function makePine(seed = 1) {
+  const H = 15;
+  const R = 0.32;
   const build = (lod) => {
     const rng = mulberry32(seed);
     const b = new GeoBuilder();
-    const H = 15;
     const barkA = lin(0x5a3e2b);
     const barkD = lin(0x3a2a1e);
-    const needleDark = lin(0x253c29);
-    const needleMid = lin(0x2f4d30);
-    const needleTip = lin(0x456538);
+    const needleDark = lin(0x22382a);
+    const needleMid = lin(0x2a4630);
+    const needleTip = lin(0x3d5b38);
+    const trunkSway = (p) => Math.pow(Math.max(0, p.y) / H, 2) * 0.35;
+    const crownSway = (p) => Math.pow(p.y / H, 2) + Math.hypot(p.x, p.z) * 0.06;
 
-    const trunkH = H * 0.9;
-    const trunk = new THREE.CylinderGeometry(0.05, 0.32, trunkH, lod === 2 ? 3 : lod ? 4 : 6, lod ? 1 : 3, true);
+    const trunkH = H * 0.97;
+    const trunk = new THREE.CylinderGeometry(0.035, R, trunkH, lod === 2 ? 4 : lod ? 6 : 9, lod ? 1 : 5, true);
     trunk.translate(0, trunkH / 2 - 0.4, 0);
     b.add(trunk, {
       deform: (p) => {
@@ -154,62 +248,120 @@ export function makePine(seed = 1) {
         }
       },
       color: (p) => barkColor(barkA, barkD, p, 4),
-      sway: (p) => Math.pow(Math.max(0, p.y) / H, 2) * 0.35,
+      sway: trunkSway,
+      card: barkCard(CARD.BARK, 26),
     });
 
-    const tiers = lod === 2 ? 2 : lod ? 3 : 8;
-    const segs = lod === 2 ? 5 : lod ? 6 : 12;
-    for (let i = 0; i < tiers; i++) {
-      const t = i / (tiers - 1);
-      const y = H * (0.24 + 0.62 * t);
-      const r = (3.0 - 2.45 * Math.pow(t, 0.85)) * (0.88 + rng() * 0.24) * (lod === 2 ? 1.12 : lod ? 1.08 : 1);
-      const h = (lod === 2 ? 7.2 : lod ? 5.2 : 3.4) - 1.5 * t;
-      const cone = new THREE.ConeGeometry(r, h, segs, 1, false);
-      cone.translate(0, h / 2, 0);
-      const rot = rng() * Math.PI * 2;
-      const tierSeed = Math.floor(rng() * 1000);
-      b.add(cone, {
-        matrix: mat(0, y, 0, 0, rot, 0),
-        deform: (p) => {
-          const rad = Math.hypot(p.x, p.z);
-          if (rad > 1e-3) {
-            const ang = Math.atan2(p.z, p.x);
-            const k = ((Math.round((ang / (Math.PI * 2)) * segs) % segs) + segs) % segs;
-            const tip = k % 2 === 0 ? 1.0 : 0.68;
-            const f = tip * (0.86 + phash(k, tierSeed, 1) * 0.26);
-            p.x *= f;
-            p.z *= f;
-            // branch tips droop
-            const fr = rad / r;
-            p.y -= fr * fr * r * 0.28 * tip;
-          }
-        },
-        normal: (p, n) => {
-          const out = _v.set(p.x, 0, p.z);
-          const l = out.length();
-          if (l > 1e-4) out.multiplyScalar(1 / l);
-          out.y = 0.75;
-          n.multiplyScalar(0.35).addScaledVector(out.normalize(), 0.65).normalize();
-        },
-        color: (p) => {
-          const rad = Math.hypot(p.x, p.z);
-          const outer = Math.min(1, rad / r);
-          const ao = 0.72 + 0.28 * t;
-          _c.copy(needleDark).lerp(needleMid, Math.min(1, outer * 1.4));
-          if (outer > 0.6) _c.lerp(needleTip, (outer - 0.6) * 1.2);
-          return jitter(_c.multiplyScalar(ao), p, 0.25);
-        },
-        sway: (p) => Math.pow(p.y / H, 2) + Math.hypot(p.x, p.z) * 0.06,
-        leaf: true,
+    const crownBase = 2.4;
+    const top = H - 0.7;
+    const radius = (y) => R * (1 - (y + 0.4) / trunkH) + 0.035;
+    const reachAt = (t) => 3.0 * Math.pow(1 - t, 0.9) + 0.3;
+    const fillColor = (p) => jitter(_c.copy(needleDark).multiplyScalar(0.8), p, 0.2);
+    const fillNormal = (p, n) => {
+      const out = _v.set(p.x, 0, p.z);
+      if (out.lengthSq() > 1e-6) out.normalize();
+      out.y = 0.6;
+      n.copy(out.normalize());
+    };
+
+    if (lod === 2) {
+      // far off: tiers, ragged at their edges
+      for (let i = 0; i < 3; i++) {
+        const t = i / 2;
+        const y = H * (0.2 + 0.6 * t);
+        const r = (3.2 - 2.5 * Math.pow(t, 0.85)) * (0.9 + rng() * 0.2);
+        const h = 7.2 - 1.5 * t;
+        const cone = new THREE.ConeGeometry(r, h, 7, 1, true);
+        cone.translate(0, h / 2, 0);
+        b.add(cone, {
+          matrix: mat(0, y, 0, 0, rng() * 6, 0),
+          normal: fillNormal,
+          color: (p) => jitter(_c.copy(needleMid).lerp(needleDark, 0.4), p, 0.2),
+          sway: crownSway,
+          leaf: true,
+          card: [0, 0, 0, CARD.FILL],
+        });
+      }
+      return b.build();
+    }
+
+    // the thick of the crown round the trunk, dark: it's what you'd see
+    // between the branches
+    const coreH = top - crownBase - 1.5;
+    const coreCone = new THREE.ConeGeometry(reachAt(0) * 0.42, coreH, lod ? 6 : 9, lod ? 1 : 3, true);
+    coreCone.translate(0, crownBase + coreH / 2, 0);
+    b.add(coreCone, { normal: fillNormal, color: fillColor, sway: crownSway, leaf: true, card: [0, 0, 0, CARD.FILL] });
+
+    const whorls = lod ? 8 : 15;
+    for (let i = 0; i < whorls; i++) {
+      const t = i / (whorls - 1);
+      const y = crownBase + (top - crownBase) * Math.pow(t, 0.95);
+      const reach = reachAt(t) * (0.88 + rng() * 0.24) * (lod ? 1.08 : 1);
+      const n = lod ? 4 : t > 0.8 ? 4 : 5;
+      const a0 = rng() * Math.PI * 2;
+      const ao = 0.72 + 0.28 * t;
+      for (let j = 0; j < n; j++) {
+        const a = a0 + (j / n) * Math.PI * 2 + (rng() - 0.5) * 0.5;
+        const out = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+        const across = new THREE.Vector3(-out.z, 0, out.x);
+        const slope = THREE.MathUtils.lerp(-0.3, 0.3, t) + (rng() - 0.5) * 0.15;
+        const lift = reach * 0.14; // the tip turns up
+        const sag = reach * 0.08;
+        const from = out.clone().multiplyScalar(radius(y) * 0.4).setY(y);
+        const spine = (s, o) =>
+          o
+            .copy(from)
+            .addScaledVector(out, reach * s)
+            .addScaledVector(UP, reach * slope * s + lift * Math.pow(s, 2.4) - sag * Math.sin(Math.PI * s));
+        const tint = 0.9 + rng() * 0.2;
+        const color = (s) => _c.copy(needleDark).lerp(needleMid, Math.min(1, s * 1.6)).lerp(needleTip, Math.max(0, s - 0.55) * 1.6).multiplyScalar(ao * tint).clone();
+        const normal = (p, o) => {
+          o.set(p.x, 0, p.z);
+          const l = o.length();
+          if (l > 1e-4) o.multiplyScalar(1 / l);
+          o.y = 0.7;
+          return o.normalize();
+        };
+        // the spray, lying nearly flat; and another under it, tipped down
+        // on one side, so the branch has some thickness seen side on
+        const roll = (rng() - 0.5) * 0.7;
+        const flat = across.clone().applyAxisAngle(out, roll);
+        const halfW = reach * 0.29 + 0.04;
+        b.card({ spine, side: flat, len: reach, halfW, segs: lod ? 1 : 2, sort: CARD.SPRAY, normal, color, sway: crownSway });
+        if (t < 0.92) {
+          const tipped = across.clone().applyAxisAngle(out, roll + (rng() < 0.5 ? 1 : -1) * (0.55 + rng() * 0.35));
+          const under = (s, o) => spine(s, o).addScaledVector(UP, -0.12 * reach * Math.sin(Math.PI * s));
+          b.card({ spine: under, side: tipped, len: reach * 0.9, halfW: halfW * 0.85, segs: 1, sort: CARD.SPRAY, normal, color: (s) => color(s).multiplyScalar(0.85), sway: crownSway });
+        }
+      }
+    }
+    // the leader: a spray or two pointing straight up
+    for (let k = 0; k < 2; k++) {
+      const side = new THREE.Vector3(Math.cos(k * 1.6), 0, Math.sin(k * 1.6));
+      const from = new THREE.Vector3(0, top - 0.3, 0);
+      b.card({
+        spine: (s, o) => o.copy(from).addScaledVector(UP, 1.4 * s),
+        side,
+        len: 1.4,
+        halfW: 0.32,
+        sort: CARD.SPRAY,
+        normal: (p, o) => o.set(side.z, 0.8, -side.x).normalize(),
+        color: (s) => _c.copy(needleMid).lerp(needleTip, s).clone(),
+        sway: crownSway,
       });
     }
     return b.build();
   };
-  return { lod0: build(0), lod1: build(1), lod2: build(2), height: 15, trunkRadius: 0.32 };
+  return { lod0: build(0), lod1: build(1), lod2: build(2), height: 15, trunkRadius: R };
 }
 
 // ── Broadleaf (oak / beech-ish) ────────────────────────────────────────────
+// A short trunk dividing into four limbs that reach up and out, each with
+// branches, and clusters of leaves all over the outside of a broad crown; a
+// ragged core inside it.
 export function makeBroadleaf(seed = 2) {
+  const H = 11;
+  const R = 0.4;
   const build = (lod) => {
     const rng = mulberry32(seed);
     const b = new GeoBuilder();
@@ -218,175 +370,189 @@ export function makeBroadleaf(seed = 2) {
     const leafDark = lin(0x2c451d);
     const leafMid = lin(0x3c5f1d);
     const leafLight = lin(0x597930);
-    const trunkH = 5.2;
+    const trunkH = 4.6;
+    const center = new THREE.Vector3(0, 7.4, 0);
+    const radii = new THREE.Vector3(3.7, 2.8, 3.7);
+    const woodSway = (p) => Math.pow(Math.max(0, p.y) / H, 2) * 0.45;
+    const leafSway = (p) => Math.pow(p.y / H, 2) * 0.9 + 0.05;
+    const bark = (p) => barkColor(barkA, barkD, p, 3);
+    const lean = (y) => [Math.sin((y / trunkH) * 2.6 + 1) * 0.16 * (y / trunkH), Math.cos((y / trunkH) * 1.9) * 0.12 * (y / trunkH)];
 
-    const trunk = new THREE.CylinderGeometry(0.17, 0.4, trunkH + 1.2, lod === 2 ? 4 : lod ? 5 : 7, lod ? 1 : 4, true);
-    trunk.translate(0, (trunkH + 1.2) / 2 - 0.4, 0);
+    const trunk = new THREE.CylinderGeometry(0.26, R, trunkH + 0.4, lod === 2 ? 5 : lod ? 6 : 9, lod ? 1 : 4, true);
+    trunk.translate(0, (trunkH + 0.4) / 2 - 0.4, 0);
     b.add(trunk, {
       deform: (p) => {
-        const t = (p.y + 0.4) / (trunkH + 1.2);
-        p.x += Math.sin(t * 2.6 + 1) * 0.18 * t;
-        p.z += Math.cos(t * 1.9) * 0.14 * t;
+        const [lx, lz] = lean(p.y);
+        p.x += lx;
+        p.z += lz;
         if (p.y < 0.5) {
           const f = 1 + (0.5 - p.y) * 0.8;
           p.x *= f;
           p.z *= f;
         }
       },
-      color: (p) => barkColor(barkA, barkD, p, 3),
-      sway: (p) => Math.pow(Math.max(0, p.y) / 11, 2) * 0.4,
+      color: bark,
+      sway: woodSway,
+      card: barkCard(CARD.BARK, 30),
     });
 
-    const center = new THREE.Vector3(0, trunkH + 2.3, 0);
-    const clusters = [];
-    const nClusters = lod === 2 ? 2 : lod ? 4 : 8;
-    for (let i = 0; i < nClusters; i++) {
-      const a = (i / nClusters) * Math.PI * 2 + rng() * 0.6;
-      let up;
-      let dist;
-      let r;
-      if (lod === 0) {
-        up = -0.25 + rng() * 1.1;
-        dist = 1.6 + rng() * 1.1;
-        r = 1.5 + rng() * 0.7;
-      } else if (lod === 1) {
-        up = 0.1 + (i % 2) * 0.55;
-        dist = 1.45;
-        r = 2.25;
-      } else {
-        up = i === 0 ? -0.05 : 0.75;
-        dist = i === 0 ? 0.5 : 0.25;
-        r = i === 0 ? 3.2 : 2.5;
-      }
-      const c = new THREE.Vector3(Math.cos(a) * dist, up * 1.6, Math.sin(a) * dist).add(center);
-      if (!lod && i === nClusters - 1) c.set(rng() - 0.5, center.y + 1.6, rng() - 0.5);
-      clusters.push({ c, r });
-    }
-
-    // branches reaching into the clusters
-    if (!lod) {
-      for (let i = 0; i < 4; i++) {
-        const cl = clusters[i * 2];
-        const from = new THREE.Vector3(0, trunkH - 1.2 + i * 0.4, 0);
-        const dir = cl.c.clone().sub(from);
-        const len = dir.length() * 0.85;
-        const br = new THREE.CylinderGeometry(0.05, 0.13, len, 4, 1, true);
-        br.translate(0, len / 2, 0);
-        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
-        const m = new THREE.Matrix4().compose(from, q, new THREE.Vector3(1, 1, 1));
-        b.add(br, { matrix: m, color: (p) => barkColor(barkA, barkD, p, 3), sway: (p) => Math.pow(p.y / 11, 2) * 0.6 });
-      }
-    }
-
-    const sphereNormal = (p, n) => {
-      const out = _v.copy(p).sub(center).normalize();
-      n.multiplyScalar(0.25).addScaledVector(out, 0.75).normalize();
-    };
+    const crownNorm = crownNormal(center, radii.x / radii.y);
     const leafColor = (p) => {
-      const h = (p.y - (center.y - 3)) / 6.5;
+      const h = (p.y - (center.y - radii.y)) / (radii.y * 2);
       const side = _v.copy(p).sub(center).normalize().y * 0.5 + 0.5;
       _c.copy(leafDark).lerp(leafMid, Math.min(1, h * 1.3));
       if (side > 0.6) _c.lerp(leafLight, (side - 0.6) * 1.1);
       return jitter(_c, p, 0.3);
     };
-    const leafSway = (p) => Math.pow(p.y / 11, 2) * 0.9 + 0.05;
+    const coreColor = (p) => leafColor(p).multiplyScalar(0.72);
 
-    for (const { c, r } of clusters) {
-      const blob = new THREE.IcosahedronGeometry(r * (lod ? 1 : 0.78), 0);
-      const bs = Math.floor(rng() * 1000);
-      b.add(blob, {
-        matrix: mat(c.x, c.y, c.z, rng(), rng() * 6, 0, 1, 0.82, 1),
-        deform: (p) => {
-          const k = 1 + (phash(Math.round(p.x * 10), Math.round(p.y * 10) + bs, Math.round(p.z * 10)) - 0.5) * 0.35;
-          p.multiplyScalar(k);
-        },
-        normal: sphereNormal,
-        color: (p) => leafColor(p).multiplyScalar(0.86),
-        sway: leafSway,
-        leaf: true,
-      });
-      if (!lod) {
-        const cards = 22;
-        for (let k = 0; k < cards; k++) {
-          const d = new THREE.Vector3(rng() * 2 - 1, rng() * 1.6 - 0.5, rng() * 2 - 1).normalize();
-          const pc = c.clone().addScaledVector(d, r * (0.7 + rng() * 0.42));
-          const n = pc.clone().sub(center).normalize();
-          n.y = n.y * 0.8 + 0.25;
-          n.normalize();
-          const col = leafColor(pc).clone().multiplyScalar(0.95 + rng() * 0.25);
-          b.leaf(pc, 0.95, n, col, leafSway(pc), rng);
-        }
+    if (lod === 2) {
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2 + rng();
+        const c = new THREE.Vector3(Math.cos(a) * 1.1, center.y + (i === 2 ? 0.9 : -0.2), Math.sin(a) * 1.1);
+        core(b, c, 2.9, { sy: 0.85, color: coreColor, sway: leafSway, detail: 0, normal: crownNorm });
       }
+      return b.build();
+    }
+
+    // the core, a little inside where the leaves are
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2 + rng();
+      const c = new THREE.Vector3(Math.cos(a) * 1.2, center.y + (rng() - 0.4) * 1.2, Math.sin(a) * 1.2);
+      core(b, c, lod ? 2.6 : 2.2, { sy: 0.8, color: coreColor, sway: leafSway, detail: lod ? 0 : 1, normal: crownNorm });
+    }
+
+    // limbs, and branches off them
+    const ends = []; // where the branches end, for the leaves to gather round
+    const limbs = 4;
+    const [tx, tz] = lean(trunkH);
+    for (let i = 0; i < limbs; i++) {
+      const a = (i / limbs) * Math.PI * 2 + rng() * 0.7;
+      const from = new THREE.Vector3(tx, trunkH - 0.9 + rng() * 0.8, tz);
+      const dir = new THREE.Vector3(Math.cos(a) * (0.75 + rng() * 0.3), 1, Math.sin(a) * (0.75 + rng() * 0.3)).normalize();
+      const len = 3.0 + rng() * 0.9;
+      limb(b, from, dir, len, 0.19, 0.07, { sides: lod ? 4 : 5, color: bark, sway: woodSway });
+      const tip = from.clone().addScaledVector(dir, len);
+      ends.push(tip);
+      if (lod) continue;
+      for (let k = 0; k < 3; k++) {
+        const at = from.clone().addScaledVector(dir, len * (0.45 + 0.2 * k));
+        const ba = a + (rng() - 0.5) * 2.2;
+        const bdir = new THREE.Vector3(Math.cos(ba), 0.5 + rng() * 0.6, Math.sin(ba)).normalize();
+        const blen = 1.6 + rng() * 0.9;
+        limb(b, at, bdir, blen, 0.065, 0.02, { sides: 3, color: bark, sway: woodSway, furrows: 5 });
+        ends.push(at.clone().addScaledVector(bdir, blen));
+      }
+    }
+
+    // leaves: clusters over the outside of the crown, thickest round the
+    // branch ends
+    const cards = lod ? 44 : 120;
+    for (let k = 0; k < cards; k++) {
+      let p;
+      if (k < ends.length * 3) {
+        p = ends[k % ends.length].clone().add(new THREE.Vector3(rng() - 0.5, rng() - 0.3, rng() - 0.5).multiplyScalar(2.0));
+      } else {
+        const d = new THREE.Vector3(rng() * 2 - 1, rng() * 1.7 - 0.6, rng() * 2 - 1).normalize();
+        p = center.clone().add(d.multiply(radii).multiplyScalar(0.7 + rng() * 0.32));
+      }
+      // pull it onto the crown's outer shell
+      const rel = p.clone().sub(center).divide(radii);
+      const l = rel.length();
+      if (l > 1.05) p.copy(center).add(rel.multiplyScalar(1.05 / l).multiply(radii));
+      const outward = crownNorm(p, new THREE.Vector3());
+      const axis = outward.clone().add(new THREE.Vector3(rng() - 0.5, rng() - 0.7, rng() - 0.5).multiplyScalar(1.4)).normalize();
+      const side = new THREE.Vector3().crossVectors(axis, new THREE.Vector3(rng() - 0.5, rng() - 0.5, rng() - 0.5)).normalize();
+      const len = (lod ? 1.9 : 1.25) * (0.85 + rng() * 0.3);
+      const from = p.clone().addScaledVector(axis, -len * 0.4);
+      const shadeK = 0.9 + rng() * 0.2;
+      b.card({
+        spine: (s, o) => o.copy(from).addScaledVector(axis, len * s),
+        side,
+        len,
+        halfW: len * 0.42,
+        sort: CARD.LEAVES,
+        normal: crownNorm,
+        color: (s) => leafColor(from).multiplyScalar(shadeK * (0.92 + 0.12 * s)).clone(),
+        sway: leafSway,
+      });
     }
     return b.build();
   };
-  return { lod0: build(0), lod1: build(1), lod2: build(2), height: 11, trunkRadius: 0.4 };
+  return { lod0: build(0), lod1: build(1), lod2: build(2), height: 11, trunkRadius: R };
 }
 
 // ── Birch ──────────────────────────────────────────────────────────────────
+// A slim white trunk, sinuous, marked dark; thin branches climbing off it,
+// and from them long strips of small leaves hanging down.
 export function makeBirch(seed = 3) {
+  const H = 12;
+  const R = 0.2;
   const build = (lod) => {
     const rng = mulberry32(seed);
     const b = new GeoBuilder();
     const white = lin(0xd8d2c4);
-    const mark = lin(0x2b2722);
+    const twig = lin(0x3a2d24);
     const leafDark = lin(0x3b5418);
     const leafLight = lin(0x688734);
-    const H = 12;
-    const trunk = new THREE.CylinderGeometry(0.07, 0.2, H, lod === 2 ? 3 : lod ? 4 : 6, lod === 2 ? 1 : lod ? 2 : 10, true);
+    const bend = (y) => Math.sin((y / H) * 3.0) * 0.25 * (y / H);
+    const woodSway = (p) => Math.pow(Math.max(0, p.y) / H, 2) * 0.6;
+    const leafSway = (p) => Math.pow(p.y / H, 2) * 1.2 + 0.08;
+    const trunk = new THREE.CylinderGeometry(0.05, R, H, lod === 2 ? 4 : lod ? 5 : 8, lod === 2 ? 1 : lod ? 3 : 10, true);
     trunk.translate(0, H / 2 - 0.3, 0);
     b.add(trunk, {
       deform: (p) => {
-        const t = (p.y + 0.3) / H;
-        p.x += Math.sin(t * 3.0) * 0.25 * t;
+        p.x += bend(p.y + 0.3);
       },
-      color: (p) => {
-        const band = phash(Math.round(p.y * 3.1), 7, Math.round(Math.atan2(p.z, p.x) * 1.5));
-        _c.copy(white);
-        if (band > 0.72 || p.y < 0.4) _c.lerp(mark, p.y < 0.4 ? 0.65 : 0.85);
-        return _c.multiplyScalar(0.92 + phash(p.x, p.y, p.z) * 0.16);
-      },
-      sway: (p) => Math.pow(Math.max(0, p.y) / H, 2) * 0.6,
+      color: (p) => _c.copy(white).multiplyScalar(0.92 + phash(p.x, p.y, p.z) * 0.1),
+      sway: woodSway,
+      card: barkCard(CARD.BIRCH, 7),
     });
 
-    const center = new THREE.Vector3(0.25, H * 0.72, 0);
-    const nClusters = lod === 2 ? 1 : lod ? 2 : 6;
+    const center = new THREE.Vector3(0.25, H * 0.66, 0);
+    const crownNorm = crownNormal(center, 0.55);
     const leafColor = (p) => {
       const side = _v.copy(p).sub(center).normalize().y * 0.5 + 0.5;
       _c.copy(leafDark).lerp(leafLight, side * 0.9);
       return jitter(_c, p, 0.3);
     };
-    const leafSway = (p) => Math.pow(p.y / H, 2) * 1.2 + 0.08;
-    for (let i = 0; i < nClusters; i++) {
-      const t = i / Math.max(1, nClusters - 1);
-      const c = new THREE.Vector3(
-        center.x + (rng() - 0.5) * 1.8,
-        lod === 2 ? H * 0.7 : H * (0.5 + 0.45 * t),
-        (rng() - 0.5) * 1.8,
-      );
-      const r = (lod === 2 ? 2.6 : lod ? 1.9 : 1.15 + rng() * 0.45) * (1.1 - t * 0.35);
-      const blob = new THREE.IcosahedronGeometry(r * (lod ? 1 : 0.7), 0);
-      b.add(blob, {
-        matrix: mat(c.x, c.y, c.z, rng(), rng() * 6, 0, 1, 1.25, 1),
-        normal: (p, n) => n.multiplyScalar(0.3).addScaledVector(_v.copy(p).sub(center).normalize(), 0.7).normalize(),
-        color: (p) => leafColor(p).multiplyScalar(0.86),
-        sway: leafSway,
-        leaf: true,
-      });
-      if (!lod) {
-        for (let k = 0; k < 16; k++) {
-          const d = new THREE.Vector3(rng() * 2 - 1, rng() * 2.4 - 1.1, rng() * 2 - 1).normalize();
-          const pc = c.clone().addScaledVector(d, r * (0.65 + rng() * 0.45));
-          const n = pc.clone().sub(center).normalize();
-          n.y += 0.3;
-          n.normalize();
-          b.leaf(pc, 0.7, n, leafColor(pc).clone(), leafSway(pc), rng);
-        }
+    // a slim core, dark, so the crown has some body behind its leaves
+    core(b, center, lod === 2 ? 2.4 : 1.1, { sy: lod === 2 ? 1.5 : 2.4, color: (p) => leafColor(p).multiplyScalar(lod === 2 ? 0.8 : 0.6), sway: leafSway, detail: lod ? 0 : 1, normal: crownNorm });
+    if (lod === 2) return b.build();
+
+    const branches = lod ? 8 : 16;
+    for (let i = 0; i < branches; i++) {
+      const t = (i + 0.5) / branches;
+      const y = H * (0.38 + 0.5 * t);
+      const a = i * 2.4 + rng() * 0.6;
+      const out = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+      const dir = out.clone().multiplyScalar(0.8).add(new THREE.Vector3(0, 0.75 + rng() * 0.5, 0)).normalize();
+      const len = (2.4 - 1.3 * t) * (0.85 + rng() * 0.3);
+      const from = new THREE.Vector3(bend(y), y, 0);
+      if (!lod) limb(b, from, dir, len, 0.04, 0.012, { sides: 3, color: () => twig, sway: woodSway, sort: CARD.SOLID });
+      // the hanging strips, from the outer part of the branch
+      const strips = lod ? 3 : 6;
+      for (let k = 0; k < strips; k++) {
+        const at = from.clone().addScaledVector(dir, len * (0.35 + 0.65 * (k / Math.max(1, strips - 1))));
+        const hang = out.clone().multiplyScalar(0.3 + rng() * 0.2).add(new THREE.Vector3((rng() - 0.5) * 0.3, -1, (rng() - 0.5) * 0.3)).normalize();
+        const slen = (lod ? 1.8 : 1.2) * (0.75 + rng() * 0.5);
+        const side = new THREE.Vector3(-out.z, 0, out.x).applyAxisAngle(UP, (rng() - 0.5) * 0.8);
+        b.card({
+          spine: (s, o) => o.copy(at).addScaledVector(hang, slen * s).addScaledVector(out, 0.15 * slen * s * s),
+          side,
+          len: slen,
+          halfW: lod ? 0.3 : 0.2,
+          segs: lod ? 1 : 2,
+          sort: CARD.SMALL,
+          normal: crownNorm,
+          color: (s) => leafColor(at).multiplyScalar(0.95 + 0.1 * s).clone(),
+          sway: leafSway,
+        });
       }
     }
     return b.build();
   };
-  return { lod0: build(0), lod1: build(1), lod2: build(2), height: 12, trunkRadius: 0.2 };
+  return { lod0: build(0), lod1: build(1), lod2: build(2), height: 12, trunkRadius: R };
 }
 
 // ── Bush ───────────────────────────────────────────────────────────────────
@@ -396,6 +562,8 @@ export function makeBush(seed = 4) {
   return { lod0, lod1, lod2: lod1, height: 1.2, trunkRadius: 0 };
 }
 
+// A few ragged lumps of leaf, and (close by) clusters of leaves standing out
+// from them.
 function buildBush(seed, cards) {
   const rng = mulberry32(seed);
   const b = new GeoBuilder();
@@ -407,18 +575,13 @@ function buildBush(seed, cards) {
     return jitter(_c.copy(dark).lerp(light, t), p, 0.3);
   };
   const sway = (p) => Math.max(0, p.y) * 0.12;
+  const normal = crownNormal(center, 1, 0.3);
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + rng();
     const c = new THREE.Vector3(Math.cos(a) * 0.4, 0.4 + rng() * 0.35, Math.sin(a) * 0.4);
     const r = 0.45 + rng() * 0.25;
-    b.add(new THREE.IcosahedronGeometry(r * (cards ? 1 : 1.12), 0), {
-      matrix: mat(c.x, c.y, c.z, rng(), rng() * 6, 0, 1, 0.8, 1),
-      normal: (p, n) => n.multiplyScalar(0.3).addScaledVector(_v.copy(p).sub(center).normalize(), 0.7).normalize(),
-      color: (p) => color(p).multiplyScalar(0.86),
-      sway,
-      leaf: true,
-    });
-    for (let k = 0; k < (cards ? 12 : 0); k++) {
+    core(b, c, r * (cards ? 0.95 : 1.12), { sy: 0.8, color: (p) => color(p).multiplyScalar(0.8), sway, detail: 0, normal });
+    for (let k = 0; k < (cards ? 10 : 0); k++) {
       const d = new THREE.Vector3(rng() * 2 - 1, rng() * 1.6 - 0.4, rng() * 2 - 1).normalize();
       const pc = c.clone().addScaledVector(d, r * (0.75 + rng() * 0.4));
       const n = pc.clone().sub(center).normalize();
@@ -429,6 +592,7 @@ function buildBush(seed, cards) {
 }
 
 // ── Fern ───────────────────────────────────────────────────────────────────
+// Fronds arching out from the middle, each cut into leaflets (CARD.FROND).
 export function makeFern(seed = 5) {
   const rng = mulberry32(seed);
   const b = new GeoBuilder();
@@ -451,8 +615,10 @@ export function makeFern(seed = 5) {
       const n = new THREE.Vector3(0, 1, 0).addScaledVector(dir, -0.2).normalize();
       const col = _c.copy(base).lerp(tip, t).multiplyScalar(0.9 + rng() * 0.2).clone();
       const sway = t * t * 0.25;
-      ids.push(b.vertex(c.clone().addScaledVector(side, w), n, col, sway, true));
-      ids.push(b.vertex(c.clone().addScaledVector(side, -w), n, col, sway, true));
+      // (a little wider than the frond, so the leaflets come to its edge)
+      const wc = w + 0.006;
+      ids.push(b.vertex(c.clone().addScaledVector(side, wc), n, col, sway, true, [L * t, wc, L, CARD.FROND]));
+      ids.push(b.vertex(c.clone().addScaledVector(side, -wc), n, col, sway, true, [L * t, -wc, L, CARD.FROND]));
     }
     for (let s = 0; s < segs; s++) {
       const i = s * 2;

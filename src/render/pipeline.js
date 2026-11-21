@@ -2,7 +2,8 @@
 //
 // 1. The scene is drawn into an HDR target with a depth texture: at the
 //    screen's own resolution (up to a cap, past which it's drawn smaller and
-//    blown up smoothly), or, with pixel art on, a few hundred lines tall.
+//    blown up smoothly), multisampled so edges are smooth, or, with pixel
+//    art on, a few hundred lines tall and hard-edged.
 // 2. Ambient occlusion, from the depth alone, at half that resolution: how
 //    much of the open sky each spot can't see past what's right next to it.
 //    It's what sets a trunk in the ground, a rock in the grass and the hiker
@@ -73,9 +74,12 @@ uniform float uRadius;
 uniform float uMaxSpan;
 varying vec2 vUv;
 
-// (The sky's depth is 1, which is infinitely far: it's read as just short
-// of that, far enough to hide nothing.)
+// Where the depth texel nearest uv is, in view space. (The middle of the
+// texel, whose depth it is: anywhere else, a slope seen edge on would seem
+// to stand up in front of itself. The sky's depth is 1, which is infinitely
+// far: it's read as just short of that, far enough to hide nothing.)
 vec3 viewPos(vec2 uv) {
+  uv = (floor(uv * uDepthRes) + 0.5) / uDepthRes;
   float d = min(texture2D(tDepth, uv).x, 0.99999);
   vec4 p = uProjInv * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
   return p.xyz / p.w;
@@ -177,17 +181,20 @@ float deckAt(vec2 p, float t, out float tall) {
 float viewZ(float d) { return -perspectiveDepthToViewZ(d, uNear, uFar); }
 
 // How open to the sky this pixel is: the occlusion's 4 × 4 texels round it,
-// each counted as far as it's at the same depth.
-float openness(float z) {
+// each counted as far as it's on the same surface. dz: how the depth runs
+// across the screen here (m a pixel), so a slope seen edge on, whose depth
+// changes fast from row to row, still counts as one surface.
+float openness(float z, vec2 dz) {
   vec2 base = floor(vUv * uAORes - 1.5);
   float sum = 0.0;
   float wsum = 0.0;
   for (int j = 0; j < 4; j++) {
     for (int i = 0; i < 4; i++) {
-      vec2 s = texture2D(tAO, (base + vec2(float(i), float(j)) + 0.5) / uAORes).xy;
-      // (a few per cent off is still this surface, seen edge on; much more
-      // is something in front of it or behind)
-      float off = (s.y - z) / (z * 0.06);
+      vec2 at = (base + vec2(float(i), float(j)) + 0.5) / uAORes;
+      vec2 s = texture2D(tAO, at).xy;
+      // (a few per cent off where this surface would be is still it; much
+      // more is something in front of it or behind)
+      float off = (s.y - z - dot(dz, (at - vUv) * uRes)) / (z * 0.04);
       float w = exp(-off * off);
       sum += s.x * w;
       wsum += w;
@@ -251,10 +258,14 @@ void main() {
   vp.xyz /= vp.w;
   vec3 rd = normalize(mat3(uCamWorld) * vp.xyz);
   float dist = sky ? 1.0e6 : length(vp.xyz);
+  // how the depth runs across the screen, but not over an edge
+  float zc = viewZ(d);
+  vec2 dz = vec2(dFdx(zc), dFdy(zc));
+  if (max(abs(dz.x), abs(dz.y)) > zc * 0.1) dz = vec2(0.0);
 
   if (!sky) {
-    float z = viewZ(d);
-    if (uAO > 0.0) col *= mix(1.0, openness(z), uAO);
+    float z = zc;
+    if (uAO > 0.0) col *= mix(1.0, openness(z, dz), uAO);
     if (uOutline > 0.0) col *= 1.0 - outlineAt(d) * uOutline;
   }
 
@@ -580,13 +591,18 @@ export class Pipeline {
       rt.depthTexture?.dispose();
       rt.dispose();
     }
+    const samples = this.enabled ? 0 : CONFIG.msaa;
     this.rtScene = new THREE.WebGLRenderTarget(lw, lh, {
       type: THREE.HalfFloatType,
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
       depthBuffer: true,
       depthTexture: new THREE.DepthTexture(lw, lh, THREE.UnsignedIntType),
+      samples,
     });
+    // a leaf's cutout: where there are samples, how much of the pixel it
+    // covers is how many of them it takes; where there aren't, all or none
+    SHARED.uAlphaCut.value = samples > 0 ? 0.02 : 0.5;
     // the occlusion at half size, once there are pixels enough to spare
     const aoDiv = lh > 400 ? 2 : 1;
     this.rtAO = hdrTarget(Math.ceil(lw / aoDiv), Math.ceil(lh / aoDiv), THREE.NearestFilter);
