@@ -30,6 +30,13 @@ controls by its buttons, and a key or the mouse puts it down again. Most pads
 with the standard layout work: Xbox, PlayStation, Nintendo Pro and the like,
 each with its buttons called what they're called on it.
 
+Which pads a browser gives that layout to differs, and a pad it doesn't is
+read by guessing: its buttons are taken in the standard order, and an axis
+sitting away from the middle when it is picked up is a trigger rather than a
+stick, so it isn't one (it would otherwise turn the camera for ever). On such
+a pad a stick may be short of a way to push it. Another browser may well know
+the same pad properly.
+
 | on the pad | does |
 |---|---|
 | left stick | walk (the further over, the faster) · under water, swim |
