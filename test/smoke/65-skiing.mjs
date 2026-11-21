@@ -232,15 +232,17 @@ export default async function ({ page, step, key, frames, shot }) {
 
   // ── The descent ───────────────────────────────────────────────────────────
   await step('no descent to be had in the woods', async () => {
+    // From where the skiing left us, which is the forest's own mountain and
+    // not the high country. Nothing is moved: this part leaves the hiker on
+    // the mountain, and the parts after it begin there.
     const got = await page.evaluate(async () => {
-      const s = world.player.start;
-      await world.teleport(s.x, s.z, 0);
+      const p = world.player.pos;
       // nothing of the high country within the reach it searches
       let most = 0;
-      for (let x = -3000; x <= 3000; x += 250) for (let z = -3000; z <= 3000; z += 250) most = Math.max(most, world.gen.country(s.x + x, s.z + z).alp);
+      for (let x = -3000; x <= 3000; x += 250) for (let z = -3000; z <= 3000; z += 250) most = Math.max(most, world.gen.country(p.x + x, p.z + z).alp);
       return { most, why: world.adventures.begin('descent') };
     });
-    assert.ok(got.most < 0.5, `no high country round the start (${got.most.toFixed(2)})`);
+    assert.ok(got.most < 0.5, `no high country round the mountain we are on (${got.most.toFixed(2)})`);
     assert.match(got.why, /high country/, 'and it says where to go for one');
     return got;
   });
