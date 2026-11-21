@@ -24,7 +24,8 @@
 //                 map opens, and again after any option is pressed
 //
 // `go here`, on a mark's and a place's card, is the map's own: travel(x, z,
-// label) is handed where you chose, and takes you there (src/map/index.js).
+// label, yaw) is handed where you chose (and for a place that says so, which
+// way to face), and takes you there (src/map/index.js).
 //
 // Other features can draw on it too, over the land and under you and the
 // marks: map.addLayer((pen) => ...), where pen is
@@ -116,7 +117,7 @@ const TEMPLATE = /* html */ `
 
 export class MapView {
   // onOpen(): it's about to open (so whatever else is up can close first)
-  // travel(x, z, label): take the player to somewhere chosen on the map
+  // travel(x, z, label, yaw): take the player to somewhere chosen on the map
   constructor({ seed, land = 1, structures = [], hikes = [], ready, marks, player, input, places = new Places(), onOpen = () => {}, travel = () => false }) {
     this.marks = marks;
     this.onOpen = onOpen;
@@ -1273,7 +1274,7 @@ export class MapView {
       }
       case 'place-go': {
         const p = this.places.get(this.placeSel);
-        if (p) this.travel(p.x, p.z, p.name);
+        if (p) this.travel(p.x, p.z, p.name, p.yaw);
         return;
       }
       case 'place-done':
