@@ -16,6 +16,8 @@
 //   lifts.js    a ride in a lift
 //   slides.js   the waterslides, and a ride down one
 //   kit.js      building blocks: boxes, cylinders, tubes, lofts
+//   textures.js her carpets, marble, panelling, wallpaper, ceilings (painted
+//               a little a frame once she's in sight)
 //   hull.js     what she looks like from outside
 //   decks.js    a deck: its floors, walls, stairs, doors; and what's solid
 //   rooms.js    what's in the rooms, and in a stateroom
@@ -60,6 +62,7 @@ import { stateroom, describe, pickYours } from './cabins.js';
 import { LiftRide, LIFT } from './lifts.js';
 import { Ride, path as slidePath } from './slides.js';
 import { ShipKit } from './kit.js';
+import { Painter, surfaceTexture, laySurfaces, SURFACES } from './textures.js';
 import { buildHull } from './hull.js';
 import { buildDeck } from './decks.js';
 import { furnishCabin } from './rooms.js';
@@ -86,6 +89,7 @@ const FOG_HAZE = 24; // how thick the air is in the thick of the fog at sea (1: 
 const FOG_HORN = 30; // s between blasts of her horn in fog
 const FULL_SPEED = 6; // m/s: under way, as fast as she goes in and out
 const LIT = 0.6; // how much of its own colour her inside gives off, lit by its lamps
+const PAINT_MS = 4; // ms a frame given to painting her carpets, marble and panelling, once she's in sight
 const CAM_IN = 2.6; // m: the camera comes in this close indoors
 const QUIET = 0.5; // how shut in you are, indoors aboard
 const OVERHEAD = { day: 1.2, night: 3.5, range: 8, decay: 1.2, up: 2.2 };
@@ -211,13 +215,15 @@ export function installCruise(game) {
     collect: () => ({
       visited,
       cabin: yours,
-      ...(where.onShip ? { aboard: { x: round(where.x), y: round(where.y), z: round(where.z), yaw: round(player.yaw - now.yaw, 1000) } } : {}),
+      // the deck you're on, and how far over its floor, so it's the same deck whatever her decks' height
+      ...(where.onShip ? { aboard: { x: round(where.x), deck: where.deck, up: round(where.y - deckY(where.deck)), z: round(where.z), yaw: round(player.yaw - now.yaw, 1000) } } : {}),
     }),
     validate: (raw) => {
       const r = raw && typeof raw === 'object' ? raw : {};
       const a = r.aboard && typeof r.aboard === 'object' ? r.aboard : null;
-      const ok = a && [a.x, a.y, a.z].every(Number.isFinite);
-      return { visited: r.visited === true, cabin: Number.isInteger(r.cabin) && cabinByNo(r.cabin) ? r.cabin : null, aboard: ok ? { x: a.x, y: a.y, z: a.z, yaw: Number.isFinite(a.yaw) ? a.yaw : 0 } : null };
+      const y = a && aboardHeight(a);
+      const ok = a && [a.x, y, a.z].every(Number.isFinite);
+      return { visited: r.visited === true, cabin: Number.isInteger(r.cabin) && cabinByNo(r.cabin) ? r.cabin : null, aboard: ok ? { x: a.x, y, z: a.z, yaw: Number.isFinite(a.yaw) ? a.yaw : 0 } : null };
     },
     restore(r) {
       visited = r.visited;
@@ -228,18 +234,24 @@ export function installCruise(game) {
   });
 
   // ── Materials ─────────────────────────────────────────────────────────────
+  // Her inside is laid with her surfaces (textures.js): plain white until
+  // they've been painted, a little a frame from when she comes in sight.
   const lit = { value: LIT };
-  const litFromWithin = (mat, key) => {
+  const surfaces = { value: surfaceTexture() };
+  let painter = null;
+  const litFromWithin = (mat, key, laid = false) => {
     mat.onBeforeCompile = (shader) => {
+      if (laid) laySurfaces(shader, surfaces);
       shader.uniforms.uLit = lit;
-      shader.fragmentShader = `uniform float uLit;\n${shader.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += ${mat.vertexColors ? 'vColor.rgb' : 'diffuseColor.rgb'} * uLit;`)}`;
+      // (its colour as drawn: the vertex's, and the surface it's laid with)
+      shader.fragmentShader = `uniform float uLit;\n${shader.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * uLit;')}`;
     };
     mat.customProgramCacheKey = () => `cruise-${key}`;
     return mat;
   };
   const materials = {
     outside: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.04 }),
-    inside: litFromWithin(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 }), 'inside'),
+    inside: litFromWithin(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 }), 'inside', true),
     glow: new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }),
     glass: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.08, metalness: 0.3, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }),
     lit: new THREE.MeshBasicMaterial({ vertexColors: true }),
@@ -287,6 +299,7 @@ export function installCruise(game) {
   const furnished = new Map(); // cabin no -> { group, owner }
 
   function buildOutside() {
+    painter = new Painter();
     const states = (c) => stateOf(c.no);
     const hull = buildHull({ materials, states });
     const lido = buildLido({ materials });
@@ -899,11 +912,15 @@ export function installCruise(game) {
     const steel = new THREE.Color(0xb8bcc4);
     const wood = new THREE.Color(0x6a4a30);
     // the floor and ceiling, the side walls, the back (glass in the midships cars)
+    k.on(SURFACES.tile);
     k.flat(-hw, d0, hw, d1, 0.004, new THREE.Color(0x3a3a3e));
+    k.on(SURFACES.tiles);
     k.flat(-hw, d0, hw, d1, h, new THREE.Color(0xe8e8e4), true);
+    k.on(SURFACES.panel);
     g.flat(-0.6, (d0 + d1) / 2 - 0.3, 0.6, (d0 + d1) / 2 + 0.3, h - 0.01, new THREE.Color(0xfff4d8), true);
     k.panel(-hw, h / 2, (d0 + d1) / 2, 1, 0, d1 - d0, h, wood);
     k.panel(hw, h / 2, (d0 + d1) / 2, -1, 0, d1 - d0, h, wood);
+    k.on(SURFACES.steel);
     if (glass) {
       gl.panel(0, h / 2, d1, 0, -1, hw * 2, h, new THREE.Color(0x9cc4d4));
       gl.panel(0, h / 2, d1, 0, 1, hw * 2, h, new THREE.Color(0x9cc4d4));
@@ -912,6 +929,7 @@ export function installCruise(game) {
     // the front either side of the doors, and over them
     for (const s of [1, -1]) k.panel(s * (L.door + (hw - L.door) / 2), h / 2, d0, 0, 1, hw - L.door, h, steel);
     k.panel(0, (2.1 + h) / 2, d0, 0, 1, L.door * 2, h - 2.1, steel);
+    k.on(null);
     // a handrail round it, and the panel of buttons by the doors
     k.box(-hw + 0.04, 0.9, d0 + 0.2, -hw + 0.08, 0.95, d1 - 0.1, steel);
     k.box(hw - 0.08, 0.9, d0 + 0.2, hw - 0.04, 0.95, d1 - 0.1, steel);
@@ -1311,6 +1329,7 @@ export function installCruise(game) {
       const d = now.known ? Math.hypot(now.x - f.x, now.z - f.z) : Infinity;
       if (d < SHOW) showOutside(true);
       else if (d > HIDE) showOutside(false);
+      if (painter && !painter.done && painter.step(PAINT_MS)) surfaces.value = surfaceTexture(painter);
       putShip();
       locate();
       if (!shown) {
@@ -1623,6 +1642,18 @@ export function installCruise(game) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+// How high over her waterline a saved place aboard is (m): its deck and how
+// far over that deck's floor; or, saved before it said its deck, its height
+// over the waterline when her decks were OLD_DECK_H apart, put on the same
+// deck now.
+const OLD_DECK_H = 3; // m
+function aboardHeight(a) {
+  if (Number.isInteger(a.deck) && a.deck >= FIRST && a.deck <= LAST) return deckY(a.deck) + (Number.isFinite(a.up) ? a.up : 0);
+  if (!Number.isFinite(a.y)) return NaN;
+  const n = Math.max(FIRST, Math.min(LAST, Math.floor((a.y - deckY(FIRST) + 0.6) / OLD_DECK_H) + FIRST));
+  return deckY(n) + (a.y - deckY(FIRST) - (n - FIRST) * OLD_DECK_H);
+}
 
 const round = (v, k = 100) => Math.round(v * k) / k;
 const titleCase = (s) => s.charAt(0) + s.slice(1).toLowerCase();

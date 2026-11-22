@@ -72,15 +72,22 @@ export const DRAFT = 8.4; // m: how far her keel is under the water
 const BOW_START = 60; // m: forward of this her sides close in to the stem
 const STERN_START = -138; // ...and aft of this they tuck in a little to the transom
 const STERN_TUCK = 3.5; // m: how far
-export const DECK_H = 3; // m from one deck's floor to the next
+// A real ship's decks are under 3 m apart, but seen from behind, as you are
+// here, rooms that low close in round you: hers are a metre more, so her
+// rooms are tall and airy, as on a ship of the grand hotels.
+export const DECK_H = 4; // m from one deck's floor to the next
 export const DECK4_Y = 7; // m: deck 4's floor over the waterline
 export const SLAB = 0.42; // m: the deck under each floor: the ceiling below is this far under it
+export const H_IN = DECK_H - SLAB; // m: a room's height, floor to ceiling
 export const FIRST = 4;
 export const LAST = 16;
 export const deckY = (n) => DECK4_Y + (n - FIRST) * DECK_H;
 export const HULL_T = 0.4; // m: the ship's side, inboard of where the plating is
 export const WALL_T = 0.14; // m: a wall inside
-export const FUNNEL = { z0: -70, z1: -54, half: 5.5, top: 62 }; // m: the funnel's casing, and the top of it
+// The windows in her side, inside and out: from the sill to the head (m over the floor).
+export const WINDOW = { sill: 0.75, head: H_IN - 0.6 };
+// The funnel's casing, and the top of it, 22 m over the sports deck (m).
+export const FUNNEL = { z0: -70, z1: -54, half: 5.5, top: deckY(15) + 22 };
 
 // Each deck: its number, its name in the lifts, and what's on it.
 export const DECKS = [
@@ -820,9 +827,10 @@ export function stairFlights(x, z, y) {
 }
 
 // The slide tower, on the sun deck (15), to starboard aft: a staircase
-// going round four times up to a platform, where the slides start. Its
-// staircase is a core's, set at (x, z) as a core is at its z.
-export const TOWER = { x: -13, z: -99.7, x0: -17.2, z0: -108.6, x1: -8.8, z1: -100, deck: 15, turns: 4, platform: [-18.5, -110, -7.5, -98.5] };
+// going round three times, a deck's height each, up to a platform 12 m over
+// the deck, where the slides (slides.js) start. Its staircase is a core's,
+// set at (x, z) as a core is at its z.
+export const TOWER = { x: -13, z: -99.7, x0: -17.2, z0: -108.6, x1: -8.8, z1: -100, deck: 15, turns: 3, platform: [-18.5, -110, -7.5, -98.5] };
 TOWER.top = deckY(TOWER.deck) + TOWER.turns * DECK_H;
 export function towerFlights() {
   const out = [];

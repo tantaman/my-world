@@ -4,7 +4,7 @@
 // the stairs climb a deck in steps a body can take; that the staterooms are
 // numbered the way a ship's are and grown the same every time; the lifts;
 // the slides, which have to end in the pool; and the pools themselves, which
-// you can swim in and climb out of.
+// you can swim in and climb out of; and what her insides are laid with.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,7 +26,11 @@ import { findBuildings, overlaps } from '../src/abandoned/sites.js';
 import { findSite as findClub, clearOf as clubClear } from '../src/huntclub/site.js';
 import { findBerth, clearOf, regionsInTheWay, PIER, LANE } from '../src/cruise/site.js';
 import { Voyage, PORTS, CYCLE, DOCK, CALL } from '../src/cruise/voyage.js';
-import { layout, walls, floorStrips, flights, towerFlights, cabinsOn, cabinByNo, roomAt, deckAt, deckY, halfBeam, poolBed, subtract, intersect, DECKS, CORES, CORE, POOLS, TOWER, FIRST, LAST, HALF_BEAM, DRAFT, WALL_T, DECK_H, isCabinDeck } from '../src/cruise/plan.js';
+import { layout, walls, floorStrips, flights, towerFlights, cabinsOn, cabinByNo, roomAt, deckAt, deckY, halfBeam, poolBed, subtract, intersect, DECKS, CORES, CORE, POOLS, TOWER, FIRST, LAST, HALF_BEAM, DRAFT, WALL_T, DECK_H, H_IN, WINDOW, isCabinDeck } from '../src/cruise/plan.js';
+import { SURFACES, paintSurfaces, Painter } from '../src/cruise/textures.js';
+import { SKIN } from '../src/cruise/decks.js';
+import { ShipKit } from '../src/cruise/kit.js';
+import * as THREE from 'three';
 import { stateroom, describe, pickYours, PALETTES } from '../src/cruise/cabins.js';
 import { LiftRide, LIFT, travelTime, moveAt, moveTime } from '../src/cruise/lifts.js';
 import { SLIDES, path, Ride, RIDE } from '../src/cruise/slides.js';
@@ -467,4 +471,77 @@ test('a pool is water held up on her deck: deep enough to swim in, with steps ou
 test('her name and every sign aboard can be spelled in the little font', () => {
   const words = ['HALCYON', 'MERIDIAN', 'THE LANTERN ROOM', 'GUEST SERVICES', 'WELCOME ABOARD', 'AFTERGLOW', 'CASINO', 'THE COMPASS BAR', 'CAFE MISTRAL', 'BUBBLES', 'THEATRE', 'THE GALLEY MARKET', 'PROMENADE', 'POOL BAR', 'MINI GOLF', 'THE CORKSCREW', 'THE PLUNGE', 'ALL ABOARD', 'CRUISE TERMINAL', 'TIDEWATER CRUISES', 'DECK 16', 'FWD 9100-9152'];
   for (const w of words) for (const ch of w) assert.ok(glyph(ch), `"${ch}" in "${w}"`);
+});
+
+test('her rooms are tall and airy, with tall windows in them', () => {
+  assert.ok(H_IN >= 3.5, `a room is ${H_IN.toFixed(2)} m to its ceiling`);
+  assert.ok(WINDOW.head - WINDOW.sill > 2 && WINDOW.head < H_IN - 0.45, 'her windows are tall, and stop under the cove');
+  // the slide tower still stands as tall as the slides were drawn for
+  assert.ok(Math.abs(TOWER.top - deckY(TOWER.deck) - 12) < 1e-9);
+});
+
+test('what her insides are laid with: each surface a layer of its own, painted, and those that take a room\'s colour light enough to keep it', () => {
+  const list = Object.values(SURFACES);
+  assert.deepEqual(
+    list.map((s) => s.layer).sort((a, b) => a - b),
+    list.map((_, i) => i),
+    'a layer each, none missed',
+  );
+  const { data, size, layers } = paintSurfaces();
+  assert.equal(layers, list.length);
+  const seen = new Set();
+  for (const [name, s] of Object.entries(SURFACES)) {
+    let sum = 0;
+    let lo = 255;
+    let hi = 0;
+    const base = s.layer * size * size * 4;
+    for (let i = 0; i < size * size; i++) {
+      const l = (data[base + i * 4] + data[base + i * 4 + 1] + data[base + i * 4 + 2]) / 3;
+      sum += l;
+      lo = Math.min(lo, l);
+      hi = Math.max(hi, l);
+    }
+    const mean = sum / (size * size) / 255;
+    if (name !== 'plain') assert.ok(hi - lo > 8, `${name} has a pattern to it`);
+    if (!s.dyed) assert.ok(mean > 0.78, `${name} takes a room's colour without darkening it (${mean.toFixed(2)})`);
+    assert.ok(s.size > 0 && s.rough > 0 && s.rough <= 1 && s.bump >= 0, name);
+    const key = Buffer.from(data.subarray(base, base + size * size * 4)).toString('base64');
+    assert.ok(!seen.has(key), `${name} is a pattern of its own`);
+    seen.add(key);
+  }
+  // painted a little at a time, it comes out the same
+  const p = new Painter();
+  let steps = 0;
+  while (!p.step(0)) steps++;
+  assert.ok(steps > 10, 'in pieces');
+  assert.deepEqual(p.data, data);
+});
+
+test('every kind of room is laid with surfaces there are', () => {
+  for (const [kind, skin] of Object.entries(SKIN)) for (const [part, name] of Object.entries(skin)) assert.ok(SURFACES[name], `${kind}'s ${part}: ${name}`);
+});
+
+test('a surface is laid on by where it is in her frame: a floor by x and z, a wall along it and up from its floor', () => {
+  const k = new ShipKit();
+  const c = new THREE.Color(1, 1, 1);
+  const m = SURFACES.marble;
+  k.on(m, 10);
+  k.flat(0, -1.2, 2.4, 0, 10, c); // a floor
+  k.panel(5, 11, 1.2, 1, 0, 2.4, 2, c); // a wall facing +x, from 10 to 12 up
+  k.on(null);
+  k.box(0, 0, 0, 1, 1, 1, c); // plain
+  const g = k.build();
+  const layer = g.getAttribute('surface');
+  const uv = g.getAttribute('uv');
+  assert.equal(layer.count, g.getAttribute('position').count);
+  for (let i = 0; i < 12; i++) assert.equal(layer.getX(i), m.layer);
+  for (let i = 12; i < layer.count; i++) assert.equal(layer.getX(i), 0);
+  const pos = g.getAttribute('position');
+  for (let i = 0; i < 6; i++) {
+    assert.ok(Math.abs(uv.getX(i) - pos.getX(i) / m.size) < 1e-6 && Math.abs(uv.getY(i) - pos.getZ(i) / m.size) < 1e-6, 'the floor by x and z');
+  }
+  for (let i = 6; i < 12; i++) {
+    assert.ok(Math.abs(uv.getX(i) + pos.getZ(i) / m.size) < 1e-6, 'the wall along it (to the right, seen from in front)');
+    assert.ok(Math.abs(uv.getY(i) - (pos.getY(i) - 10) / m.size) < 1e-6, 'and up from its floor');
+  }
 });
