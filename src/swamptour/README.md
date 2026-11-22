@@ -13,7 +13,8 @@ you're set down at the foot of the dock.
 **Get in.** The guide sits up in the high seat at the back of a blue
 aluminium airboat, in front of the engine and the big propeller in its round
 wire cage, and says hello as you come up. Walk out along the dock to the
-boat and **click**: you're in the middle of the front row, with a pair of ear
+boat and press **F** (the key that gets you into anything: see
+[Acting](../act/README.md)): you're in the middle of the front row, with a pair of ear
 defenders on, because it's loud. The starter grinds, the engine catches, and
 off you go.
 
@@ -36,7 +37,7 @@ are used to the boats and let you come close; the ones you meet on your own
 
 **Getting off.** Back at the dock the guide says goodbye (and hopes you'll
 tip the guide), and you step out onto the dock. To go back sooner,
-**right-click**, and you're run back in. Going somewhere else all at once
+**F**, and you're run back in. Going somewhere else all at once
 (the map, **R**) ends the tour too. How many tours you've been on, how many
 gators you've seen and the biggest are kept.
 
@@ -46,13 +47,14 @@ in its front row with the guide up behind you, and you see them in theirs.
 
 | | |
 |---|---|
-| **click** by the boat | take the tour |
-| **right-click** on the tour | back to the landing |
+| **F** by the boat | take the tour |
+| **F** on the tour | back to the landing |
+| on a pad | **Y** is F |
 
-Both are in your pack too (**Tab**: see [your pack](../pack/README.md)),
-with no key of their own: by the boat *take the airboat tour* is at hand, and
-on the tour *back to the landing* (on a touch screen, a button of its own).
-Anywhere else it says where the tour is.
+Both are at hand in your pack too (**Tab**: see [your pack](../pack/README.md)):
+by the boat *get in*, and on the tour *back to the landing* (on a touch
+screen, a button saying so). Anywhere else, *airboat tour* in the pack says
+where the tour is.
 
 From the console:
 

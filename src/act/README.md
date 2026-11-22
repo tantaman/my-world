@@ -1,13 +1,17 @@
 # Acting on what's at hand
 
 One key does whatever the thing beside you is for: **F** on a keyboard, **Y**
-on a game controller, and on a touch screen a button that says what it would
-do. Get into a car, a boat or a train and out again, onto your horse or the
-turtle or the eagle and off, into your inner tube and out; take the jetpack
-off its rack, climb aboard the rocket (and in orbit, fly home), calm a wild
-horse (hold it down), buy a car on a dealer's lot, rent the movies in your
-hands at the counter, ask the steward for a shotgun. Whatever is at hand says
-so in the prompt, with the same key.
+on a game controller. Get into a car, a boat or a train and out again, the
+race car on the pit apron, the airboat at the swamp tour's dock; onto your
+horse or the turtle or the eagle and off, into your inner tube and out, onto
+a surfboard and off; take the jetpack off its rack, climb aboard the rocket
+(and in orbit, fly home), calm a wild horse (hold it down), buy a car on a
+dealer's lot, rent the movies in your hands at the counter, ask the steward
+for a shotgun. Whatever is at hand says so in the prompt, with the same key.
+
+What it would do is at hand in [your pack](../pack/README.md) too, named for
+it (*F · get in*), and so on a touch screen it's a button saying so, held
+down where the key would be held.
 
 | | |
 |---|---|
@@ -35,6 +39,6 @@ world.act.press()    // do it
 ## Files
 
 ```
-index.js              plugs it into the game: F and the pad's Y, the touch button, the help panel
+index.js              plugs it into the game: F and the pad's Y, what it would do (for the pack), the help panel
 offers.js             what could be done, and which of it the key does: the nearest
 ```

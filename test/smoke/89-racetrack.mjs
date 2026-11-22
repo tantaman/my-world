@@ -1,10 +1,10 @@
 // A race track: picked on the map, `go here` sets you down at the paddock
-// gate looking out at the grid. Walk up to your car on the apron and a click
-// puts you in it at the back of the grid; the lights come on one by one and
+// gate looking out at the grid. Walk up to your car on the apron and F (the
+// act key) puts you in it at the back of the grid; the lights come on one by one and
 // go out, and W takes you off down the straight, past the line, with the
 // race card, the speed and the little map on the screen. Over the line for
 // the last time, the race is over and says where you came; stopped, a click
-// would race again, and a right-click gets you out, back on the apron.
+// would race again, and F gets you out, back on the apron.
 //
 // Needs: nothing in particular (the tracks are on the map from anywhere).
 // Leaves: you on the apron by your car, out of it, one race run.
@@ -65,12 +65,12 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.evaluate(() => world.racetrack.toCar());
     await frames(6);
     let r = await race();
-    assert.match(r.prompt, /get in your car/, 'by your car a click would get you in');
-    assert.equal(await page.evaluate(() => world.pack.list().hand.find((r) => r.id === 'racetrack')?.word), 'race', '...and it is at hand in your pack');
-    await page.evaluate(() => T.tap('use'));
+    assert.match(r.prompt, /F get in your car/, 'by your car F would get you in');
+    assert.equal(await page.evaluate(() => world.pack.list().hand.find((r) => r.id === 'act')?.word), 'get in', '...and it is at hand in your pack');
+    await key('KeyF');
     await frames(4);
     r = await race();
-    assert.ok(r.driving, 'click, and you are in it');
+    assert.ok(r.driving, 'F, and you are in it');
     assert.equal(r.state.state, 'lights');
     assert.equal(r.state.position, 6, 'at the back of the grid');
     assert.ok(r.card, 'the race card is up');
@@ -115,10 +115,10 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.ok(await page.evaluate(() => world.racetrack.record.races === 1), 'a race run, kept');
     assert.equal(await page.evaluate(() => world.pack.list().hand.find((r) => r.id === 'racetrack')?.word), 'race again', 'stopped, another race is at hand');
     await shot('the results');
-    await page.evaluate(() => T.tap('alt'));
+    await key('KeyF');
     await frames(6);
     r = await race();
-    assert.equal(r.driving, false, 'right-click, and you are out');
+    assert.equal(r.driving, false, 'F, and you are out');
     assert.equal(r.card, false, 'the card is down');
     assert.ok(await page.evaluate(() => world.player.aboard === null && world.player.character.seated === null), 'on your feet');
     const by = await page.evaluate(() => {

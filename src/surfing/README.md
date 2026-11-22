@@ -28,8 +28,9 @@ its lip throws out over the face and comes down in spray, and then it's
 white water, rolling in up the beach. You can hear it from the beach, from
 where it's breaking.
 
-**Surfing.** In the sea at a surf spot, *surf* is at hand (in the pack, and
-a button on a touch screen): you lie on a board, pointing out to sea.
+**Surfing.** In the sea at a surf spot, **F** (the key that gets you onto
+anything: see [Acting](../act/README.md); *surf* is at hand in the pack, and a
+button on a touch screen): you lie on a board, pointing out to sea.
 
 | | lying on the board | standing |
 |---|---|---|
@@ -39,7 +40,8 @@ a button on a touch screen): you lie on a board, pointing out to sea.
 | **shift** | duck the nose under a wave | crouch: turn tighter, ride in the barrel |
 | **space** | stand up, once a wave has you | off the lip, into the air |
 
-*swim*, at hand while you surf, gets you off the board.
+**F** again (*swim*, at hand while you surf) gets you off the board. On a pad,
+**Y** is F.
 
 Paddle out through the white water (duck under it, or it shoves you back
 in) to just past where the big ones break. When one stands up out to sea of
