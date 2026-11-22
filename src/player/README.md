@@ -44,6 +44,26 @@ it's like down there is [Under the water](../underwater/README.md). Water
 held up in something built (a pool, a hot tub: `world/basins.js`) is waded
 and swum in the same way, wherever it is.
 
+## The camera behind you
+
+If steering the camera and walking at once is a handful, switch on *camera
+locked behind you* on the settings panel (**O**, under *you*). Then the
+camera stays behind you, looking past your right shoulder the way you face,
+and one stick (or **W A S D**, or the arrows, or your left thumb on a touch
+screen) does everything:
+
+| | |
+|---|---|
+| forward | walk the way you face (all the way: run) |
+| left · right | turn, on the spot or as you go |
+| back | back up, slower, still facing ahead |
+
+Looking about (the mouse, the right stick, your right thumb, **Q E**) turns
+you too, and still tips the camera up and down. On something you steer
+yourself (a horse, a boat) it's the same: left and right turn it. On
+something that carries you along (a train, skis, a car) the camera keeps
+round behind the way you're going. Your browser remembers the choice.
+
 ## With a game controller
 
 Plug a pad in and press any button on it: the browser shows a page no pad
@@ -97,9 +117,9 @@ world are told, so don't change it once someone has played as them; the
 ## Files
 
 ```
-index.js              plugs it into the game: controls, the hiker, who you are, where you arrive
-player.js             movement, collision, wading, swimming and diving, third-person camera
-character.js          the body anyone has: bones, IK gait, work poses, swimming, things raised to the face, a stance on skis or a board; dressed as one of the hikers, at their size
+index.js              plugs it into the game: controls, the hiker, who you are, the camera behind you, where you arrive
+player.js             movement, collision, wading, swimming and diving, third-person camera, free or locked behind you
+character.js          the body anyone has: bones, IK gait (forwards or backwards), work poses, swimming, things raised to the face, a stance on skis or a board; dressed as one of the hikers, at their size
 hikers.js             who you can be: the hikers, in the order they're offered
 hikers/hiker.js       the hiker's clothes: rain shell, daypack, trousers and boots
 hikers/oliver.js      Oliver: his head and hair, henley, joggers and trainers

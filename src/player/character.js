@@ -581,10 +581,17 @@ export class Character {
     s.under = under;
   }
 
-  // speed: horizontal m/s, grounded: bool, vy: vertical velocity, turn: rad/s
+  // speed: horizontal m/s (less than 0: walking backwards), grounded: bool,
+  // vy: vertical velocity, turn: rad/s
   update(dt, speed, grounded, vy, turn) {
     dt = Math.min(dt, 1 / 15);
     this.time += dt;
+    // Walking backwards is the same walk played backwards: each foot goes
+    // along its path from the end to the start, so a planted foot slides
+    // forward under you, and one coming down lands toe first and rolls back
+    // onto the heel. The body leans the other way into starts and stops.
+    const ahead = speed < 0 ? -1 : 1;
+    speed = Math.abs(speed);
     // Someone smaller walks the way the grown-up body would at a speed scaled
     // down to them (by the root of their size, which keeps the Froude number),
     // and their steps turn over quicker by the same root. The strides come
@@ -629,7 +636,7 @@ export class Character {
     const fRun = v / (2 * (0.35 + 0.27 * v));
     let f = Math.max(lerp(fWalk, fRun, rb), turning * 1.2, mb * 0.6);
     f *= 1 - ab; // hold the stride in the air
-    this.phase += f * dt * quick;
+    this.phase += ahead * f * dt * quick;
     const stride = f > 1e-3 ? v / f : 0;
     const betaWalk = clamp(0.62 - 0.03 * v, 0.52, 0.62);
     const betaRun = clamp((0.9 * Math.max(fRun, 0.5)) / Math.max(v, 0.5), 0.22, 0.4);
@@ -637,9 +644,11 @@ export class Character {
     const sweep = beta * stride; // how far a planted foot travels back under you
     const roll = smoothstep(0, 1.4, v); // slow steps barely roll heel to toe
 
-    // A heel comes down every half cycle.
-    const step = Math.floor(this.phase * 2);
-    if (step > this.stepIndex && grounded && mb > 0.3 && this.onFootstep) this.onFootstep(rb);
+    // A heel comes down every half cycle. Walking backwards a toe does, where
+    // the foot's path played backwards comes to the ground: at the end of
+    // the time it is down going forwards.
+    const step = Math.floor((this.phase - (ahead < 0 ? beta : 0)) * 2);
+    if (step !== this.stepIndex && grounded && mb > 0.3 && this.onFootstep) this.onFootstep(rb);
     this.stepIndex = step;
 
     const uL = fract(this.phase);
@@ -659,7 +668,7 @@ export class Character {
     let hRoll = side1 * (walkW * 0.07 + runW * 0.035) + idle * shift * 0.04;
     let hYaw = -swingL * (walkW * (0.05 + 0.02 * v) + runW * 0.13);
     let hz = 0;
-    const accLean = clamp(this.acc * 0.022, -0.16, 0.22) * (1 - ab);
+    const accLean = clamp(this.acc * 0.022, -0.16, 0.22) * (1 - ab) * ahead;
     let hPitch = runW * 0.08 + accLean * 0.3;
     hy += this.land;
 

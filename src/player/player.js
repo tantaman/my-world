@@ -89,6 +89,8 @@ const ZOOM_HOLD = 2.5;
 // How near and far the camera can be (m).
 const CAM_DIST = [2.2, 16];
 const _dir = new THREE.Vector3();
+const _from = new THREE.Vector3();
+const _right = new THREE.Vector3();
 const _turn = new THREE.Quaternion();
 const _up = new THREE.Vector3(0, 1, 0);
 const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
@@ -102,6 +104,13 @@ const CAVE_CAM = { clear: 0.25, steps: 16, nearest: 0.15 };
 // Moved by something that swings the camera round behind you (aboard.behind),
 // it waits this long (s) after you last looked about before it does.
 const LOOK_HOLD = 1.5;
+// With the camera locked behind you (lockCamera), for someone who'd rather
+// not steer it: left and right turn you this fast (rad/s), backing up goes
+// at this much of walking pace, the camera looks past your right shoulder
+// from this far (m, the grown-up's) to the side, and being carried (aboard)
+// or walked somewhere (steer), it swings round behind the way you go this
+// quickly (1/s).
+const LOCKED = { turn: 2, back: 0.55, shoulder: 0.5, follow: 4 };
 
 // Where someone at (x, z) stands: on the ground, afloat in deep water, or on
 // the floor of a space they are in (feet about y; spaces: world/spaces.js).
@@ -116,6 +125,22 @@ export function standHeight(world, x, z, depth = SWIM_DEPTH, y = Infinity, space
   const g = world.heightAt(x, z);
   if (world.waterAt(x, z, _w) && _w.level - g > depth) return _w.level - depth;
   return g;
+}
+
+// An angle brought round to between -π and π.
+const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
+// The walking axes with a stick pushed on the slant, all the way, counted as
+// both all the way, as W and A together are: so turning while you walk with
+// the camera locked behind you doesn't slow you down. (The round of a
+// stick's travel, stretched out to the square of the keys.)
+function squared(axes) {
+  const most = Math.max(Math.abs(axes.x), Math.abs(axes.y));
+  if (most < 1e-4) return axes;
+  const k = Math.hypot(axes.x, axes.y) / most;
+  axes.x = clamp(axes.x * k, -1, 1);
+  axes.y = clamp(axes.y * k, -1, 1);
+  return axes;
 }
 
 // Emits:
@@ -159,6 +184,14 @@ export class Player extends Emitter {
     this.camDist = 6;
     this.camDistSmooth = 6;
     this.camTarget = new THREE.Vector3();
+    // The camera locked behind you, looking the way you face: left and right
+    // on the walking keys or stick turn you (and it with you) rather than
+    // step sideways, forward walks the way you face and back backs you up.
+    // So one stick does it all, with nothing to look about with. Looking
+    // about (the mouse, the other stick) turns you too, and still tips the
+    // camera up and down.
+    this.lockCamera = false;
+    this._shoulder = 0; // how far (m) to the side the camera looks from, eased
     this.hasMoved = false;
     // { x, z, yaw }: where the path starts, and where to appear when the
     // world opens (the start, unless a save remembers where you stood).
@@ -410,8 +443,18 @@ export class Player extends Emitter {
     if (this.aboard) return this._ride(dt, look.x || look.y || stick.x || stick.y || input.isDown('turnLeft') || input.isDown('turnRight'));
     this._rode = false;
 
-    // Camera-relative movement
+    // Camera-relative movement; or with the camera locked behind you, left
+    // and right turn you, and it with you, and you go forward or back the
+    // way you face (backing up slower, and never at a run).
     const axes = input.moveAxes();
+    let turning = false;
+    if (this.lockCamera) {
+      squared(axes);
+      this.camYaw -= axes.x * LOCKED.turn * dt;
+      turning = Math.abs(axes.x) > 1e-4;
+      axes.x = 0;
+      if (axes.y < 0) axes.y *= LOCKED.back;
+    }
     const fx = -Math.sin(this.camYaw);
     const fz = -Math.cos(this.camYaw);
     const rx = Math.cos(this.camYaw);
@@ -420,8 +463,9 @@ export class Player extends Emitter {
     let wz = fz * axes.y + rz * axes.x;
     let wl = Math.hypot(wx, wz);
     let amount = Math.min(1, wl);
-    let running = input.running();
-    this.manual = wl > 1e-4;
+    let running = input.running() && !(this.lockCamera && axes.y < 0);
+    this.manual = wl > 1e-4 || turning;
+    let steered = false;
     if (this.manual) this.hasMoved = true;
     // ...or, with your hands off the controls, wherever you're being walked
     // (not while something carries you: your hands are on it)
@@ -435,6 +479,7 @@ export class Player extends Emitter {
         wl = d;
         amount = Math.min(1, d / STEER_EASE);
         running = !!this.steer.run;
+        steered = true;
       }
     }
     if (wl > 1e-4) {
@@ -629,14 +674,19 @@ export class Player extends Emitter {
     this.underfoot = this.grounded ? under : null;
     if (!wasGrounded && this.grounded && fallSpeed > 2.5) this.emit('land', Math.min(1, fallSpeed / 12));
 
-    // Facing
+    // Facing: the work in hand, or the way you're going; with the camera
+    // locked behind you, the way it looks, unless you're being walked
+    // somewhere, when it comes round behind the way you go instead.
     const hs = Math.hypot(this.vel.x, this.vel.z);
     let turn = 0;
     const facing = this.faceTo ? Math.hypot(this.faceTo.x - this.pos.x, this.faceTo.z - this.pos.z) > 0.05 : false;
-    if (hs > 0.3 || facing) {
+    const faceAhead = this.lockCamera && !steered;
+    if (hs > 0.3 || facing || faceAhead) {
       const target = facing
         ? Math.atan2(this.faceTo.x - this.pos.x, this.faceTo.z - this.pos.z)
-        : Math.atan2(this.vel.x, this.vel.z);
+        : faceAhead
+          ? this.camYaw + Math.PI
+          : Math.atan2(this.vel.x, this.vel.z);
       let d = target - this.yaw;
       d = Math.atan2(Math.sin(d), Math.cos(d));
       const step = d * (1 - Math.exp(-dt * (c ? c.turn : 12)));
@@ -644,6 +694,7 @@ export class Player extends Emitter {
       turn = step / Math.max(dt, 1e-4);
     }
     this.turnRate = lerp(this.turnRate, turn, 1 - Math.exp(-dt * 8));
+    if (steered && this.lockCamera && hs > 0.3) this.camYaw += wrap(this.yaw + Math.PI - this.camYaw) * (1 - Math.exp(-dt * LOCKED.follow));
 
     const root = this.character.root;
     root.position.copy(this.pos);
@@ -651,9 +702,11 @@ export class Player extends Emitter {
     // bob a little while swimming at the surface
     if (diver) root.position.y += Math.sin(this.character.time * 2.6) * 0.04 * (1 - smoothstep(0.1, 0.5, this.under));
     this.character.swim(diver ? 1 : 0, this.prone, this.pitch, this.under > 0.3);
+    // backing up on your feet (the camera locked behind you), the legs walk backwards
+    const backing = this.lockCamera && !diver && this.vel.x * Math.sin(this.yaw) + this.vel.z * Math.cos(this.yaw) < 0;
     // carried, the legs aren't walking (whatever carries you sits you on it)
     if (c) this.character.update(dt, 0, true, 0, 0);
-    else this.character.update(dt, hs, this.grounded, this.vel.y, this.turnRate);
+    else this.character.update(dt, backing ? -hs : hs, this.grounded, this.vel.y, this.turnRate);
     // whether your head is under the water
     this.submerged = diver && this.pos.y + lerp(HEAD[0], HEAD[1], this.prone) * this.size < this.surface - 0.05;
 
@@ -779,10 +832,10 @@ export class Player extends Emitter {
 
   // Is the camera's view clear t metres back from its target along dir: open
   // air in a cave, or above the land?
-  _open(dir, t) {
-    const x = this.camTarget.x + dir.x * t;
-    const y = this.camTarget.y + dir.y * t;
-    const z = this.camTarget.z + dir.z * t;
+  _open(from, dir, t) {
+    const x = from.x + dir.x * t;
+    const y = from.y + dir.y * t;
+    const z = from.z + dir.z * t;
     if (this.spaces && this.spaces.air(x, y, z, CAVE_CAM.clear)) return true;
     return y >= this.world.heightAt(x, z) + 0.35;
   }
@@ -811,12 +864,11 @@ export class Player extends Emitter {
     this.camTarget.y += dy;
     this.camTarget.z += dz;
     this.camYaw += turn;
-    // ...and round behind you, if it should, while you aren't looking about
+    // ...and round behind you, if it should (always, with the camera locked
+    // behind you), while you aren't looking about
     this._looked = looked ? 0 : this._looked + dt;
-    if (at.behind > 0 && this._looked > LOOK_HOLD) {
-      const off = Math.atan2(Math.sin(heading + Math.PI - this.camYaw), Math.cos(heading + Math.PI - this.camYaw));
-      this.camYaw += off * (1 - Math.exp(-dt * at.behind));
-    }
+    const behind = this.lockCamera ? Math.max(at.behind, LOCKED.follow) : at.behind;
+    if (behind > 0 && this._looked > LOOK_HOLD) this.camYaw += wrap(heading + Math.PI - this.camYaw) * (1 - Math.exp(-dt * behind));
     const k = this._rode && Math.hypot(dx, dz) < 5 ? 1 / Math.max(dt, 1e-4) : 0;
     this.vel.set(dx * k, dy * k, dz * k);
     this.pos.set(at.x, at.y, at.z);
@@ -849,17 +901,33 @@ export class Player extends Emitter {
     this.camTarget.x = lerp(this.camTarget.x, this.pos.x, kT);
     this.camTarget.z = lerp(this.camTarget.z, this.pos.z, kT);
     this.camTarget.y = lerp(this.camTarget.y, this.pos.y + this.eye, snap ? 1 : 1 - Math.exp(-dt * 6));
+    const under = !!this.space;
+
+    // With the camera locked behind you it looks past your right shoulder,
+    // so you're a little to the left and what's ahead of you is under the
+    // crosshair, not the back of your head: from beside your head, as far
+    // to the side as a wall there leaves room for (and in a cave, not at all).
+    const from = _from.copy(this.camTarget);
+    const right = _right.set(Math.cos(this.camYaw), 0, -Math.sin(this.camYaw));
+    let side = this.lockCamera && !under ? LOCKED.shoulder * this.size : 0;
+    if (side > 0) {
+      for (const blocked of this.cameraBlockers) {
+        const hit = blocked(this.camTarget, right, side + 0.25);
+        if (hit < side + 0.25) side = Math.max(0, hit - 0.25);
+      }
+    }
+    this._shoulder = snap ? side : lerp(this._shoulder, side, 1 - Math.exp(-dt * (side < this._shoulder ? 14 : 3)));
+    from.addScaledVector(right, this._shoulder);
 
     // Pull in if the hillside is between us and the camera (or in a cave,
     // its rock: looked for more finely, and let come in closer).
     let dist = this.camDist + (this.carrier ? this.carrier.back : 0) + (this.aboard ? this._at.back : 0);
     const cp = Math.cos(this.camPitch);
     const dir = _dir.set(Math.sin(this.camYaw) * cp, Math.sin(this.camPitch), Math.cos(this.camYaw) * cp);
-    const under = !!this.space;
     const steps = under ? CAVE_CAM.steps : 8;
     for (let i = 1; i <= steps; i++) {
       const t = (i / steps) * dist;
-      if (this._open(dir, t)) continue;
+      if (this._open(from, dir, t)) continue;
       if (!under) {
         dist = Math.max(1.2, t * 0.9);
         break;
@@ -869,7 +937,7 @@ export class Player extends Emitter {
       let hi = t;
       for (let k = 0; k < 5; k++) {
         const mid = (lo + hi) / 2;
-        if (this._open(dir, mid)) lo = mid;
+        if (this._open(from, dir, mid)) lo = mid;
         else hi = mid;
       }
       dist = Math.max(CAVE_CAM.nearest, lo);
@@ -877,7 +945,7 @@ export class Player extends Emitter {
     }
     // ...or a wall or roof.
     for (const blocked of this.cameraBlockers) {
-      const hit = blocked(this.camTarget, dir, dist);
+      const hit = blocked(from, dir, dist);
       if (hit < dist) dist = Math.max(0.6, hit - 0.25);
     }
     const kd = snap ? 1 : 1 - Math.exp(-dt * (dist < this.camDistSmooth ? 14 : 3));
@@ -886,7 +954,7 @@ export class Player extends Emitter {
     if (under && dist < this.camDistSmooth) this.camDistSmooth = dist;
 
     const cam = this.camera;
-    cam.position.copy(this.camTarget).addScaledVector(dir, this.camDistSmooth);
+    cam.position.copy(from).addScaledVector(dir, this.camDistSmooth);
     // (in a cave the march above has already kept it in the open)
     if (!under) {
       let floor = this.world.heightAt(cam.position.x, cam.position.z) + 0.35;
@@ -898,7 +966,7 @@ export class Player extends Emitter {
       }
       if (cam.position.y < floor) cam.position.y = floor;
     }
-    cam.lookAt(this.camTarget);
+    cam.lookAt(from);
     this._lookThrough(dir);
   }
 
