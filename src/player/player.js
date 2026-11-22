@@ -240,7 +240,8 @@ export class Player extends Emitter {
     //   at         { x, z, yaw }: where it is now, and drawn
     // While it's set, you move about against what's solid of it at `still`,
     // and are put where that is on it `at` now. Who sets it sets it while
-    // you're on it, and only then.
+    // you're on it, and only then: set, you're taken to be standing on what's
+    // solid of it (as you are, until it moves).
     this.deck = null;
     this._deckAt = null; // where the deck was when you were last put on it
     // Something held up to the eye (a rifle's scope), or null. While there
@@ -324,8 +325,9 @@ export class Player extends Emitter {
       this._deckAt = null;
       return this._update(dt);
     }
-    // onto the deck where it's solid, as it was when you were last put on it...
-    this._moveFrame(this._deckAt || d.at, d.still);
+    // onto the deck where it's solid, as it was when you were last put on it
+    // (just set, you're on it there already)...
+    this._moveFrame(this._deckAt || d.still, d.still);
     this._update(dt);
     // ...and back to where that is on it now
     this._moveFrame(d.still, d.at);

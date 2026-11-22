@@ -187,7 +187,6 @@ export function installCruise(game) {
   let refPort = -1;
   const voy = {};
   const deckFrame = { still: ref, at: now };
-  const toL = (x, z, out = _l) => toLocal(now, x, z, out);
   const worldSolid = (s) => {
     const a = toWorld(ref, s.ax, s.az, {});
     const b = toWorld(ref, s.bx, s.bz, {});
@@ -812,7 +811,9 @@ export function installCruise(game) {
   // ── Where you are ─────────────────────────────────────────────────────────
   function locate() {
     const p = player.pos;
-    toL(p.x, p.z);
+    // where you are on her: where she is, if she's carrying you; if she
+    // isn't, you're where she's solid (alongside, the same place)
+    toLocal(player.deck === deckFrame || !solid ? now : ref, p.x, p.z, _l);
     where.x = _l.x;
     where.z = _l.z;
     where.y = p.y - now.y;
@@ -932,11 +933,9 @@ export function installCruise(game) {
   };
   function enterCar(room) {
     const core = CORES.find((c) => c.id === room.core);
-    const p = player.pos;
-    toL(p.x, p.z);
     // somewhere well inside it
-    const lx = Math.max(room.liftX - 0.6, Math.min(room.liftX + 0.6, _l.x));
-    const lz = Math.max(room.z0 + 0.6, Math.min(room.z1 - 0.5, _l.z));
+    const lx = Math.max(room.liftX - 0.6, Math.min(room.liftX + 0.6, where.x));
+    const lz = Math.max(room.z0 + 0.6, Math.min(room.z1 - 0.5, where.z));
     const held = { x: lx, z: lz };
     car = { core, x: room.liftX, z: core.z + (CORE.lifts.z0 + CORE.lifts.z1) / 2, deck: where.deck, state: 'here', pick: where.deck, ride: null, held };
   }
