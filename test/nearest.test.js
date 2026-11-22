@@ -70,3 +70,32 @@ test('a place two streams hold is listed once', () => {
   const merged = new MergeNearest([new ListNearest(0, 0, [p]), new ListNearest(0, 0, [p, { id: 'other', x: 20, z: 0 }])]);
   assert.deepEqual(pull(merged, 5).map((g) => g.place.id), ['same', 'other']);
 });
+
+test('a square that says where its places can be is only looked in when that is next', () => {
+  // big squares, most with nothing; one place in some, somewhere near a spot
+  const BIG = 1000;
+  const spot = (i, j) => {
+    const r = mulberry32(hash2i(i, j, 9));
+    return r() < 0.3 ? { x: (i + 0.2 + r() * 0.6) * BIG, z: (j + 0.2 + r() * 0.6) * BIG } : null;
+  };
+  const placeOf = (i, j) => {
+    const s = spot(i, j);
+    return s ? [{ id: `${i}:${j}`, x: s.x + 40, z: s.z - 30 }] : [];
+  };
+  const looked = [];
+  const stream = new GridNearest(10, 10, {
+    size: BIG,
+    at: (i, j) => (looked.push(`${i}:${j}`), placeOf(i, j)),
+    box: (i, j) => {
+      const s = spot(i, j);
+      return s ? [s.x - 60, s.z - 60, s.x + 60, s.z + 60] : null;
+    },
+  });
+  const got = pull(stream, 8);
+  const all = [];
+  for (let j = -12; j <= 12; j++) for (let i = -12; i <= 12; i++) all.push(...placeOf(i, j));
+  assert.deepEqual(got.map((g) => g.place.id), byDistance(all, 10, 10).slice(0, 8).map((w) => w.id));
+  assert.equal(looked.length, new Set(looked).size, 'each looked in once');
+  assert.ok(looked.every((k) => spot(...k.split(':').map(Number))), 'and only those that can have something');
+  assert.ok(looked.length <= 10, `no more of them than it took (${looked.length})`);
+});

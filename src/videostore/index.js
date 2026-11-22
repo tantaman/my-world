@@ -54,7 +54,7 @@ import { VEG_STRIDE } from '../world/flora.js';
 import { SKY } from '../render/uniforms.js';
 import { rayBox, wrapAngle } from '../core/geom.js';
 import { mulberry32 } from '../noise.js';
-import { Branches } from './branches.js';
+import { Branches, hasBranch } from './branches.js';
 import { GridNearest, ListNearest, MergeNearest } from '../core/nearest.js';
 
 const BEEN_KEPT = 500; // branches you've been to, the most remembered
@@ -307,6 +307,11 @@ export function installVideostore(game) {
         new ListNearest(x, z, home ? [asPlace(home)] : []),
         new GridNearest(x, z, {
           size: towns.towns.size,
+          // (a town known not to have one has nothing)
+          box(i, j) {
+            const t = towns.towns.peek(i, j);
+            return t === null || (t && !hasBranch(t, gen.seed)) ? null : undefined;
+          },
           at(i, j) {
             const t = towns.towns.peek(i, j);
             const b = t && branches.peek(t);

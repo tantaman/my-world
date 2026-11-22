@@ -40,7 +40,7 @@
 //   world.spaceport.arena         the match, while you're up there
 
 import * as THREE from 'three';
-import { findSite, clearOf, LaunchSites, FAR, PAD, ROCKET_AT, LANDING_AT } from './site.js';
+import { findSite, clearOf, LaunchSites, FAR, FAR_REACH, PAD, ROCKET_AT, LANDING_AT } from './site.js';
 import { GridNearest, ListNearest, MergeNearest } from '../core/nearest.js';
 import { formatDistance } from '../core/format.js';
 import { buildLaunchSite, makeCapsule, makeExhaust, ROCKET, SMOKE } from './launchSite.js';
@@ -194,6 +194,11 @@ export function installSpaceport(game) {
         new ListNearest(x, z, home ? [asPlace(home)] : []),
         new GridNearest(x, z, {
           size: FAR.cell,
+          // (where a square's can be is known from the seed alone, cheaply)
+          box(i, j) {
+            const s = sites.spot(i, j);
+            return s ? [s.x - FAR_REACH, s.z - FAR_REACH, s.x + FAR_REACH, s.z + FAR_REACH] : null;
+          },
           at(i, j) {
             const s = sites.peek(i, j);
             return s === undefined ? undefined : s ? [asPlace(s)] : [];

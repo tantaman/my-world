@@ -20,12 +20,13 @@ export const RUNS = {
   apart: 3000, // m kept from the High Country ski run
 };
 // What a run is called: a word for the mountain and one for the run, each
-// going round on a lattice so the squares round about have others.
+// going round on a lattice (the mountain's i + 4j, of 16, so no two squares
+// within three of each other either way share one).
 const PEAKS = ['Raven', 'Ptarmigan', 'Marten', 'Ermine', 'Lynx', 'Cairn', 'Gable', 'Scree', 'Corrie', 'Tarn', 'Hoarfrost', 'Larch', 'Stag', 'Owl', 'Juniper', 'Granite'];
 const KINDS = ['Bowl', 'Couloir', 'Glades', 'Chute', 'Face', 'Run'];
 const wrap = (k, n) => ((k % n) + n) % n;
 export function runName(seed, i, j) {
-  return `${PEAKS[wrap(i * 7 + j * 11 + seed, PEAKS.length)]} ${KINDS[wrap(i * 2 + j * 5 + (seed >> 4), KINDS.length)]}`;
+  return `${PEAKS[wrap(i + j * 4 + seed, PEAKS.length)]} ${KINDS[wrap(i * 2 + j * 5 + (seed >> 4), KINDS.length)]}`;
 }
 
 // gen: the WorldGen; landforms: the real places (kept clear of); home: the

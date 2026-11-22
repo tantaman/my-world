@@ -41,10 +41,12 @@ export class RoutePanel {
     this.more = this.el.querySelector('.route-more');
     this.detail = this.el.querySelector('.route-detail');
     this.steps = this.detail.querySelector('ol');
-    // Scrolled (or tabbed) to the end of the list: a page more.
+    // Scrolled (or tabbed) to the end of the list: a page more, and more
+    // again for as long as the end is still in view (update()).
+    this.atEnd = false;
     if (typeof IntersectionObserver === 'function') {
       new IntersectionObserver((seen) => {
-        if (seen.some((e) => e.isIntersecting) && this.stream && this.count >= this.want) this.want = this.count + PAGE;
+        for (const e of seen) this.atEnd = e.isIntersecting;
       }).observe(this.more);
     }
     this.el.addEventListener('click', (e) => {
@@ -187,6 +189,7 @@ export class RoutePanel {
   // Each frame the routes tab is showing.
   update() {
     if (!this.detail.hidden || !this.stream) return;
+    if (this.atEnd && this.count >= this.want) this.want = this.count + PAGE;
     if (this.count < this.want) this.pull(PULL_MS);
   }
 
