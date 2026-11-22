@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { SHARED, SKY } from '../render/uniforms.js';
 import { POINT_GLSL, POINT_DISC_GLSL } from '../render/glsl.js';
+import { OVER } from '../render/pipeline.js';
 
 const MOTE = 0.006; // m across (a mote, made a little more of than it is)
 const FIREFLY = 0.02; // m: the glow round one
@@ -86,6 +87,7 @@ export function createParticles(count = 900) {
     blending: THREE.AdditiveBlending,
   });
   const points = new THREE.Points(geo, mat);
+  points.layers.set(OVER); // in the air: drawn over the water, not seen through it (render/pipeline.js)
   points.frustumCulled = false;
   return {
     object: points,

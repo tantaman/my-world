@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { SHARED } from '../render/uniforms.js';
 import { anchor } from '../render/origin.js';
+import { OVER } from '../render/pipeline.js';
 import { NOISE_GLSL, POINT_GLSL, POINT_DISC_GLSL } from '../render/glsl.js';
 
 // Which way smoke drifts and flames lean, as the trees sway.
@@ -160,6 +161,7 @@ export class FireFx {
       }),
     );
     this.sparksMesh.frustumCulled = false;
+    this.sparksMesh.layers.set(OVER); // in the air: drawn over water, not seen through it (render/pipeline.js)
     scene.add(this.sparksMesh);
 
     // smoke
@@ -208,6 +210,7 @@ export class FireFx {
     this.smokeMesh = new THREE.Mesh(geo, this.smokeMat);
     this.smokeMesh.frustumCulled = false;
     this.smokeMesh.renderOrder = 5; // under the flames, which add their light on top
+    this.smokeMesh.layers.set(OVER);
     scene.add(this.smokeMesh);
   }
 

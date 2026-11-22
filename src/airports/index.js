@@ -52,6 +52,7 @@ import { SEAT_HIPS } from '../player/character.js';
 import { SHARED, SKY } from '../render/uniforms.js';
 import { rayBox } from '../core/geom.js';
 import { formatDistance } from '../core/format.js';
+import { createBuildingMaterial } from '../build/surfaces.js';
 
 const SHOW = 750; // m: an airfield this close is stood up...
 const HIDE = 950; // ...and taken down again past this
@@ -199,7 +200,7 @@ export function installAirports(game) {
   });
 
   // ── Standing them up and taking them down ─────────────────────────────────
-  const body = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
+  const body = createBuildingMaterial(); // (build/surfaces.js)
   const paint = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
   const lamps = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
   const planeBody = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide });

@@ -107,6 +107,7 @@ to build in it with other people — see [Building together](src/save/README.md)
 | `sharp` | `1080` | the most lines the picture is drawn in without pixel art |
 | `ao` | `0.85` | ambient occlusion, 0–1 (`0`: not worked out at all) |
 | `msaa` | `4` | samples per pixel without pixel art (`0`: none, hard-edged leaves) |
+| `mirror` | `28` | steps a reflection in the water is followed across the picture (`0`: it mirrors only the sky) |
 | `time` | `16.6` | starting hour of the day |
 | `seed` | `20261119` | a completely different world |
 | `land` | newest | which [land](src/world/README.md#lands) a local world is grown on: `1` for the first |
@@ -183,6 +184,7 @@ place in that order, not at the end:
 | `build/builder.js` | hands too full for tools | `builder.idleWhile(fn)` |
 | `build/inventory.js` | a material to carry (`optional`: on the HUD only while you have some) | `game.builder.stock.define({ id, label, optional })` |
 | `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)` |
+| `build/surfaces.js` | what something built is made of: bark, grain, paint, stone, shingles, tin, glass | `mesher.surf = SURF.paint` (and `mesher.wear`), drawn with `createBuildingMaterial()` |
 | `country/index.js` | a layer of cloud of your own over everything, for a while (a flight's) | `game.country.cloud(() => ({ at, cover, x, z }))` |
 | `far/index.js` | land drawn past where the forest is streamed in, to be seen from high ground | `game.far.want(id, x0, z0, x1, z1, step)`, `far.drop(id)` |
 | `game/commands.js` | a key or a pad's button, and its line on the help panel | `game.commands.add({ keys, run, group, label })` |
@@ -205,6 +207,7 @@ place in that order, not at the end:
 | `player/player.js` | something that moves you itself (a train you sit in, skis you steer, a tube the river carries) | `player.aboard = { place(out, dt) }` |
 | `player/player.js` | something held to the eye: look through it, magnified | `player.sight = { zoom }` |
 | `render/origin.js` | a uniform that says where something is | `game.origin.place(uniform)` |
+| `render/pipeline.js` | something drawn over the water, not seen through it (a splash, a spark), or over what's behind it | `object.layers.set(OVER)`; a light on it: `light.layers.enableAll()` |
 | `save/domains.js` | something that is saved | `game.save.register({ id, collect, restore, … })` |
 | `save/worldSave.js` | a word to the others here, never stored | `game.save.say(ch, body, to)`, `game.save.on('message', fn)` |
 | `ui/hud.js` | a button on the HUD | `game.hud.button(id, fn)` |

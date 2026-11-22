@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, GROUND_GLSL, wave } from '../render/glsl.js';
+import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, GROUND_GLSL, ABSORB_GLSL, wave } from '../render/glsl.js';
 import { SHARED, LAND, UNDER } from '../render/uniforms.js';
 import { CUTS, CUT_GLSL, SHRINK, RIM } from './cuts.js';
 import { SEA } from './sea.js';
@@ -18,7 +18,8 @@ import { FOLIAGE_GLSL, FOLIAGE_DEPTH_GLSL } from './foliage.js';
 // turf and stones above the trees and snow on the tops. (As pixel art this
 // reads as hand-placed pixel texture.)
 // Under water it turns to silt, pebbles and cobbles, darkening (reds first)
-// with depth, with the light netted over it by the ripples, and a damp band
+// with depth as the daylight comes down to it, with the light netted over it
+// by the ripples, and a damp band
 // and a little beach along the shore. By the sea the beach is sand, and so is
 // the seabed, in ripples, with rock where it's steep. Where the ground is cut
 // away for something else to stand in for it (a cave's mouth:
@@ -82,6 +83,7 @@ export function createTerrainMaterial() {
         ${WORLD_GLSL}
         ${WORLD_NOISE_GLSL}
         ${GROUND_GLSL}
+        ${ABSORB_GLSL}
         // Above the trees: thin, tawny turf among stones. Snow on top of that
         // where it lies, in drifts, but not on the cliffs.
         vec3 highGround(vec3 col, vec2 wp, vec2 high, float slope) {
@@ -238,8 +240,11 @@ export function createTerrainMaterial() {
             float caustic = causticAt(wp, uTime);
             bed *= 1.0 + caustic * mix(0.8 * exp(-wd * 1.5), 1.1 * exp(-wd * 0.11), uUnder);
             diffuseColor.rgb = mix(diffuseColor.rgb, bed, smoothstep(0.0, 0.12, wd));
-            // (from below the surface, the post-process does this for everything)
-            if (uUnder < 0.5) diffuseColor.rgb *= exp(-wd * vec3(1.15, 0.6, 0.48));
+            // The daylight that reaches it came down through the water, which
+            // took the reds first. (On the way back up to the eye, the water
+            // does the same again: waterSurface.js. From below the surface,
+            // the post-process does both, for everything.)
+            if (uUnder < 0.5) diffuseColor.rgb *= exp(-wd * waterAbsorb(seaWater ? 1.0 : 0.0));
           }
         }`,
       )
@@ -255,7 +260,7 @@ export function createTerrainMaterial() {
         }`,
       );
   };
-  mat.customProgramCacheKey = () => 'terrain-v9';
+  mat.customProgramCacheKey = () => 'terrain-v10';
   return mat;
 }
 

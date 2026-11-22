@@ -35,6 +35,7 @@ import { VEG_STRIDE } from '../world/flora.js';
 import { SKY, SHARED } from '../render/uniforms.js';
 import { rayBox } from '../core/geom.js';
 import './sound.js';
+import { createBuildingMaterial } from '../build/surfaces.js';
 
 const SHOW = 430; // m: towns this close (to their edge) are stood up...
 const HIDE = 530; // ...and taken down again past this
@@ -63,7 +64,7 @@ export function installTowns(game) {
   const keepOff = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);
   const towns = new Towns(gen, { start: player.start, sites: game.landmarks ? game.landmarks.sites : null, keepOff });
   const materials = {
-    body: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }),
+    body: createBuildingMaterial(), // paint, boards, shingles, stone and glass, as they are (build/surfaces.js)
     glow: new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }),
     street: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }),
     weed: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }),

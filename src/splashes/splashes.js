@@ -16,6 +16,7 @@ import * as THREE from 'three';
 import { SKY, SHARED } from '../render/uniforms.js';
 import { POINT_GLSL, POINT_DISC_GLSL } from '../render/glsl.js';
 import { anchor } from '../render/origin.js';
+import { OVER } from '../render/pipeline.js';
 
 const POOL = 384;
 const GRAVITY = 9.8; // m/s²
@@ -68,6 +69,7 @@ export class Splashes {
       depthWrite: false,
     });
     this.points = new THREE.Points(geo, mat);
+    this.points.layers.set(OVER); // thrown up out of the water: drawn over it (render/pipeline.js)
     this.points.frustumCulled = false;
     this.points.visible = false;
     scene.add(this.points);

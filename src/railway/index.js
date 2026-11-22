@@ -45,6 +45,7 @@ import { VEG_STRIDE } from '../world/flora.js';
 import { SEAT_HIPS } from '../player/character.js';
 import { SHARED } from '../render/uniforms.js';
 import { formatDistance } from '../core/format.js';
+import { createBuildingMaterial } from '../build/surfaces.js';
 
 const SHOW = 300; // m: track and stations this close are stood up...
 const HIDE = 370; // ...and taken down again past this
@@ -89,7 +90,7 @@ export function installRailway(game) {
   // and none on real land, or near enough it that the land isn't the forest's alone
   const keepOff = (x0, z0, x1, z1) => !!(landforms && landforms.reaches(x0, z0, x1, z1));
   const lines = new Lines(gen, { start: player.start, keepClear, keepOff });
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
+  const material = createBuildingMaterial(); // (build/surfaces.js)
   const glow = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
   const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset ? chunks.heightOffset(x, z) : 0);
   const tables = new Map();

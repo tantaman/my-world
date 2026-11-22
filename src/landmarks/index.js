@@ -27,6 +27,7 @@ import { KINDS } from './kinds.js';
 import { buildSite } from './models.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { rayBox } from '../core/geom.js';
+import { createBuildingMaterial } from '../build/surfaces.js';
 
 const SHOW = 330; // m: sites this close are stood up in the world...
 const HIDE = 420; // ...and taken down again past this
@@ -45,7 +46,7 @@ export const after = ['render', 'ui', 'world', 'player', 'build', 'map'];
 export function installLandmarks(game) {
   const { scene, gen, landforms, chunks, grass, solids, player, builder, map, hud, save } = game;
   const sites = new Sites(gen, { start: player.start });
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
+  const material = createBuildingMaterial(); // logs, boards, stone and tin, as they are (build/surfaces.js)
   const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset ? chunks.heightOffset(x, z) : 0);
   const shown = new Map(); // id -> { site, object, blockers, bobbing }
   const visited = new Set(); // ids of the sites you've been to

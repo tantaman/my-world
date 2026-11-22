@@ -14,6 +14,19 @@ eye's) way of turning that into a picture. Pixel art is a setting.
    `q=low`), so edges are smooth, and a leaf cut from its card covers as much
    of a pixel as it really does. With pixel art on, it's about 300 "art
    pixels" tall, and hard-edged.
+
+   It's drawn in two goes. First everything but the water; then a copy is
+   kept of that, its colour and how far off each pixel is, and the water is
+   drawn over it (the `OVER` layer, `pipeline.js`). So the water can be what
+   real water is, a window and a mirror at once: you see the bed through it,
+   bent by the ripples and dimmed by the length of water the light comes up
+   through, reds first; and it mirrors what stands over it, the banks, the
+   trees across the lake, a cabin on the shore, you, by following the
+   mirrored ray across the copy until it passes behind something
+   (screen-space reflection, `?mirror=` steps). Where that ray leaves the
+   picture it sees the sky. Splashes, motes and sparks are on `OVER` too, so
+   they're drawn in front of the water rather than seen through it; and the
+   lights that fall on the water are on every layer.
 2. **Ambient occlusion**, at half that resolution, from the depth buffer
    alone: how much of the sky each spot is shut off from by what's right
    next to it. It sets trunks, rocks and the hiker into the ground.
@@ -64,6 +77,18 @@ sway in the wind, and grass parts around your feet. Motes, sparks, drops and bub
 metres (`pointPx` in `glsl.js`), so they're specks however finely the
 picture is drawn.
 
+What people build is drawn the same way, from what it's made of rather than
+from a texture (`build/surfaces.js`): every piece of a cabin, an old place or
+a town says whether it is bark, a cut end, sawn wood, paint, stone,
+shingles, slate, tin, glass, iron, clay or cloth, and which way its grain
+runs. So a log has plates and furrows of bark along it and rings at its cut
+end, boards have their grain and the odd knot, paint is a little glossy and
+chalks and flakes as it wears, shingles and slates lie in staggered courses,
+tin is corrugated and rusts down from its laps, stone is granular and
+lichened, and glass mirrors the sky over the dark of the room. Old roofs
+grow moss, and rain streaks the walls. Each pattern fades out as it gets
+finer than a pixel or two.
+
 **Nothing big goes to the graphics card.** The game thinks in world
 coordinates, in JavaScript's 64-bit numbers, everywhere, and the world is
 thousands of kilometres across (the hikes lie where they really are). The
@@ -97,7 +122,7 @@ On the settings panel (**O**, or *settings* in the corner), under *picture*:
 ```
 index.js              plugs it into the game: renderer, scene, camera, the picture's settings
 origin.js             where each frame is drawn from, so far-off places stay sharp
-pipeline.js           render → occlusion → composite → bloom → the eye → tone map → screen
+pipeline.js           render (all but the water; a copy; the water over it) → occlusion → composite → bloom → the eye → tone map → screen
 uniforms.js           shader uniforms everything shares: time, wind, sky
 glsl.js               shared GLSL: noise, patterns over the world, sky, ground colour
 ```
