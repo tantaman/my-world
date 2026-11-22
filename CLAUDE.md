@@ -44,6 +44,10 @@ starts with the contract.
   arguments, so they can be tested alone.
 - Bind keys with `game.commands.add`; the help panel is generated from it.
   Do not add key checks elsewhere or edit help text in `index.html`.
+- Every letter and every pad button is bound. Something new to do goes
+  without a key: a command with a `label` is in the pack (`src/pack/`, Tab),
+  and one whose `now()` gives a word ('get in', 'float') is at hand, with a
+  button on a touch screen. Don't make touch buttons by hand.
 - Anything persistent goes through `game.save.register` and calls
   `game.save.touch()` when it changes. Do not use `localStorage` directly;
   keys live in `src/core/storage.js`.

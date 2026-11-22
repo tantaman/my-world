@@ -269,21 +269,11 @@ export function installBoats(game) {
     hud.flash(`no boat within reach · build one at the water’s edge with the boat tool (${toolKey()})`, SAY);
     return false;
   }
-  commands.add({ id: 'boat', keys: ['KeyF'], group: 'BOATS', help: 'F', label: 'get into the boat beside you · get out of it', run: press });
+  // What F would do here, in a word ('get in', 'get out'), while it would do
+  // anything: what the pack lists it by, and a touch screen's button says.
+  let doing = '';
+  commands.add({ id: 'boat', keys: ['KeyF'], group: 'BOATS', help: 'F', label: 'get into the boat beside you · get out of it', run: press, now: () => doing });
   commands.describe({ group: 'BOATS', help: 'W A S D', label: 'in a boat: paddle (shift: paddle hard)' });
-
-  // On a touch screen, a button for it, named for what it would do.
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.id = 'act-boat';
-  btn.hidden = true;
-  btn.textContent = 'get in';
-  btn.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    press();
-  });
-  document.getElementById('touch-act')?.prepend(btn);
 
   // What F would do here, said in place of the tool's prompt (unless the tool
   // has something to say, or something under way: the rod, its float out).
@@ -314,8 +304,7 @@ export function installBoats(game) {
     if (html) hud.cue({ html });
     else if (cued) hud.cue(null);
     cued = !!html;
-    btn.hidden = !touch || !word;
-    if (word && btn.textContent !== word) btn.textContent = word;
+    doing = word;
   }
 
   // ── Everyone else here ────────────────────────────────────────────────────

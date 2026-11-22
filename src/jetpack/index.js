@@ -209,11 +209,15 @@ export function installJetpack(game) {
   }
 
   // ── J ─────────────────────────────────────────────────────────────────────
+  // At its rack, on your feet: J would put it on, or hang it back up.
+  const atRack = () => !!rack && nearRack() && !jets.on && !player.carrier && !player.aboard;
   commands.add({
     id: 'jetpack',
-    keys: ['KeyJ', 'PadL3'],
+    keys: ['KeyJ'],
     group: 'JETPACK',
     label: 'at the launch site: strap on the jetpack · hang it back up',
+    // at hand there: in the pack, which is how a pad gets at it, and a button on a touch screen
+    now: () => (atRack() ? (jets.worn ? 'hang up' : 'strap on') : ''),
     run() {
       if (jets.on) return hud.flash('land first');
       if (rack && nearRack()) return wear(!jets.worn, true);
@@ -278,7 +282,10 @@ export function installJetpack(game) {
       // what J would do here, or how to fly
       let html = null;
       if (jets.on) html = input.isTouch ? `tap jump: climb · let go to come down · ${Math.round(player.height)} m up` : `<b>space</b> climb · <b>shift</b> dive · let go to come down · ${Math.round(player.height)} m up`;
-      else if (rack && nearRack() && !player.carrier && !player.aboard) html = jets.worn ? '<b>J</b> hang the jetpack back up' : '<b>J</b> strap on the jetpack';
+      else if (atRack()) {
+        const K = (word) => (input.isTouch ? word : 'J');
+        html = jets.worn ? `<b>${K('hang up')}</b> hang the jetpack back up` : `<b>${K('strap on')}</b> strap on the jetpack`;
+      }
       if (html) {
         hud.cue({ html });
         cued = true;

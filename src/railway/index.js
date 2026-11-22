@@ -437,20 +437,10 @@ export function installRailway(game) {
     }
     map.open('rail');
   }
-  commands.add({ id: 'railway', keys: ['KeyY', 'PadY'], group: 'WANDER', label: 'railway: stations to go to · get on a train · get off', run: press });
-
-  // on a touch screen, a button to get on and off, when there's a train
-  const act = document.createElement('button');
-  act.type = 'button';
-  act.id = 'act-train';
-  act.hidden = true;
-  act.textContent = 'board';
-  act.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    press();
-  });
-  document.getElementById('touch-act')?.prepend(act);
+  // What Y would do here, in a word ('board', 'get off'), when there's a
+  // train to do it with: what the pack lists it by, and a touch screen's button says.
+  let doing = '';
+  commands.add({ id: 'railway', keys: ['KeyY', 'PadY'], group: 'WANDER', label: 'railway: stations to go to · get on a train · get off', run: press, now: () => doing });
 
   // Off to a station: onto its platform, facing the track.
   let arriving = null;
@@ -775,8 +765,7 @@ export function installRailway(game) {
     if (html) hud.cue({ html });
     else if (cued) hud.cue(null);
     cued = !!html;
-    act.hidden = !input.isTouch || !word;
-    if (word && act.textContent !== word) act.textContent = word;
+    doing = word;
   }
 
   // The panel's list: the stations within reach, nearest first, and when

@@ -74,11 +74,13 @@ See [Building together](src/save/README.md) to set the server up, or skip it
 | **R** | back to the starting path |
 | **H** or **?** | help |
 | **O** | settings: the picture, the hour, sound, frame stats |
+| **Tab** | your pack: everything there is to do, what is at hand first |
 
 Those get you about. Everything else — the map, the tools, talking, riding —
 has its keys in its own README, in its folder under [`src/`](src/), and **H**
 in the game lists them: the help panel is written from the keys the
-features bind, so it can't fall behind.
+features bind, so it can't fall behind. So is [your pack](src/pack/README.md),
+where each of them can be done without its key.
 
 On a phone or tablet, drag with your left thumb to walk (push it all the way
 to run), drag with your right thumb to look, and tap on the right to jump.
@@ -86,7 +88,9 @@ Tap a tool in the bar at the bottom (a slot with pips holds a kit of tools: tap
 again for the next, or pick one from it). The **use**, **alt** and **stake**
 buttons on the right stand in for the mouse buttons and **G**, and in a shared
 world, hold **talk** or **radio** beside them to talk. Out of your depth, hold
-**dive** to go under; let go and you drift back up.
+**dive** to go under; let go and you drift back up. Whatever else is at hand
+(a boat to get into, a river to float down) has a button over those while it
+is, and everything there is to do is in your pack: tap *pack*, top left.
 
 Your position, the time of day, your look settings and whether sound is on
 are remembered between visits. Add `?reset` to the URL to start fresh (your
@@ -188,6 +192,7 @@ place in that order, not at the end:
 | `country/index.js` | a layer of cloud of your own over everything, for a while (a flight's) | `game.country.cloud(() => ({ at, cover, x, z }))` |
 | `far/index.js` | land drawn past where the forest is streamed in, to be seen from high ground | `game.far.want(id, x0, z0, x1, z1, step)`, `far.drop(id)` |
 | `game/commands.js` | a key or a pad's button, and its line on the help panel | `game.commands.add({ keys, run, group, label })` |
+| `game/commands.js` | something to do that needs no key: in your pack, and at hand (first there, a button on a touch screen) while it says what it would do | `game.commands.add({ run, group, label, now: () => 'float' })` |
 | `game/game.js` | something done every frame | `game.addSystem({ name, phase, update })` |
 | `game/settings.js` | a remembered preference | `game.settings.get / set` |
 | `hunting/shot.js` | something else the rifle can hit (a man, a wall that stops a shot) | `game.hunting.targets.add({ aimed, struck?, heard? })` |
@@ -328,6 +333,10 @@ and if it has a voice, a `defineCall`. Four-legged mammals need nothing else.
 **A key** is `game.commands.add({ id, keys: ['KeyB'], group: 'LOOK', label:
 '…', run })`, from the feature that owns what it does. The help panel is
 written from the same list, and two features wanting one key are warned about.
+The letters are all taken, so a new thing to do goes without one: leave `keys`
+out and it is done from [your pack](src/pack/README.md), which lists every
+command. Give it `now: () => 'get in'` (or `''`) and, while that gives a
+word, it is at hand: first in the pack, and a button on a touch screen.
 Something you set once and leave doesn't need a key: it's a switch or a
 slider on the settings panel, `game.hud.setting({ id, group, label, get, set })`.
 

@@ -1,0 +1,179 @@
+/* Your pack (Tab): the list of everything there is to do. It opens where the
+   other panels do. Uses the colour tokens defined on :root in index.html. */
+
+/* The line that says what you carry (#inv, in index.html) is the pack's
+   handle for a mouse or a finger: it is marked "pack", and can be pressed. */
+#inv {
+  pointer-events: auto;
+  cursor: pointer;
+}
+#inv::before {
+  content: 'pack';
+  margin-right: 8px;
+  padding: 1px 6px 2px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  text-shadow: none;
+}
+#inv:hover::before,
+#inv:focus-visible::before {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+@media (hover: none) {
+  #inv::before {
+    padding: 5px 9px 6px;
+  }
+}
+
+#pack {
+  position: absolute;
+  right: calc(16px + var(--inset-r));
+  bottom: calc(44px + var(--inset-b));
+  width: min(400px, calc(100vw - 32px));
+  max-height: calc(100vh - 120px - var(--inset-t) - var(--inset-b));
+  display: flex;
+  flex-direction: column;
+  padding: 13px 15px 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  background: rgba(10, 16, 11, 0.94);
+  border: 1px solid var(--line);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+#pack.open {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+#pack .pack-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+#pack h2 {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  color: var(--accent);
+  font-weight: 600;
+}
+#pack .pack-body {
+  overflow-y: auto;
+  min-height: 0;
+}
+#pack h3 {
+  margin: 10px 0 2px;
+  font-size: 9.5px;
+  letter-spacing: 0.25em;
+  color: var(--ink-dim);
+  font-weight: 600;
+}
+#pack ol,
+#pack ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+#pack li {
+  border-top: 1px solid var(--line);
+}
+/* What's yours: each thing, and how much of it or how it stands. */
+#pack .pack-yours li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 4px 4px;
+  color: var(--ink);
+}
+#pack .pack-yours li i {
+  font-style: normal;
+  color: var(--ink-dim);
+  text-align: right;
+}
+#pack button {
+  font: inherit;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+#pack .pack-head button {
+  padding: 0 2px;
+  font-size: 12px;
+}
+/* A row: the word for what it would do (if it is at hand), what it is, its key. */
+#pack li button {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 4px 7px;
+}
+#pack li button b {
+  flex: none;
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+#pack li button span {
+  flex: 1;
+  min-width: 0;
+}
+#pack li button kbd {
+  flex: none;
+  font-family: var(--font);
+  font-size: 10.5px;
+  color: var(--ink);
+}
+#pack .pack-hand button span {
+  color: var(--ink);
+}
+#pack button:hover,
+#pack button:focus-visible {
+  color: var(--ink);
+  background: rgba(238, 240, 226, 0.05);
+}
+#pack button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+@media (hover: none) {
+  #pack li button {
+    padding: 10px 4px 11px;
+  }
+}
+@media (max-width: 1230px) {
+  #pack {
+    top: calc(44px + var(--inset-t));
+    bottom: auto;
+  }
+}
+
+/* With a pad in hand: what is at hand that the pad has no button for, beside
+   the button that opens the pack. Where the panels open, while none is. */
+#pack-hand {
+  position: absolute;
+  right: calc(16px + var(--inset-r));
+  bottom: calc(44px + var(--inset-b));
+  padding: 5px 10px 6px;
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+#pack-hand[hidden] {
+  display: none;
+}
+#pack-hand b {
+  color: var(--accent);
+  font-weight: 600;
+}

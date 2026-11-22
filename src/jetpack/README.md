@@ -18,8 +18,8 @@ in the air. (Step off a ledge and press space, and they catch then too.)
 | **W A S D** | fly where the camera faces, at 12 m/s |
 | **shift** | dive, and go faster: 24 m/s along |
 | neither space nor shift | the jets throttle back, and let you down slowly |
-| on a pad | **A** held to climb, **B** to dive, the left stick to steer; **L3** is J |
-| on a touch screen | tap jump in the air to climb |
+| on a pad | **A** held to climb, **B** to dive, the left stick to steer; at the rack, *strap on* and *hang up* are at hand in [your pack](../pack/README.md) (**L3**) |
+| on a touch screen | at the rack, the *strap on* (or *hang up*) button · tap jump in the air to climb |
 
 You hang under it with your feet drawn up and your arms out, tipped forward
 the faster you go and banked into turns, with a flame under each nozzle and
