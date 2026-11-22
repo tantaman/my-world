@@ -15,6 +15,8 @@ import { HIKES } from '../src/world/hikes.js';
 import { Landforms } from '../src/world/landforms.js';
 import { findSite as findPad, clearOf as padClear } from '../src/spaceport/site.js';
 import { findSite, clearOf, SLAB, SKIRT, DOOR_STEP } from '../src/videostore/site.js';
+import { Branches, hasBranch, BRANCH } from '../src/videostore/branches.js';
+import { Airports } from '../src/airports/airports.js';
 import { FACES, RACKS, SECTIONS, SOLIDS, HALF_W, BACK, FRONT, CEILING, DOOR, QUEUE, CLERK, slotAt, aim, fillOrder, walkable, signs } from '../src/videostore/floorplan.js';
 import { Catalog, STORE, STAFF, GENRES, sortKey, plural } from '../src/videostore/catalog.js';
 import { paintCover, Atlas, COVER, titleBand } from '../src/videostore/covers.js';
@@ -36,9 +38,68 @@ function worldOf(land) {
   const caves = new Caves({ gen, keepOff: keepHike });
   const lines = new Lines(gen, { start, keepClear: [clearOfPlaces(sites), clearOfCaves((a, b, c, d) => caves.inBox(a, b, c, d))], keepOff: keepHike });
   const towns = new Towns(gen, { start, sites, keepOff: keepHike });
-  const spaceport = findPad(gen, start, padClear({ landforms, sites, towns, caves, lines }));
-  return { gen, start, spaceport, keepOff: clearOf({ landforms, sites, towns, caves, lines, spaceport }) };
+  const padKeep = padClear({ landforms, sites, towns, caves, lines });
+  const spaceport = findPad(gen, start, padKeep);
+  // the airfield by the start, as the airports make it (the branches keep off it)
+  const field = () => {
+    const keep = (x0, z0, x1, z1) => padKeep(x0, z0, x1, z1) || (spaceport.box[0] <= x1 && spaceport.box[2] >= x0 && spaceport.box[1] <= z1 && spaceport.box[3] >= z0);
+    return new Airports(gen, { cards: HIKES.map(({ load, ...card }) => card), start, keepOff: keep }).site('home');
+  };
+  return { gen, start, spaceport, towns, field, keepOff: clearOf({ landforms, sites, towns, caves, lines, spaceport }) };
 }
+
+test('branches stand beside the villages people live in, inside the town\'s square, and are pinned', () => {
+  const { gen, start, towns, field, keepOff } = worldOf(LANDS[0]);
+  const home = findSite(gen, start, keepOff);
+  const airfield = field();
+  const clear = (a, b) => a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[3];
+  const branches = new Branches(gen, { towns, keepOff, also: (...box) => !clear(box, home.box) || !clear(box, airfield.box) });
+  const pinned = {};
+  let rolled = 0;
+  for (let j = -3; j < 3; j++) {
+    for (let i = -3; i < 3; i++) {
+      const t = towns.cell(i, j);
+      const b = t && branches.forTown(t);
+      if (t && hasBranch(t, gen.seed)) rolled++;
+      if (!b) continue;
+      assert.ok(BRANCH.kinds.includes(t.kind) && t.people > 0, `${b.name}: beside a town people live in`);
+      assert.equal(b.name, `${STORE.name}, ${t.name}`);
+      const S = towns.size;
+      assert.ok(b.box[0] >= i * S && b.box[2] <= (i + 1) * S && b.box[1] >= j * S && b.box[3] <= (j + 1) * S, 'inside its town\'s square');
+      assert.ok(!keepOff(...b.box) && clear(b.box, home.box) && clear(b.box, airfield.box), 'clear of everything it keeps clear of, the airfield among it');
+      assert.ok(b.top - b.low < 3.6, 'on flat enough ground');
+      // facing the town: its front (+z) turned towards the middle of the street
+      const fx = Math.sin(b.yaw);
+      const fz = Math.cos(b.yaw);
+      assert.ok(fx * (t.x - b.x) + fz * (t.z - b.z) > 0, 'facing the town');
+      assert.equal(branches.byId(b.id), b, 'found again by its id');
+      const round = (v) => Math.round(v * 1000) / 1000;
+      pinned[b.id] = { name: b.name, x: round(b.x), z: round(b.z), yaw: round(b.yaw), top: round(b.top) };
+    }
+  }
+  assert.ok(Object.keys(pinned).length >= 2, 'there are some');
+  assert.ok(Object.keys(pinned).length >= rolled - 1, 'nearly every village that has one finds somewhere for it');
+  matchesGolden(`videostore-branches-${SEED}`, pinned, { tolerance: 1e-6 });
+});
+
+test('a branch is the same looked for a little at a time, waiting on the railway', () => {
+  const { gen, towns, keepOff } = worldOf(LANDS[0]);
+  let asked = 0;
+  const slow = (...box) => keepOff(...box);
+  slow.ready = () => ++asked > 4;
+  const outright = new Branches(gen, { towns, keepOff });
+  const bit = new Branches(gen, { towns, keepOff: slow });
+  let town = null;
+  for (let k = 0; !town; k++) {
+    const t = towns.cell(k % 7, Math.floor(k / 7));
+    if (t && hasBranch(t, gen.seed) && outright.forTown(t)) town = t;
+  }
+  assert.equal(bit.peek(town), undefined, 'not known at first');
+  let rounds = 0;
+  while (bit.pump(1) > 0) rounds++;
+  assert.ok(rounds > 1 && asked > 4, 'it took a while');
+  assert.deepEqual(bit.peek(town), outright.forTown(town));
+});
 
 test('the video store is grown from the seed: the same every time, on flat dry ground, clear of what was there first', () => {
   for (const land of LANDS) {

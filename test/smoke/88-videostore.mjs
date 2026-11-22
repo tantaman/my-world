@@ -3,11 +3,12 @@
 // off the shelf (into your hands, its back on the screen, a gap where it
 // stood), a right-click puts it back; take two to the counter and a click
 // rents them, with a receipt; drop them in the returns outside and they're
-// back. Walk out with one you haven't rented, and the gate goes off.
+// back. Walk out with one you haven't rented, and the gate goes off. Beside
+// a village there's a branch, the same shop.
 //
 // Needs: nothing in particular (the store is on the map from anywhere).
-// Leaves: you on the pavement outside the store's doors, nothing in your
-// hands and nothing out.
+// Leaves: you on the pavement outside the doors of the store by the start,
+// nothing in your hands and nothing out.
 
 import assert from 'node:assert/strict';
 
@@ -164,5 +165,37 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.ok(caught, 'the gate goes off');
     assert.equal((await store()).hands.length, 0, 'and it goes back on the shelf');
     await page.evaluate(() => world.videostore.go());
+  });
+
+  await step('a branch beside a village', async () => {
+    const { home, branch } = await page.evaluate(() => {
+      const towns = world.towns.towns;
+      const branches = world.videostore.branches;
+      for (let r = 0; r < 6; r++) {
+        for (let j = -r; j <= r; j++) {
+          for (let i = -r; i <= r; i++) {
+            const t = Math.max(Math.abs(i), Math.abs(j)) === r && towns.cell(i, j);
+            const b = t && branches.forTown(t);
+            if (b) return { home: world.videostore.home.id, branch: { id: b.id, name: b.name, town: t.name } };
+          }
+        }
+      }
+      return { home: world.videostore.home.id, branch: null };
+    });
+    assert.ok(branch, 'there is one');
+    assert.ok(branch.name.endsWith(branch.town), `named for its village (${branch.name})`);
+    await page.evaluate((id) => world.videostore.go(id), branch.id);
+    assert.ok(await page.evaluate(() => T.until(() => world.videostore.ready, 30000)), 'it stands there');
+    await frames(10);
+    assert.equal(await page.evaluate(() => world.videostore.site.id), branch.id, 'the one stood up now');
+    assert.equal(await page.evaluate((id) => world.map.places.get(id).visited, branch.id), true, 'remembered as somewhere you have been');
+    await page.evaluate(() => world.videostore.enter());
+    await frames(20);
+    assert.equal((await store()).inside, true, 'in through its doors');
+    await shot('branch');
+    await page.evaluate((id) => world.videostore.go(id), home);
+    await page.evaluate(() => T.until(() => world.videostore.ready, 30000));
+    assert.equal(await page.evaluate(() => world.videostore.site.id), home, 'and back at the first');
+    return branch;
   });
 }
