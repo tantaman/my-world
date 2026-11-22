@@ -52,7 +52,7 @@ const RISE = 0.19; // m, each step's rise at the most
 export const DOOR_OUT = 2.2;
 const PAD_UP = 0.08; // m a station's pad stands over the highest ground under it
 // Where it may be: this far from the start (m), the nearest ring first.
-const RING = [450, 1000];
+export const RING = [450, 1000];
 const STEP = 30; // m between the spots looked at, round a ring and between rings
 const FLAT_MOST = 3.2; // m the ground may rise across the field and the clubhouse
 const DRY = 40; // m from station 8 to the nearest water, at the least
@@ -75,6 +75,18 @@ export function clubName(seed) {
 // keepOff(x0, z0, x1, z1): whether that square is somewhere it may not be.
 // -> a site, or null where there's nowhere for one.
 export function findSite(gen, start, keepOff = () => false) {
+  return pickSite(gen, candidates(gen, start), keepOff);
+}
+
+// It's found in two goes, so the first, the dear one, can be done before
+// what it has to keep clear of is all known (the airfields are found a little
+// at a time, after the world opens):
+//
+// candidates(gen, start) -> the spots flat and dry enough, best first: the
+//   ground looked at all over each (the dear part), nothing else asked
+// pickSite(gen, found, keepOff) -> the best of them nothing is in the way of,
+//   as a site
+export function candidates(gen, start) {
   const [x0, z0, x1, z1] = PLAN;
   const quick = [
     [x0, z0],
@@ -119,6 +131,10 @@ export function findSite(gen, start, keepOff = () => false) {
     }
   }
   found.sort((a, b) => a.score - b.score);
+  return found;
+}
+
+export function pickSite(gen, found, keepOff = () => false) {
   // the best of them that nothing else is in the way of (asked last, and of
   // as few as can be: it can be dear)
   for (const s of found) {
@@ -214,13 +230,32 @@ export function layout(site, ground) {
   return { deck, low, steps, pads, houses, mouths, cross };
 }
 
+// Whether a region's airfield (airports/airports.js) might reach somewhere
+// `d` metres from the middle of the region and `half` metres across either
+// way: an airfield stands in its region's ring (r0 to r1 from its middle),
+// and its box reaches this far further in, or out.
+const FIELD_REACH = { inside: 170, outside: 4200 };
+export function mayReach(g, d, half) {
+  return d + half >= g.r0 - FIELD_REACH.inside && d - half <= g.r1 + FIELD_REACH.outside;
+}
+
+// The airfields' regions whose airfield might be in the way of a club
+// anywhere it may be (from `start`): the ones whose airfield findSite will ask
+// about. (regions: the Airports' regions.)
+export function regionsInTheWay(regions, start) {
+  const far = RING[1] + Math.hypot(PLAN[2] - PLAN[0], PLAN[3] - PLAN[1]) / 2 + Math.max(Math.abs(PLAN[1]), Math.abs(PLAN[3])) + CLEAR;
+  return regions.filter((g) => mayReach(g, Math.hypot(start.x - g.x, start.z - g.z), far));
+}
+
 // What the club keeps clear of, all of it there first:
 //   reserved   what the video store keeps clear of (videostore/site.js clearOf:
 //              real places, old places, towns, caves' mouths, the railway,
 //              the launch site)
 //   boxes      () -> [[x0, z0, x1, z1]]: other places' boxes in the world (the
 //              video store, the abandoned buildings)
-//   airfields  the Airports (airports/airports.js: regions, site(id)), or null
+//   airfields  the Airports (airports/airports.js: regions, site(id)), or null:
+//              the airfields of regionsInTheWay are asked about, and found
+//              then and there if they haven't been
 // -> keepOff for findSite.
 export function clearOf({ reserved = () => false, boxes = () => [], airfields = null }) {
   const over = (b, x0, z0, x1, z1) => b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0;
@@ -230,10 +265,9 @@ export function clearOf({ reserved = () => false, boxes = () => [], airfields = 
     if (airfields) {
       const x = (x0 + x1) / 2;
       const z = (z0 + z1) / 2;
+      const half = Math.hypot(x1 - x0, z1 - z0) / 2;
       for (const g of airfields.regions) {
-        // an airfield is within its region's ring; only those that might reach here
-        const d = Math.hypot(x - g.x, z - g.z);
-        if (d < g.r0 - 170 || d > g.r1 + 4200) continue;
+        if (!mayReach(g, Math.hypot(x - g.x, z - g.z), half)) continue;
         const field = airfields.site(g.id);
         if (field && over(field.box, x0, z0, x1, z1)) return true;
       }

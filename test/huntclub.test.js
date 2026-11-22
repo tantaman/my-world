@@ -18,7 +18,7 @@ import { findSite as findPad, clearOf as padClear } from '../src/spaceport/site.
 import { findSite as findStore, clearOf as storeClear } from '../src/videostore/site.js';
 import { findBuildings, overlaps } from '../src/abandoned/sites.js';
 import { Airports } from '../src/airports/airports.js';
-import { findSite, clearOf, clubName, layout, PLAN, CLUB, EDGE, TREAD } from '../src/huntclub/site.js';
+import { findSite, candidates, pickSite, clearOf, regionsInTheWay, mayReach, clubName, layout, PLAN, CLUB, EDGE, TREAD, RING } from '../src/huntclub/site.js';
 import { FIELD, STATIONS, HOUSES, CLAY, SHOT, SCHEDULE, TARGETS, Round, fly, launch, pattern, meeting, missedBy, housesOf, validateRecord } from '../src/huntclub/skeet.js';
 import { Range, describe } from '../src/huntclub/range.js';
 import { buildClub, COUNTER, HATCH } from '../src/huntclub/club.js';
@@ -56,10 +56,15 @@ function worldOf(land, seed = SEED) {
 
 test('the hunt club is grown from the seed: the same every time, on flat dry ground, clear of what was there first', () => {
   for (const land of LANDS) {
-    const { gen, start, keepOff, store, abandoned } = worldOf(land);
+    const { gen, start, keepOff, store, abandoned, airports } = worldOf(land);
     const site = findSite(gen, start, keepOff);
     assert.ok(site, `land ${land} has a hunt club`);
     assert.deepEqual(findSite(gen, start, keepOff), site, 'and the same one again');
+    assert.deepEqual(pickSite(gen, candidates(gen, start), keepOff), site, 'found in two goes, the same');
+    // the airfields it waits for: where you start's, and none of a far-off hike's
+    const ways = regionsInTheWay(airports.regions, start).map((g) => g.id);
+    assert.deepEqual(ways, ['home']);
+    assert.ok(airports.regions.length > 1);
     const d = Math.hypot(site.x - start.x, site.z - start.z);
     assert.ok(d >= 440 && d <= 1010, `a longer walk from the start than the video store (${d.toFixed(0)} m)`);
     gen.height(site.x, site.z);
@@ -79,6 +84,18 @@ test('the hunt club is grown from the seed: the same every time, on flat dry gro
     const round = (v) => Math.round(v * 1000) / 1000;
     matchesGolden(land > 1 ? `huntclub-${SEED}-land${land}` : `huntclub-${SEED}`, { id: site.id, name: site.name, x: round(site.x), z: round(site.z), yaw: round(site.yaw), base: round(site.base) }, { tolerance: 1e-6 });
   }
+});
+
+test("an airfield is only asked about where it might reach", () => {
+  const g = { x: 0, z: 0, r0: 700, r1: 4000 };
+  assert.equal(mayReach(g, 400, 50), false, 'well inside its ring');
+  assert.equal(mayReach(g, 500, 50), true, 'its box can come this far in');
+  assert.equal(mayReach(g, 9000, 50), false, 'well beyond it');
+  // everywhere the club may be is within reach of the regions it waits for
+  const regions = [g, { x: 30000, z: 0, r0: 700, r1: 4000 }, { x: 0, z: 5200, r0: 700, r1: 4000 }];
+  const ways = regionsInTheWay(regions, { x: 0, z: 0 });
+  assert.deepEqual(ways, [regions[0], regions[2]]);
+  for (const r of [RING[0], RING[1]]) for (const h of regions) if (!ways.includes(h)) assert.equal(mayReach(h, Math.hypot(r - h.x, h.z), 80), false);
 });
 
 test('the hunt club keeps off somewhere it is told to, and a seed names it', () => {

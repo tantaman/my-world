@@ -32,7 +32,7 @@
 //   world.huntclub.lead(target)       where to aim to break a target in the air
 
 import * as THREE from 'three';
-import { findSite, clearOf, layout, PLAN, CLUB, EDGE, TREAD } from './site.js';
+import { candidates, pickSite, clearOf, regionsInTheWay, clubName, layout, PLAN, CLUB, EDGE, TREAD } from './site.js';
 import { STATIONS, HOUSES, FIELD, meeting, validateRecord } from './skeet.js';
 import { Range } from './range.js';
 import { buildClub, COUNTER } from './club.js';
@@ -90,15 +90,35 @@ export function installHuntclub(game) {
   const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway, spaceport, videostore, abandoned, airports, wildlife, hunting } = game;
 
   // ── Where it is ───────────────────────────────────────────────────────────
+  // The flat dry spots it could be are looked for now. Which of them it is
+  // waits for the airfields that might be in the way to be found: the
+  // airports feature looks for those a little at a time once the world is
+  // open, so as not to hold up the start, and this doesn't hurry it. Until
+  // then the club isn't anywhere, and fills in on the map when it is. Asked
+  // for by its id (it's being tracked, say), it's found there and then.
+  const fields = airports.airports;
+  const inTheWay = regionsInTheWay(fields.regions, player.start);
   const keepOff = clearOf({
     reserved: storeClearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, spaceport: spaceport.site }),
     boxes: () => [videostore.site && videostore.site.box, ...abandoned.sites.map((s) => s.box)].filter(Boolean),
-    airfields: airports.airports,
+    airfields: fields,
   });
-  const site = findSite(gen, player.start, keepOff);
+  const spots = candidates(gen, player.start);
   const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset ? chunks.heightOffset(x, z) : 0);
-  // how high everything stands, on the land as it was grown
-  const lay = site ? layout(site, (x, z) => gen.height(x, z)) : null;
+  const name = clubName(gen.seed);
+  let site = null;
+  let lay = null; // how high everything stands, on the land as it was grown
+  let range = null;
+  let decided = false;
+  // whether the airfields in its way have all been found (asking for any that haven't)
+  const fieldsKnown = () => inTheWay.every((g) => fields.site(g.id, false) !== undefined);
+  function decide() {
+    if (decided) return site;
+    decided = true;
+    site = pickSite(gen, spots, keepOff);
+    if (site) settle();
+    return site;
+  }
   const local = (x, z, out = _l) => toLocal(site, x, z, out);
 
   // ── What's yours ──────────────────────────────────────────────────────────
@@ -123,7 +143,6 @@ export function installHuntclub(game) {
 
   // ── The shotgun ───────────────────────────────────────────────────────────
   // On the tool bar once you've been given it, in the rifle's slot.
-  const range = site ? new Range({ scene, site, lay, ground, chips: builder.chips, sound }) : null;
   let shown = false;
   const skeet = {
     status: () => (shown && range ? range.status(player.pos.x, player.pos.y, player.pos.z) : null),
@@ -141,7 +160,7 @@ export function installHuntclub(game) {
         targets: hunting.targets,
         skeet,
         owned: () => owned,
-        notYours: `not yours · the steward at ${site ? site.name : 'the hunt club'} will give you one`,
+        notYours: `not yours · the steward at ${name} will give you one`,
       }),
     );
     return shotgun;
@@ -173,57 +192,54 @@ export function installHuntclub(game) {
 
   const card = new Scorecard(document.getElementById('hud') || document.body);
 
-  if (site) {
-    // ── The forest round it ─────────────────────────────────────────────────
-    chunks.on('vegetation', (ch) => {
-      const S = chunks.size;
-      const x0 = ch.cx * S;
-      const z0 = ch.cz * S;
-      const b = site.box;
-      if (b[0] > x0 + S + 3 || b[2] < x0 - 3 || b[1] > z0 + S + 3 || b[3] < z0 - 3) return;
-      for (const kind in ch.vegLists) {
-        const list = ch.vegLists[kind];
-        for (let o = 0, k = 0; o < list.length; o += VEG_STRIDE, k++) {
-          const scale = list[o + 4];
-          if (scale <= 0) continue;
-          const back = (KEEP_BACK[kind] ?? 0.6) * (SCALED[kind] ? scale : 1);
-          if (onPlan(site, list[o], list[o + 2], back)) chunks.hideInstance(ch, kind, k);
-        }
+  // ── The forest round it ───────────────────────────────────────────────────
+  // The trees, bushes and stones on the field hidden: as each chunk's plants
+  // come, and those already there when the club is found.
+  function clearChunk(ch) {
+    const S = chunks.size;
+    const x0 = ch.cx * S;
+    const z0 = ch.cz * S;
+    const b = site.box;
+    if (!ch.vegLists || b[0] > x0 + S + 3 || b[2] < x0 - 3 || b[1] > z0 + S + 3 || b[3] < z0 - 3) return;
+    for (const kind in ch.vegLists) {
+      const list = ch.vegLists[kind];
+      for (let o = 0, k = 0; o < list.length; o += VEG_STRIDE, k++) {
+        const scale = list[o + 4];
+        if (scale <= 0) continue;
+        const back = (KEEP_BACK[kind] ?? 0.6) * (SCALED[kind] ? scale : 1);
+        if (onPlan(site, list[o], list[o + 2], back)) chunks.hideInstance(ch, kind, k);
       }
-    });
-    // no grass under the clubhouse, the houses, the pads or the walks
-    const foot = EDGE - lay.steps.length * TREAD;
-    const R = FIELD.radius;
-    const arcZ = -Math.sqrt(R * R - (FIELD.chord / 2) ** 2);
-    const _g = { x: 0, z: 0 };
-    const bare = (x, z) => {
-      toLocal(site, x, z, _g);
-      const u = _g.x;
-      const v = _g.z;
-      if (u > CLUB.x0 - 0.8 && u < CLUB.x1 + 0.8 && v > foot - 0.3 && v < CLUB.z1 + 0.4) return true;
-      for (const h of Object.values(HOUSES)) if (u > h.box[0] - 0.3 && u < h.box[2] + 0.3 && v > h.box[1] - 0.3 && v < h.box[3] + 0.3) return true;
-      for (const s of STATIONS) if (Math.abs(u - s.x) < FIELD.pad + 0.15 && Math.abs(v - s.z) < FIELD.pad + 0.15) return true;
-      if (v > -0.5 && Math.abs(Math.hypot(u, v - arcZ) - R) < 0.6) return true;
-      return Math.abs(u) < 0.65 && v > 0 && v < foot;
-    };
-    grass.addClearing((x0, z0, x1, z1) => {
-      const b = site.box;
-      if (b[0] > x1 || b[2] < x0 || b[1] > z1 || b[3] < z0) return null;
-      return bare;
-    });
-    // ── Building goes round it ──────────────────────────────────────────────
-    const discs = planDiscs(site, 3);
-    builder.obstacles.addSource((x, z, R2, out) => {
-      const b = site.box;
-      if (x + R2 + 3 < b[0] || x - R2 - 3 > b[2] || z + R2 + 3 < b[1] || z - R2 - 3 > b[3]) return;
-      for (const d of discs) {
-        if (Math.hypot(d.x - x, d.z - z) > R2 + d.r + 1) continue;
-        out.push({ x: d.x, z: d.z, what: 'the skeet field', dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
-      }
-    });
-    // ── On the map ──────────────────────────────────────────────────────────
-    // where it is is the foot of its steps: that's where `go here` and
-    // tracking it lead
+    }
+  }
+  chunks.on('vegetation', (ch) => site && clearChunk(ch));
+  // no grass under the clubhouse, the houses, the pads or the walks
+  let bare = null;
+  grass.addClearing((x0, z0, x1, z1) => {
+    const b = site && site.box;
+    if (!b || b[0] > x1 || b[2] < x0 || b[1] > z1 || b[3] < z0) return null;
+    return bare;
+  });
+  // ── Building goes round it ────────────────────────────────────────────────
+  let discs = [];
+  builder.obstacles.addSource((x, z, R2, out) => {
+    const b = site && site.box;
+    if (!b || x + R2 + 3 < b[0] || x - R2 - 3 > b[2] || z + R2 + 3 < b[1] || z - R2 - 3 > b[3]) return;
+    for (const d of discs) {
+      if (Math.hypot(d.x - x, d.z - z) > R2 + d.r + 1) continue;
+      out.push({ x: d.x, z: d.z, what: 'the skeet field', dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
+    }
+  });
+  // ── On the map ────────────────────────────────────────────────────────────
+  // where it is is the foot of its steps: that's where `go here` and tracking
+  // it lead
+  let place = null;
+  map.places.addSource({
+    destinations: () => (site ? [asPlace()] : []),
+    within: (x0, z0, x1, z1) => (site && site.door.x >= x0 && site.door.x <= x1 && site.door.z >= z0 && site.door.z <= z1 ? [asPlace()] : []),
+    get: (id) => (typeof id === 'string' && id.startsWith('huntclub:') && decide() && id === site.id ? asPlace() : null),
+  });
+  function asPlace() {
+    if (place && place.visited === visited) return place;
     const corners = ([x0, z0, x1, z1]) =>
       [
         [x0, z0],
@@ -234,29 +250,45 @@ export function installHuntclub(game) {
         const p = toWorld(site, u, v);
         return [p.x, p.z];
       });
-    let place = null;
-    const asPlace = () => {
-      if (place && place.visited === visited) return place;
-      place = {
-        id: site.id,
-        x: site.door.x,
-        z: site.door.z,
-        yaw: site.door.yaw,
-        name: site.name,
-        kind: 'hunt club',
-        note: 'get a shotgun from the steward and shoot a round of skeet',
-        glyph: GLYPH,
-        visited,
-        shape: [corners([CLUB.x0, EDGE, CLUB.x1, CLUB.z1]), ...Object.values(HOUSES).map((h) => corners(h.box))],
-        ground: [corners(PLAN)],
-      };
-      return place;
+    place = {
+      id: site.id,
+      x: site.door.x,
+      z: site.door.z,
+      yaw: site.door.yaw,
+      name: site.name,
+      kind: 'hunt club',
+      note: 'get a shotgun from the steward and shoot a round of skeet',
+      glyph: GLYPH,
+      visited,
+      shape: [corners([CLUB.x0, EDGE, CLUB.x1, CLUB.z1]), ...Object.values(HOUSES).map((h) => corners(h.box))],
+      ground: [corners(PLAN)],
     };
-    map.places.addSource({
-      destinations: () => [asPlace()],
-      within: (x0, z0, x1, z1) => (site.door.x >= x0 && site.door.x <= x1 && site.door.z >= z0 && site.door.z <= z1 ? [asPlace()] : []),
-      get: (id) => (id === site.id ? asPlace() : null),
-    });
+    return place;
+  }
+
+  // Found: how high everything stands, the field at work, and the forest,
+  // the grass and building told.
+  function settle() {
+    lay = layout(site, (x, z) => gen.height(x, z));
+    range = new Range({ scene, site, lay, ground, chips: builder.chips, sound });
+    listen(range);
+    for (const ch of chunks.chunks.values()) clearChunk(ch);
+    const foot = EDGE - lay.steps.length * TREAD;
+    const R = FIELD.radius;
+    const arcZ = -Math.sqrt(R * R - (FIELD.chord / 2) ** 2);
+    const _g = { x: 0, z: 0 };
+    bare = (x, z) => {
+      toLocal(site, x, z, _g);
+      const u = _g.x;
+      const v = _g.z;
+      if (u > CLUB.x0 - 0.8 && u < CLUB.x1 + 0.8 && v > foot - 0.3 && v < CLUB.z1 + 0.4) return true;
+      for (const h of Object.values(HOUSES)) if (u > h.box[0] - 0.3 && u < h.box[2] + 0.3 && v > h.box[1] - 0.3 && v < h.box[3] + 0.3) return true;
+      for (const s of STATIONS) if (Math.abs(u - s.x) < FIELD.pad + 0.15 && Math.abs(v - s.z) < FIELD.pad + 0.15) return true;
+      if (v > -0.5 && Math.abs(Math.hypot(u, v - arcZ) - R) < 0.6) return true;
+      return Math.abs(u) < 0.65 && v > 0 && v < foot;
+    };
+    grass.invalidate(...site.box);
+    discs = planDiscs(site, 3);
   }
 
   // ── Standing it up ────────────────────────────────────────────────────────
@@ -294,7 +326,7 @@ export function installHuntclub(game) {
   // ── The steward ───────────────────────────────────────────────────────────
   // Behind the hatch in a blaze-orange vest and cap, looking up when you come
   // near, waving when you come up to the porch.
-  const who = site ? STEWARDS[hash2i(5, 9, gen.seed) % STEWARDS.length] : STEWARDS[0];
+  const who = STEWARDS[hash2i(5, 9, gen.seed) % STEWARDS.length];
   function makeSteward(at) {
     const rnd = mulberry32(gen.seed + 4421);
     const c = (hex) => new THREE.Color(hex);
@@ -344,7 +376,7 @@ export function installHuntclub(game) {
   // ── What the field says ───────────────────────────────────────────────────
   let cardUntil = 0;
   let clock = 0;
-  if (range) {
+  function listen(range) {
     range.on('call', ({ x, y, z }) => {
       sound.call('pull', x, y, z, { pitch: 0.95 + Math.random() * 0.1 });
       hud.flash('“pull!”', 900);
@@ -387,6 +419,7 @@ export function installHuntclub(game) {
     name: 'huntclub',
     phase: 'world',
     update({ dt }) {
+      if (!decided && fieldsKnown()) decide();
       if (!site) return;
       clock += dt;
       const f = game.focus;
@@ -479,9 +512,16 @@ export function installHuntclub(game) {
 
   // ── From the console ──────────────────────────────────────────────────────
   game.provide('huntclub', {
-    site,
-    lay,
-    range,
+    // null until it's been found (a moment after the world opens)
+    get site() {
+      return site;
+    },
+    get lay() {
+      return lay;
+    },
+    get range() {
+      return range;
+    },
     get shotgun() {
       return shotgun;
     },

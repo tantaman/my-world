@@ -69,7 +69,9 @@ export default async function ({ page, step, key, frames, open, shot }) {
 
   let site = null;
   await step('to the hunt club, from the map', async () => {
-    site = await page.evaluate(() => {
+    site = await page.evaluate(async () => {
+      // found a moment after the world opens, once the airfields have been
+      await T.until(() => world.huntclub.site, 60000);
       const s = world.huntclub.site;
       return s && { id: s.id, name: s.name, door: s.door };
     });
