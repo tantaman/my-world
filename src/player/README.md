@@ -30,6 +30,12 @@ walk the way a small child does at the same speed: quicker, shorter steps,
 so the feet still don't skate. The camera sits at their eye level, deep
 water floats them sooner, and wading drags at them sooner too.
 
+The hiker's face is drawn from a photo of the man himself: a real-sized head with a
+lean face and a long, straight nose, smiling, a full dark beard and short
+dark hair at the sides, square white frames with dark lenses that catch the
+sky. Beard, hair and eyebrows are layers of strands you can make out up
+close, which become a solid mass of hair further off.
+
 The walk is solved, not keyframed. Each foot follows a path on the ground,
 rolling heel to toe while it's planted and arcing forward when it swings.
 Two-bone IK bends the hip and knee to reach it, so planted feet don't
@@ -147,7 +153,7 @@ hikers/oliver.js      Oliver: his look, henley, joggers and trainers
 hikers/elliott.js     Elliott: his look, puffer jacket, henley at the neck, joggers and trainers
 hikers/child.js       what the children share: a head built to a look, patterns taken in, trainers
 clothing.js           garment sections, cloth folds, boots and generated weave, and putting them on the bones
-head.js               the hiker's face and beard, sunglasses and snapback
+head.js               the hiker's face, ears, hair and beard (strands in layers), sunglasses and snapback
 input.js              keyboard, mouse, touch, and a pad's buttons as keys
 gamepad.js            game controllers: reading them, what their buttons are called, typing into panels
 peers.js              everyone else, drawn as whoever they are and eased between messages
