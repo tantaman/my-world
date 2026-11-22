@@ -93,13 +93,14 @@ const pick = (list) => list[Math.floor(Math.random() * list.length)];
 const overlaps = (b, x0, z0, x1, z1) => b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0;
 
 // The features this uses, so it is installed after them (game/features.js):
-// the video store, the abandoned buildings and the airfields for what the
-// clubs keep clear of, along with everything they keep clear of; towns for
+// the video store, the abandoned buildings, the airfields and the race
+// tracks for what the clubs keep clear of, along with everything they keep
+// clear of; towns for
 // the steward's body and voice; hunting for game and kills, and to put the
 // shotgun in the rifle's slot.
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'towns', 'wildlife', 'hunting', 'videostore', 'abandoned', 'airports'];
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'towns', 'wildlife', 'hunting', 'videostore', 'abandoned', 'airports', 'racetrack'];
 export function installHuntclub(game) {
-  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway, spaceport, videostore, abandoned, airports, wildlife, hunting } = game;
+  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway, spaceport, videostore, abandoned, airports, racetrack, wildlife, hunting } = game;
 
   // ── Where they are ────────────────────────────────────────────────────────
   // Clear of everything there first: what the video store keeps clear of,
@@ -134,8 +135,14 @@ export function installHuntclub(game) {
     }
     return home;
   }
-  // The rest, out in the forest, looked for round about you as you go.
-  const clubs = new HuntClubs(gen, { start: player.start, keepOff, away: (...box) => !!landforms.reaches(...box) });
+  // The rest, out in the forest, looked for round about you as you go. They
+  // keep clear of the race tracks too. (The tracks keep out of the ring round
+  // the start that the first club may be anywhere in, so it needn't ask, and
+  // asking would find the tracks of the towns round the start as the world
+  // opens.)
+  const farKeepOff = (...box) => keepOff(...box) || racetrack.tracks.within(...box).length > 0;
+  farKeepOff.ready = keepOff.ready;
+  const clubs = new HuntClubs(gen, { start: player.start, keepOff: farKeepOff, away: (...box) => !!landforms.reaches(...box) });
   // every club whose box overlaps a rectangle (wait = false: only those found already)
   const all = (x0, z0, x1, z1, wait = true) => {
     const out = home && overlaps(home.box, x0, z0, x1, z1) ? [home] : [];
