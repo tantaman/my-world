@@ -88,6 +88,28 @@ test("a flat face's pattern runs level across it, or up it, and stays small far 
   for (const p of all) assert.ok(Math.abs(p.u) < 20 && Math.abs(p.v) < 20, `small numbers: ${p.u}, ${p.v}`);
 });
 
+test('a face written a vertex at a time (as the railway writes its ties) is drawn as tris would draw it', () => {
+  const far = 4.0e6;
+  const [a, b, c, d] = [
+    [far, 10, far],
+    [far + 3, 10, far],
+    [far + 3, 12, far],
+    [far, 12, far],
+  ].map((p) => new THREE.Vector3(...p));
+  const white = new THREE.Color(1, 1, 1);
+  const mesher = () => Object.assign(new Mesher(), { wear: 0.25 });
+  const byTris = mesher();
+  byTris.tris([a, b, c, a, c, d], () => white, SURF.paint | UPRIGHT);
+  const byVertex = mesher();
+  for (const p of [a, b, c, d]) byVertex.vertex(p.x, p.y, p.z, 0, 0, 1, white, SURF.paint | UPRIGHT);
+  byVertex.idx.push(0, 1, 2, 0, 2, 3);
+  const want = vertices(byTris.build(byTris.anchor()));
+  const got = vertices(byVertex.build(byVertex.anchor()));
+  assert.equal(got.length, byVertex.n, 'every vertex says what it is');
+  // tris wrote a, b, c, a, c, d
+  for (const [i, j] of [[0, 0], [1, 1], [2, 2], [3, 5]]) assert.deepEqual(got[i], want[j]);
+});
+
 test('an old cabin is logs, end grain, shakes, boards and stone, and worn', () => {
   const gen = growWorld(20261119, [], 1);
   const site = new Sites(gen).within(-2100, -2100, 2100, 2100).find((s) => s.kind === 'cabin');

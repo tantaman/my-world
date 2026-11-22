@@ -81,13 +81,9 @@ const _q = { x: 0, y: 0, z: 0, dx: 0, dz: 0, grade: 0 };
 // ── Writing geometry ─────────────────────────────────────────────────────────
 // Straight into a Mesher (build/geometry.js), a face at a time with flat
 // normals: thousands of ties and planks don't each need a BufferGeometry.
-
-function vert(m, x, y, z, nx, ny, nz, c) {
-  m.pos.push(x, y, z);
-  m.nor.push(nx, ny, nz);
-  m.col.push(c.r, c.g, c.b);
-  return m.n++;
-}
+// Each vertex goes in by the Mesher's own vertex(), which gives it what it's
+// made of and its grain as well: the material that draws it reads those, and
+// a mesh missing them isn't drawn at all.
 
 // A flat four-sided face, its corners in order round it as seen from the
 // side it faces. Corners are [x, y, z]; color is one THREE.Color, or one
@@ -107,10 +103,10 @@ export function quad(m, a, b, c, d, color) {
   ny /= l;
   nz /= l;
   const [ca, cb, cc, cd] = Array.isArray(color) ? color : [color, color, color, color];
-  const i = vert(m, a[0], a[1], a[2], nx, ny, nz, ca);
-  vert(m, b[0], b[1], b[2], nx, ny, nz, cb);
-  vert(m, c[0], c[1], c[2], nx, ny, nz, cc);
-  vert(m, d[0], d[1], d[2], nx, ny, nz, cd);
+  const i = m.vertex(a[0], a[1], a[2], nx, ny, nz, ca);
+  m.vertex(b[0], b[1], b[2], nx, ny, nz, cb);
+  m.vertex(c[0], c[1], c[2], nx, ny, nz, cc);
+  m.vertex(d[0], d[1], d[2], nx, ny, nz, cd);
   m.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
 }
 

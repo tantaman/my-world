@@ -268,6 +268,9 @@ test('the track, the stations and the trains are made, and stand where the line 
       verts += p.length / 3;
       for (let i = 0; i < p.length; i++) assert.ok(Number.isFinite(p[i]), `${what}: a finite vertex`);
       assert.ok(o.geometry.attributes.color, `${what}: coloured`);
+      // every vertex says what it's made of and where on its grain: one
+      // short of that and the building material doesn't draw the mesh at all
+      for (const [name, a] of Object.entries(o.geometry.attributes)) assert.equal(a.count, p.length / 3, `${what}: ${name} for every vertex`);
     });
     return verts;
   };
@@ -358,13 +361,14 @@ test('a line far away is built from where it stands, and its smoke drawn from be
   };
   const ground = (x, z) => gen.height(x - FAR[0], z - FAR[1]);
   const material = new THREE.MeshStandardMaterial({ vertexColors: true });
-  // nothing handed to the graphics card from out here: each mesh measures
-  // from where it stands, and is put there
+  // nothing big handed to the graphics card from out here: each mesh
+  // measures from where it stands, and is put there, and the grain it's
+  // drawn with is measured from near it too
   const biggest = (object) => {
     let most = 0;
     object.traverse((o) => {
       if (!o.isMesh) return;
-      for (const v of o.geometry.attributes.position.array) most = Math.max(most, Math.abs(v));
+      for (const name of ['position', 'aUV']) for (const v of o.geometry.attributes[name].array) most = Math.max(most, Math.abs(v));
     });
     return most;
   };
