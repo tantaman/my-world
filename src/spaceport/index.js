@@ -42,7 +42,6 @@
 import * as THREE from 'three';
 import { findSite, clearOf, LaunchSites, FAR, FAR_REACH, PAD, ROCKET_AT, LANDING_AT } from './site.js';
 import { GridNearest, ListNearest, MergeNearest } from '../core/nearest.js';
-import { formatDistance } from '../core/format.js';
 import { buildLaunchSite, makeCapsule, makeExhaust, ROCKET, SMOKE } from './launchSite.js';
 import { Flight, DESTINATIONS } from './flight.js';
 import { FlightPanel } from './flightPanel.js';
@@ -64,18 +63,17 @@ const PUMP_MS = [1.5, 6]; // ms a frame spent looking for them: about, and while
 const SHOW = 520; // m: the site is stood up this close...
 const HIDE = 680; // ...and taken down past this
 const ARRIVE = 16; // m from the middle of the pad that counts as there
-const BOARD = 6.5; // m from the rocket, on the pad, that T climbs you aboard
+const BOARD = 6.5; // m from the rocket, on the pad, that F climbs you aboard
 const CAPSULE_KEPT = 160; // m you go from a landed capsule before it's taken away
 const BOTS = 4;
 const SENS = 0.0022; // rad of turn per pixel the mouse moves, in the arena
 const STICK_TURN = { yaw: 3.2, pitch: 2 }; // rad/s with a pad's right stick pushed all the way
-const AGAIN = 2.5; // s to press T a second time to leave a match before it's over
+const AGAIN = 2.5; // s to press F a second time to leave a match before it's over
 const EXPOSURE = 1.05;
 // How far (m) plants of each kind are kept back from the pad.
 const KEEP_BACK = { pine: 1.8, broad: 2, birch: 1.4, bush: 0.7, fern: 0.25, rock: 1.1, log: 2.4 };
 const SCALED = { rock: true, log: true };
 const GLYPH = ['...#...', '..###..', '..#.#..', '..###..', '..###..', '.#####.', '.#.#.#.'];
-const WAYS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
 const ARENA_TITLE = 2; // s the arena's name is up before its countdown
 const _v = new THREE.Vector3();
@@ -499,42 +497,28 @@ export function installSpaceport(game) {
       return;
     }
     leaveAsked = now;
-    ui.say('T again to fly home<small>and leave the match</small>', AGAIN * 1000);
+    ui.say(`${input.isTouch ? '“fly home”' : 'F'} again to fly home<small>and leave the match</small>`, AGAIN * 1000);
   }
 
-  // ── T ─────────────────────────────────────────────────────────────────────
+  // ── By the rocket ─────────────────────────────────────────────────────────
   function nearRocket() {
     if (!site || !shown) return false;
     const r = atSite(ROCKET_AT.x, ROCKET_AT.z);
     const p = player.pos;
     return Math.hypot(p.x - r.x, p.z - r.z) < BOARD && Math.abs(p.y - site.top) < 2.5;
   }
-  commands.add({
-    id: 'rocket',
-    keys: ['KeyT'],
-    group: 'WANDER',
-    label: 'by the rocket: choose a destination · in orbit: fly home',
-    run() {
-      if (flight.phase === 'orbit') return leave();
-      if (flight.phase !== 'ground') return;
-      if (nearRocket()) return chooseFlight();
-      const p = player.pos;
-      const n = nearest(p);
-      if (!n) return hud.flash('there’s no launch site anywhere near · look under launch sites in the map’s routes', 2800);
-      if (n.d < ARRIVE + 6) return hud.flash('walk up to the rocket, then T', 2200);
-      const a = Math.atan2(n.site.x - p.x, -(n.site.z - p.z));
-      hud.flash(`the nearest launch site is ${formatDistance(n.d)} ${WAYS[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8]} · it’s on the map`, 3200);
-    },
-  });
-  // Aboard with the act key (F) too: what's at hand, as everywhere.
+  // The act key (F): by the rocket, aboard it and away; in orbit, home
+  // again (in the middle of a match, asked twice). What's at hand, as everywhere.
   act.offer({
     id: 'rocket',
     at() {
+      if (flight.phase === 'orbit') return { d: 0, word: 'fly home', run: leave };
       if (flight.phase !== 'ground' || player.aboard || player.carrier || !nearRocket()) return null;
       const r = atSite(ROCKET_AT.x, ROCKET_AT.z);
       return { d: Math.hypot(player.pos.x - r.x, player.pos.z - r.z), word: 'aboard', run: chooseFlight };
     },
   });
+  commands.describe({ group: 'WANDER', help: 'F', pad: ['PadY'], label: 'by the rocket: choose a destination · in orbit: fly home' });
   commands.add({
     id: 'station-deck', keys: ['Enter'], group: 'ORBIT', label: 'Deep Space 9: dock or view the exterior',
     run: changeDeck,
@@ -588,7 +572,7 @@ export function installSpaceport(game) {
         sound.sfx('countdown', { go: true });
       }
       ui.update(arena);
-      if (arena.over) ui.scores(arena, `T to fly home · your record here: ${record.wins} ${record.wins === 1 ? 'win' : 'wins'} in ${record.matches} · best ${record.best} frags`);
+      if (arena.over) ui.scores(arena, `${input.isTouch ? '“fly home”' : 'F'} to fly home · your record here: ${record.wins} ${record.wins === 1 ? 'win' : 'wins'} in ${record.matches} · best ${record.best} frags`);
     },
   });
 
@@ -630,7 +614,7 @@ export function installSpaceport(game) {
       if (capsule && flight.phase === 'ground' && d > CAPSULE_KEPT) dropCapsule();
       if (!arrived && d < ARRIVE && flight.phase === 'ground') {
         arrived = true;
-        hud.flash(`${site.name} · walk up to the rocket and press T to choose a destination`, 3600);
+        hud.flash(`${site.name} · walk up to the rocket and press ${input.isTouch ? '“aboard”' : 'F'} to choose a destination`, 3600);
         if (!beenTo(site)) {
           if (site === home) record.visited = true;
           else record.been = [site.id, ...record.been].slice(0, BEEN_KEPT);
@@ -638,7 +622,7 @@ export function installSpaceport(game) {
         }
       }
       if (d > ARRIVE * 4) arrived = false;
-      // T, by the rocket
+      // F, by the rocket
       const can = flight.phase === 'ground' && nearRocket() && !player.aboard && !player.carrier;
       ui.launchTouch.hidden = !input.isTouch || input.blocked || !(can || arena);
       if (!ui.launchTouch.hidden) ui.launchTouch.textContent = can ? 'Choose destination' : 'Fly home';

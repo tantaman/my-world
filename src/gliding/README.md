@@ -1,7 +1,7 @@
 # Gliding
 
 A hang glider, for coming down from a long way up. Fly your eagle up high
-(see [Mounts](../mounts/README.md)) and press **Z**: you let go of it, and
+(see [Mounts](../mounts/README.md)) and press **F**: you let go of it, and
 your glider opens over you. You drop for a moment while the sail fills, then
 it takes your weight and you're flying, lying flat under the wing with your
 hands on the bar. The eagle flies on, peels off, and comes down to wait for

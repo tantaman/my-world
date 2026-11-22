@@ -42,10 +42,10 @@ export default async function ({ page, step, key, frames, shot }) {
       await T.frames(5);
     }, h);
     assert.equal(await page.evaluate(() => world.mounts.hints.stage.horse), 3, 'seen');
-    assert.match(await page.evaluate(() => T.prompt()), /hold Z.*calm the wild horse/);
-    await page.keyboard.down('KeyZ');
+    assert.match(await page.evaluate(() => T.prompt()), /hold F.*calm the wild horse/);
+    await page.keyboard.down('KeyF');
     const won = await page.evaluate(() => T.until(() => world.mounts.list()[0].tame, 60000));
-    await page.keyboard.up('KeyZ');
+    await page.keyboard.up('KeyF');
     assert.ok(won, 'it trusts you');
     await frames(3);
     assert.match(await page.evaluate(() => T.prompt()), /F ride your horse/);
@@ -54,7 +54,7 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.equal(mine[0].label, 'your horse');
     assert.match(mine[0].note, /^about \d+ m to the /, 'with where it is');
     // on, and away at a gallop
-    await key('KeyZ');
+    await key('KeyF');
     assert.equal(await page.evaluate(() => world.mounts.riding), 'horse');
     assert.deepEqual(await page.evaluate(() => [world.builder.idle, world.player.character.tool]), [true, null], 'tools put away while you ride');
     await page.evaluate(() => world.look(world.player.yaw + Math.PI, 0.3));
@@ -73,7 +73,7 @@ export default async function ({ page, step, key, frames, shot }) {
     await shot('riding');
     assert.ok(gallop > 8, `a gallop (${gallop.toFixed(1)} m/s)`);
     await frames(30);
-    await key('KeyZ');
+    await key('KeyF');
     assert.equal(await page.evaluate(() => world.mounts.riding), null, 'and off again');
     // from a long way off, a whistle brings it back
     const back = await page.evaluate(async () => {
@@ -143,7 +143,7 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.keyboard.up('ShiftLeft');
     assert.ok(swimming, 'out into the lake, swimming fast');
     await shot('turtle');
-    await key('KeyZ');
+    await key('KeyF');
     const flew = await page.evaluate(async () => {
       const e = world.mounts.haunts.eagle;
       await world.teleport(e.x + 3, e.z);
@@ -159,10 +159,10 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.keyboard.up('Space');
     assert.ok(up, 'up into the air');
     await shot('eagle');
-    // Z low in the air brings it down, and you're let off when it lands
-    // (higher up, Z lets go of it and you glide: that's the gliding part)
+    // F low in the air brings it down, and you're let off when it lands
+    // (higher up, F lets go of it and you glide: that's the gliding part)
     assert.match(await page.evaluate(() => T.prompt()), /F land/);
-    await key('KeyZ');
+    await key('KeyF');
     const down = await page.evaluate(() => T.until(() => !world.mounts.riding, 60000));
     assert.ok(down, 'down, and off');
     assert.equal(await page.evaluate(() => world.player.flying), false);

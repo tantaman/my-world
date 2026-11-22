@@ -100,7 +100,7 @@ const overlaps = (b, x0, z0, x1, z1) => b[0] <= x1 && b[2] >= x0 && b[1] <= z1 &
 // shotgun in the rifle's slot.
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'towns', 'wildlife', 'hunting', 'videostore', 'abandoned', 'airports', 'racetrack', 'act'];
 export function installHuntclub(game) {
-  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway, spaceport, videostore, abandoned, airports, racetrack, wildlife, hunting, act } = game;
+  const { scene, gen, chunks, grass, solids, landforms, player, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway, spaceport, videostore, abandoned, airports, racetrack, wildlife, hunting, act } = game;
 
   // ── Where they are ────────────────────────────────────────────────────────
   // Clear of everything there first: what the video store keeps clear of,
@@ -586,12 +586,9 @@ export function installHuntclub(game) {
         }
       } else if (near > GREET * 2) greeted = false;
 
-      // at the hatch, without a gun: ask for one (with a click, or the act key)
+      // at the hatch, without a gun: ask for one (the act key: see ask)
       let cue = null;
-      if (!owned && atCounter()) {
-        cue = `<b>${act.key('ask')}</b> ask the steward for a shotgun`;
-        if (input.tapped('use')) ask();
-      }
+      if (!owned && atCounter()) cue = `<b>${act.key('ask')}</b> ask the steward for a shotgun`;
       if (cue) {
         hud.cue({ html: cue });
         cued = true;

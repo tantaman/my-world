@@ -3,9 +3,10 @@
 // you at its own pace, down riffles and little cascades, round boulders, and
 // across the lakes on the way to where the water runs out of them, and on
 // down. Paddle with your hands (W A S D) to hurry it along or make for a
-// bank, and V (or F, the act key) again climbs out wherever you are. Where the river ends (a
-// lake that keeps its water, or the sea) you're told so, and where the
-// nearest river that runs on somewhere else is.
+// bank, and F (the act key) climbs out wherever you are. Where the river
+// ends (a lake that keeps its water, or the sea) you're told so, and where
+// the nearest river that runs on somewhere else is. Away from the water, V
+// says where the nearest river to float down is.
 //
 //   tube.js     how it floats: the current, lakes, shallows, boulders, the surface
 //   course.js   where the water goes: out of a lake, how far a river runs, the nearest
@@ -48,7 +49,7 @@ const SPARE = 0.05;
 const HOP = { time: 0.75, up: 0.45 };
 // Getting out: onto a bank this far (m) from the tube's middle at most,
 // where the water is no deeper than WADE m and the bank stands no more than
-// CLIFF m over it. F (or V) again within SLIP s slips you out into deep water.
+// CLIFF m over it. F again within SLIP s slips you out into deep water.
 const OUT_REACH = 2.6;
 const WADE = 0.45;
 const CLIFF = 1.2;
@@ -114,8 +115,8 @@ function duration(s) {
 
 // The features this uses, so it is installed after them (game/features.js).
 // And after boats, fishing and mounts, whose words on what a key would do
-// are said every frame, so that what V would do is said over them; and
-// after act, whose key (F) gets you in and out of the tube too.
+// are said every frame, so that what F would do in the tube is said over
+// them; and after act, whose key (F) gets you in and out of the tube.
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'splashes', 'boats', 'fishing', 'mounts', 'act'];
 export function installTubing(game) {
   const { scene, chunks, gen, solids, player, input, hud, commands, save, sound, builder, splashes, peers, act } = game;
@@ -467,21 +468,30 @@ export function installTubing(game) {
     return { id: 'tubing', label: 'a river to float down', color: GUIDE.color, x: target.x, z: target.z };
   });
 
-  // ── P: get in, get out ────────────────────────────────────────────────────
-  function press() {
-    if (active) return getOut();
-    if (player.carrier || player.aboard) {
-      hud.flash('get down first: you can’t get into a tube from here');
-      return false;
-    }
+  // ── In and out: the act key (F) ───────────────────────────────────────────
+  // Beside water deep enough to float in, F pulls out your tube and you drop
+  // into it; in it, F climbs out (as with everything else you get into).
+  act.offer({
+    id: 'tube',
+    at() {
+      if (active) return { d: 0, word: 'get out', run: getOut };
+      if (player.carrier || player.aboard || player.space) return null;
+      const spot = waterBy(player.pos.x, player.pos.z);
+      return spot ? { d: FLOAT_AT, word: 'float', run: () => getIn(spot) } : null;
+    },
+  });
+
+  // ── V: where to float ─────────────────────────────────────────────────────
+  // Away from the water, which way the nearest river or stream to float down
+  // is, and the HUD points you there.
+  function whereToFloat() {
+    const p = player.pos;
+    if (active) return hud.flash(input.isTouch ? 'you’re floating · “get out” climbs out' : 'you’re floating · F climbs out');
+    if (!player.space && !player.carrier && !player.aboard && waterBy(p.x, p.z)) return hud.flash(input.isTouch ? 'water deep enough to float in, here · “float”' : 'water deep enough to float in, here · F to float');
     if (player.space) {
       hud.flash('no river to float down in here');
       return false;
     }
-    const p = player.pos;
-    const spot = waterBy(p.x, p.z);
-    if (spot) return getIn(spot);
-    // nowhere to float here: where is there?
     const r = course.nearest(p.x, p.z);
     if (!r) {
       hud.flash('no water deep enough to float in here, and no river near enough to float down', SAY);
@@ -491,20 +501,9 @@ export function installTubing(game) {
     hud.flash(`no water deep enough to float in here · the nearest ${r.river ? 'river' : 'stream'} to float down is ${formatDistance(r.d)} ${way(r.x - p.x, r.z - p.z)}, and runs ${formatDistance(r.far)} from there`, SAY);
     return false;
   }
-  // What V would do here, in a word ('float', 'get out'), while there is
-  // water to do it on: what the pack lists it by, and a touch screen's button says.
-  let doing = '';
-  commands.add({ id: 'tube', keys: ['KeyV', 'PadR3'], group: 'WANDER', label: 'inner tube: pull it out and float down the river · get out', run: press, now: () => doing });
+  commands.add({ id: 'tube', keys: ['KeyV', 'PadR3'], group: 'WANDER', label: 'inner tube: where the nearest river to float down is', run: whereToFloat });
+  commands.describe({ group: 'WANDER', help: 'F', pad: ['PadY'], label: 'beside water deep enough: float off in your inner tube · in it: get out' });
   commands.describe({ group: 'WANDER', help: 'in the tube', label: 'W A S D paddle with your hands · shift paddle hard' });
-  // Out of it with the act key (F, a pad's Y, its button on a touch screen)
-  // too, as out of everything else; and beside running water, into it.
-  act.offer({
-    id: 'tube',
-    at() {
-      if (active) return { d: 0, word: 'get out', run: getOut };
-      return notice() ? { d: FLOAT_AT, word: 'float', run: press } : null;
-    },
-  });
 
   // ── What the keys do now, and how it's going ──────────────────────────────
   // Running water you could float down, beside you: looked for now and then.
@@ -549,7 +548,6 @@ export function installTubing(game) {
     if (html) hud.cue({ html });
     else if (cued) hud.cue(null);
     cued = !!html;
-    doing = word;
   }
 
   const readout = document.createElement('div');

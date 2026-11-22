@@ -108,7 +108,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
     assert.equal(await prompt(), 'F ask the steward for a shotgun');
     assert.match(await toast(), new RegExp(`^${await page.evaluate(() => world.huntclub.steward)}: “`), 'the steward says hello');
     await shot('the hatch');
-    await page.evaluate(() => T.tap('use'));
+    await key('KeyF');
     const got = await page.evaluate(() => ({ owned: world.huntclub.owned, tool: T.tool(), slot: world.builder.slotOf('shotgun'), rifle: world.builder.slotOf('rifle'), kit: world.builder.kits.find((k) => k.tools.some((t) => t.id === 'shotgun')).label }));
     assert.deepEqual(got, { owned: true, tool: 'shotgun', slot: got.rifle, rifle: got.rifle, kit: 'guns' }, "it's yours, in hand, in the rifle's slot");
     assert.match(await toast(), /over-and-under/);

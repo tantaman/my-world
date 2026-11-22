@@ -23,7 +23,7 @@
 //   - the bank, the trestles and the platforms are solids, to walk on
 //   - the stations are places on the map, and the lines and trains drawn on it
 //   - the stations tab beside the map, which Y opens: the stations to go to;
-//     beside a standing train, Y gets on, and at a station, Y gets off
+//     beside a standing train, F (the act key) gets on, and at a station, off
 //     (player.aboard)
 //   - a layer of sound for the trains near you
 //
@@ -416,7 +416,7 @@ export function installRailway(game) {
     return best;
   }
 
-  // ── Y: the stations, getting on and getting off ───────────────────────────
+  // ── The stations (Y), getting on and getting off (F) ──────────────────────
   // The stations are a tab beside the map.
   const showing = () => map.isOpen && map.tab === 'rail';
   const panel = new StationPanel({ onPick: (id) => go(id), showing, onClose: () => map.close() });
@@ -429,21 +429,10 @@ export function installRailway(game) {
       refreshPanel();
     },
   });
-  function press() {
-    if (aboard) return void leave();
-    const c = coachNear();
-    if (c) {
-      if (c.e.w.v < STOOD) return board(c.e, c.car, c.seat);
-      return hud.flash('wait for it to stop at a station');
-    }
-    map.open('rail');
-  }
-  // What Y would do here, in a word ('board', 'get off'), when there's a
-  // train to do it with: what the pack lists it by, and a touch screen's button says.
-  let doing = '';
-  commands.add({ id: 'railway', keys: ['KeyY'], group: 'WANDER', label: 'railway: stations to go to · get on a train · get off', run: press, now: () => doing });
-  // On and off with the act key (F, a pad's Y, its button on a touch screen)
-  // too, as with everything else you get into.
+  // Y: the stations to go to. (Getting on and off is the act key's, F, as
+  // with everything else you get into.)
+  commands.add({ id: 'railway', keys: ['KeyY'], group: 'WANDER', label: 'railway: the stations to go to', run: () => map.open('rail') });
+  commands.describe({ group: 'WANDER', help: 'F', pad: ['PadY'], label: 'beside a standing train: get on · at a station: get off' });
   act.offer({
     id: 'train',
     at() {
@@ -773,7 +762,6 @@ export function installRailway(game) {
     if (html) hud.cue({ html });
     else if (cued) hud.cue(null);
     cued = !!html;
-    doing = word;
   }
 
   // The panel's list: the stations within reach, nearest first, and when
@@ -832,7 +820,11 @@ export function installRailway(game) {
       return out.sort((a, b) => a.dist - b.dist);
     },
     go,
-    board: () => press(),
+    // get on the train beside you, standing at a station
+    board() {
+      const c = coachNear();
+      return c && c.e.w.v < STOOD ? (board(c.e, c.car, c.seat), true) : false;
+    },
     getOff: () => leave(),
     // (for trying things out) the next train to stand at a station in `in` s
     soon(id, inSeconds = 5) {

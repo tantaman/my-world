@@ -1,7 +1,7 @@
-// The launch site: walk up to the rocket, T climbs aboard, a countdown and
+// The launch site: walk up to the rocket, F climbs aboard, a countdown and
 // it lifts off to orbit; in the arena the controls are an arena shooter's
 // (W runs, the view is yours, the use button fires the railgun) and a rail
-// frags a bot; T, T flies you home, and you step out onto the pad. Far out
+// frags a bot; F, F flies you home, and you step out onto the pad. Far out
 // there are others, each with its name, and the rocket there flies too.
 //
 // Needs: nothing in particular (the launch site is near where you first
@@ -16,14 +16,14 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.ok(site, 'there is a launch site');
     await page.evaluate(() => world.spaceport.go());
     await frames(5);
-    assert.match(await page.evaluate(() => T.prompt()), /climb aboard/, 'beside the rocket, T would climb aboard');
-    await key('KeyT');
+    assert.match(await page.evaluate(() => T.prompt()), /climb aboard/, 'beside the rocket, F would climb aboard');
+    await key('KeyF');
     const manifest = page.getByRole('dialog', { name: 'Choose a destination' });
     assert.ok(await manifest.isVisible(), 'the rocket offers both flights');
     await key('Escape');
     assert.ok(await manifest.isHidden(), 'you can stay on the pad');
     assert.equal(await page.evaluate(() => world.spaceport.phase), 'ground');
-    await key('KeyT');
+    await key('KeyF');
     await manifest.getByRole('button', { name: /The Orrery/ }).click();
     assert.equal(await page.evaluate(() => world.spaceport.phase), 'boarding', 'choosing the arena boards the rocket');
     assert.ok(await page.evaluate(() => !!world.player.aboard && getComputedStyle(document.getElementById('hotbar')).display === 'none'), 'carried, and the tools put away');
@@ -75,9 +75,9 @@ export default async function ({ page, step, key, frames, shot }) {
   });
 
   await step('home again', async () => {
-    await key('KeyT');
-    await key('KeyT');
-    assert.equal(await page.evaluate(() => world.spaceport.phase), 'home', 'T twice, and the capsule comes down');
+    await key('KeyF');
+    await key('KeyF');
+    assert.equal(await page.evaluate(() => world.spaceport.phase), 'home', 'F twice, and the capsule comes down');
     await page.evaluate(() => world.spaceport.hurry());
     await frames(5);
     const back = await page.evaluate(() => {
@@ -91,7 +91,7 @@ export default async function ({ page, step, key, frames, shot }) {
 
   await step('dock at Deep Space 9', async () => {
     await page.evaluate(() => world.spaceport.go());
-    await key('KeyT');
+    await key('KeyF');
     await shot('flight-manifest');
     await page.getByRole('button', { name: /Deep Space 9/ }).click();
     const trip = await page.evaluate(() => {
@@ -124,7 +124,7 @@ export default async function ({ page, step, key, frames, shot }) {
     await shot('deep-space-9');
     await key('Enter');
     assert.deepEqual((await hiker()).feet, stopped.feet, 'return to your spot on the deck');
-    await key('KeyT');
+    await key('KeyF');
     assert.equal(await page.evaluate(() => world.spaceport.phase), 'home');
     await page.evaluate(() => world.spaceport.hurry());
     await frames(4);

@@ -15,7 +15,7 @@ are the same at any of them, and the map remembers which you've been to.
 
 **Get a shotgun.** Up on the porch, the steward serves from a hatch in the
 wall, with the gun room behind: a rack of shotguns, shelves of shells, a
-pair of antlers. Step up to the hatch and **click**, and you're handed a
+pair of antlers. Step up to the hatch and press **F**, and you're handed a
 12-gauge over-and-under. It's yours from then on, wherever you go: it shares
 the rifle's slot on the tool bar (**7**, then **7** again to change between
 them). It holds two shells, and you break it open to load.
@@ -89,7 +89,7 @@ the one that stands.
 
 | | |
 |---|---|
-| **F** (or **click**) at the hatch | ask the steward for a shotgun (at any club) |
+| **F** at the hatch | ask the steward for a shotgun (at any club) |
 | **7** | the shotgun (in the rifle's slot: press again to change) |
 | **click** on a station | call "pull!" for the next targets |
 | **click** | shoot · beside a kill, hold to dress it |

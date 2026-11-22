@@ -1,7 +1,6 @@
-// The railway: Y away from a train opens the stations beside the map; pick
-// one and you're on its platform; a train comes in, Y gets you on, it
-// carries you to the next station, and Y there gets you off onto its
-// platform.
+// The railway: Y opens the stations beside the map; pick one and you're on
+// its platform; a train comes in, F (the act key) gets you on, it carries you
+// to the next station, and F there gets you off onto its platform.
 //
 // Needs: nothing in particular (a line within reach of wherever you are).
 // Leaves: you on a station's platform, the train you came on pulling out.
@@ -27,10 +26,10 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.evaluate((id) => world.railway.soon(id, 4), id);
     await page.waitForFunction((id) => world.railway.list(80).some((s) => s.id === id && s.due === 0), id, { timeout: 120000 });
     await frames(5);
-    assert.match(await page.evaluate(() => T.prompt()), /get on/, 'beside it, Y would get you on');
-    await key('KeyY');
+    assert.match(await page.evaluate(() => T.prompt()), /get on/, 'beside it, F would get you on');
+    await key('KeyF');
     const on = await page.evaluate(() => world.railway.aboard);
-    assert.ok(on, 'Y and you are aboard');
+    assert.ok(on, 'F and you are aboard');
     await shot('aboard');
     // it pulls out with you on it
     await page.waitForFunction(() => {
@@ -43,7 +42,7 @@ export default async function ({ page, step, key, frames, shot }) {
       return Math.hypot(world.player.pos.x - st.x, world.player.pos.z - st.z);
     }, id);
     assert.ok(away > 10, `it carries you off (${away.toFixed(0)} m)`);
-    // ...to the next station, where Y gets you off onto its platform
+    // ...to the next station, where F gets you off onto its platform
     const next = await page.evaluate(() => {
       const a = world.railway.aboard;
       const e = world.railway.trains.get(`${a.line}#${a.train}`);
@@ -57,7 +56,7 @@ export default async function ({ page, step, key, frames, shot }) {
     }, null, { timeout: 120000 });
     await page.waitForFunction(() => world.chunks.isFullyLoaded(), null, { timeout: 60000 });
     await frames(10);
-    await key('KeyY');
+    await key('KeyF');
     await frames(10);
     const off = await page.evaluate((next) => {
       const st = world.railway.lines.byId(next);

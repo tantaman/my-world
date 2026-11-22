@@ -1,8 +1,8 @@
 // Tubing: away from the water, V says where the nearest river to float down
-// is and points the way there; on its bank, V tosses the tube in and you drop
-// into it; the river carries you on down, and your hands paddle you along
-// faster; V climbs out (onto the bank, or out in deep water, asked twice,
-// into the water); and you're back in your tube after a reload.
+// is and points the way there; on its bank, F (the act key) tosses the tube in
+// and you drop into it; the river carries you on down, and your hands paddle
+// you along faster; F climbs out (onto the bank, or out in deep water, asked
+// twice, into the water); and you're back in your tube after a reload.
 //
 // Needs nothing from earlier parts: it finds its own river. Leaves you on
 // foot by that river, out of the tube.
@@ -69,7 +69,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
     }, river);
     assert.ok(bank, 'a bank to stand on, beside the river');
     assert.match(bank.prompt, /^F float down it in your inner tube$/, `walking by, the prompt says so (${bank.prompt})`);
-    await key('KeyV');
+    await key('KeyF');
     const ok = await page.evaluate(() => T.until(() => world.tubing.state() && !world.tubing.state().hopping, 10000));
     assert.ok(ok, 'hopped in');
     await frames(10);
@@ -127,9 +127,9 @@ export default async function ({ page, step, key, frames, open, shot }) {
   });
 
   await step('out of the tube', async () => {
-    await key('KeyV');
+    await key('KeyF');
     let said = await toast();
-    if (/no bank within reach/.test(said)) await key('KeyV');
+    if (/no bank within reach/.test(said)) await key('KeyF');
     said = await toast();
     const out = await page.evaluate(() => ({ active: world.tubing.active, aboard: !!world.player.aboard, seated: world.player.character.seated }));
     assert.equal(out.active, false, 'out of it');
@@ -140,15 +140,15 @@ export default async function ({ page, step, key, frames, open, shot }) {
   });
 
   await step('back in your tube after a reload', async () => {
-    await key('KeyV');
+    await key('KeyF');
     assert.ok(await page.evaluate(() => T.until(() => world.tubing.state() && !world.tubing.state().hopping, 10000)), 'in again');
     await page.evaluate(() => T.frames(140)); // long enough for the change to be written down
     await open();
     const back = await page.evaluate(() => ({ s: world.tubing.state(), seated: !!world.player.character.seated }));
     assert.ok(back.s && !back.s.hopping, 'in your tube');
     assert.ok(back.seated, 'sat in it');
-    await key('KeyV');
-    if (await page.evaluate(() => world.tubing.active)) await key('KeyV');
+    await key('KeyF');
+    if (await page.evaluate(() => world.tubing.active)) await key('KeyF');
     assert.equal(await page.evaluate(() => world.tubing.active), false, 'and out of it again');
     return { far: back.s.far };
   });

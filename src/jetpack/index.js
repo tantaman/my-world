@@ -1,5 +1,5 @@
 // A jetpack, hanging on a rack at the front of the launch pad. Walk up to it
-// and press J, and it's strapped to your back, yours until you hang it back
+// and press F (the act key), and it's strapped to your back, yours until you hang it back
 // up. Jump and keep holding space, and the jets fire: you fly. Space climbs,
 // shift dives and goes faster, W A S D steer, and with neither space nor
 // shift the jets throttle back and let you down slowly. Touch down and they
@@ -34,7 +34,7 @@ import { jetSounds } from './sound.js';
 
 const SHOW = 300; // m from the rack that it's stood up...
 const HIDE = 380; // ...and taken down past this
-const REACH = 2.5; // m from the rack that J takes the jetpack, or hangs it back
+const REACH = 2.5; // m from the rack that F takes the jetpack, or hangs it back
 const PIVOT = 1.05; // m above the feet the body tips about, flying (about the hips)
 const TELL = 0.3; // s between telling the others how high you are, flying
 const SAY = 3400; // ms a word stays up
@@ -43,7 +43,6 @@ const SAY = 3400; // ms a word stays up
 // of your own speed they carry off, how long (s) one lasts, the drag on them
 // (1/s), and how big one is (m across, at first and growing each second).
 const VAPOUR = { rate: 28, out: [3, 7], scatter: 1.6, carry: 0.3, life: [0.4, 0.9], drag: 2.6, size: [0.06, 0.6] };
-const WAYS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
 const _o = new THREE.Vector3();
 const _v = new THREE.Vector3();
@@ -213,36 +212,19 @@ export function installJetpack(game) {
     puffs.instanceMatrix.needsUpdate = true;
   }
 
-  // ── J ─────────────────────────────────────────────────────────────────────
-  // At its rack, on your feet: J would put it on, or hang it back up.
+  // ── At the rack: the act key (F) ──────────────────────────────────────────
+  // Takes it down and straps it on, or hangs it back up: what's at hand, as
+  // everywhere.
+  // at its rack, on your feet
   const atRack = () => !!rack && nearRack() && !jets.on && !player.carrier && !player.aboard;
-  commands.add({
-    id: 'jetpack',
-    keys: ['KeyJ'],
-    group: 'JETPACK',
-    label: 'at the launch site: strap on the jetpack · hang it back up',
-    // at hand there: in the pack, which is how a pad gets at it, and a button on a touch screen
-    now: () => (atRack() ? (jets.worn ? 'hang up' : 'strap on') : ''),
-    run() {
-      if (jets.on) return hud.flash('land first');
-      if (rack && nearRack()) return wear(!jets.worn, true);
-      if (jets.worn) return hud.flash('jump, and hold space to fly · J at its rack hangs it back up', SAY);
-      if (!rack) return hud.flash('there’s no jetpack in this world', 2400);
-      const p = player.pos;
-      const d = Math.hypot(rack.x - p.x, rack.z - p.z);
-      if (d < REACH * 3) return hud.flash('walk up to the rack, then J', 2200);
-      const a = Math.atan2(rack.x - p.x, -(rack.z - p.z));
-      hud.flash(`a jetpack hangs on a rack at the launch site, ${Math.round(d)} m ${WAYS[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8]} · the launch site is on the map`, SAY);
-    },
-  });
-  // At the rack, with the act key (F) too: what's at hand, as everywhere.
   act.offer({
     id: 'jetpack',
     at() {
-      if (!rack || jets.on || player.carrier || player.aboard || !nearRack()) return null;
+      if (!atRack()) return null;
       return { d: Math.hypot(player.pos.x - rack.x, player.pos.z - rack.z), word: jets.worn ? 'hang up' : 'strap on', run: () => wear(!jets.worn, true) };
     },
   });
+  commands.describe({ group: 'JETPACK', help: 'F', pad: ['PadY'], label: 'at the launch site’s rack: strap on the jetpack · hang it back up' });
   commands.describe({ group: 'JETPACK', help: 'space, held', pad: ['PadA'], label: 'off the ground: fire the jets · climb' });
   commands.describe({ group: 'JETPACK', help: 'shift', pad: ['PadB'], label: 'flying: dive, and faster' });
   commands.describe({ group: 'JETPACK', help: 'W A S D', pad: ['PadLS'], label: 'flying: steer · let go of space to come down' });
@@ -292,7 +274,7 @@ export function installJetpack(game) {
       pack.burn(jets.thrust);
       vapour(dt);
       heard.thrust = jets.thrust;
-      // what J would do here, or how to fly
+      // what F would do here, or how to fly
       let html = null;
       if (jets.on) html = input.isTouch ? `tap jump: climb · let go to come down · ${Math.round(player.height)} m up` : `<b>space</b> climb · <b>shift</b> dive · let go to come down · ${Math.round(player.height)} m up`;
       else if (atRack()) html = jets.worn ? `<b>${act.key('hang up')}</b> hang the jetpack back up` : `<b>${act.key('strap on')}</b> strap on the jetpack`;

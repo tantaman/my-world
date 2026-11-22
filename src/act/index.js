@@ -8,11 +8,12 @@
 //   offers.js   what could be done, and which of it the key does: the nearest
 //
 // A feature offers what it would do, and the key does the nearest of them.
-// It keeps its own key as well, if it has one, for the other things it does
-// (Z whistles for your mount, Y lists the stations).
+// Nothing else does these things: a feature's own key, if it has one, is for
+// the other things it does (Z whistles for your mount, Y lists the stations).
 //
 //   game.act.offer({ id, at })   at() -> null, or { d (m from you; 0 if you're
-//                                in or on it), word ('get in'), run() }
+//                                in or on it), word ('get in'), run(), and
+//                                hold(dt) if it's done by holding the key }
 //   game.act.key(word)    how a prompt names the key: <b>F</b>, or on a touch
 //                         screen the word on its button
 //   game.act.here()       what the key would do now, or null
@@ -30,19 +31,32 @@ export function installAct(game) {
   const { input, commands } = game;
   const offers = new Offers();
 
-  commands.add({ id: 'act', keys: ['KeyF', 'PadY'], group: 'WANDER', help: 'F', label: 'act on what’s at hand: get in or out, on or off · ride · buy, rent, ask', run: () => offers.press() });
+  commands.add({
+    id: 'act',
+    keys: ['KeyF', 'PadY'],
+    group: 'WANDER',
+    help: 'F',
+    label: 'act on what’s at hand: get in or out, on or off · ride, calm (hold) · buy, rent, ask · in orbit: fly home',
+    run: () => offers.press(),
+    hold: (dt) => offers.hold(dt),
+  });
 
-  // On a touch screen, one button for it, named for what it would do.
+  // On a touch screen, one button for it, named for what it would do, and
+  // held down for as long as it's touched.
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.id = 'act-do';
   btn.hidden = true;
+  let touching = false;
   btn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     e.stopPropagation();
+    touching = true;
     offers.press();
   });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) btn.addEventListener(ev, () => (touching = false));
   document.getElementById('touch-act')?.prepend(btn);
+  game.addSystem({ name: 'act-held', phase: 'input', update: ({ dt }) => touching && offers.hold(dt) });
   game.addSystem({
     name: 'act',
     phase: 'late',

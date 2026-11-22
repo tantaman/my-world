@@ -5,12 +5,16 @@
 // there's nothing to do. The nearest wins: what you're in or on (0 m away)
 // before anything beside you, and of two as near, the one offered first.
 //
-//   offers.offer({ id, at })   at() -> null, or { d, word, run }:
-//                                d     how far you are from it (m)
-//                                word  what it would do, in a word or two ('get in', 'ride')
-//                                run() do it
-//   offers.here() -> what the key would do now ({ id, d, word, run }), or null
+//   offers.offer({ id, at })   at() -> null, or { d, word, run, hold }:
+//                                d      how far you are from it (m)
+//                                word   what it would do, in a word or two ('get in', 'ride')
+//                                run()  do it
+//                                hold(dt)  if it's done by holding the key
+//                                       down (calming a wild horse): each
+//                                       frame the key is held
+//   offers.here() -> what the key would do now ({ id, d, word, run, hold }), or null
 //   offers.press() -> do it: whether there was anything to do
+//   offers.hold(dt) -> the key held down a frame: whether that did anything
 //
 // No three.js, and no game: the tests read it.
 
@@ -31,7 +35,7 @@ export class Offers {
     for (const o of this.list) {
       const a = o.at();
       if (!a || !(a.d <= Infinity) || typeof a.run !== 'function') continue;
-      if (!best || a.d < best.d) best = { id: o.id, d: a.d, word: a.word || '', run: a.run };
+      if (!best || a.d < best.d) best = { id: o.id, d: a.d, word: a.word || '', run: a.run, hold: a.hold || null };
     }
     return best;
   }
@@ -40,6 +44,13 @@ export class Offers {
     const a = this.here();
     if (!a) return false;
     a.run();
+    return true;
+  }
+
+  hold(dt) {
+    const a = this.here();
+    if (!a || !a.hold) return false;
+    a.hold(dt);
     return true;
   }
 }

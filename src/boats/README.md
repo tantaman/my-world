@@ -15,8 +15,7 @@ paddle it about the ponds, lakes and rivers, or out to sea.
   and goes where the current takes it. You can step up onto a raft lying in
   the shallows.
 - **Get in.** Beside a boat, **F** climbs in. A boat on the bank is pushed off
-  down it and out until it floats. With the boat tool in hand, **click** on
-  a boat does the same.
+  down it and out until it floats.
 - **Paddle.** **W A S D** paddles the way the camera faces, and **shift**
   paddles hard. A river's current carries you along, and carries a raft
   more. A boat won't go where it's too shallow for it: it runs aground and
@@ -45,8 +44,8 @@ left. Which one you're in is yours, so you're back in it when you come back.
 |---|---|
 | **8** | the boat tool |
 | **hold click** / **hold right-click** | at the water's edge: build a canoe / a raft |
-| **click** / **hold right-click** | on a boat: get in / break it up |
-| **F** | get into the boat beside you · get out |
+| **hold right-click** | with the boat tool, on a boat: break it up |
+| **F** | get into the boat beside you · get out (the act key, as for everything you get into: see [Acting](../act/README.md)) |
 | **W A S D**, **shift** | in a boat: paddle, paddle hard |
 
 From the console:
