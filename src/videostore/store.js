@@ -43,8 +43,8 @@
 import * as THREE from 'three';
 import { toWorld } from '../landmarks/sites.js';
 import { HALF_W, BACK, FRONT, SLAB, SKIRT } from './site.js';
-import { FACES, FACE_BY_ID, RACKS, BOX, ROW, SOLIDS, CEILING, COUNTER, CANDY, KIDS, STANDEES, GATE, DOOR, CLERK, RETURN_SLOT, slotAt, signs } from './floorplan.js';
-import { STAFF, STORE } from './catalog.js';
+import { FACE_BY_ID, RACKS, BOX, ROW, SOLIDS, CEILING, COUNTER, CANDY, KIDS, STANDEES, GATE, DOOR, CLERK, RETURN_SLOT, slotAt, signs } from './floorplan.js';
+import { STORE } from './catalog.js';
 import { layout } from './font.js';
 
 const col = (hex) => new THREE.Color(hex);
@@ -233,12 +233,12 @@ export function buildStore(site, ground, { catalog, atlas, hidden = new Set(), o
   // the carpet underfoot, a hair over the slab, for its footsteps
   rectSolid(-HALF_W, BACK, HALF_W, FRONT, -0.5, LIFT, { surface: 'carpet', step: 0.34 });
   lot(kits.outside);
-  shell(kits, solid, rectSolid, blocker);
-  sign(kits);
+  shell(kits, solid, rectSolid, blocker, site.theme);
+  sign(kits, site.theme);
   outsideThings(kits, solid, catalog, atlas);
   insideShell(kits);
-  shelving(kits);
-  signsInside(kits);
+  shelving(kits, catalog);
+  signsInside(kits, catalog.faces);
   counter(kits);
   corners(kits, catalog, atlas);
   for (const [x0, z0, x1, z1, h] of SOLIDS) rectSolid(x0, z0, x1, z1, 0, h);
@@ -369,7 +369,7 @@ function lot(m) {
 
 // The walls, the glass front, the roof, and the solids and camera blockers
 // that go with them.
-function shell(kits, solid, rectSolid, blocker) {
+function shell(kits, solid, rectSolid, blocker, theme) {
   const m = kits.outside;
   const X = HALF_W + WALL_T;
   const Z0 = BACK - WALL_T;
@@ -407,7 +407,7 @@ function shell(kits, solid, rectSolid, blocker) {
   }
   // the fascia the sign is on, standing out over the pavement
   const fz = F + FASCIA.out;
-  m.box(-X - 0.2, FASCIA.y0, F, X + 0.2, FASCIA.y1, fz, PAL.indigo);
+  m.box(-X - 0.2, FASCIA.y0, F, X + 0.2, FASCIA.y1, fz, theme ? col(theme.fascia) : PAL.indigo);
   m.box(-X - 0.2, FASCIA.y0 - 0.12, F, X + 0.2, FASCIA.y0, fz + 0.04, PAL.teal);
   m.box(-X - 0.2, FASCIA.y1, F - 0.1, X + 0.2, FASCIA.y1 + 0.12, fz + 0.04, PAL.magenta);
   // lights under the fascia, over the pavement
@@ -446,14 +446,15 @@ function shell(kits, solid, rectSolid, blocker) {
 
 // REWIND VIDEO, in yellow letters standing out from the fascia, beside a
 // cassette; and under it, smaller, the motto.
-function sign(kits) {
+function sign(kits, theme) {
   const z = FRONT + FASCIA.out;
   const y = (FASCIA.y0 + FASCIA.y1) / 2 + 0.25;
   const text = STORE.name.toUpperCase();
   const w = layout(text).width * SIGN_PX;
   const cx = 1.6;
   kits.neon.words(text, cx, y, z, 0, 1, SIGN_PX, PAL.neon, { deep: 0.12 });
-  kits.neon.words(STORE.motto.toUpperCase(), cx, FASCIA.y0 + 0.42, z + 0.01, 0, 1, 0.055, PAL.white);
+  const subtitle = theme ? `${theme.label} specialists` : STORE.motto;
+  kits.neon.words(subtitle.toUpperCase(), cx, FASCIA.y0 + 0.42, z + 0.01, 0, 1, 0.055, PAL.white);
   // the cassette: a magenta body, a window, two teal reels
   const lx = cx - w / 2 - 2.1;
   const m = kits.outside;
@@ -524,9 +525,9 @@ function insideShell(kits) {
 
 // Every run of shelving: its back, its ends, its shelves with their price
 // rails, a cap along its top.
-function shelving(kits) {
+function shelving(kits, catalog) {
   const m = kits.inside;
-  for (const f of FACES) {
+  for (const f of catalog.faces) {
     const R = RACKS[f.kind];
     const ux = f.ux;
     const uz = f.uz;
@@ -567,7 +568,7 @@ function shelving(kits) {
     }
     // a staff pick's card under each box, and whose picks they are
     if (f.section === 'picks') {
-      const who = STAFF[f.staff % STAFF.length].name.toUpperCase();
+      const who = catalog.staff[f.staff % catalog.staff.length].name.toUpperCase();
       const mid = f.len / 2;
       kits.glow.words(`${who}’S PICKS`, ax + ux * mid + f.nx * 0.01, R.height + 0.16, az + uz * mid + f.nz * 0.01, f.nx, f.nz, 0.016, PAL.neon);
       m.panel(ax + ux * mid - f.nx * 0.03, R.height + 0.16, az + uz * mid - f.nz * 0.03, f.nx, f.nz, f.len, 0.22, PAL.signPanel);
@@ -597,8 +598,8 @@ function boxFace(m, f, y0, y1, front, back, color) {
 }
 
 // The signs over the shelves: words that glow, on a dark panel.
-function signsInside(kits) {
-  for (const s of signs()) {
+function signsInside(kits, faces) {
+  for (const s of signs(faces)) {
     const px = s.big ? 0.1 : 0.055;
     const w = layout(s.text).width * px;
     const h = 7 * px;
@@ -727,7 +728,7 @@ const PER_BOX = 4 * 6; // vertices: front, top, two sides
 
 function shelfBoxes(catalog, atlas, hidden, out, materials) {
   const list = []; // [{ key, film, face, col, row }]
-  for (const f of FACES) {
+  for (const f of catalog.faces) {
     for (let c = 0; c < f.cols; c++) {
       for (let r = 0; r < f.rows; r++) {
         const film = catalog.at(f.id, c, r);

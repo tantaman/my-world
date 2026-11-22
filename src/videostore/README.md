@@ -8,6 +8,12 @@ map with a little cassette on its badge; pick it and press **go here**, and
 you're set down on the pavement outside its doors, facing them. Track it,
 and the HUD leads you to the doors on foot.
 
+Farther out, a second Rewind branch usually stands near a town. Its cassette
+badge appears on the map as you approach, and you can find it later in
+**M → Routes**. Look for different staff picks and an extra aisle face for
+horror, sci-fi, or cult films. Your membership works at both shops, and
+either shop takes returns.
+
 The doors slide open as you walk up, the chime goes, and the clerk behind
 the counter looks up and says hello. Then it's the aisles:
 
@@ -28,9 +34,9 @@ the counter looks up and says hello. Then it's the aisles:
   films by the door, a television over the till, and the rule on the wall
   behind it: *be kind, please rewind.*
 
-None of the films is real. There are a couple of thousand of them, grown
-from the world's seed like everything else (so everyone in a world browses
-the same shop), each with a title in its genre's way of naming things, a
+None of the films is real. Each shop has a couple of thousand of them, grown
+from the world's seed so everyone finds the same tapes at that shop. Each
+has a title in its genre's way of naming things, a
 pixel-painted cover, and a back of the box: a tagline, what it's about,
 who's in it and who directed it, the year, the rating, how long it runs, a
 critic's stars and a quote. It's 1997 in there.

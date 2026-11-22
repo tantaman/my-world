@@ -14,7 +14,7 @@ import { Lines, clearOfPlaces, clearOfCaves } from '../src/railway/lines.js';
 import { HIKES } from '../src/world/hikes.js';
 import { Landforms } from '../src/world/landforms.js';
 import { findSite as findPad, clearOf as padClear } from '../src/spaceport/site.js';
-import { findSite, clearOf, SLAB, SKIRT, DOOR_STEP } from '../src/videostore/site.js';
+import { findSite, findBranch, clearOf, SLAB, SKIRT, DOOR_STEP } from '../src/videostore/site.js';
 import { FACES, RACKS, SECTIONS, SOLIDS, HALF_W, BACK, FRONT, CEILING, DOOR, QUEUE, CLERK, slotAt, aim, fillOrder, walkable, signs } from '../src/videostore/floorplan.js';
 import { Catalog, STORE, STAFF, GENRES, sortKey, plural } from '../src/videostore/catalog.js';
 import { paintCover, Atlas, COVER, titleBand } from '../src/videostore/covers.js';
@@ -36,7 +36,7 @@ function worldOf(land) {
   const lines = new Lines(gen, { start, keepClear: [clearOfPlaces(sites), clearOfCaves((a, b, c, d) => caves.inBox(a, b, c, d))], keepOff: keepHike });
   const towns = new Towns(gen, { start, sites, keepOff: keepHike });
   const spaceport = findPad(gen, start, padClear({ landforms, sites, towns, caves, lines }));
-  return { gen, start, spaceport, keepOff: clearOf({ landforms, sites, towns, caves, lines, spaceport }) };
+  return { gen, start, towns, spaceport, keepOff: clearOf({ landforms, sites, towns, caves, lines, spaceport }) };
 }
 
 test('the video store is grown from the seed: the same every time, on flat dry ground, clear of what was there first', () => {
@@ -76,6 +76,26 @@ test('the video store keeps off somewhere it is told to', () => {
   assert.ok(second && second.id !== first.id, 'somewhere else');
   assert.ok(second.box[2] <= box[0] || second.box[0] >= box[2] || second.box[3] <= box[1] || second.box[1] >= box[3], 'clear of it');
   assert.ok(SLAB[0] - SKIRT < -HALF_W && SLAB[3] > DOOR_STEP.z, 'the slab is under the shop and the door step');
+});
+
+test('the Rewind branch has a stable address and an aisle stocked for its specialty', () => {
+  const { gen, start, towns, keepOff } = worldOf(LANDS[0]);
+  const home = findSite(gen, start, keepOff);
+  const branch = findBranch(gen, start, towns, keepOff);
+  assert.ok(branch);
+  assert.notEqual(branch.id, home.id);
+  assert.deepEqual(findBranch(gen, start, towns, keepOff), branch);
+  assert.equal(keepOff(...branch.box), false);
+  gen.height(branch.x, branch.z);
+  assert.ok(gen.water.edge >= 30 && branch.top - branch.low < 3.6);
+  assert.ok(towns.near(branch.x, branch.z, 350).some((town) => town.name === branch.branch && town.people > 0));
+
+  const original = new Catalog(gen.seed);
+  const local = new Catalog(branch.seed, branch.theme);
+  assert.equal(original.at('island1-w', 0, 0).section, 'action');
+  assert.equal(local.at('island1-w', 0, 0).section, branch.theme.section);
+  assert.equal(local.at('left-a', 0, 0).section, 'action');
+  assert.notEqual(local.at('island1-picks', 0, 0).staff, original.at('island1-picks', 0, 0).staff);
 });
 
 // ── Inside ──────────────────────────────────────────────────────────────────
@@ -395,4 +415,26 @@ test('what you have out is kept, and a save with nonsense in it is tidied', () =
   const tidy = Counter.validate({ out: [{ id: 'x' }, null, saved.out[0], { ...saved.out[0], title: 7 }], owned: 'lots', card: { number: 5 } });
   assert.deepEqual(tidy, { out: [saved.out[0]], owned: [], card: null });
   assert.deepEqual(Counter.validate(null), { out: [], owned: [], card: null });
+});
+
+test('rentals at the two stores keep their own shelf slots and share a membership', () => {
+  const home = new Catalog(SEED);
+  const local = new Catalog(42, { section: 'horror' });
+  const branch = 'videostore:2480:-730';
+  const slot = 'island1-w:0:0';
+  const counter = new Counter();
+  counter.take(home.at('island1-w', 0, 0), slot);
+  counter.checkout(NOW, (id) => home.byId(id), '1111 2222 3333');
+  assert.equal(counter.taken(branch).size, 0);
+  counter.take(local.at('island1-w', 0, 0), slot, branch);
+  counter.checkout(NOW, (id) => local.byId(id), '4444 5555 6666');
+  const reloaded = new Counter();
+  reloaded.load(counter.serialize());
+  assert.deepEqual([...reloaded.taken()], [slot]);
+  assert.deepEqual([...reloaded.taken(branch)], [slot]);
+  assert.equal(reloaded.card.number, '1111 2222 3333');
+  assert.equal(reloaded.card.rentals, 2);
+  assert.deepEqual(reloaded.returnAll(NOW).items.map((item) => item.siteId), [undefined, branch]);
+  assert.equal(reloaded.taken().size, 0);
+  assert.equal(reloaded.taken(branch).size, 0);
 });

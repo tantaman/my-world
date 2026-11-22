@@ -4,6 +4,8 @@
 // and aisles of tapes, every one a film that never was (catalog.js), face
 // out on the shelves in alphabetical order: new releases all along the back
 // wall, a genre to each side of each aisle, staff picks on the ends.
+// The branch adds a specialty aisle and its own staff. The two shops share
+// a counter record, and each rental remembers the shelf it came from.
 //
 // Look at a box and click, and it comes off the shelf: you hold it up and
 // read the back. Take up to three; right-click puts the one in your hand
@@ -27,16 +29,17 @@
 // have out, what you've bought and your membership card are yours, saved.
 //
 // From the console:
-//   world.videostore.site          where it is
-//   await world.videostore.go()    stand outside the doors
-//   await world.videostore.enter() ...or just inside them
+//   world.videostore.site          where the original shop is
+//   world.videostore.sites         both addresses when there is room for a branch
+//   await world.videostore.go(id)  stand outside its doors (defaults to the original)
+//   await world.videostore.enter(id) ...or just inside them
 //   world.videostore.catalog       every film, and where it is
 //   world.videostore.counter       what's in your hands, what you have out
 
 import * as THREE from 'three';
-import { findSite, clearOf, HALF_W, BACK, FRONT } from './site.js';
-import { FACES, FACE_BY_ID, DOOR, CLERK, QUEUE, RETURN_SLOT, BOX, ROW, aim, slotAt } from './floorplan.js';
-import { Catalog, STORE, STAFF } from './catalog.js';
+import { findSite, findBranch, clearOf, HALF_W, BACK, FRONT } from './site.js';
+import { FACE_BY_ID, DOOR, CLERK, QUEUE, RETURN_SLOT, BOX, ROW, aim, slotAt } from './floorplan.js';
+import { Catalog, STORE } from './catalog.js';
 import { Atlas } from './covers.js';
 import { buildStore, makeHeldBox, DROP_BOX } from './store.js';
 import { Counter, HANDS, termsOf, money } from './browse.js';
@@ -82,34 +85,73 @@ const _d = new THREE.Vector3();
 const _l = { x: 0, z: 0 };
 const _r = { x: 0, z: 0 };
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
+const intersects = (box, x0, z0, x1, z1) => box[0] <= x1 && box[1] <= z1 && box[2] >= x0 && box[3] >= z0;
 
 // The features this uses, so it is installed after them (game/features.js):
-// landmarks, towns, caves, railway and spaceport for what the store keeps
+// landmarks, towns, caves, railway, spaceport and airports for what the shops keep
 // clear of (and towns for its clerk's body and voice; caves so the shop's
 // quiet goes on after a cave's).
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks', 'towns', 'caves', 'railway', 'spaceport'];
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'landmarks', 'towns', 'caves', 'railway', 'spaceport', 'airports'];
 export function installVideostore(game) {
-  const { scene, camera, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, sky, landmarks, towns, caves, railway, spaceport } = game;
+  const { scene, camera, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, sky, landmarks, towns, caves, railway, spaceport, airports } = game;
 
   // ── Where it is ───────────────────────────────────────────────────────────
   const keepOff = clearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, spaceport: spaceport.site });
-  const site = findSite(gen, player.start, keepOff);
+  const home = findSite(gen, player.start, keepOff);
+  const branch = findBranch(gen, player.start, towns.towns, (x0, z0, x1, z1) => {
+    if (keepOff(x0, z0, x1, z1)) return true;
+    const fields = airports.airports;
+    for (const region of fields.regions) {
+      const d = Math.hypot((x0 + x1) / 2 - region.x, (z0 + z1) / 2 - region.z);
+      if (d < region.r0 - 240 || d > region.r1 + 4200) continue;
+      const field = fields.site(region.id);
+      if (field && intersects(field.box, x0, z0, x1, z1)) return true;
+    }
+    return false;
+  });
+  const sites = [home, branch].filter(Boolean);
+  const siteName = (s) => s.branch ? `${STORE.name} · ${s.branch}` : STORE.name;
+  let site = null; // the location currently using the shop scene
+  const stockSite = () => site?.branch ? site.id : null;
   const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset ? chunks.heightOffset(x, z) : 0);
   const local = (x, z, out = _l) => toLocal(site, x, z, out);
 
+  // A saved building or fire on this ground takes priority over the new branch.
+  let branchStanding;
+  function stands(s) {
+    if (s !== branch) return true;
+    if (branchStanding === undefined) {
+      branchStanding = true; // checking other obstacle sources can ask us again
+      const radius = Math.max(Math.hypot(s.box[0] - s.x, s.box[1] - s.z), Math.hypot(s.box[2] - s.x, s.box[3] - s.z));
+      branchStanding = !builder.obstacles.near(s.x, s.z, radius + 2)
+        .some((o) => !o.grown && !o.clear && onPlan(s, o.x, o.z, 1, s.cleared));
+    }
+    return branchStanding;
+  }
+
   // ── What's yours ──────────────────────────────────────────────────────────
   const counter = new Counter();
-  let visited = false;
+  const visited = new Set();
+  let discovered = false;
   let built = null; // buildStore's, and { clerk }, while it's stood up or ready to be
   let shown = false;
   save.register({
     id: 'videostore',
     scope: 'yours',
     local: 'marks',
-    collect: () => ({ visited, ...counter.serialize() }),
-    validate: (raw) => ({ visited: !!(raw && raw.visited === true), ...Counter.validate(raw) }),
+    collect: () => ({ visited: visited.has(home?.id), discoveredBranch: discovered ? branch.id : null, visitedBranch: visited.has(branch?.id) ? branch.id : null, ...counter.serialize() }),
+    validate: (raw) => ({
+      visited: raw?.visited === true,
+      discoveredBranch: branch && (raw?.discoveredBranch === branch.id || raw?.visitedBranch === branch.id) ? branch.id : null,
+      visitedBranch: branch && raw?.visitedBranch === branch.id ? branch.id : null,
+      ...Counter.validate(raw),
+    }),
     restore(r) {
-      visited = r.visited;
+      branchStanding = undefined;
+      visited.clear();
+      if (home && r.visited) visited.add(home.id);
+      if (r.visitedBranch) visited.add(r.visitedBranch);
+      discovered = !!r.discoveredBranch;
       putBackAll();
       counter.load(r);
       if (built) rebuild();
@@ -147,8 +189,11 @@ export function installVideostore(game) {
   // ── The films ─────────────────────────────────────────────────────────────
   // Grown when first wanted, and their covers painted a slice a frame as you
   // come near.
-  let catalog = null;
-  const films = () => catalog || (catalog = new Catalog(gen.seed));
+  const catalogs = new Map();
+  function films(s = site || home || branch) {
+    if (!catalogs.has(s)) catalogs.set(s, new Catalog(s?.seed ?? gen.seed, s?.theme));
+    return catalogs.get(s);
+  }
   let atlas = null;
   let painted = 0;
   function paint() {
@@ -192,14 +237,13 @@ export function installVideostore(game) {
   overhead.castShadow = false;
   scene.add(overhead);
 
-  if (site) {
+  for (const site of sites) {
     // ── The forest round it ─────────────────────────────────────────────────
     chunks.on('vegetation', (ch) => {
       const S = chunks.size;
       const x0 = ch.cx * S;
       const z0 = ch.cz * S;
-      const b = site.box;
-      if (b[0] > x0 + S + 3 || b[2] < x0 - 3 || b[1] > z0 + S + 3 || b[3] < z0 - 3) return;
+      if (!intersects(site.box, x0 - 3, z0 - 3, x0 + S + 3, z0 + S + 3) || !stands(site)) return;
       for (const kind in ch.vegLists) {
         const list = ch.vegLists[kind];
         for (let o = 0, k = 0; o < list.length; o += VEG_STRIDE, k++) {
@@ -211,13 +255,13 @@ export function installVideostore(game) {
       }
     });
     grass.addClearing((x0, z0, x1, z1) => {
-      const b = site.box;
-      if (b[0] > x1 || b[2] < x0 || b[1] > z1 || b[3] < z0) return null;
+      if (!intersects(site.box, x0, z0, x1, z1) || !stands(site)) return null;
       return (x, z) => onPlan(site, x, z, 0.1, site.cleared);
     });
     // ── Building goes round it ──────────────────────────────────────────────
     const discs = planDiscs({ ...site, plan: site.cleared }, 2);
     builder.obstacles.addSource((x, z, R, out) => {
+      if (!intersects(site.box, x - R - 3, z - R - 3, x + R + 3, z + R + 3) || !stands(site)) return;
       for (const d of discs) {
         if (Math.hypot(d.x - x, d.z - z) > R + d.r + 1) continue;
         out.push({ x: d.x, z: d.z, what: 'the video store', dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
@@ -235,22 +279,23 @@ export function installVideostore(game) {
         const p = toWorld(site, u, v);
         return [p.x, p.z];
       });
-    let place = null;
-    const asPlace = () => {
-      if (place && place.visited === visited) return place;
-      place = { id: site.id, x: site.door.x, z: site.door.z, yaw: site.door.yaw, name: STORE.name, kind: 'video store', note: 'aisles and aisles of tapes: browse, and rent one for the night', glyph: GLYPH, visited, shape: [corners([-HALF_W - 0.25, BACK - 0.25, HALF_W + 0.25, FRONT])], ground: [corners(site.plan[0])] };
-      return place;
+    const place = {
+      id: site.id, ...site.door, name: siteName(site), kind: 'video store', glyph: GLYPH,
+      note: site.theme ? `A Rewind branch specializing in ${site.theme.label.toLowerCase()}. Rentals and returns at either shop.` : 'aisles and aisles of tapes: browse, and rent one for the night',
+      shape: [corners([-HALF_W - 0.25, BACK - 0.25, HALF_W + 0.25, FRONT])], ground: [corners(site.plan[0])],
+      get visited() { return visited.has(site.id); },
     };
+    const listed = () => (site === home || discovered) && stands(site);
     map.places.addSource({
-      destinations: () => [asPlace()],
-      within: (x0, z0, x1, z1) => (site.door.x >= x0 && site.door.x <= x1 && site.door.z >= z0 && site.door.z <= z1 ? [asPlace()] : []),
-      get: (id) => (id === site.id ? asPlace() : null),
+      destinations: () => listed() ? [place] : [],
+      within: (x0, z0, x1, z1) => site.door.x >= x0 && site.door.x <= x1 && site.door.z >= z0 && site.door.z <= z1 && listed() ? [place] : [],
+      get: (id) => id === site.id && listed() ? place : null,
     });
   }
 
   // ── Standing it up ────────────────────────────────────────────────────────
   function build() {
-    built = buildStore(site, ground, { catalog: films(), atlas, hidden: counter.taken(), out: soldOut(), materials });
+    built = buildStore(site, ground, { catalog: films(), atlas, hidden: counter.taken(stockSite()), out: soldOut(), materials });
     built.clerk = makeClerk();
     built.object.add(built.clerk.body.mesh);
     built.object.add(marker);
@@ -263,6 +308,8 @@ export function installVideostore(game) {
   }
   function dispose() {
     if (!built) return;
+    marker.removeFromParent();
+    built.clerk.body.mesh.removeFromParent();
     built.object.traverse((o) => o.isMesh && o.geometry.dispose());
     built.clerk.body.dispose();
     built = null;
@@ -297,8 +344,10 @@ export function installVideostore(game) {
   // till in the shop's teal shirt, look up when you come near, wave when you
   // come in.
   function makeClerk() {
-    const who = STAFF[Math.floor(((sky.hours + 2) % 24) / 6) % STAFF.length];
-    const rnd = mulberry32(gen.seed + who.name.length * 7919);
+    const { staff } = films();
+    const who = staff[Math.floor(((sky.hours + 2) % 24) / 6) % staff.length];
+    const seed = site.seed ?? gen.seed;
+    const rnd = mulberry32(seed + who.name.length * 7919);
     const c = (hex) => new THREE.Color(hex);
     const look = {
       her: rnd() < 0.5,
@@ -318,7 +367,7 @@ export function installVideostore(game) {
       hatColor: c(0x000000),
       beard: false,
     };
-    const body = new Body(look, gen.seed);
+    const body = new Body(look, seed);
     body.mesh.position.set(CLERK.x, 0, CLERK.z);
     body.mesh.rotation.y = -Math.PI / 2; // facing the shop (-x)
     return { who, body };
@@ -334,7 +383,8 @@ export function installVideostore(game) {
   }
 
   // ── In your hands ─────────────────────────────────────────────────────────
-  const held = makeHeldBox(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }));
+  const heldMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+  const held = makeHeldBox(heldMaterial);
   player.character.addRaised('vhs', held.object);
   let heldShown = -1;
   function handsChanged() {
@@ -347,7 +397,10 @@ export function installVideostore(game) {
     }
   }
   function putBackAll() {
-    for (const h of counter.dropAll()) if (built) built.boxes.show(h.key, true);
+    for (const h of counter.dropAll()) restoreBox(h);
+  }
+  function restoreBox(tape) {
+    if (built && (tape.siteId ?? null) === stockSite()) built.boxes.show(tape.key, true);
   }
   counter.on('change', handsChanged);
 
@@ -400,7 +453,7 @@ export function installVideostore(game) {
     const me = local(player.pos.x, player.pos.z, _r);
     let best = null;
     let far = AIM_FAR;
-    for (const f of FACES) {
+    for (const f of films().faces) {
       const dn = vx * f.nx + vz * f.nz;
       if (dn > -1e-4) continue;
       const t = (0.02 - ((ox - f.x0) * f.nx + (oz - f.z0) * f.nz)) / dn;
@@ -419,7 +472,7 @@ export function installVideostore(game) {
     best.key = `${best.face.id}:${best.col}:${best.row}`;
     best.film = film;
     best.gone = soldOut().has(film.id);
-    best.taken = counter.taken().has(best.key);
+    best.taken = counter.taken(stockSite()).has(best.key);
     return best;
   }
 
@@ -429,7 +482,7 @@ export function installVideostore(game) {
   const soon = (s, fn) => later.push({ at: clock + s, fn });
 
   function take(a) {
-    const r = counter.take(a.film, a.key);
+    const r = counter.take(a.film, a.key, stockSite());
     if (r === 'full') {
       hud.flash(`your hands are full: ${HANDS} at a time · right-click puts one back`, 2400);
       return false;
@@ -442,7 +495,7 @@ export function installVideostore(game) {
   function putBack() {
     const h = counter.putBack();
     if (!h) return false;
-    if (built) built.boxes.show(h.key, true);
+    restoreBox(h);
     sound.sfx('tape-back');
     heldShown = -1;
     handsChanged();
@@ -468,7 +521,7 @@ export function installVideostore(game) {
     if (!r) return false;
     r.items.forEach((item, i) => {
       soon(i * 0.35, () => sound.sfx('tape-drop'));
-      if (built) built.boxes.show(item.key, true);
+      restoreBox(item);
     });
     const late = r.items.filter((i) => i.late > 0);
     if (late.length) {
@@ -515,8 +568,9 @@ export function installVideostore(game) {
     if (!counter.hands.length) return;
     if (toDoor < 5) {
       sound.sfx('gate-alarm');
-      soon(0.5, () => say(pick(SAYS.alarm)));
-      soon(0.9, () => hud.flash('the tapes go back on the shelf: rent them at the counter first', 3000));
+      const shop = site;
+      soon(0.5, () => { if (site === shop) say(pick(SAYS.alarm)); });
+      soon(0.9, () => { if (site === shop) hud.flash('the tapes go back on the shelf: rent them at the counter first', 3000); });
     }
     putBackAll();
   }
@@ -530,11 +584,31 @@ export function installVideostore(game) {
   let screenCut = 0;
   const kept = { ambience: 1, wildlife: 1 }; // their levels as you came in, to put back
   let hushed = 1;
+
+  function switchSite(next) {
+    if (wasInside) cameOut(Infinity);
+    show(false);
+    dispose();
+    held.mesh.material = heldMaterial;
+    heldShown = -1;
+    materials.covers?.map.dispose();
+    materials.covers?.dispose();
+    materials.covers = null;
+    atlas = null;
+    painted = 0;
+    outDay = -1;
+    arrived = wasInside = where.inside = false;
+    heard.inside = heard.near = 0;
+    doorsOpen = 0;
+    lastHello = -Infinity;
+    mark(null);
+    site = next;
+  }
+
   game.addSystem({
     name: 'videostore',
     phase: 'world',
     update({ dt }) {
-      if (!site) return;
       clock += dt;
       for (let i = later.length - 1; i >= 0; i--) {
         if (later[i].at <= clock) {
@@ -544,7 +618,9 @@ export function installVideostore(game) {
         }
       }
       const f = game.focus;
-      const d = Math.hypot(site.x - f.x, site.z - f.z);
+      const next = sites.find((s) => Math.hypot(s.x - f.x, s.z - f.z) < PREPARE && stands(s)) || null;
+      if (next !== site) switchSite(next);
+      const d = site ? Math.hypot(site.x - f.x, site.z - f.z) : Infinity;
       if (d < PREPARE && !materials.covers) paint();
       if (d < SHOW && materials.covers) show(true);
       else if (d > HIDE) show(false);
@@ -564,11 +640,15 @@ export function installVideostore(game) {
 
       placeOf();
       const toDoor = Math.hypot(where.x, where.z - FRONT);
+      if (!discovered && site === branch && Math.hypot(player.pos.x - site.x, player.pos.z - site.z) < SHOW) {
+        discovered = true;
+        save.touch();
+      }
       if (!arrived && toDoor < ARRIVE && !where.inside) {
         arrived = true;
-        hud.flash(`${STORE.name} · walk in and browse: take a tape off the shelf, rent it at the counter`, 4200);
-        if (!visited) {
-          visited = true;
+        hud.flash(`${siteName(site)} · walk in and browse: take a tape off the shelf, rent it at the counter`, 4200);
+        if (!visited.has(site.id)) {
+          visited.add(site.id);
           save.touch();
         }
       }
@@ -587,7 +667,8 @@ export function installVideostore(game) {
         if (clock - lastHello > GREET_AGAIN) {
           lastHello = clock;
           const night = sky.hours > 21 || sky.hours < 4;
-          soon(0.7, () => say(counter.out.length ? pick(SAYS.back) : pick(night ? SAYS.late : SAYS.hello), true));
+          const shop = site;
+          soon(0.7, () => { if (site === shop && where.inside) say(counter.out.length ? pick(SAYS.back) : pick(night ? SAYS.late : SAYS.hello), true); });
         }
         for (const bus of Object.keys(kept)) kept[bus] = sound.levels[bus] ?? 1;
       }
@@ -687,7 +768,9 @@ export function installVideostore(game) {
 
   // ── From the console ──────────────────────────────────────────────────────
   game.provide('videostore', {
-    site,
+    site: home,
+    sites,
+    get activeSite() { return site; },
     counter,
     card,
     get catalog() {
@@ -703,10 +786,11 @@ export function installVideostore(game) {
       return shown;
     },
     // stand on the pavement outside the doors, facing them
-    async go() {
-      if (!site) return null;
-      await game.api.teleport(site.door.x, site.door.z, site.door.yaw);
-      return { x: site.door.x, z: site.door.z };
+    async go(id = home?.id) {
+      const target = sites.find((s) => s.id === id);
+      if (!target || !stands(target)) return null;
+      await game.api.teleport(target.door.x, target.door.z, target.door.yaw);
+      return { x: target.door.x, z: target.door.z };
     },
     // stand at the counter, facing the clerk
     toCounter() {
@@ -717,16 +801,17 @@ export function installVideostore(game) {
       return { x: p.x, z: p.z };
     },
     // ...or just inside them, facing the shop
-    async enter() {
-      if (!site) return null;
-      const p = toWorld(site, 0, FRONT - 2.2);
-      await game.api.teleport(p.x, p.z, site.yaw + Math.PI);
+    async enter(id = home?.id) {
+      const target = sites.find((s) => s.id === id);
+      if (!target || !stands(target)) return null;
+      const p = toWorld(target, 0, FRONT - 2.2);
+      await game.api.teleport(p.x, p.z, target.yaw + Math.PI);
       return { x: p.x, z: p.z };
     },
     // stand in front of a slot and look at its box (face id, column, row)
     look(faceId, col, row) {
       const f = FACE_BY_ID.get(faceId);
-      if (!f) return null;
+      if (!site || !shown || !f) return null;
       const along = (col + 0.5) * (f.len / f.cols);
       const sx = f.x0 + f.ux * along;
       const sz = f.z0 + f.uz * along;

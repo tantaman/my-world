@@ -11,7 +11,7 @@
 
 import assert from 'node:assert/strict';
 
-export default async function ({ page, step, key, frames, shot }) {
+export default async function ({ page, step, key, frames, shot, open }) {
   const store = () =>
     page.evaluate(() => {
       const v = world.videostore;
@@ -21,7 +21,7 @@ export default async function ({ page, step, key, frames, shot }) {
   const at = (lx, lz) =>
     page.evaluate(
       ([lx, lz]) => {
-        const s = world.videostore.site;
+        const s = world.videostore.activeSite;
         const c = Math.cos(s.yaw);
         const n = Math.sin(s.yaw);
         return { x: s.x + lx * c + lz * n, z: s.z - lx * n + lz * c, yaw: s.yaw, top: s.top };
@@ -32,6 +32,14 @@ export default async function ({ page, step, key, frames, shot }) {
     const p = await at(lx, lz);
     await page.evaluate(([p, turn]) => world.player.spawn(p.x, p.z, p.yaw + turn, p.yaw + turn + Math.PI, p.top), [p, turn]);
     await frames(6);
+  };
+  const goFromMap = async (site) => {
+    await key('KeyM');
+    await page.evaluate(({ id, door }) => {
+      world.map.centerOn(door.x, door.z);
+      world.map.selectPlace(id);
+      document.querySelector('#place-card [data-act="place-go"]').click();
+    }, site);
   };
 
   await step('to the video store, from the map', async () => {
@@ -118,11 +126,39 @@ export default async function ({ page, step, key, frames, shot }) {
     return { receipt: receipt.replace(/\s+/g, ' ').trim() };
   });
 
-  await step('drop them in the returns', async () => {
+  await step('discover the second branch and return the tapes there', async () => {
+    const branch = await page.evaluate(() => {
+      const branch = world.videostore.sites.find((s) => s.branch);
+      return { id: branch.id, door: branch.door, section: branch.theme.section, listed: !!world.map.places.get(branch.id), member: world.videostore.counter.card.number };
+    });
+    // Earlier trips in the full play-through can already have passed the branch.
+    if (branch.listed) await goFromMap(branch);
+    else await page.evaluate((b) => world.teleport(b.door.x, b.door.z, b.door.yaw), branch);
+    assert.ok(await page.evaluate((id) => T.until(() => world.videostore.ready && world.videostore.activeSite?.id === id && world.map.places.get(id), 60000), branch.id), 'the branch stands and has a pin');
+    const offered = await page.evaluate(() => world.videostore.catalog.at('island1-w', 0, 0).section);
+    assert.equal(offered, branch.section, 'the extra aisle is stocked for the specialty');
+    await shot('the second Rewind branch');
     await standAt(3.1, 10.9, Math.PI);
     assert.match((await store()).prompt, /drop your 2 tapes in the returns/, 'by the drop box, a click would return them');
     await page.evaluate(() => T.tap('use'));
     assert.deepEqual((await store()).out, [], 'returned');
+    assert.equal(await page.evaluate(() => world.videostore.counter.card.number), branch.member);
+
+    await page.evaluate((id) => world.videostore.enter(id), branch.id);
+    const localFilm = await page.evaluate(() => world.videostore.look('island1-w', 8, 2).title);
+    await frames(5);
+    await page.evaluate(() => T.tap('use'));
+    assert.deepEqual((await store()).hands, [localFilm]);
+    await page.evaluate(() => world.videostore.toCounter());
+    await frames(5);
+    await page.evaluate(() => T.tap('use'));
+    assert.equal(await page.evaluate(() => world.videostore.counter.out[0]?.siteId), branch.id);
+    await page.evaluate(() => world.videostore.go());
+    assert.ok(await page.evaluate(() => T.until(() => world.videostore.ready && world.videostore.activeSite === world.videostore.site, 60000)));
+    await standAt(3.1, 10.9, Math.PI);
+    await page.evaluate(() => T.tap('use'));
+    assert.deepEqual((await store()).out, [], 'a branch rental goes back at the original shop');
+    return { branch: branch.id, previouslyDiscovered: branch.listed };
   });
 
   await step('the security gate', async () => {
@@ -135,6 +171,15 @@ export default async function ({ page, step, key, frames, shot }) {
     const caught = await page.evaluate(() => T.until(() => /rent them at the counter first/.test(document.getElementById('toast').textContent), 10000));
     assert.ok(caught, 'the gate goes off');
     assert.equal((await store()).hands.length, 0, 'and it goes back on the shelf');
+    await page.evaluate(() => world.videostore.go());
+  });
+
+  await step('find the discovered branch again after reloading', async () => {
+    const branch = await page.evaluate(() => world.videostore.sites.find((s) => s.branch));
+    await open();
+    assert.ok(await page.evaluate((id) => world.map.places.destinations().some((p) => p.id === id && p.visited), branch.id));
+    await goFromMap(branch);
+    assert.ok(await page.evaluate((id) => T.until(() => world.videostore.ready && world.videostore.activeSite?.id === id, 60000), branch.id));
     await page.evaluate(() => world.videostore.go());
   });
 }

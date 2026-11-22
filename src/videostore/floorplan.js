@@ -224,9 +224,9 @@ export function walkable(x, z, r = 0.3) {
 // side of an island, back to back along its top, each read from its aisle.
 // -> [{ text, x, z, y, nx, nz, big }]: the middle of the sign, and which way
 // it faces
-export function signs() {
+export function signs(faces = FACES) {
   const out = [];
-  for (const f of FACES) {
+  for (const f of faces) {
     if (f.section === 'picks' || f.section === 'sale') continue;
     const mid = f.len / 2;
     const x = f.x0 + f.ux * mid;

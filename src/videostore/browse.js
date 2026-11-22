@@ -70,10 +70,10 @@ export class Counter extends Emitter {
     this.card = null; // { number, since, rentals }
   }
 
-  take(film, key) {
-    if (this.hands.some((h) => h.key === key)) return 'have';
+  take(film, key, siteId = null) {
+    if (this.hands.some((h) => h.key === key && (h.siteId ?? null) === siteId)) return 'have';
     if (this.hands.length >= HANDS) return 'full';
-    this.hands.push({ id: film.id, title: film.title, key, section: film.section });
+    this.hands.push({ id: film.id, title: film.title, key, section: film.section, ...(siteId && { siteId }) });
     this.emit('change');
     return 'ok';
   }
@@ -107,7 +107,7 @@ export class Counter extends Emitter {
       } else {
         const d = dueAt(now, T.nights);
         due = Math.min(due, d);
-        this.out.push({ id: h.id, title: h.title, key: h.key, at: now, due: d, kind: film.section === 'new' ? 'new' : 'catalog' });
+        this.out.push({ id: h.id, title: h.title, key: h.key, at: now, due: d, kind: film.section === 'new' ? 'new' : 'catalog', ...(h.siteId && { siteId: h.siteId }) });
         items.push({ title: h.title, price: T.price, due: d });
       }
     }
@@ -124,7 +124,7 @@ export class Counter extends Emitter {
     const items = this.out.map((o) => {
       const late = daysLate(o.due, now);
       const T = o.kind === 'new' ? TERMS.new : TERMS.catalog;
-      return { title: o.title, key: o.key, id: o.id, late, fee: late * T.late };
+      return { title: o.title, key: o.key, id: o.id, late, fee: late * T.late, ...(o.siteId && { siteId: o.siteId }) };
     });
     this.out = [];
     this.emit('change');
@@ -133,8 +133,8 @@ export class Counter extends Emitter {
 
   // The slots whose boxes are off the shelf, by you: in your hands, or out
   // at home with you.
-  taken() {
-    return new Set([...this.hands.map((h) => h.key), ...this.out.map((o) => o.key)]);
+  taken(siteId = null) {
+    return new Set([...this.hands, ...this.out].filter((o) => (o.siteId ?? null) === siteId).map((o) => o.key));
   }
 
   serialize() {
@@ -158,7 +158,7 @@ export class Counter extends Emitter {
     const out = (Array.isArray(r.out) ? r.out : [])
       .filter((o) => o && num(o.id) && str(o.title) && str(o.key, 40) && num(o.at) && num(o.due))
       .slice(0, 50)
-      .map((o) => ({ id: o.id, title: o.title, key: o.key, at: o.at, due: o.due, kind: o.kind === 'new' ? 'new' : 'catalog' }));
+      .map((o) => ({ id: o.id, title: o.title, key: o.key, at: o.at, due: o.due, kind: o.kind === 'new' ? 'new' : 'catalog', ...(str(o.siteId, 40) && /^videostore:-?\d+:-?\d+$/.test(o.siteId) && { siteId: o.siteId }) }));
     const owned = (Array.isArray(r.owned) ? r.owned : [])
       .filter((o) => o && num(o.id) && str(o.title))
       .slice(-KEPT_OWNED)

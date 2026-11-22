@@ -1,7 +1,7 @@
-// Where the video store is.
+// Where Rewind Video and its branch are.
 //
-// There is one, a walk out from where people first arrive: past the launch
-// site, near enough to find on a first afternoon. Where exactly is grown from
+// The original is a walk out from where people first arrive: past the launch
+// site, near enough to find on a first afternoon. Its address is grown from
 // the seed and the land, like the old places (landmarks/sites.js): the
 // flattest dry ground in a ring round the start, a little nearer winning
 // over a little flatter, so everyone in a world finds it in the same place
@@ -29,6 +29,7 @@
 
 import { samplesNear } from '../railway/lines.js';
 import { toWorld } from '../landmarks/sites.js';
+import { hash2i } from '../noise.js';
 
 // The building, in its own frame (m): the shop floor runs from -HALF_W to
 // HALF_W across and from BACK to FRONT, its glass front at FRONT. See
@@ -54,7 +55,7 @@ export const DOOR_STEP = { x: 0, z: FRONT + 3.2 };
 // keepOff(x0, z0, x1, z1): whether that square is somewhere it may not be
 // (a hike, an old place, a town, a cave's mouth, a railway, the launch site).
 // -> a site, or null where there's nowhere for one.
-export function findSite(gen, start, keepOff = () => false) {
+export function findSite(gen, start, keepOff = () => false, { ring = RING, step = STEP, turnOffset = 1.1 } = {}) {
   const found = [];
   const [x0, z0, x1, z1] = SLAB;
   const corners = [
@@ -78,9 +79,9 @@ export function findSite(gen, start, keepOff = () => false) {
   ];
   const spot = { x: 0, z: 0, yaw: 0 };
   const _w = { x: 0, z: 0 };
-  for (let r = RING[0]; r <= RING[1]; r += STEP) {
-    const n = Math.max(12, Math.round((Math.PI * 2 * r) / STEP));
-    const turn = r * 0.618 + 1.1; // each ring starts somewhere else round, so the spots don't line up
+  for (let r = ring[0]; r <= ring[1]; r += step) {
+    const n = Math.max(12, Math.round((Math.PI * 2 * r) / step));
+    const turn = r * 0.618 + turnOffset; // each ring starts somewhere else round, so the spots don't line up
     for (let k = 0; k < n; k++) {
       const a = turn + (k / n) * Math.PI * 2;
       spot.x = start.x + Math.cos(a) * r;
@@ -156,6 +157,41 @@ export function findSite(gen, start, keepOff = () => false) {
     box,
     door: { x: door.x, z: door.z, yaw: yaw + Math.PI },
   };
+}
+
+const BRANCH_THEMES = [
+  { section: 'horror', label: 'Horror', fascia: 0x472052 },
+  { section: 'scifi', label: 'Sci-fi', fascia: 0x144753 },
+  { section: 'cult', label: 'Cult films', fascia: 0x57302c },
+];
+
+export function findBranch(gen, start, towns, keepOff) {
+  function reserved(x0, z0, x1, z1) {
+    const x = (x0 + x1) / 2;
+    const z = (z0 + z1) / 2;
+    // Leave room around the Mineral Baths and Furnace Works survey rings.
+    const distance = Math.hypot(x - start.x, z - start.z);
+    return distance < 2350 || distance > 3340 ||
+      gen.padClearance(x, z) < Math.hypot(x1 - x0, z1 - z0) / 2 ||
+      keepOff(x0, z0, x1, z1);
+  }
+
+  function survey(anchor, ring, step) {
+    const seed = hash2i(Math.round(anchor.x), Math.round(anchor.z), gen.seed ^ 0x726577);
+    const site = findSite(gen, anchor, reserved, { ring, step, turnOffset: (seed % 360) * Math.PI / 180 });
+    return site && { ...site, branch: anchor.name, seed, theme: BRANCH_THEMES[seed % BRANCH_THEMES.length] };
+  }
+
+  const reach = 4200;
+  const dist = (town) => Math.hypot(town.x - start.x, town.z - start.z);
+  const nearby = towns.within(start.x - reach, start.z - reach, start.x + reach, start.z + reach)
+    .filter((town) => town.people > 0 && dist(town) >= 2050 && dist(town) <= 3690)
+    .sort((a, b) => dist(a) - dist(b));
+  for (const town of nearby.slice(0, 5)) {
+    const branch = survey(town, [95, 350], 32);
+    if (branch) return branch;
+  }
+  return survey({ ...start, name: 'Outpost' }, [2380, 3310], 120);
 }
 
 // What the store keeps clear of, all of it there first: the land of a real

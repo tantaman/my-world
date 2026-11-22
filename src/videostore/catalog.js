@@ -37,6 +37,13 @@ export const STAFF = [
   { name: 'Sam', likes: ['comedy', 'family', 'romance'], says: ['I laughed so hard I cried!', 'Perfect for a rainy night.', 'Make popcorn first.', 'Quote it with your friends.', 'My mom’s favorite!', 'Feel-good pick of the week.'] },
 ];
 
+export const BRANCH_STAFF = [
+  { name: 'Rita', likes: ['horror', 'cult', 'thriller'], says: ['The opening scene is the best part.', 'Save this one for a stormy night.', 'The cheap effects are half the fun.'] },
+  { name: 'Eli', likes: ['scifi', 'action', 'cult'], says: ['Wait for the shot of the ship.', 'The sets alone are worth it.', 'Better with friends.'] },
+  { name: 'Nora', likes: ['classics', 'romance', 'drama'], says: ['Look for the long take in the diner.', 'The last scene gets me every time.', 'I keep coming back to this one.'] },
+  { name: 'Cal', likes: ['foreign', 'family', 'comedy'], says: ['My sister and I wore this tape out.', 'Good for a Sunday afternoon.', 'Give it ten minutes and you’re in.'] },
+];
+
 const pick = (list, rnd) => list[Math.floor(rnd() * list.length)];
 const between = (a, b, rnd) => a + Math.floor(rnd() * (b - a + 1));
 const weighted = (table, rnd) => {
@@ -530,8 +537,11 @@ function makeFilm(id, genre, rnd, { year = null, section } = {}) {
 // ── The shop's stock ─────────────────────────────────────────────────────────
 
 export class Catalog {
-  constructor(seed) {
+  constructor(seed, theme = null) {
     const rnd = mulberry32((seed ^ SALT) >>> 0);
+    this.staff = theme ? BRANCH_STAFF : STAFF;
+    // The branch gives its specialty a second aisle face. Action still has its wall shelves.
+    this.faces = theme ? FACES.map((face) => face.id === 'island1-w' ? { ...face, section: theme.section } : face) : FACES;
     this.films = [];
     this.slots = new Map(); // 'face:col:row' -> film
     this.where = new Map(); // id -> [{ face, col, row }]
@@ -555,7 +565,7 @@ export class Catalog {
 
     // how many slots each section has, on which faces
     const faces = new Map();
-    for (const face of FACES) {
+    for (const face of this.faces) {
       if (!faces.has(face.section)) faces.set(face.section, []);
       faces.get(face.section).push(face);
     }
@@ -637,7 +647,7 @@ export class Catalog {
   _stockPicks(faces, fresh, rnd) {
     const all = [];
     for (const face of faces) {
-      const who = STAFF[face.staff % STAFF.length];
+      const who = this.staff[face.staff % this.staff.length];
       const films = [];
       for (let i = 0; i < face.cols * face.rows; i++) {
         const f = fresh(pick(who.likes, rnd), { section: 'picks' });
