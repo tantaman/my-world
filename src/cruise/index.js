@@ -751,6 +751,7 @@ export function installCruise(game) {
     return places[i];
   }
   map.places.addSource({
+    list: 'cruise piers',
     destinations: () => [0, 1].filter((i) => berths[i]).map(asPlace),
     within: (x0, z0, x1, z1) => [0, 1].filter((i) => berths[i] && berths[i].door.x >= x0 && berths[i].door.x <= x1 && berths[i].door.z >= z0 && berths[i].door.z <= z1).map(asPlace),
     get: (id) => {
