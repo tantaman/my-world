@@ -30,6 +30,8 @@
 #settings .settings-row.slider { flex-wrap: wrap; row-gap: 2px; }
 #settings .settings-row output { color: var(--ink); }
 #settings .settings-row input[type='range'] { flex: 1 0 100%; margin: 0 0 4px; accent-color: var(--accent); }
+#settings .settings-row.choice { flex-wrap: wrap; row-gap: 4px; }
+#settings .settings-row.choice [role='radiogroup'] { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
 @media (hover: none) {
   #settings button { padding: 7px 12px; }
   #settings .settings-row { min-height: 38px; }

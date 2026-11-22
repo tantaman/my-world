@@ -55,17 +55,18 @@ export const FLYING = Object.freeze({
 });
 
 // What carries you while the jets burn: your own size and pace (player.js,
-// on foot), and its flight.
-export function jetCarrier() {
+// on foot), and its flight. size: how tall you are beside the grown-up
+// hiker (player.size).
+export function jetCarrier(size = 1) {
   return {
     walk: CONFIG.walkSpeed,
     run: CONFIG.runSpeed,
     swim: 1.3,
-    depth: SWIM_DEPTH,
+    depth: SWIM_DEPTH * size,
     jump: CONFIG.jumpSpeed,
     radius: 0.32,
-    height: 1.5,
-    eye: 1.45,
+    height: 1.5 * size,
+    eye: 1.45 * size,
     back: 1.5,
     agility: 11,
     turn: 6,
@@ -114,7 +115,7 @@ export class Jets {
     // (not the press that jumped: that frame you weren't up yet)
     if ((controls.held && this.air >= HOLD) || (was && controls.pressed())) {
       this.on = true;
-      this.carrier = jetCarrier();
+      this.carrier = jetCarrier(player.size);
       player.carrier = this.carrier;
       player.vel.y = Math.max(player.vel.y, KICK);
       return 'ignite';

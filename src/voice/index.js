@@ -26,7 +26,7 @@ import { VoiceScreen } from './onScreen.js';
 import { walkie } from './walkie.js';
 import { formatDistance } from '../core/format.js';
 
-const MOUTH = 1.62; // m above the ground a hiker talks from
+const MOUTH = 1.62; // m above the ground a hiker talks from (a grown-up; less someone smaller)
 const NO_MIC = {
   blocked: 'the microphone is blocked · allow it for this site to talk',
   none: 'no microphone found',
@@ -44,7 +44,7 @@ export function installVoice(game) {
     signal: (to, body) => save.say('rtc', body, to),
     servers: () => iceServers(save.id),
   });
-  const mouthOf = (p) => (p ? { x: p.pos.x, y: p.pos.y + MOUTH, z: p.pos.z } : null);
+  const mouthOf = (p) => (p ? { x: p.pos.x, y: p.pos.y + MOUTH * (p.character?.size ?? 1), z: p.pos.z } : null);
   const voices = new Voices({ where: (id) => mouthOf(peers.get(id)), ear: () => mouthOf(player) });
   sound.addLayer(voices.layer());
   const bars = new TalkBars(scene);

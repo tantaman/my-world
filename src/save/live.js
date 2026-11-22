@@ -61,10 +61,11 @@ export class Live {
     });
   }
 
-  // Where you are. Dropped on the floor if the socket is down — it is only
-  // ever true for an instant anyway. (Who you are, the object knows already.)
-  at(x, z, yaw) {
-    if (this.connected) this.ws.send(JSON.stringify({ t: 'at', x, z, yaw }));
+  // Where you are, and which hiker you are (player/hikers.js). Dropped on
+  // the floor if the socket is down — it is only ever true for an instant
+  // anyway. (Who you are signed in as, the object knows already.)
+  at(x, z, yaw, who) {
+    if (this.connected) this.ws.send(JSON.stringify(typeof who === 'string' ? { t: 'at', x, z, yaw, who } : { t: 'at', x, z, yaw }));
   }
 
   // Something for the others here, on a channel (`ch`), to everyone or to one
