@@ -202,7 +202,7 @@ test('a flight: boarded, taxied, flown over the clouds, carried across, landed, 
   assert.equal(p.door, 1);
 });
 
-test("a plane and an airfield are drawn whole: every vertex says what it's made of", async () => {
+test("a plane and an airfield are drawn whole: every vertex says what it's made of, and faces some way", async () => {
   const THREE = await import('three');
   const { Plane } = await import('../src/airports/plane.js');
   const { buildAirfield } = await import('../src/airports/airfield.js');
@@ -218,6 +218,10 @@ test("a plane and an airfield are drawn whole: every vertex says what it's made 
       // one short of a vertex, and the building material doesn't draw it at all
       const n = o.geometry.attributes.position.count;
       for (const [name, a] of Object.entries(o.geometry.attributes)) assert.equal(a.count, n, `${what}: ${name} for every vertex`);
+      // and faces some way (a drum's end, a wheel's hub): a normal of
+      // nothing is drawn black, and blooms
+      const nor = o.geometry.attributes.normal.array;
+      for (let i = 0; i < nor.length; i += 3) assert.ok(Math.abs(Math.hypot(nor[i], nor[i + 1], nor[i + 2]) - 1) < 1e-3, `${what}: a vertex facing some way`);
     });
     assert.ok(meshes > 0, `${what} is made`);
   }
