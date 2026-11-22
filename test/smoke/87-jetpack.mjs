@@ -13,6 +13,8 @@ import assert from 'node:assert/strict';
 export default async function ({ page, step, key, frames, shot }) {
   const onBack = () => page.evaluate(() => world.player.character.back.children.some((o) => o.visible));
 
+  // what your pack lists of it, with what else is yours
+  const inPack = () => page.evaluate(() => world.pack.list().yours.filter((t) => /jetpack/.test(t.label)));
   await step('strap on the jetpack at the launch site', async () => {
     const rack = await page.evaluate(() => world.jetpack.rack && { x: world.jetpack.rack.x, z: world.jetpack.rack.z });
     assert.ok(rack, 'there is a rack');
@@ -24,6 +26,7 @@ export default async function ({ page, step, key, frames, shot }) {
     await key('KeyJ');
     assert.equal(await page.evaluate(() => world.jetpack.have), true, 'J, and it is yours');
     assert.equal(await onBack(), true, 'on your back');
+    assert.deepEqual(await inPack(), [{ label: 'a jetpack', note: 'on your back' }], 'and in your pack, with what else is yours');
     return rack;
   });
 
@@ -75,5 +78,6 @@ export default async function ({ page, step, key, frames, shot }) {
     await key('KeyJ');
     assert.equal(await page.evaluate(() => world.jetpack.have), false, 'back on its rack');
     assert.equal(await onBack(), false, 'off your back');
+    assert.deepEqual(await inPack(), [], 'and no longer in your pack');
   });
 }

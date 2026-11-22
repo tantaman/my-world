@@ -1,4 +1,4 @@
-// Your pack: everything there is to do, in one place.
+// Your pack: everything there is to do, and what's yours, in one place.
 //
 // Every feature binds its own keys, and there are more things to do than
 // keys to do them with: the letters are all taken, a pad's buttons too, and a
@@ -17,29 +17,46 @@
 // So a new feature's command needs no key at all, and nothing here knows
 // which features there are: it reads the commands.
 //
+// The pack also lists what's yours: what you carry of each material, and
+// whatever else you have come by (a jetpack, a horse, a rented tape). The
+// materials are read off the builder's stock; a feature with something else
+// to have says so:
+//
+//   game.pack.have(() => (worn ? [{ label: 'a jetpack', note: 'on your back' }] : null));
+//
+// It is a list to look at, not a store: each feature keeps and saves what it
+// gave you, as before (things.js).
+//
 //   book.js      the list, laid out: at hand, then the rest under their headings
+//   things.js    what's yours: who says so, and the materials
 //   panel.js     the pack on the screen
 //   buttons.js   the buttons on a touch screen
 //
 // From the console:
 //   world.pack.open() / close()
-//   world.pack.list()     -> { hand: [{ id, word, label, help }], rest: [{ group, rows }] }
+//   world.pack.list()     -> { hand: [{ id, word, label, help }], yours: [{ label, note }], rest: [{ group, rows }] }
 //   world.pack.do(id)     as picking its row would
 
 import { pages, shown } from './book.js';
+import { Things, told, materials } from './things.js';
 import { PackPanel } from './panel.js';
 import { HandButtons } from './buttons.js';
 import './pack.css';
 
 const KEY = 'Tab';
+const PAD = 'PadL3'; // ...and on a pad
 
 // The features this uses, so it is installed after them (game/features.js).
-export const after = ['ui', 'player'];
+export const after = ['ui', 'player', 'build'];
 export function installPack(game) {
-  const { hud, input, commands } = game;
+  const { hud, input, commands, builder } = game;
 
   // Everything on offer but the pack itself: it is what they are listed in.
   const book = () => pages(commands.offers(), 'pack');
+
+  // What's yours: the materials first, then what other features say you have.
+  const things = new Things();
+  things.add(() => materials(builder.stock));
 
   // ── The pack ──────────────────────────────────────────────────────────────
   // A row's key, as whoever is playing would press it: a pad's button, a
@@ -48,7 +65,7 @@ export function installPack(game) {
     if (input.padInUse) return row.pad ? row.pad.map((code) => input.pads.name(code)).join(' · ') : '';
     return input.isTouch ? '' : row.help;
   };
-  const panel = new PackPanel({ book, keyOf, onDo: (id) => commands.run(id), input, key: KEY });
+  const panel = new PackPanel({ book, yours: () => things.list(), keyOf, onDo: (id) => commands.run(id), input, key: KEY });
 
   // One panel at a time: opening this one closes whatever else is up.
   const toggle = () => {
@@ -59,7 +76,7 @@ export function installPack(game) {
     panel.toggle();
   };
   game.on('panel', (which) => which !== 'pack' && panel.close());
-  commands.add({ id: 'pack', keys: [KEY, 'PadL3'], group: 'WANDER', label: 'your pack · everything there is to do, what is at hand first', run: toggle });
+  commands.add({ id: 'pack', keys: [KEY, PAD], group: 'WANDER', label: 'your pack · everything there is to do, and what’s yours', run: toggle });
 
   // Tab is the browser's key for going from button to button. While the game
   // has the keyboard it is the pack's instead (an open panel keeps its own).
@@ -79,7 +96,7 @@ export function installPack(game) {
   const line = document.getElementById('inv');
   if (line) {
     line.setAttribute('role', 'button');
-    line.setAttribute('aria-label', 'Your pack: everything there is to do');
+    line.setAttribute('aria-label', 'Your pack: everything there is to do, and what’s yours');
     hud.button('inv', toggle);
   }
 
@@ -107,7 +124,7 @@ export function installPack(game) {
     if (words === handSaid) return;
     handSaid = words;
     hand.hidden = !words;
-    handKey.textContent = input.pads.name('PadL3');
+    handKey.textContent = input.pads.name(PAD);
     handWords.textContent = words;
   }
 
@@ -117,12 +134,15 @@ export function installPack(game) {
     get isOpen() {
       return panel.isOpen;
     },
-    list: book,
+    list: () => ({ ...book(), yours: things.list() }),
     do: (id) => commands.run(id),
+    // something you have, listed under what's yours: () => [{ label, note }] (things.js)
+    have: (source) => things.add(source),
   });
 
   // Late, once everything has said what it would do this frame.
   let wrote = '';
+  let wroteYours = '';
   game.addSystem({
     name: 'pack',
     phase: 'late',
@@ -136,6 +156,9 @@ export function installPack(game) {
       const now = shown(all);
       if (now !== wrote) panel.render();
       wrote = now;
+      const yours = told(things.list());
+      if (yours !== wroteYours) panel.renderYours();
+      wroteYours = yours;
     },
   });
 }

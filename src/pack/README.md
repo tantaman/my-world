@@ -1,7 +1,7 @@
 # Your pack
 
 There is more to do out here than there are keys to do it with. So everything
-you can do is in one place too: your pack.
+you can do is in one place too, with everything you have: your pack.
 
 | | |
 |---|---|
@@ -19,7 +19,16 @@ on*. The rest follow under the same headings as the help panel (**H**).
 Picking one that has nothing to do here does what its key would, which is
 usually to tell you where it could be done.
 
-The world carries on behind the pack while it's open, and the list keeps up
+Between what is at hand and the rest is what's **yours**: how much you carry
+of each material (logs, timber, stone, soil, and fish or meat while you have
+some), and whatever else you have come by, with how it stands: the jetpack
+on your back, the horse you tamed and how far off it is and which way, the
+tapes you have out from the video store and the day they're due. It is a list
+to look at, not slots to fill: nothing has a weight, and you can't run out of
+room. What everyone always has (the axe, the skis, the inner tube) isn't in
+it; those are things to do, and are in the list below.
+
+The world carries on behind the pack while it's open, and the lists keep up
 with it.
 
 **On a touch screen** there are no keys, so whatever is at hand also has a
@@ -51,14 +60,28 @@ the pack (and, at hand, from its button on a touch screen), and has no line
 on the help panel. That is how a new feature gets something done without
 finding a free letter: there are none left.
 
+**Something to have** is said by the feature that gives it to you (which
+names `pack` in its `after`, as for anything it takes from the game), as a
+function that returns what you have of it now:
+
+```js
+game.pack.have(() => (worn ? [{ label: 'a jetpack', note: 'on your back' }] : null));
+```
+
+The pack keeps nothing of it and saves nothing: the feature goes on keeping
+and saving what is yours, as it did, and the pack asks when it is looked
+into. A new material (`game.builder.stock.define`) needs nothing here: what
+you carry is read off the builder's stock.
+
 From the console: `world.pack.open()`, `world.pack.list()` (what is at hand,
-and the rest), `world.pack.do('tube')`.
+what's yours, and the rest), `world.pack.do('tube')`.
 
 ## Files
 
 ```
 index.js      plugs it into the game: Tab, the handle on what you carry, the frame
 book.js       the list, laid out: what is at hand, then the rest under their headings
+things.js     what's yours: who says so, and the materials you carry
 panel.js      the pack on the screen
 buttons.js    the buttons for what is at hand, on a touch screen
 pack.css      how those look

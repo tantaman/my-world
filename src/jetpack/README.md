@@ -3,8 +3,9 @@
 At the [launch site](../spaceport/README.md), at the front of the pad,
 between the fuel tank and the rocket, a jetpack hangs on a rack: two white
 tanks with red bands, a nozzle under each. Walk up to it and press **J**,
-and it's strapped to your back. It's yours from then on, wherever you go,
-until you take it back to the rack and **J** hangs it up again.
+and it's strapped to your back. It's yours from then on, wherever you go
+(and listed with what's yours in [your pack](../pack/README.md)), until you
+take it back to the rack and **J** hangs it up again.
 
 With it on your back you walk, run, build and jump as before. To fly, jump
 and keep holding **space**: a moment after you leave the ground the jets

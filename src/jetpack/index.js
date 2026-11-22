@@ -56,7 +56,7 @@ const round = (v, f = 10) => Math.round(v * f) / f;
 
 // The features this uses, so it is installed after them (game/features.js);
 // spaceport for where the launch site is.
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'spaceport'];
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'spaceport', 'pack'];
 export function installJetpack(game) {
   const { scene, solids, player, input, builder, hud, commands, save, sound, peers, spaceport } = game;
   const rack = rackAt(spaceport.sites.home);
@@ -101,6 +101,10 @@ export function installJetpack(game) {
     validate: (raw) => ({ have: !!raw && typeof raw === 'object' && raw.have === true }),
     restore: (r) => wear(r.have, false),
   });
+
+  // Listed with what's yours while you have it. (game.pack is your pack, the
+  // list; `pack` here is the thing on your back.)
+  game.pack.have(() => (jets.worn ? [{ label: 'a jetpack', note: 'on your back' }] : null));
 
   // On your back (from the rack), or off it (back onto the rack).
   // byHand: you did it, here and now (not a save being opened).

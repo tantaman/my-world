@@ -1,12 +1,14 @@
 // Your pack: Tab opens the list of everything there is to do, a row does
 // what its key would, something at hand heads the list and (on a touch
-// screen) has a button of its own, and a pad opens it with L3.
+// screen) has a button of its own, what's yours is listed in it, and a pad
+// opens it with L3.
 //
 // Needs nothing of the parts before it, and takes whatever else they have
 // left at hand (something to eat, say) as it finds it. Uses the stand-in pad
 // that 43-gamepad puts in the page (T.pad). Leaves the panels shut, the pad
 // unplugged and the screen not a touch screen; and in the pack's list a
-// "wave" that this part added, which is never at hand again.
+// "wave" that this part added, which is never at hand again, and a flag that
+// is never yours again.
 
 import assert from 'node:assert/strict';
 
@@ -120,6 +122,44 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.equal(await page.evaluate(() => window.wave.waved), 1, 'Enter does it');
     assert.ok(!(await pack()).open, 'and the pack closes');
     return wave;
+  });
+
+  await step('what is yours', async () => {
+    const yours = () =>
+      page.evaluate(() => ({
+        head: document.querySelector('#pack .pack-yours h3')?.textContent ?? null,
+        rows: [...document.querySelectorAll('#pack .pack-yours li')].map((li) => [li.querySelector('span').textContent, li.querySelector('i')?.textContent ?? '']),
+      }));
+    await key('Tab');
+    const had = await yours();
+    assert.equal(had.head, 'YOURS');
+    // what you carry, as the line at the top of the screen has it (or, building without gathering, nothing to count)
+    const carried = await page.evaluate(() => ({ creative: world.builder.creative, line: document.getElementById('inv').textContent }));
+    if (carried.creative) assert.deepEqual(had.rows[0], ['materials', 'unlimited']);
+    else assert.equal(had.rows.map(([label, note]) => `${label} ${note}`).join(' · ').slice(0, carried.line.length), carried.line, 'the materials you carry come first');
+    assert.deepEqual(await page.evaluate(() => world.pack.list().yours.map((t) => [t.label, t.note])), had.rows, 'the console sees the same list');
+    const order = await page.evaluate(() => [...document.querySelectorAll('#pack h3')].map((h) => h.textContent));
+    assert.ok(order.indexOf('YOURS') < order.indexOf('WANDER'), 'above the rest of what there is to do');
+    // the rows are to look at: the arrows go past them, from one thing to do to the next
+    assert.equal(await page.evaluate(() => document.querySelectorAll('#pack .pack-yours button, #pack .pack-yours [data-do]').length), 0);
+
+    // What a feature does from its install function, done here by hand:
+    // something to have, which it says is yours while it is.
+    await page.evaluate(() => {
+      window.flag = { planted: false };
+      world.pack.have(() => (window.flag.planted ? [{ label: 'a flag', note: 'planted by the path' }] : null));
+    });
+    await frames(3);
+    assert.deepEqual((await yours()).rows, had.rows, 'not yours yet, it is not listed');
+    await page.evaluate(() => (window.flag.planted = true));
+    await frames(3);
+    assert.deepEqual((await yours()).rows, [...had.rows, ['a flag', 'planted by the path']], 'come by while the pack is open, it is listed with how it stands');
+    await shot('yours');
+    await page.evaluate(() => (window.flag.planted = false));
+    await frames(3);
+    assert.deepEqual((await yours()).rows, had.rows, 'and gone when it is');
+    await key('Escape');
+    return had;
   });
 
   await step('a button on a touch screen', async () => {

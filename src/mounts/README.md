@@ -24,7 +24,8 @@ eagle takes to the air and circles until it settles again). Walk up to it
 quietly instead, and when you're beside it **hold Z**: the hiker holds out a
 hand, and while you stand still with it the animal comes to trust you (the
 bar above the tool bar). Let go and it slowly forgets; rush it and you start
-again. When it trusts you, it's yours.
+again. When it trusts you, it's yours, and is listed with what else is yours
+in [your pack](../pack/README.md), with how far off it is and which way.
 
 **Riding.** Beside your own, **Z** climbs on and **Z** gets off. You steer
 with the movement keys as you walk, and your tools are put away while you

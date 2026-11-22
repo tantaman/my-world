@@ -78,9 +78,9 @@ const _sphere = new THREE.Sphere();
 const _pm = new THREE.Matrix4();
 
 // The features this uses, so it is installed after them (game/features.js).
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'splashes', 'gliding'];
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'splashes', 'gliding', 'pack'];
 export function installMounts(game) {
-  const { scene, camera, gen, chunks, solids, player, input, hud, commands, save, sound, builder, map, splashes, peers, gliding } = game;
+  const { scene, camera, gen, chunks, solids, player, input, hud, commands, save, sound, builder, map, splashes, peers, gliding, pack } = game;
 
   // ── Where they live, and what you know of it ──────────────────────────────
   const start = player.start;
@@ -355,6 +355,8 @@ export function installMounts(game) {
   }
 
   const tameOnes = () => all.filter((m) => m.tame);
+  // The ones that are yours are listed in your pack, with where each is.
+  pack.have(() => tameOnes().map((m) => ({ label: `your ${m.def.name}`, note: m.riding ? 'carrying you' : bearing(player.pos.x, player.pos.z, m.x, m.z).words })));
   const nearest = (list, within) => {
     let best = null;
     let bd = within;

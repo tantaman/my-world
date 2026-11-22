@@ -61,7 +61,9 @@ viewed tape is $9.99 and yours to keep. Due back means by midnight, on the
 real calendar: the receipt says which day. Bring it back late and there's a
 late fee for every day ($1.50 a day for a new release, $1 otherwise), which
 the clerk lets slide this once (there's no money in the forest). Your
-membership card, what you have out and what you've bought are yours, saved;
+membership card, what you have out and what you've bought are yours, saved
+(and listed in [your pack](../pack/README.md): the card, each movie you have
+out and the day it's due, and how many you own);
 a movie you have out leaves a gap on the shelf until you bring it back.
 Renting a DVD leaves the VHS copies available.
 
