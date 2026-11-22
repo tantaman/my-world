@@ -34,7 +34,6 @@ import * as THREE from 'three';
 import { ShipKit } from './kit.js';
 import { layout } from '../videostore/font.js';
 import { halfBeam, deckY, layout as deckLayout, walls, cabinsOn, CORES, DECK_H, SLAB, HALF_BEAM, BOW, STERN, DRAFT, HULL_T, FUNNEL, SHIP } from './plan.js';
-import { railing } from './decks.js';
 
 const col = (hex) => new THREE.Color(hex);
 const WHITE = col(0xf2f2ee);
@@ -418,7 +417,6 @@ function lowerWindows(kits) {
 function bridge(kits) {
   const n = 13;
   const y = deckY(n);
-  const z0 = cabinsFore(n) - 10;
   const z1 = cabinsFore(n);
   const w = halfBeam(z1);
   const k = kits.hull;
@@ -435,7 +433,6 @@ function bridge(kits) {
     kits.glass.box(Math.min(x0, x1), y + 0.9, z1 - 6, Math.max(x0, x1), y + 2.4, z1 - 1, DARK_GLASS);
     k.box(Math.min(x0, x1), y, z1 - 6, Math.max(x0, x1), y + 0.9, z1 - 1, WHITE);
   }
-  void z0;
 }
 
 // The deck at the bow, forward of the decks over it: the anchor windlasses,
@@ -614,5 +611,4 @@ function navLights(kits) {
   for (let zz = -130; zz < 80; zz += 10) {
     for (const s of [1, -1]) kits.glow.box(s * (HALF_BEAM - 0.2) - 0.08, BULWARK + 0.02, zz - 0.08, s * (HALF_BEAM - 0.2) + 0.08, BULWARK + 0.08, zz + 0.08, LIT);
   }
-  void railing;
 }

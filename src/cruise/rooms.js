@@ -16,7 +16,7 @@
 
 import * as THREE from 'three';
 import { mulberry32 } from '../noise.js';
-import { CORES, CORE, CORR, DECK_H, SLAB, POOLS, poolBed, TRACK, FUNNEL, DECK_BY_N, inner, cabinsOn, isCabinDeck } from './plan.js';
+import { CORE, CORR, DECK_H, SLAB, POOLS, TRACK, FUNNEL, inner, cabinsOn, isCabinDeck } from './plan.js';
 
 const col = (hex) => new THREE.Color(hex);
 const H_IN = DECK_H - SLAB;
@@ -159,10 +159,8 @@ function hashId(s) {
 const BY_KIND = {
   lobby(r, { kits, y, n }) {
     const k = kits.inside;
-    const c = CORES.find((q) => q.id === r.core);
     // the deck's number, big, on the back wall between the stairs and the lifts
     const z = r.z0 + 0.09;
-    void c;
     const L = CORE.lifts;
     for (const x of L.xs) {
       // call buttons beside each car, a light over it
@@ -549,7 +547,7 @@ const BY_KIND = {
     loungers(r, ctx, rnd, [0x3aa86a, 0xf4f4f0]);
   },
 
-  golf(r, { kits, y, solid }, rnd) {
+  golf(r, { kits, y }, rnd) {
     if (r.id !== 'golf') return;
     const k = kits.outside;
     // nine holes: a flag in each, and some low walls to play round
@@ -562,7 +560,6 @@ const BY_KIND = {
       k.box(x - 1.5, y, z + 1.2, x + 1.5 - rnd() * 1.5, y + 0.15, z + 1.4, col(0xe8e2d6));
     }
     sign(k, 'MINI GOLF', 0, y + 1.2, r.z0 + 0.6, 0, -1, 0.04, WHITE, col(0x2a6a3a));
-    void solid;
   },
 
   track(r, { kits, y }) {
@@ -732,4 +729,3 @@ function towel(k, x, y, z, kind) {
   }
 }
 
-export { DECK_BY_N, CORR, poolBed };

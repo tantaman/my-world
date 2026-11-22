@@ -46,7 +46,7 @@ import { buildDeck } from './decks.js';
 import { furnishCabin } from './rooms.js';
 import { buildLido } from './lido.js';
 import { buildPier } from './pier.js';
-import { shipSounds, BEAT } from './sound.js';
+import { shipSounds } from './sound.js';
 import { onPlan, planDiscs, toWorld, toLocal } from '../landmarks/sites.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { SKY } from '../render/uniforms.js';
@@ -78,8 +78,6 @@ const SLIDE_SEAT = { spread: 0.18, hang: 0.05, fwd: 0.8, lean: -0.55, reins: 0, 
 
 const _l = { x: 0, z: 0 };
 const _w = { x: 0, z: 0 };
-const _o = new THREE.Vector3();
-const _d = new THREE.Vector3();
 
 // The features this uses, so it is installed after them (game/features.js):
 // landmarks, towns, caves, the railway, the launch site, the video store and

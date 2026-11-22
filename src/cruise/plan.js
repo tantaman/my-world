@@ -354,7 +354,7 @@ function cores(d) {
   const { stair: S, lifts: L } = CORE;
   for (const c of coresOn(d.n)) {
     const lobby = d.room(`lobby-${c.id}`, 'lobby', -CORE.half, c.z + CORE.lobby[0], CORE.half, c.z + CORE.lobby[1], { core: c.id });
-    const st = d.room(`stair-${c.id}`, 'stair', -S.half, c.z + S.back, S.half, c.z + CORE.lobby[0], { core: c.id, open: ['z1'] });
+    d.room(`stair-${c.id}`, 'stair', -S.half, c.z + S.back, S.half, c.z + CORE.lobby[0], { core: c.id, open: ['z1'] });
     d.gap('z', c.z + CORE.lobby[0], -S.half, S.half);
     // the flights' well: no floor, but deck 4's (the bottom), which has the
     // flight up standing on it and a cupboard under the flight coming down
@@ -376,7 +376,6 @@ function cores(d) {
     // the gap between the lobby's wall and a car's, so a door can be walked through
     for (const x of L.xs) d.room(`sill-${c.id}-${x}`, 'sill', x - L.door, c.z + L.z0, x + L.door, c.z + L.z0 + 0.2, { open: ['z0', 'z1'] });
     lobby.lifts = L.xs;
-    void st;
   }
 }
 
@@ -393,13 +392,11 @@ function publicDeck(d) {
   const side = n === 6 ? 15.4 : Infinity;
   cores(d);
   // a passage each side of each core, joining what's aft of it to what's forward
-  const passages = [];
   for (const c of CORES) {
     const [z0, z1] = bk(c.z);
     for (const s of [1, -1]) {
       const p = d.room(`passage-${c.id}-${s}`, 'passage', s * CORE.half, z0, s * CORR[1], z1, { open: [] });
       d.link(p, `lobby-${c.id}`);
-      passages.push(p);
     }
   }
   const P = (c, s) => d.byId.get(`passage-${c}-${s}`);
@@ -467,7 +464,6 @@ function publicDeck(d) {
     d.link('terrace', 'club', 4);
     d.doors.push({ x: 0, z: -136, nx: 0, nz: -1, w: 4, kind: 'glass' });
   }
-  void passages;
 }
 
 function atriumRoom(d, ends, cap = Infinity) {
@@ -645,7 +641,6 @@ function lidoDeck(d) {
     const p = d.room(`passage-fwd-${s}`, 'buffet', s * CORE.half, cF + CORE.block[0], s * CORR[1], fA1, { open: ['z1', 'z0'] });
     d.link(p, 'lobby-fwd');
   }
-  void fA1;
 }
 
 // The open space over the pools, round which the running track goes.
