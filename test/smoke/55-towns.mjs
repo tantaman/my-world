@@ -99,9 +99,11 @@ export default async function ({ page, step, key, frames, shot }) {
     // comes after it plays as it would without it, and a town left tracked
     // holds the HUD's guide (the first source with one wins, ui/hud.js), so
     // the next feature to point the way somewhere would never get a look in.
-    await page.evaluate((p) => {
+    // (and waiting to be there: a teleport left on its way sets you down
+    // again when it arrives, on top of wherever the next part has put you)
+    await page.evaluate(async (p) => {
       world.marks.setTracked(null);
-      world.teleport(p.x, p.z, p.yaw);
+      await world.teleport(p.x, p.z, p.yaw);
     }, from);
     return inside;
   });
