@@ -71,6 +71,11 @@ const TRESTLE_MOST = 700; // m: a longer one than this isn't worth it
 const NEARER = 0.2; // how much a metre nearer the start is worth, in metres of pier
 const CLEAR = 25; // m round it all kept clear of anything else grown from the seed
 const MOUTH_CLEAR = 30; // m from a cave's mouth
+// How far (m) a berth looked for from the start (not all the way round) can
+// reach from it, the most: the farthest shore along the fan, out to sea to
+// her middle, and from there the longest trestle, the pier and her length.
+// What's grown after her needn't ask about her further off than this.
+export const HOME_REACH = LOOK.far + OUT.to + TRESTLE_MOST + PIER.x1 + BOW + CLEAR;
 
 const _w = { x: 0, z: 0 };
 

@@ -221,6 +221,7 @@ place in that order, not at the end:
 | `player/player.js` | something held to the eye: look through it, magnified | `player.sight = { zoom }` |
 | `render/origin.js` | a uniform that says where something is | `game.origin.place(uniform)` |
 | `render/pipeline.js` | something drawn over the water, not seen through it (a splash, a spark), or over what's behind it | `object.layers.set(OVER)`; a light on it: `light.layers.enableAll()` |
+| `roads/index.js` | driving on the roads: the top of the road under a spot, and what it's made of | `game.roads.under(x, z, game.roads.around(x, z, r))` |
 | `save/domains.js` | something that is saved | `game.save.register({ id, collect, restore, … })` |
 | `save/worldSave.js` | a word to the others here, never stored | `game.save.say(ch, body, to)`, `game.save.on('message', fn)` |
 | `ui/hud.js` | a button on the HUD | `game.hud.button(id, fn)` |

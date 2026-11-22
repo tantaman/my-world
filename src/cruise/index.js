@@ -1514,6 +1514,10 @@ export function installCruise(game) {
     get berths() {
       return berths.slice();
     },
+    // port i's berth (0 home, 1 Maui), or null if there's none: found now if
+    // it hasn't been, or with wait = false, undefined until it has (for
+    // what's grown after her to keep clear of)
+    berth: (i, wait = true) => (!from[i] ? null : wait ? ensure(i) : searches[i] === 'done' ? berths[i] : undefined),
     // how the looking for each berth is going: 'waiting' (for the airfields
     // in its way), 'looking', 'done'
     get searches() {

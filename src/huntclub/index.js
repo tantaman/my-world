@@ -645,6 +645,14 @@ export function installHuntclub(game) {
       if (!decided && x0 <= x + HOME_REACH && x1 >= x - HOME_REACH && z0 <= z + HOME_REACH && z1 >= z - HOME_REACH) decide();
       return all(x0, z0, x1, z1);
     },
+    // whether every club that could overlap a rectangle has been found,
+    // asking for those there that haven't been: what's grown after them in
+    // the background waits for them rather than find them there and then
+    known(x0, z0, x1, z1) {
+      const { x, z } = player.start;
+      const first = decided || x0 > x + HOME_REACH || x1 < x - HOME_REACH || z0 > z + HOME_REACH || z1 < z - HOME_REACH;
+      return clubs.known(x0, z0, x1, z1) && first;
+    },
     get lay() {
       return lay;
     },
