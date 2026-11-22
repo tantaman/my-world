@@ -85,19 +85,28 @@ const _q = { x: 0, y: 0, z: 0, dx: 0, dz: 0, grade: 0 };
 // made of and its grain as well: the material that draws it reads those, and
 // a mesh missing them isn't drawn at all.
 
+// Component k of (q - p) × (s - r), for [x, y, z] points.
+function cross(p, q, r, s, k) {
+  const i = (k + 1) % 3;
+  const j = (k + 2) % 3;
+  return (q[i] - p[i]) * (s[j] - r[j]) - (q[j] - p[j]) * (s[i] - r[i]);
+}
+
 // A flat four-sided face, its corners in order round it as seen from the
 // side it faces. Corners are [x, y, z]; color is one THREE.Color, or one
-// for each corner.
+// for each corner. A triangle is a quad with a corner given twice: c and d
+// the same, or a and d (a fan round a hub, as a drum's end is).
 export function quad(m, a, b, c, d, color) {
-  const ux = b[0] - a[0];
-  const uy = b[1] - a[1];
-  const uz = b[2] - a[2];
-  const vx = d[0] - a[0];
-  const vy = d[1] - a[1];
-  const vz = d[2] - a[2];
-  let nx = uy * vz - uz * vy;
-  let ny = uz * vx - ux * vz;
-  let nz = ux * vy - uy * vx;
+  // the way it faces: across its first corner, or, where that is no corner
+  // (a and d the same), across its diagonals, which turn the same way
+  let nx = cross(a, b, a, d, 0);
+  let ny = cross(a, b, a, d, 1);
+  let nz = cross(a, b, a, d, 2);
+  if (Math.hypot(nx, ny, nz) < 1e-12) {
+    nx = cross(a, c, b, d, 0);
+    ny = cross(a, c, b, d, 1);
+    nz = cross(a, c, b, d, 2);
+  }
   const l = Math.hypot(nx, ny, nz) || 1;
   nx /= l;
   ny /= l;

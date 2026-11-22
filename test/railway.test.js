@@ -271,6 +271,9 @@ test('the track, the stations and the trains are made, and stand where the line 
       // every vertex says what it's made of and where on its grain: one
       // short of that and the building material doesn't draw the mesh at all
       for (const [name, a] of Object.entries(o.geometry.attributes)) assert.equal(a.count, p.length / 3, `${what}: ${name} for every vertex`);
+      // and faces some way: a normal of nothing is drawn black, and blooms
+      const n = o.geometry.attributes.normal.array;
+      for (let i = 0; i < n.length; i += 3) assert.ok(Math.abs(Math.hypot(n[i], n[i + 1], n[i + 2]) - 1) < 1e-3, `${what}: a vertex facing some way`);
     });
     return verts;
   };
