@@ -1,4 +1,4 @@
-// Places under the ground you can be in: caves. Everywhere else the terrain
+// Places under the ground you can be in: caves, and Hell. Everywhere else the terrain
 // says where the ground is; inside one of these, the space does — its floor,
 // its roof, its walls — and the terrain overhead is only the hill on top.
 //
@@ -9,10 +9,17 @@
 //   inside(x, z, y, out)     is a body at (x, z) with its feet about y in it?
 //                            -> bool; fills out.floor and out.roof (Infinity
 //                            where it is open to the sky)
-//   walls(x, z, out)         for someone inside: out.d, how far to its walls
+//   walls(x, z, out, y)      for someone inside: out.d, how far to its walls
 //                            (m, < 0 in them; Infinity where there are none
-//                            to speak of) and out.nx, out.nz, the way out of them
+//                            to speak of) and out.nx, out.nz, the way out of them.
+//                            y is how high their feet are, for a space whose
+//                            walls are only walls to someone low enough (a
+//                            cliff you can walk off the top of)
 //   air(x, y, z, m)          is (x, y, z) open air in it, at least m from rock?
+//   light(x, z)              optional: how much daylight reaches (x, z) in it,
+//                            1 at its mouth .. 0 deep inside. Where it is dark
+//                            the sky's light is dimmed and the headlamp comes
+//                            on (src/caves/index.js)
 //
 // There is one of these for the whole world, like Solids. The player, the
 // people you share a world with and the camera read it; whoever makes a
