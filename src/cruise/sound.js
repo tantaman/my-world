@@ -11,6 +11,9 @@
 //                splash at the bottom
 //   her horn     (sound.call 'ship-horn' at her funnel) the long deep blast
 //                she sounds at noon and at five
+//   underfoot    marble and tile: the click of a heel on polished stone
+//                (decks.js says which floors are; her carpets are the video
+//                store's 'carpet', her parquet and teak 'boards')
 //
 // The layer hears what it should from `source`, which index.js fills in
 // every frame (each 0..1):
@@ -23,7 +26,9 @@
 
 import { defineSfx } from '../audio/sfx.js';
 import { defineCall } from '../audio/calls.js';
+import { defineSurface } from '../audio/footsteps.js';
 import { SILENT } from '../audio/kit.js';
+import { rand } from '../core/geom.js';
 
 const BUS = 'cruise';
 const BPM = 124;
@@ -35,6 +40,17 @@ const CLUB = 0.16;
 const DRUMS = 0.05;
 const PIANO = 0.045;
 const LAP = 0.08;
+// Marble, or tile: a hard click of the heel, the knock of the step under it,
+// and a little ring off the stone.
+defineSurface('marble', {
+  thump: 0.6,
+  step({ s, t, run, sharp, noise }) {
+    noise(s.white, t, 0.04, [['bandpass', rand(2600, 3200), 2.5]], 0.55 * sharp, 0.0008, 0.018);
+    noise(s.pink, t + 0.004, 0.12, [['bandpass', rand(900, 1100), 1.6]], 0.3 * sharp, 0.002, 0.05 - run * 0.01);
+    noise(s.white, t + 0.01, 0.25, [['bandpass', 4200, 6]], 0.06, 0.01, 0.2);
+  },
+});
+
 // the club's chords: minor, going round (Am F C G, sevenths)
 const CLUB_CHORDS = [
   [57, 60, 64, 67],

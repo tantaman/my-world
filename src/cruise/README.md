@@ -15,7 +15,16 @@ gangway. Alongside, she sounds her horn at noon and
 at five.
 
 While she's alongside, walk up the gangway, through the door in her side,
-and she's yours to wander (while she's away, there's a chain across it). The first time you come aboard you're given a key card: one of the
+and she's yours to wander (while she's away, there's a chain across it).
+Her rooms are tall and airy, three and a half metres to the ceiling (the
+grand rooms go up two or three decks), and dressed as a ship of hers is:
+carpet with a gold trellis down the corridors and up the stairs, marble with
+black keystones in the lobbies, the atrium and the Galleria, wood panelling
+under a rail, wallpaper, coffered ceilings with their lights let into the
+coffers and a cove of light round the tops of the walls; a claret carpet
+with gold medallions in the dining room and the theatre, a carpet as loud as
+they come in the casino, parquet in the café and the bar, velvet on the
+theatre's walls. Heels click on the marble. The first time you come aboard you're given a key card: one of the
 balcony staterooms is yours, and the HUD leads you to it, by the lifts and
 along the corridors.
 
@@ -49,7 +58,7 @@ tread by tread. The lifts you walk into:
 - **The pools and hot tubs**: step up onto the rim, and in. Out of your depth
   you swim, as anywhere; the steps at the end of a pool, or a hot tub's
   bench, are the way out.
-- **The slides**: climb the tower (four turns of stairs from the sun deck),
+- **The slides**: climb the tower (three turns of stairs from the sun deck),
   walk up to the top of a slide, and **click**. The Corkscrew is an open red
   flume, out over her starboard side and round her stern; the Plunge a
   closed blue tube, twice round over her port side. Both end in the splash
@@ -141,12 +150,13 @@ voyage.js    where she is by the clock: alongside, leaving, at sea, arriving; th
 cabins.js    what's in each stateroom, grown from the seed; which is yours
 lifts.js     a ride in a lift: the doors, speeding up, slowing down
 slides.js    the two waterslides, and a ride down one
-kit.js       building blocks: the video store's Kit, and cylinders, rods, tubes, lofts
+kit.js       building blocks: the video store's Kit, and cylinders, rods, tubes, lofts; laying a surface on what's drawn
 hull.js      her outside: the hull, the promenade, the decks of balconies, the bridge, the funnel, the lifeboats, her name
-decks.js     one deck from its plan: floors, ceilings, walls, windows, stairs, doors; what's solid; what the camera can't see through
+decks.js     one deck from its plan: floors, ceilings, walls, windows, stairs, doors, and what each kind of room is laid with; what's solid; what the camera can't see through
+textures.js  her carpets, marble, panelling, wallpaper and ceilings, painted in code into one array of textures, a little a frame
 rooms.js     what's in the rooms, and in a stateroom
 lido.js      the pools and hot tubs, the slide tower, the slides
 pier.js      the pier, the trestle out to it, the terminal, the gangway, its chain
 wake.js      the white water she leaves under way
-sound.js     her hum, her engines and the wind under way, the club's beat, steel drums, the atrium's piano, the lifts, her horn
+sound.js     her hum, her engines and the wind under way, the club's beat, steel drums, the atrium's piano, the lifts, her horn, heels on marble
 ```

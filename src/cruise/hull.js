@@ -33,7 +33,7 @@
 import * as THREE from 'three';
 import { ShipKit } from './kit.js';
 import { layout } from '../videostore/font.js';
-import { halfBeam, deckY, layout as deckLayout, walls, cabinsOn, CORES, DECK_H, SLAB, HALF_BEAM, BOW, STERN, DRAFT, HULL_T, FUNNEL, SHIP } from './plan.js';
+import { halfBeam, deckY, layout as deckLayout, walls, cabinsOn, CORES, DECK_H, SLAB, HALF_BEAM, BOW, STERN, DRAFT, HULL_T, FUNNEL, SHIP, WINDOW } from './plan.js';
 
 const col = (hex) => new THREE.Color(hex);
 const WHITE = col(0xf2f2ee);
@@ -48,6 +48,9 @@ const TEAK = col(0xa98256);
 const STEEL = col(0x8a9098);
 const ORANGE = col(0xe8641e);
 const LIT = col(0xffd9a0);
+// a window's glass: its middle over the floor, and how tall it is (the opening less its frame)
+const WIN_Y = (WINDOW.sill + WINDOW.head) / 2;
+const WIN_H = WINDOW.head - WINDOW.sill - 0.1;
 
 const PROMENADE = { z0: -136, z1: 85, inner: 15.4, y: deckY(6) };
 const BULWARK = PROMENADE.y + 1.1; // m: the top of her side along the promenade
@@ -257,7 +260,7 @@ function promenade(kits) {
       for (let z = a; z < b - 0.01; z += 3) {
         const e = Math.min(b, z + 3);
         k.panel(x, (y + top) / 2, (z + e) / 2, s, 0, e - z, top - y, OFFWHITE);
-        if (e - z > 2.4) pane(kits, x + s * 0.02, y + 1.45, (z + e) / 2, s, 0, 2, 1.3, true, DARK_GLASS);
+        if (e - z > 2.4) pane(kits, x + s * 0.02, y + WIN_Y, (z + e) / 2, s, 0, 2, WIN_H, true, DARK_GLASS);
       }
     };
     for (const [a, b] of cuts) {
@@ -284,7 +287,7 @@ function promenade(kits) {
     const door = Math.abs((x + e) / 2) < 2;
     if (!door) k.panel((x + e) / 2, (y + top) / 2, tz[1] - 0.08, 0, -1, e - x, top - y, OFFWHITE);
     else k.panel((x + e) / 2, (y + 2.2 + top) / 2, tz[1] - 0.08, 0, -1, e - x, top - y - 2.2, OFFWHITE);
-    if (!door) pane(kits, (x + e) / 2, y + 1.45, tz[1] - 0.1, 0, -1, 2, 1.3, true, DARK_GLASS);
+    if (!door) pane(kits, (x + e) / 2, y + WIN_Y, tz[1] - 0.1, 0, -1, 2, WIN_H, true, DARK_GLASS);
   }
   k.flat(-th, tz[0], th, tz[1], top, WHITE, true);
   // the deck over the terrace (deck 7's aft end is at -140: its top here is open)
@@ -327,7 +330,7 @@ function superstructure(kits, n, states) {
     for (let x = -fw; x < fw - 0.01; x += 3) {
       const e = Math.min(fw, x + 3);
       k.panel((x + e) / 2, (y0 + y1) / 2, fore, 0, 1, e - x, h, WHITE);
-      if (e - x > 2.2) k.panel((x + e) / 2, deckY(n) + 1.4, fore + 0.02, 0, 1, 2, 1.2, DARK_GLASS);
+      if (e - x > 2.2) k.panel((x + e) / 2, deckY(n) + WIN_Y, fore + 0.02, 0, 1, 2, WIN_H, DARK_GLASS);
     }
     // the top of the step, out in front of the deck over it
     k.flat(-fw, cabinsFore(n + 1), fw, fore, y1 + SLAB, OFFWHITE);
@@ -337,7 +340,7 @@ function superstructure(kits, n, states) {
   for (let x = -aw; x < aw - 0.01; x += 3) {
     const e = Math.min(aw, x + 3);
     k.panel((x + e) / 2, (y0 + y1) / 2, CABINS_AFT, 0, -1, e - x, h, WHITE);
-    if (e - x > 2.2) k.panel((x + e) / 2, deckY(n) + 1.4, CABINS_AFT - 0.02, 0, -1, 2, 1.2, DARK_GLASS);
+    if (e - x > 2.2) k.panel((x + e) / 2, deckY(n) + WIN_Y, CABINS_AFT - 0.02, 0, -1, 2, WIN_H, DARK_GLASS);
   }
   // the edge of each deck: a white band
   for (const s of [1, -1]) {
@@ -354,7 +357,7 @@ function window(kits, c, y0, y1, st) {
   const zc = (c.z0 + c.z1) / 2;
   const h = y1 - y0;
   kits.hull.panel(x, (y0 + y1) / 2, zc, s, 0, c.z1 - c.z0, h, WHITE);
-  pane(kits, x + s * 0.03, y0 + SLAB + 1.45, zc, s, 0, 1.8, 1.25, !!(st && st.lit));
+  pane(kits, x + s * 0.03, y0 + SLAB + WIN_Y, zc, s, 0, 1.8, WIN_H, !!(st && st.lit));
 }
 
 function balcony(kits, c, y0, y1, st) {
@@ -403,10 +406,10 @@ function lowerWindows(kits) {
       const zlo = Math.min(w.z0, w.z1);
       for (let a = (len % P) / 2 + (P - ww) / 2; a + ww <= len - 0.3; a += P) {
         const zc = zlo + a + ww / 2;
-        const yc = y + (0.75 + 2.1) / 2;
+        const yc = y + WIN_Y;
         const x = s * (hullWidth(zc, yc) + 0.03);
-        if (Math.abs(hullWidth(zc, y + 0.75) - hullWidth(zc, y + 2.1)) > 0.15) continue;
-        pane(kits, x, yc, zc, s, 0, ww, 2.1 - 0.75, true);
+        if (Math.abs(hullWidth(zc, y + WINDOW.sill) - hullWidth(zc, y + WINDOW.head)) > 0.15) continue;
+        pane(kits, x, yc, zc, s, 0, ww, WIN_H, true);
       }
     }
   }

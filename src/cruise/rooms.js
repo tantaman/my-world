@@ -16,10 +16,9 @@
 
 import * as THREE from 'three';
 import { mulberry32 } from '../noise.js';
-import { CORE, CORR, DECK_H, SLAB, POOLS, TRACK, FUNNEL, inner, cabinsOn, isCabinDeck } from './plan.js';
+import { CORE, CORR, DECK_H, SLAB, H_IN, POOLS, TRACK, FUNNEL, inner, cabinsOn, isCabinDeck } from './plan.js';
 
 const col = (hex) => new THREE.Color(hex);
-const H_IN = DECK_H - SLAB;
 const WOOD = col(0x6a4426);
 const WOOD_LIGHT = col(0xa07850);
 const CLOTH = col(0xf4f2ec);

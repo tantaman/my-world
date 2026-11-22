@@ -4,8 +4,13 @@
 // Each room is its floor, its ceiling (where the deck over it is), its walls
 // (each room draws its own side of a wall, so the wall between two rooms is
 // two faces with the wall's thickness between), the head over each doorway,
-// and what's in it (rooms.js). Windows are gaps in the walls on her side,
-// with the hull's thickness round them; the glass is in the hull (hull.js).
+// and what's in it (rooms.js). Each kind of room is laid with its own
+// surfaces (SKIN, from textures.js): carpet down the corridors, marble in
+// the lobbies, panelling under a rail round the walls, coffered ceilings
+// over the grand rooms, with their lights let into the coffers, and a cove
+// of light round the tops of the walls. Windows are gaps in the walls on her
+// side, with the hull's thickness round them; the glass is in the hull
+// (hull.js).
 // The staircases are drawn tread by tread; the doors are instances, to be
 // opened one at a time.
 //
@@ -31,11 +36,11 @@
 
 import * as THREE from 'three';
 import { ShipKit } from './kit.js';
-import { layout, walls, floorStrips, flights, subtract, intersect, rectOf, CORES, CORE, deckY, DECK_H, SLAB, WALL_T, HULL_T, LAST } from './plan.js';
+import { layout, walls, floorStrips, flights, subtract, intersect, rectOf, CORES, CORE, deckY, DECK_H, SLAB, H_IN, WALL_T, HULL_T, WINDOW, LAST } from './plan.js';
 import { furnish } from './rooms.js';
+import { SURFACES } from './textures.js';
 
 const col = (hex) => new THREE.Color(hex);
-const H_IN = DECK_H - SLAB; // m: a room's height, floor to ceiling
 const DOOR_HEAD = 2.15; // m: the top of a doorway
 const LINTEL_MOST = 3.4; // m: an opening wider than this is an archway, with no head over it
 const RAIL_H = 1.05; // m: a railing's top
@@ -43,11 +48,14 @@ export const RAIL_SOLID = 2; // m: how high a railing is solid (so it can't be j
 const WELL_SOLID = 1.8; // ...and the rail round a well
 const TOP_DECKS = 14; // from this deck up, the deck is her outside
 
-const MARBLE = [col(0xe8e2d6), col(0xcfc6b6)];
+const DADO = 1; // m: the rail along the top of the panelling, where a room has it
+// The colours of each kind of room: its floor, its walls, the panelling under
+// its rail (dado), its ceiling. Where it's laid with a dyed surface (SKIN),
+// that's its colour, not this.
 const LOOK = {
   corridor: { floor: 0x2c3e5c, wall: 0xe8e2d4, dado: 0x7a5a3e, ceil: 0xf0ece4 },
   passage: { floor: 0x2c3e5c, wall: 0xe8e2d4, dado: 0x7a5a3e, ceil: 0xf0ece4 },
-  lobby: { floor: 'marble', wall: 0xd8ccb4, dado: 0x6a4a30, ceil: 0xf2eee6 },
+  lobby: { floor: 0xffffff, wall: 0xd8ccb4, dado: 0x6a4a30, ceil: 0xf2eee6 },
   stair: { floor: 0x5a4a3a, wall: 0xe0d8c8, ceil: 0xf0ece4 },
   lift: { floor: 0x4a4a4e, wall: 0xb8b8bc, ceil: 0xd8d8dc },
   sill: { floor: 0x9a9a9e, wall: 0xb8b8bc, ceil: 0xd8d8dc },
@@ -60,10 +68,10 @@ const LOOK = {
   club: { floor: 0x16121c, wall: 0x1e1828, ceil: 0x0e0c14 },
   casino: { floor: 0x5a1420, wall: 0x3a1820, ceil: 0x2a1418 },
   bar: { floor: 0x4a3426, wall: 0x6a4a32, ceil: 0x3a2a20 },
-  atrium: { floor: 'marble', wall: 0xe8dcc4, ceil: 0xf4ecdc },
-  gangway: { floor: 'marble', wall: 0xe8dcc4, dado: 0x7a5a3e, ceil: 0xf4ecdc },
-  gallery: { floor: 0x8a8278, wall: 0xf2f0ea, ceil: 0xf4f2ee },
-  galleria: { floor: 'marble', wall: 0xece4d4, ceil: 0xf4f0e6 },
+  atrium: { floor: 0xffffff, wall: 0xe8dcc4, ceil: 0xf4ecdc },
+  gangway: { floor: 0xffffff, wall: 0xe8dcc4, dado: 0x7a5a3e, ceil: 0xf4ecdc },
+  gallery: { floor: 0xb89466, wall: 0xf2f0ea, ceil: 0xf4f2ee },
+  galleria: { floor: 0xffffff, wall: 0xece4d4, ceil: 0xf4f0e6 },
   shop: { floor: 0xc8c0b0, wall: 0xf4f0e8, ceil: 0xf6f4ee },
   cafe: { floor: 0x8a6a4a, wall: 0xe8d8c0, dado: 0x5a3a24, ceil: 0xf0e6d6 },
   champagne: { floor: 0x2a2030, wall: 0x4a3a50, ceil: 0x2a2030 },
@@ -81,6 +89,50 @@ const LOOK = {
   bridge: { floor: 0x3a3a40, wall: 0xe8e8e4, ceil: 0xf0f0ee },
 };
 const lookOf = (r) => LOOK[r.kind] || LOOK.corridor;
+// What each kind of room is laid with (textures.js): its floor, its walls,
+// the panelling under its rail, its ceiling. What isn't said is plain.
+const CORRIDOR = { floor: 'trellis', wall: 'paper', dado: 'panel', ceil: 'tiles' };
+const GRAND = { floor: 'marble', wall: 'paper', dado: 'panel', ceil: 'coffer' };
+export const SKIN = {
+  corridor: CORRIDOR,
+  passage: CORRIDOR,
+  lobby: GRAND,
+  gangway: GRAND,
+  atrium: GRAND,
+  galleria: GRAND,
+  stair: { floor: 'trellis', wall: 'paper', ceil: 'tiles' },
+  lift: { floor: 'tile', wall: 'steel', ceil: 'tiles' },
+  sill: { floor: 'steel', wall: 'steel' },
+  cabin: { floor: 'plush', wall: 'paper', ceil: 'tiles' },
+  dining: { floor: 'medallion', wall: 'paper', dado: 'panel', ceil: 'coffer' },
+  foyer: { floor: 'medallion', wall: 'paper', dado: 'panel', ceil: 'coffer' },
+  theatre: { floor: 'medallion', wall: 'drape', ceil: 'coffer' },
+  stage: { floor: 'parquet', wall: 'drape' },
+  club: { floor: 'plush', wall: 'drape' },
+  casino: { floor: 'casino', wall: 'paper', ceil: 'coffer' },
+  bar: { floor: 'parquet', wall: 'panel', ceil: 'coffer' },
+  cafe: { floor: 'parquet', wall: 'paper', dado: 'panel', ceil: 'coffer' },
+  champagne: { floor: 'plush', wall: 'drape', ceil: 'coffer' },
+  gallery: { floor: 'parquet', ceil: 'tiles' },
+  shop: { floor: 'tile', ceil: 'tiles' },
+  buffet: { floor: 'tile', wall: 'paper', ceil: 'tiles' },
+  vestibule: { floor: 'tile', wall: 'paper', ceil: 'tiles' },
+  bridge: { floor: 'tile', ceil: 'tiles' },
+};
+// What a floor laid with each surface sounds like underfoot (the rest, carpet).
+const STEPS = { marble: 'marble', tile: 'marble', steel: 'marble', parquet: 'boards' };
+const skinOf = (r, part) => SURFACES[(SKIN[r.kind] || {})[part]] || null;
+// Lay what's drawn next in a room's kit with its surface for `part` (on its
+// inside: out on deck it's plain), upright faces measured from y.
+const lay = (k, r, part, y = 0) => k.on(r.out ? null : skinOf(r, part), y);
+// The colour to draw a surface in: its own, if it's dyed.
+const dyed = (r, part, c) => (!r.out && skinOf(r, part)?.dyed ? WHITE : c);
+const WHITE = col(0xffffff);
+// The rooms with a cove round the top of their walls: a ledge, and a strip of
+// light hidden over it, washing up the wall to the ceiling; its colour.
+const COVE = { drop: 0.42, deep: 0.2, thick: 0.08, glow: 0.18 }; // m: under the ceiling, out from the wall, the ledge's thickness, the light's height
+const COVE_LIGHT = { casino: 0xffc860, bar: 0xffc890, champagne: 0xe8b0ff };
+const COVED = new Set(['corridor', 'passage', 'lobby', 'gangway', 'atrium', 'galleria', 'dining', 'foyer', 'cafe', 'cabin', 'champagne', 'bar', 'casino']);
 // Rooms drawn with her outside (hull.js): here only what's solid of them.
 const OUTSIDE = new Set(['balcony', 'promenade', 'terrace']);
 const TEAK = [col(0xb08a5a), col(0xa47e50), col(0xb89462)];
@@ -126,13 +178,33 @@ export function buildDeck(n, { materials, seed = 0, look = {}, visual = true } =
   };
   const box = (x0, y0, z0, x1, y1, z1) => blockers.push([x0, y0, z0, x1, y1, z1]);
 
-  // the floor: strips, solid and seen by the camera
-  const surfaceOf = (x, z) => {
-    for (const r of L.rooms) if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) return r.out || lookOf(r).floor === 'teak' ? 'boards' : 'carpet';
+  // the floor: strips, solid and seen by the camera; each strip in stretches
+  // that sound the same underfoot, joined so there's no gap between them
+  const surfaceOf = (rooms, z) => {
+    for (const r of rooms) if (z >= r.z0 && z <= r.z1) return r.out || lookOf(r).floor === 'teak' ? 'boards' : (STEPS[(SKIN[r.kind] || {}).floor] ?? 'carpet');
     return 'boards';
   };
   for (const s of floorStrips(L)) {
-    solid(s.x, s.z0 + s.r, s.x, Math.max(s.z0 + s.r, s.z1 - s.r), s.r, y - SLAB, y, { surface: surfaceOf(s.x, (s.z0 + s.z1) / 2) });
+    const rooms = L.rooms.filter((m) => s.x >= m.x0 && s.x <= m.x1 && m.z1 > s.z0 && m.z0 < s.z1);
+    const cuts = [s.z0, s.z1];
+    for (const m of rooms) for (const z of [m.z0, m.z1]) if (z > s.z0 && z < s.z1) cuts.push(z);
+    cuts.sort((a, b) => a - b);
+    const stretch = (a, b, surface) => {
+      const za = a === s.z0 ? a + s.r : a;
+      const zb = b === s.z1 ? b - s.r : b;
+      solid(s.x, za, s.x, Math.max(za, zb), s.r, y - SLAB, y, { surface });
+    };
+    let from = s.z0;
+    let sound = null;
+    for (let i = 0; i < cuts.length - 1; i++) {
+      const here = surfaceOf(rooms, (cuts[i] + cuts[i + 1]) / 2);
+      if (sound !== null && here !== sound) {
+        stretch(from, cuts[i], sound);
+        from = cuts[i];
+      }
+      sound = here;
+    }
+    stretch(from, s.z1, sound);
     box(s.x - s.r, y - SLAB, s.z0, s.x + s.r, y, s.z1);
   }
   // ...and the deck over it, which the camera mustn't rise through
@@ -147,6 +219,7 @@ export function buildDeck(n, { materials, seed = 0, look = {}, visual = true } =
     const rects = subtract([rectOf(r)], [...L.holes, ...L.pools]);
     for (const [x0, z0, x1, z1] of rects) floorQuads(kits, lk.floor, x0, z0, x1, z1, y + 0.002, r, look);
   }
+  kits.inside.on(null);
 
   // ── ceilings, and roofs where nothing is over a room ──
   for (const r of L.rooms) {
@@ -158,12 +231,12 @@ export function buildDeck(n, { materials, seed = 0, look = {}, visual = true } =
     // the underside of the deck over it, where there is one
     let cover = above ? subtract(r.out ? intersect(base, aboveRooms) : base, above.holes) : [];
     if (above && !r.out && top) cover = intersect(cover, aboveRooms);
-    for (const c of cover) ceiling(k, kits.glow, c, y + H_IN, lk, r);
+    for (const c of cover) ceiling(k, kits.glow, c, y + H_IN, lk, r, y);
     // a tall room: the ceiling of the decks it goes up through, where they're open over it
     if (tall > 1) {
       let open = base;
       for (let j = 1; j < tall; j++) open = intersect(open, layout(n + j).holes);
-      for (const c of open) ceiling(k, kits.glow, c, y + tall * DECK_H - SLAB, lk, r);
+      for (const c of open) ceiling(k, kits.glow, c, y + tall * DECK_H - SLAB, lk, r, y);
     }
     // up top, a roof over what has nothing over it (seen from the shore, and from higher up)
     if (top && !r.out) {
@@ -180,6 +253,8 @@ export function buildDeck(n, { materials, seed = 0, look = {}, visual = true } =
   for (const w of W) wall(kits, w, y, n, top, solid, box, L, look);
   // the heads over doorways, and the jambs either side
   for (const r of L.rooms) lintels(kitFor(r), r, L, y);
+  // the coves round the tops of the walls
+  for (const r of L.rooms) if (COVED.has(r.kind) && !r.out) coves(kits.inside, kits.glow, r, L, y, n);
   // rails round the holes in the floor
   for (const [x0, z0, x1, z1] of L.wells) wellRail(kits, x0, z0, x1, z1, y, solid, n);
   // solid blocks (under the stairs, the funnel's casing)
@@ -196,6 +271,7 @@ export function buildDeck(n, { materials, seed = 0, look = {}, visual = true } =
     if (n > c.top) continue;
     stairs(kits.inside, c.z, 0, n, c.top, solid, box);
   }
+  kits.inside.on(null);
 
   // ── what's in the rooms ──
   for (const r of L.rooms) furnish(r, { n, y, kits, solid, rectSolid, box, seed, look, L });
@@ -234,17 +310,6 @@ export function buildDeck(n, { materials, seed = 0, look = {}, visual = true } =
 // ── Floors ───────────────────────────────────────────────────────────────────
 
 function floorQuads(kits, kind, x0, z0, x1, z1, y, r, look) {
-  if (kind === 'marble') {
-    // big tiles, in two shades
-    const T = 1.2;
-    for (let z = z0; z < z1 - 1e-3; z += T) {
-      for (let x = x0; x < x1 - 1e-3; x += T) {
-        const i = Math.floor((x + 100) / T) + Math.floor((z + 400) / T);
-        kits.inside.flat(x, z, Math.min(x1, x + T), Math.min(z1, z + T), y, MARBLE[i & 1]);
-      }
-    }
-    return;
-  }
   if (kind === 'teak') {
     // planks along her: the teak kit has its own texture of them, uv in metres
     const k = kits.teak;
@@ -257,7 +322,9 @@ function floorQuads(kits, kind, x0, z0, x1, z1, y, r, look) {
     if (s) c = col(s.palette.carpet);
   }
   const k = r.out ? kits.outside : kits.inside;
-  k.flat(x0, z0, x1, z1, y, c);
+  lay(k, r, 'floor');
+  k.flat(x0, z0, x1, z1, y, dyed(r, 'floor', c));
+  k.on(null);
   // a running track's lanes
   if (r.kind === 'track') {
     for (const lx of [-15.5, -14.3, 14.3, 15.5]) if (lx > x0 && lx < x1) k.flat(lx - 0.04, z0, lx + 0.04, z1, y + 0.004, col(0xf2f2ee));
@@ -266,15 +333,23 @@ function floorQuads(kits, kind, x0, z0, x1, z1, y, r, look) {
 
 // ── Ceilings ─────────────────────────────────────────────────────────────────
 
-function ceiling(k, glow, [x0, z0, x1, z1], h, lk, r) {
+function ceiling(k, glow, [x0, z0, x1, z1], h, lk, r, y) {
+  lay(k, r, 'ceil', y);
   k.flat(x0, z0, x1, z1, h, col(lk.ceil ?? 0xf0ece4), true);
+  k.on(null);
   if (r.out && r.kind !== 'promenade' && r.kind !== 'lido' && r.kind !== 'splash') return;
-  // lights let into it
-  const S = r.kind === 'cabin' || r.kind === 'corridor' || r.kind === 'passage' ? 2.6 : 3.2;
-  const sz = r.kind === 'club' || r.kind === 'theatre' ? 0.12 : 0.28;
+  // lights let into it: in the middle of each coffer, or of a panel every
+  // 2.4 m, where it has them (from the first in from its edge); otherwise in
+  // rows from its corner
+  const skin = skinOf(r, 'ceil');
+  const coffered = skin === SURFACES.coffer;
+  const P = coffered ? skin.size : skin ? skin.size / 2 : 0; // m: a coffer's or a panel's pitch
+  const S = coffered ? P : skin ? 2.4 : r.kind === 'cabin' || r.kind === 'corridor' || r.kind === 'passage' ? 2.6 : 3.2;
+  const sz = r.kind === 'club' || r.kind === 'theatre' ? 0.12 : coffered ? 0.36 : 0.28;
   const light = r.kind === 'club' ? col(0x8a4aff) : r.kind === 'casino' ? col(0xffd890) : NIGHT_SIGN;
-  for (let z = z0 + S / 2; z < z1; z += S) {
-    for (let x = x0 + S / 2; x < x1; x += S) {
+  const first = (a) => (skin ? Math.ceil((a + 0.4 - P / 2) / P) * P + P / 2 : a + S / 2);
+  for (let z = first(z0); z < z1; z += S) {
+    for (let x = first(x0); x < x1; x += S) {
       if (x1 - x < 0.4 || z1 - z < 0.4) continue;
       glow.flat(x - sz, z - sz, x + sz, z + sz, h - 0.01, light, true);
     }
@@ -298,8 +373,8 @@ function windowsIn(w, len) {
   for (let a = (len % P) / 2 + (P - ww) / 2; a + ww <= len - 0.3; a += P) out.push([a, a + ww]);
   return out;
 }
-const SILL = 0.75;
-const HEAD = 2.1;
+const SILL = WINDOW.sill;
+const HEAD = WINDOW.head;
 
 function wall(kits, w, y, n, top, solid, box, L, look) {
   const r = w.room;
@@ -359,12 +434,18 @@ function wall(kits, w, y, n, top, solid, box, L, look) {
 
   const bottom = r.out ? 0 : -SLAB;
   const wins = w.kind === 'hull' ? windowsIn(w, len) : [];
-  const dado = lk.dado != null && !r.up ? 1.0 : 0;
+  const dado = lk.dado != null && !r.up ? DADO : 0;
   const draw = (a, b, y0, y1) => {
     if (dado && y0 < dado) {
+      lay(k, r, 'dado', y);
       strip(k, a, b, y0, Math.min(dado, y1), col(lk.dado));
+      lay(k, r, 'wall', y);
       strip(k, a, b, Math.min(dado, y1), y1, wc);
-    } else strip(k, a, b, y0, y1, wc);
+    } else {
+      lay(k, r, 'wall', y);
+      strip(k, a, b, y0, y1, wc);
+    }
+    k.on(null);
   };
   let from = 0;
   for (const [a, b] of wins) {
@@ -429,6 +510,57 @@ function wall(kits, w, y, n, top, solid, box, L, look) {
   }
 }
 
+// The coves round a room: along each side with a wall to it, carried on
+// over its doorways and broken only where it opens wide (an archway, with no
+// wall over it). Each is the ledge's underside and its front, and the light
+// on the wall over it.
+function coves(k, glow, r, L, y, n) {
+  const lk = lookOf(r);
+  const top = r.up ? r.up : H_IN;
+  const inset = WALL_T / 2 + (n > 4 && n <= 6 ? 0.012 : 0);
+  const y0 = y + top - COVE.drop;
+  const ledge = col(lk.ceil ?? 0xf0ece4);
+  const light = col(COVE_LIGHT[r.kind] ?? 0xffe6b8);
+  const E = 0.06;
+  for (const [name, at, nx, nz] of [
+    ['x0', r.x0, 1, 0],
+    ['x1', r.x1, -1, 0],
+    ['z0', r.z0, 0, 1],
+    ['z1', r.z1, 0, -1],
+  ]) {
+    if ((r.open && r.open.includes(name)) || (r.glass && r.glass.includes(name)) || (r.rail && r.rail.includes(name))) continue;
+    const alongZ = nx !== 0;
+    const lo = alongZ ? r.z0 : r.x0;
+    const hi = alongZ ? r.z1 : r.x1;
+    // the archways along this side
+    const arches = [];
+    for (const o of L.openings) {
+      const on = alongZ ? o[0] - E <= at && o[2] + E >= at : o[1] - E <= at && o[3] + E >= at;
+      const a = alongZ ? o[1] : o[0];
+      const b = alongZ ? o[3] : o[2];
+      if (on && b - a > LINTEL_MOST) arches.push([a, b]);
+    }
+    arches.sort((p, q) => p[0] - q[0]);
+    let from = lo;
+    for (const [a, b] of [...arches, [hi, hi]]) {
+      const to = Math.min(a, hi);
+      if (to - from > 0.3) {
+        // the ledge, out from the wall's face: its underside, and its front
+        const p = at + (alongZ ? nx : nz) * inset;
+        const q = at + (alongZ ? nx : nz) * (inset + COVE.deep);
+        if (alongZ) k.flat(Math.min(p, q), from, Math.max(p, q), to, y0, ledge, true);
+        else k.flat(from, Math.min(p, q), to, Math.max(p, q), y0, ledge, true);
+        const m = (from + to) / 2;
+        k.panel(alongZ ? q : m, y0 + COVE.thick / 2, alongZ ? m : q, nx, nz, to - from, COVE.thick, ledge);
+        // the light over it, on the wall
+        const g = at + (alongZ ? nx : nz) * (inset + 0.004);
+        glow.panel(alongZ ? g : m, y0 + COVE.thick + COVE.glow / 2, alongZ ? m : g, nx, nz, to - from, COVE.glow, light);
+      }
+      from = Math.max(from, b);
+    }
+  }
+}
+
 // The heads over a room's doorways, and the jambs either side of each.
 function lintels(k, r, L, y) {
   if (OUTSIDE.has(r.kind) || r.kind === 'sill') return;
@@ -455,7 +587,9 @@ function lintels(k, r, L, y) {
       const px = alongZ ? at + nx * inset : m;
       const pz = alongZ ? m : at + nz * inset;
       const wc = col(lk.wall);
+      lay(k, r, 'wall', y);
       if (hi - lo <= LINTEL_MOST && !r.out) k.panel(px, y + (DOOR_HEAD + tall) / 2, pz, nx, nz, hi - lo, tall - DOOR_HEAD, wc);
+      k.on(null);
       // the jambs: across the wall's half-thickness on this side
       const jh = hi - lo <= LINTEL_MOST && !r.out ? DOOR_HEAD : tall;
       for (const [s, sgn] of [
@@ -522,20 +656,26 @@ export function stairs(k, z, x, n, coreTop, solid, box, base = null, turns = 1) 
   const treadC = col(0x6a5a4a);
   const nose = BRASS;
   const y0 = base ?? deckY(n);
+  // the cores' stairs are carpeted as the corridors are (the slide tower's are bare)
+  const carpet = base === null ? SURFACES.trellis : null;
   for (let t = 0; t < turns; t++) {
     const yb = y0 + t * DECK_H;
     if (base === null && n >= coreTop) break;
     const list = base === null ? flights({ z, top: coreTop }, n) : flightsAt(x, z, yb);
     for (const f of list) {
       if (f.landing) {
-        k.box(f.x0, f.top - 0.25, f.z0, f.x1, f.top, f.z1, treadC);
+        k.on(carpet, yb);
+        k.box(f.x0, f.top - 0.25, f.z0, f.x1, f.top, f.z1, carpet ? WHITE : treadC);
+        k.on(null);
         const r = (f.z1 - f.z0) / 2;
         solid(f.x0 + r, (f.z0 + f.z1) / 2, f.x1 - r, (f.z0 + f.z1) / 2, r + 0.02, f.top - 0.3, f.top, { surface: 'carpet' });
         box(f.x0, f.top - 0.25, f.z0, f.x1, f.top, f.z1);
         continue;
       }
       // a tread and its riser, and the stringer under it
-      k.box(f.x0, f.top - 1 / 6, f.z0, f.x1, f.top, f.z1, treadC, 'y-');
+      k.on(carpet, yb);
+      k.box(f.x0, f.top - DECK_H / 18, f.z0, f.x1, f.top, f.z1, carpet ? WHITE : treadC, 'y-');
+      k.on(null);
       k.box(f.x0, f.top - 0.02, f.flight === 1 ? f.z1 - 0.03 : f.z0, f.x1, f.top + 0.005, f.flight === 1 ? f.z1 : f.z0 + 0.03, nose);
       const r = (f.z1 - f.z0) / 2 + 0.02;
       solid(f.x0 + r, (f.z0 + f.z1) / 2, f.x1 - r, (f.z0 + f.z1) / 2, r, f.top - 0.35, f.top, { surface: 'carpet' });

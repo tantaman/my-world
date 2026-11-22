@@ -3,9 +3,19 @@
 // and curved things a ship has that a shop doesn't: cylinders, tubes swept
 // along a path, triangles, and a surface lofted through rows of points.
 //
+// What's drawn can be laid with one of her surfaces (textures.js): kit.on(
+// surface, base) and what's drawn after it is carpet, marble, panelling...
+// until kit.on(null). Where it is on the surface is worked out from where it
+// is in her frame, a repeat every surface.size metres: a floor (or ceiling)
+// by its x and z, an upright face by how far along it is and how high over
+// `base` (the floor it stands on), so the panelling's rail is at the same
+// height all round a room. Every vertex says its layer (the `surface`
+// attribute; 0 for plain) and has a uv.
+//
 // Everything is in the ship's own frame (plan.js), round her own origin, and
 // the group it ends up in is what's put in the world (render/origin.js).
 
+import * as THREE from 'three';
 import { Kit } from '../videostore/store.js';
 
 const _n = [0, 0, 0];
@@ -28,6 +38,27 @@ function normal(a, b, c, out = _n) {
 }
 
 export class ShipKit extends Kit {
+  constructor() {
+    super();
+    this.lay = []; // each vertex's layer
+    this.layer = 0;
+    this.tile = 1;
+    this.base = 0;
+  }
+
+  // Lay what's drawn from now on with a surface (textures.js's SURFACES), its
+  // upright faces measured from `base` (m); or, given null, plain.
+  on(surface, base = 0) {
+    this.layer = surface ? surface.layer : 0;
+    this.tile = surface ? surface.size : 1;
+    this.base = base;
+  }
+
+  quad(a, b, c, d, n, color, uv = null) {
+    super.quad(a, b, c, d, n, color, uv);
+    this.laid(6, n, !uv);
+  }
+
   tri(a, b, c, color, n = null) {
     const m = n || normal(a, b, c);
     for (const p of [a, b, c]) {
@@ -36,6 +67,37 @@ export class ShipKit extends Kit {
       this.col.push(color.r, color.g, color.b);
       this.uv.push(0, 0);
     }
+    this.laid(3, m, true);
+  }
+
+  // The last `count` vertices are on the surface being laid: where on it,
+  // from where they are (facing n), unless they were given a uv.
+  laid(count, n, place) {
+    for (let i = 0; i < count; i++) this.lay.push(this.layer);
+    if (!this.layer || !place) return;
+    const ax = Math.abs(n[0]);
+    const ay = Math.abs(n[1]);
+    const az = Math.abs(n[2]);
+    const P = this.pos;
+    const U = this.uv;
+    const first = P.length / 3 - count;
+    for (let k = first; k < first + count; k++) {
+      const x = P[k * 3];
+      const y = P[k * 3 + 1] - this.base;
+      const z = P[k * 3 + 2];
+      // along an upright face: to the right, as it's seen from in front
+      const u = ay >= ax && ay >= az ? x : ax >= az ? (n[0] > 0 ? -z : z) : n[2] > 0 ? x : -x;
+      const v = ay >= ax && ay >= az ? z : y;
+      U[k * 2] = u / this.tile;
+      U[k * 2 + 1] = v / this.tile;
+    }
+  }
+
+  // with a uv always, and each vertex's layer
+  build() {
+    const g = super.build(true);
+    g.setAttribute('surface', new THREE.Float32BufferAttribute(this.lay, 1));
+    return g;
   }
 
   // a flat four-cornered piece with its normal worked out from its corners
