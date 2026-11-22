@@ -10,6 +10,7 @@ import { Grass } from './grass.js';
 import { Sky } from './sky.js';
 import { Solids } from './solids.js';
 import { Spaces } from './spaces.js';
+import { Basins } from './basins.js';
 import { CUTS } from './cuts.js';
 import { createParticles } from './particles.js';
 import { createTerrainMaterial, createTerrainDepthMaterial, createVegetationMaterial, createVegetationDepthMaterial, createGrassMaterial } from './materials.js';
@@ -84,6 +85,8 @@ export function installWorld(game) {
   game.provide('solids', new Solids());
   // Places under the ground you can be in (caves). Whoever makes one, adds it.
   game.provide('spaces', new Spaces());
+  // Water held up in something built (a pool, a tub). Whoever builds one, adds it.
+  game.provide('basins', new Basins());
   // What the world streams in around: a point that whoever is being followed
   // keeps up to date (the player feature copies the hiker's position into it).
   game.provide('focus', new THREE.Vector3());

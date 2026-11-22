@@ -18,6 +18,9 @@
 //
 // Under the ground, in a cave (world/spaces.js), its floor is what you stand
 // on, its walls and roof keep you in, and the camera keeps to its air.
+//
+// Water held up in something built (world/basins.js: a pool, a hot tub) is
+// waded and swum in like the land's, where your feet are about as high as it.
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
@@ -38,6 +41,9 @@ const STEER_ARRIVE = 0.08;
 const STEER_EASE = 0.7;
 // Water deeper than this floats you: you swim with your feet this far down.
 export const SWIM_DEPTH = 1.12;
+// Feet more than this far (m) over the water are in the air over it, not in
+// it: a jump on a ship's deck far above the sea isn't a swim.
+const OVER_WATER = 0.5;
 // How much of the current's speed it carries you at: wading in it up to your
 // knees (WADE_PUSH depth, m) and over, and swimming.
 const WADE_PUSH = [0.15, 0.9];
@@ -91,8 +97,12 @@ const LOOK_HOLD = 1.5;
 // the floor of a space they are in (feet about y; spaces: world/spaces.js).
 // world is the ChunkManager.
 // depth: how deep it has to be to float them (SWIM_DEPTH for someone on foot).
-export function standHeight(world, x, z, depth = SWIM_DEPTH, y = Infinity, spaces = null) {
+// basins: water held up in something built (world/basins.js), which floats
+// them where it's deep enough; where it isn't, its floor is something built
+// they stand on, and the ground under it is the land's.
+export function standHeight(world, x, z, depth = SWIM_DEPTH, y = Infinity, spaces = null, basins = null) {
   if (spaces && spaces.at(x, z, y, _in)) return _in.floor;
+  if (basins && basins.at(x, z, y, _w) && _w.depth > depth) return _w.level - depth;
   const g = world.heightAt(x, z);
   if (world.waterAt(x, z, _w) && _w.level - g > depth) return _w.level - depth;
   return g;
@@ -107,13 +117,15 @@ export class Player extends Emitter {
   // world: the ChunkManager (heightAt, waterAt, forEachCollider)
   // solids: built things you bump into and stand on (src/world/solids.js)
   // spaces: places under the ground you can be in (src/world/spaces.js)
-  constructor({ scene, camera, world, input, solids = null, spaces = null }) {
+  // basins: water held up in something built (src/world/basins.js)
+  constructor({ scene, camera, world, input, solids = null, spaces = null, basins = null }) {
     super();
     this.camera = camera;
     this.world = world;
     this.input = input;
     this.solids = solids;
     this.spaces = spaces;
+    this.basins = basins;
     // The space you're in (a cave), or null out under the sky.
     this.space = null;
     this.character = new Character();
@@ -238,7 +250,7 @@ export class Player extends Emitter {
   // (Which solid that was, if any, is left in this.groundSolid.) afloat: in
   // deep water, where you float rather than the bed.
   groundAt(x, z, y = Infinity, afloat = true) {
-    let g = afloat ? standHeight(this.world, x, z, this.carrier ? this.carrier.depth : SWIM_DEPTH, y, this.spaces) : this.world.heightAt(x, z);
+    let g = afloat ? standHeight(this.world, x, z, this.carrier ? this.carrier.depth : SWIM_DEPTH, y, this.spaces, this.basins) : this.world.heightAt(x, z);
     this.groundSolid = null;
     if (this.solids) {
       this.solids.forEachNear(x, z, 1, (s) => {
@@ -336,7 +348,7 @@ export class Player extends Emitter {
     // Standing on something built over it (a dock, a boat) you're out of it,
     // and under the ground (in a cave) what is overhead is the land's.
     this.space = this.spaces ? this.spaces.at(this.pos.x, this.pos.z, this.pos.y + 0.05) : null;
-    const inWater = !this.space && this.world.waterAt(this.pos.x, this.pos.z, _w) && _w.depth > 0 && !(this.underfoot && this.pos.y > _w.level);
+    const inWater = !this.space && this._water(this.pos.x, this.pos.z, this.pos.y, _w) && _w.depth > 0 && !(this.underfoot && this.pos.y > _w.level) && this.pos.y < _w.level + OVER_WATER;
     const depth = inWater ? _w.depth : 0;
     const float = c ? c.depth : SWIM_DEPTH;
     const F = c && c.fly;
@@ -649,6 +661,13 @@ export class Player extends Emitter {
     this.vel.z = 0;
   }
 
+  // The water at (x, z) for something about y high: held up in a basin
+  // there, or the land's. out and the answer as for chunks.waterAt.
+  _water(x, z, y, out) {
+    if (this.basins && this.basins.at(x, z, y, out)) return true;
+    return this.world.waterAt(x, z, out);
+  }
+
   // How deep the water is at (x, z) (m, 0 out of it).
   _depth(x, z) {
     return this.world.waterAt(x, z, _w) ? Math.max(0, _w.depth) : 0;
@@ -776,7 +795,7 @@ export class Player extends Emitter {
       let floor = this.world.heightAt(cam.position.x, cam.position.z) + 0.35;
       // and on the same side of the surface as your head: out of the water
       // while it's out, under while you're under
-      if (this.world.waterAt(cam.position.x, cam.position.z, _w) && _w.depth > 0) {
+      if (this._water(cam.position.x, cam.position.z, cam.position.y, _w) && _w.depth > 0) {
         if (!this.submerged) floor = Math.max(floor, _w.level + 0.3);
         else if (cam.position.y > _w.level - 0.25) cam.position.y = Math.max(floor, _w.level - 0.25);
       }

@@ -11,10 +11,10 @@ const finite = (v, otherwise) => (Number.isFinite(v) ? v : otherwise);
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world'];
 export function installPlayer(game) {
-  const { scene, camera, chunks, gen, solids, spaces, hud, commands, save } = game;
+  const { scene, camera, chunks, gen, solids, spaces, basins, hud, commands, save } = game;
 
   const input = new Input(game.renderer.domElement);
-  const player = new Player({ scene, camera, world: chunks, input, solids, spaces });
+  const player = new Player({ scene, camera, world: chunks, input, solids, spaces, basins });
   game.provide('input', input);
   game.provide('player', player);
 
