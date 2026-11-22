@@ -1,0 +1,17 @@
+/* How fast the raft is going, and the rapid you're in or the next one down:
+   above the coordinates, while you're guiding it. Uses the colour tokens
+   defined on :root in index.html. */
+
+#rafting {
+  position: absolute;
+  left: calc(16px + var(--inset-l));
+  bottom: calc(52px + var(--inset-b));
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75), 0 0 6px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+#rafting[hidden] {
+  display: none;
+}

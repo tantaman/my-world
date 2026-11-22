@@ -129,7 +129,10 @@
     and mirrors the far shore. Running water is drawn out into streaks along
     the current and carries flecks of foam and bubbles down with it, so you
     can see which way it goes and how fast. It froths on cascades, along the
-    shore and round your legs, and opens into a wake behind you. Below it the
+    shore and round your legs, and opens into a wake behind you. Down a rapid
+    it stands up in waves that keep their place while the water pours
+    through them, white at their tops, laid out by the water's own level so
+    they run straight across the river round its bends. Below it the
     bed turns to silt, pebbles and cobbles under a moving net of light,
     darkening, reds first, as the daylight comes down to it.
   - **By the water** trees and logs keep back from the bank, ferns come right
