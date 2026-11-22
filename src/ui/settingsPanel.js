@@ -14,6 +14,11 @@
 //     get: () => pipeline.softness, set: (v) => { ... },
 //     show: (v) => v.toFixed(2),               // how its value is written
 //   });
+//   hud.setting({
+//     id: 'hiker', group: 'YOU', label: 'who is hiking',
+//     options: [{ value: 'hiker', label: 'the hiker' }, ...],  // one of a few
+//     get: () => id, set: (value) => { ... },
+//   });
 //
 //   can     () => false leaves it off the panel for now (fullscreen where
 //           the browser has none)
@@ -116,7 +121,9 @@ export class SettingsPanel {
     if (!this.isOpen) return;
     for (const { control, input, value } of this.rows.values()) {
       const v = control.get();
-      if (input.type === 'range') {
+      if (control.options) {
+        for (const b of input.children) b.setAttribute('aria-checked', String(b.dataset.value === String(v)));
+      } else if (input.type === 'range') {
         if (!input.matches(':active')) input.value = String(v); // not while it's being dragged
         const text = control.show ? control.show(v) : String(v);
         if (value.textContent !== text) value.textContent = text;
@@ -150,7 +157,26 @@ export class SettingsPanel {
     row.appendChild(label);
     let input;
     let value = null;
-    if (c.min !== undefined && c.max !== undefined) {
+    if (c.options) {
+      // one of a few: a button for each, the one it is ringed
+      row.classList.add('choice');
+      input = document.createElement('div');
+      input.setAttribute('role', 'radiogroup');
+      input.setAttribute('aria-label', c.label);
+      for (const o of c.options) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('role', 'radio');
+        b.dataset.value = String(o.value);
+        b.textContent = o.label;
+        b.addEventListener('click', () => {
+          c.set(o.value);
+          this.refresh();
+        });
+        input.appendChild(b);
+      }
+      row.appendChild(input);
+    } else if (c.min !== undefined && c.max !== undefined) {
       row.classList.add('slider');
       value = document.createElement('output');
       value.htmlFor = `setting-${c.id}`;

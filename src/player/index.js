@@ -1,8 +1,10 @@
-// You: the controls, the hiker, the camera that follows.
+// You: the controls, the hiker, the camera that follows. Which hiker you are
+// (hikers.js) is yours to choose on the settings panel, and remembered here.
 
 import { Input } from './input.js';
 import { padNames } from './gamepad.js';
 import { Player } from './player.js';
+import { HIKERS, hiker } from './hikers.js';
 import { SHARED, WADE } from '../render/uniforms.js';
 
 const round = (v, f = 100) => Math.round(v * f) / f;
@@ -11,10 +13,10 @@ const finite = (v, otherwise) => (Number.isFinite(v) ? v : otherwise);
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world'];
 export function installPlayer(game) {
-  const { scene, camera, chunks, gen, solids, spaces, basins, hud, commands, save } = game;
+  const { scene, camera, chunks, gen, solids, spaces, basins, hud, commands, save, settings } = game;
 
   const input = new Input(game.renderer.domElement);
-  const player = new Player({ scene, camera, world: chunks, input, solids, spaces, basins });
+  const player = new Player({ scene, camera, world: chunks, input, solids, spaces, basins, who: hiker(settings.get('hiker', 'string')) });
   game.provide('input', input);
   game.provide('player', player);
 
@@ -58,6 +60,21 @@ export function installPlayer(game) {
     },
     restore: (p) => {
       if (p && p.x !== null && p.z !== null) player.arrival = p;
+    },
+  });
+
+  // Who you are: a preference of this browser's, not the world's (two people
+  // can be in one world as whoever they like), told to the others here with
+  // where you are standing (save/index.js).
+  hud.setting({
+    id: 'hiker',
+    group: 'YOU',
+    label: 'who is hiking',
+    options: HIKERS.map((h) => ({ value: h.id, label: h.name })),
+    get: () => player.character.who.id,
+    set: (id) => {
+      player.be(hiker(id));
+      settings.set('hiker', player.character.who.id);
     },
   });
 

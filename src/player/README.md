@@ -1,10 +1,27 @@
 # The hiker
 
-The hiker wears an orange rain shell with the hood gathered at the collar,
-a loaded daypack with a hydration hose, tan trousers,
-a brown snapback with a maroon brim, white sunglasses and a beard. The shell, pack and trousers
-have woven surfaces generated in code. Sleeves and trouser legs bend with the
-elbows and knees, and folds catch the light as the hiker moves.
+You can be one of two people, picked on the settings panel (**O**, under
+*you*: who is hiking). Your browser remembers who, and the others in a shared
+world see you as them.
+
+- **The hiker** wears an orange rain shell with the hood gathered at the
+  collar, a loaded daypack with a hydration hose, tan trousers, a brown
+  snapback with a maroon brim, white sunglasses and a beard.
+- **Oliver** is five, nearly six, and about 1.16 m tall. He wears a dark
+  green henley with three buttons at the neck, navy joggers gathered over
+  grey socks, and royal blue trainers with white soles and a red-orange heel.
+  His dark hair is faded short at the sides and spiky on top, his eyes are
+  brown, and his ears stand out a little.
+
+The clothes have woven surfaces generated in code. Sleeves and trouser legs
+bend with the elbows and knees, and folds catch the light as you move.
+Whatever you're holding or wearing (the axe, the radio, a headlamp, a
+jetpack) stays with you when you change who you are.
+
+Someone smaller is the same body made smaller, with a child's bigger head. They
+walk the way a small child does at the same speed: quicker, shorter steps,
+so the feet still don't skate. The camera sits at their eye level, deep
+water floats them sooner, and wading drags at them sooner too.
 
 The walk is solved, not keyframed. Each foot follows a path on the ground,
 rolling heel to toe while it's planted and arcing forward when it swings.
@@ -62,15 +79,33 @@ stay quiet until one.
 A feature gives a command a pad button by listing it with its keys
 (`keys: ['KeyM', 'PadSelect']`); `gamepad.js` has the names.
 
+## Someone new
+
+A hiker is a file in `hikers/` and a line in `HIKERS` (`hikers.js`), which
+is also the order they're offered in. The file exports
+`{ id, name, size, dress(body) }`: what each of those is, and what `dress`
+hangs clothes on and has to say back, is at the top of `Character` in
+`character.js`. `oliver.js` is the one to start from. His head is built
+round his eyes, and his clothes reuse the grown-up's patterns taken in. The
+helpers for putting things on the bones are at the end of `clothing.js`.
+
+Measurements are in metres of the grown-up's body, whatever `size` is: the
+whole figure is scaled by it afterwards. The `id` is what others in a shared
+world are told, so don't change it once someone has played as them; the
+`name` can change.
+
 ## Files
 
 ```
-index.js              plugs it into the game: controls, the hiker, where you arrive
+index.js              plugs it into the game: controls, the hiker, who you are, where you arrive
 player.js             movement, collision, wading, swimming and diving, third-person camera
-character.js          procedural hiker model, IK gait, work poses, swimming, things raised to the face, a stance on skis or a board
-clothing.js           garment sections, cloth folds, boots and generated weave
+character.js          the body anyone has: bones, IK gait, work poses, swimming, things raised to the face, a stance on skis or a board; dressed as one of the hikers, at their size
+hikers.js             who you can be: the hikers, in the order they're offered
+hikers/hiker.js       the hiker's clothes: rain shell, daypack, trousers and boots
+hikers/oliver.js      Oliver: his head and hair, henley, joggers and trainers
+clothing.js           garment sections, cloth folds, boots and generated weave, and putting them on the bones
 head.js               the hiker's face and beard, sunglasses and snapback
 input.js              keyboard, mouse, touch, and a pad's buttons as keys
 gamepad.js            game controllers: reading them, what their buttons are called, typing into panels
-peers.js              everyone else, drawn and eased between messages
+peers.js              everyone else, drawn as whoever they are and eased between messages
 ```

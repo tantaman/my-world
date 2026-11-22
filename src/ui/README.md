@@ -13,10 +13,10 @@ one tool has a pip for each, and opens over its slot for a moment when it's
 picked, so you can see what's in it and click one.
 
 **Settings** (**O**, or *settings* in the corner) are the things you set once
-and leave: how the picture looks, the hour, the sound. They don't each take a
-key. Each is a switch or a slider, put there by whichever feature owns it
-(`hud.setting`), under a heading it names (*picture*, say). **O** or **Esc**
-closes it.
+and leave: how the picture looks, the hour, the sound, who is hiking. They
+don't each take a key. Each is a switch, a slider or a choice of a few, put
+there by whichever feature owns it (`hud.setting`), under a heading it names
+(*picture*, say). **O** or **Esc** closes it.
 
 | | |
 |---|---|

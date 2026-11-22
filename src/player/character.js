@@ -1,6 +1,10 @@
 // A small procedurally-built hiker with a procedural gait. No assets, just
 // tailored meshes, a little trigonometry and a two-bone IK for each leg.
 //
+// This is the body anyone has: the bones, the walk, the poses. Who it is
+// (their clothes, face and size) is one of the hikers (hikers.js), dressed
+// onto it, and it can be someone else at any time (dress()).
+//
 // The walk is built the way a real one works rather than from sines on the
 // joints: each foot follows a path on the ground, planted while it carries
 // the weight (rolling heel → flat → toe) and swinging forward in an arc, and
@@ -11,8 +15,8 @@
 
 import * as THREE from 'three';
 import { smoothstep, lerp, clamp } from '../noise.js';
-import { tailored, sleeve, trouserLeg, bootUpper, outsole, handShape, textile, foldAt } from './clothing.js';
-import { buildHead } from './head.js';
+import { group } from './clothing.js';
+import { HIKER } from './hikers/hiker.js';
 
 // Work poses as keyframes over one swing (p = 0..1). Angles in radians:
 //   sh = shoulder pitch (negative raises the arm forward), el = elbow,
@@ -147,14 +151,18 @@ function samplePose(keys, p, out) {
 }
 
 // ── Body measurements (metres) ──────────────────────────────────────────────
+// The grown-up's. Someone smaller (who.size) is the same body made smaller,
+// so these are in metres of the grown-up body; what a body meets in the world
+// (the ground, a saddle) is turned into them, and back out.
 const HIPS_Y = 0.94; // pelvis height standing
-// Sitting astride something (Character.seat), the hips stay this far above
-// the root: whatever carries the hiker puts the root this far under the seat.
+// Sitting astride something (Character.seat), the hips are this far above
+// the root (m, in the world, whoever it is): whatever carries the hiker puts
+// the root this far under the seat.
 export const SEAT_HIPS = HIPS_Y;
 const HIP_X = 0.095; // hip joints either side of the pelvis
 const HIP_Y = -0.04;
-const NECK = 0.145; // centre of the head above the base of the neck
-const BACK_OF_PACK = 0.182; // m from the middle of the daypack to the back of it
+const NECK_Y = 0.5; // the base of the neck above the chest joint
+const NECK = 0.145; // centre of the head (eye level) above the base of the neck
 const THIGH = 0.42;
 const SHIN = 0.43;
 const REACH = (THIGH + SHIN) * 0.985; // a planted leg never quite locks straight
@@ -196,11 +204,45 @@ const _a = { y: 0, z: 0 };
 const _b = { y: 0, z: 0 };
 const _t = new THREE.Vector3();
 const _inv = new THREE.Matrix4();
+const _m = new THREE.Matrix4();
 
-const M = (hex, rough = 0.85, extra) => new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: 0, ...extra });
+// Put an object where another is, in its own parent's frame.
+function place(object, at) {
+  object.parent.updateWorldMatrix(true, false);
+  at.updateWorldMatrix(true, false);
+  _m.copy(object.parent.matrixWorld).invert().multiply(at.matrixWorld);
+  _m.decompose(object.position, object.quaternion, object.scale);
+}
 
+// A strap made to go round one crown, let out or taken in to go round
+// another: { holder, crown } from addWorn.
+function fit(w, crown) {
+  const sx = crown.rx / w.crown.rx;
+  const sz = crown.rz / w.crown.rz;
+  w.holder.scale.set(sx, 1, sz);
+  w.holder.position.set(0, crown.y - w.crown.y, crown.z - w.crown.z * sz);
+}
+
+// Who a Character is: one of the hikers (hikers.js), dressed onto the bones.
+//   id      what they're called in a message to the others here, for good
+//   name    ...and on the settings panel
+//   size    how tall, as a share of the grown-up body the measurements here
+//           are for: the whole body is made that much smaller, and it walks
+//           the way a smaller body does, with quicker, shorter steps
+//   dress(body)  puts their skin, hair and clothes on the bones (body.chest,
+//           body.neck, body.head, body.armL.shoulder and .elbow,
+//           body.legL.hip, .knee and .ankle, ...: see #bones), in metres of the
+//           grown-up body, with the helpers at the end of clothing.js; and
+//           says where three things go -> { brow, crown, back }:
+//             brow   an object on the head where something worn there goes
+//                    (a headlamp): +z out of the front, y up it
+//             crown  { rx, rz, z, y }: the half-width and half-depth of the
+//                    head (or what is on it) about that high, its middle, and
+//                    that height, in brow's parent's frame: for a strap round it
+//             back   an object where something worn on the back goes (a
+//                    jetpack): +z into the body, y up the spine
 export class Character {
-  constructor() {
+  constructor(who = HIKER) {
     this.root = new THREE.Group();
     // yaw last, so the body can be pitched about its own axis (on a horse's back)
     this.root.rotation.order = 'YXZ';
@@ -229,7 +271,7 @@ export class Character {
     // Optional (x, z) -> ground height in world space, so feet meet the slope.
     this.groundAt = null;
 
-    this.#build();
+    this.#bones();
 
     this.tool = null;
     this.action = null; // { kind, t, dur, loop }
@@ -253,59 +295,24 @@ export class Character {
     this.footL = foot(1);
     this.footR = foot(-1);
 
-    // The model owns these resources. A peer can later have borrowed gear
-    // attached to the same joints; keep that gear out of model disposal.
-    this.resources = new Set();
-    this.root.traverse((o) => {
-      if (!o.isMesh) return;
-      o.receiveShadow = true;
-      this.resources.add(o.geometry);
-      this.resources.add(o.material);
-      if (o.isSkinnedMesh) this.resources.add(o.skeleton);
-    });
+    // Whoever is dressed owns their clothes; what is held, worn or carried
+    // on the bones (a peer's borrowed gear, too) stays when someone else is.
+    this.who = null;
+    this.size = 1; // who.size
+    this.outfit = []; // what dress() hung on the bones
+    this.resources = new Set(); // ...and what it is made of
+    this.worn = []; // straps round the head: { holder, crown } (addWorn)
+    this.dress(who);
   }
 
   dispose() {
-    for (const resource of this.resources) resource.dispose();
-    this.resources.clear();
+    this.#undress();
   }
 
-  // ── The model ─────────────────────────────────────────────────────────────
-  // An orange rain shell with the grey hood rolled at the collar, tan hiking
-  // trousers and brown boots, a black daypack with a hydration hose over the
-  // left shoulder, a brown snapback with a maroon flat brim, white sunglasses
-  // and a full dark beard.
-  #build() {
-    const skin = M(0xc68c6c, 0.7);
-    const shell = M(0xc85a26, 0.63, { vertexColors: true, ...textile('ripstop') });
-    const trim = M(0x793c24, 0.72);
-    const hood = M(0x787b74, 0.84, textile('ripstop'));
-    const pants = M(0xa98b60, 0.96, { vertexColors: true, ...textile('twill') });
-    const boot = M(0x654633, 0.69);
-    const sole = M(0x302e2a, 0.94);
-    const pack = M(0x424844, 0.88, textile('canvas'));
-    const webbing = M(0x313530, 0.97, textile('canvas'));
-    const binding = M(0x505650, 0.76);
-    const hose = M(0x66888d, 0.36);
-
-    const piece = (parent, geometry, material, x = 0, y = 0, z = 0) => {
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.castShadow = true;
-      mesh.position.set(x, y, z);
-      parent.add(mesh);
-      return mesh;
-    };
-    const cord = (parent, material, radius, points) => {
-      const path = new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
-      return piece(parent, new THREE.TubeGeometry(path, points.length * 3, radius, 6), material);
-    };
-    const group = (parent, x, y, z) => {
-      const g = new THREE.Group();
-      g.position.set(x, y, z);
-      parent.add(g);
-      return g;
-    };
-
+  // ── The body ──────────────────────────────────────────────────────────────
+  // The bones everyone has, at the grown-up's measurements. The clothes are
+  // whoever is dressed (dress()).
+  #bones() {
     const joint = (parent, x, y) => {
       const bone = new THREE.Bone();
       bone.position.set(x, y, 0);
@@ -315,146 +322,19 @@ export class Character {
     this.hips = joint(this.root, 0, HIPS_Y);
     this.spine = group(this.hips, 0, 0.06, 0);
     this.chest = joint(this.spine, 0, 0);
-    const jacket = tailored([
-      [-0.065, 0.188, 0.141, -0.005], [-0.052, 0.202, 0.152, -0.005, 0.006],
-      [-0.034, 0.209, 0.156, -0.004, 0.01], [0.018, 0.20, 0.15, 0, 0.023],
-      [0.043, 0.184, 0.14, 0, 0.025], [0.065, 0.19, 0.147, 0, 0.023],
-      [0.13, 0.173, 0.138, 0, -0.018], [0.18, 0.181, 0.141, 0, -0.018],
-      [0.25, 0.189, 0.144], [0.34, 0.207, 0.151, 0.003],
-      [0.395, 0.221, 0.144], [0.43, 0.221, 0.132], [0.46, 0.183, 0.117],
-      [0.487, 0.126, 0.10], [0.502, 0.09, 0.083],
-    ], { segments: 48, squareness: 0.88,
-      crease: (y, across, front) => {
-        const ax = Math.abs(across);
-        const pocket = 0.008 * foldAt(y - 0.12 - 0.075 * across, 0.019);
-        const shoulder = 0.006 * foldAt(y - 0.41 + 0.12 * ax, 0.013);
-        const gather = 0.006 * foldAt(y - 0.056 + 0.045 * across, 0.012);
-        const strap = Math.exp(-(((ax - 0.63) / 0.11) ** 2)) * smoothstep(0.16, 0.30, y);
-        return pocket + gather + shoulder - Math.max(front, 0) * strap * 0.012;
-      },
-      surface: (x, y, front) => {
-        const panel = Math.abs(x) > 0.15 && y < 0.39 ? 0.79 : 1;
-        const tone = y < -0.035 ? 0.75 : panel;
-        return [tone, tone * (front < -0.5 ? 0.95 : 1), tone];
-      },
-    });
-    piece(this.chest, jacket, shell);
-    const collar = tailored([[0.464, 0.112, 0.105], [0.502, 0.103, 0.094],
-      [0.535, 0.094, 0.085], [0.548, 0.085, 0.078]]);
-    piece(this.chest, collar, M(0xb44a20, 0.56));
-    cord(this.chest, trim, 0.004, [[0, -0.05, 0.149], [0, 0.04, 0.147],
-      [0, 0.13, 0.14], [0, 0.255, 0.146], [0, 0.34, 0.156],
-      [0, 0.43, 0.134], [0, 0.49, 0.103], [0, 0.545, 0.081]]);
-    for (const side of [-1, 1]) {
-      cord(this.chest, trim, 0.0035, [[side * 0.126, 0, 0.124],
-        [side * 0.14, 0.075, 0.10], [side * 0.149, 0.143, 0.079]]);
-    }
-    piece(this.chest, tailored([[0.38, 0.035, 0.026, -0.138],
-      [0.403, 0.084, 0.043, -0.141], [0.448, 0.128, 0.054, -0.131, 0.01],
-      [0.463, 0.125, 0.047, -0.128, 0.012], [0.486, 0.142, 0.061, -0.111, 0.007],
-      [0.515, 0.131, 0.063, -0.09], [0.532, 0.095, 0.047, -0.09]], { crease: (y, x, front) =>
-        0.009 * foldAt(y - 0.456 - 0.023 * x, 0.01) +
-        0.007 * foldAt(y - 0.485 + 0.016 * front, 0.009) }), hood);
-
-    // The back panel rests against the shell. The loaded pack is deepest
-    // near its base, with a separately bound shovel pocket on its outer face.
-    const bp = group(this.chest, 0, 0.258, -0.158);
-    this.back = group(bp, 0, 0, -BACK_OF_PACK);
-    piece(bp, tailored([[-0.224, 0.099, 0.055, -0.037], [-0.207, 0.145, 0.083, -0.045],
-      [-0.159, 0.159, 0.096, -0.054], [-0.065, 0.162, 0.104, -0.055],
-      [0.035, 0.15, 0.095, -0.047], [0.143, 0.138, 0.081, -0.034],
-      [0.196, 0.105, 0.058, -0.025], [0.209, 0.062, 0.034, -0.025]],
-    { squareness: 0.76 }), pack);
-    piece(bp, tailored([[-0.195, 0.096, 0.024, -0.127], [-0.162, 0.134, 0.032, -0.137],
-      [-0.07, 0.139, 0.036, -0.146], [0.004, 0.117, 0.031, -0.134],
-      [0.04, 0.088, 0.021, -0.132]], { squareness: 0.78 }), webbing);
-    cord(bp, binding, 0.004, [[-0.124, -0.039, -0.159], [-0.09, 0.019, -0.153],
-      [0, 0.04, -0.153], [0.09, 0.019, -0.153], [0.124, -0.039, -0.159]]);
-    cord(bp, trim, 0.005, [[0.089, 0.018, -0.157], [0.097, -0.016, -0.167], [0.091, -0.032, -0.173]]);
-    cord(bp, webbing, 0.009, [[-0.046, 0.186, -0.024], [-0.026, 0.234, -0.023],
-      [0.023, 0.235, -0.023], [0.047, 0.186, -0.024]]);
-    // Daisy chains stitched to the pocket, with a reflective bar tack at
-    // each end. Two side compression straps draw the shell down over its load.
-    const stitch = M(0x8c9185, 0.78);
-    for (const side of [-1, 1]) {
-      const pocketWeb = cord(bp, binding, 0.0075, [[side * 0.072, -0.154, -0.167],
-        [side * 0.081, -0.123, -0.173], [side * 0.086, -0.085, -0.176],
-        [side * 0.089, -0.046, -0.171]]);
-      for (const t of [0.1, 0.49, 0.89]) {
-        const at = pocketWeb.geometry.parameters.path.getPointAt(t);
-        piece(bp, new THREE.BoxGeometry(0.015, 0.003, 0.004), stitch, at.x, at.y, at.z - 0.007);
-      }
-      cord(bp, webbing, 0.009, [[side * 0.116, 0.134, -0.098],
-        [side * 0.14, 0.083, -0.082], [side * 0.15, 0.058, -0.039],
-        [side * 0.146, 0.075, -0.009]]);
-      cord(bp, binding, 0.0035, [[side * 0.143, -0.143, -0.102],
-        [side * 0.148, -0.011, -0.095], [side * 0.135, 0.101, -0.085],
-        [side * 0.101, 0.165, -0.089], [side * 0.042, 0.184, -0.092], [0, 0.187, -0.088]]);
-    }
-    for (const side of [-1, 1]) {
-      // Sweep a flattened strap over the shoulder and back to the hip belt.
-      const strap = cord(this.chest, webbing, 0.011, [[side * 0.098, 0.40, -0.17],
-        [side * 0.112, 0.466, -0.089], [side * 0.127, 0.492, -0.008],
-        [side * 0.133, 0.461, 0.091], [side * 0.135, 0.37, 0.117],
-        [side * 0.124, 0.242, 0.12], [side * 0.164, 0.15, 0.078],
-        [side * 0.179, 0.09, -0.012], [side * 0.145, 0.07, -0.159]]);
-      // Widen just the cross section, keeping its centre on the path.
-      const vertices = strap.geometry.attributes.position;
-      const path = strap.geometry.parameters.path;
-      for (let ring = 0; ring <= strap.geometry.parameters.tubularSegments; ring++) {
-        const centre = path.getPointAt(ring / strap.geometry.parameters.tubularSegments);
-        for (let k = 0; k <= 6; k++) {
-          const i = ring * 7 + k;
-          vertices.setX(i, centre.x + (vertices.getX(i) - centre.x) * 2.3);
-        }
-      }
-      strap.geometry.computeVertexNormals();
-    }
-    cord(this.chest, hose, 0.006, [[0.087, 0.433, -0.15], [0.117, 0.49, -0.071],
-      [0.129, 0.506, -0.002], [0.141, 0.467, 0.10], [0.141, 0.388, 0.132],
-      [0.128, 0.305, 0.141]]);
-    this.neck = group(this.chest, 0, 0.5, 0);
-    piece(this.neck, new THREE.CylinderGeometry(0.054, 0.064, 0.13, 16), skin, 0, 0.055);
+    this.neck = group(this.chest, 0, NECK_Y, 0);
     this.head = group(this.neck, 0, NECK, 0);
-    // what is worn on the head goes on the cap (addWorn)
-    this.cap = buildHead(this.head, skin);
+    // Where something worn on the head goes, and the frame a strap round it
+    // is in; and where something worn on the back goes. Whoever is dressed
+    // says where those are (dress()).
+    this.capFrame = group(this.head);
+    this.brow = group(this.capFrame);
+    this.cap = { brow: this.brow, crown: null }; // crown: see who.dress
+    this.back = group(this.chest);
 
-    // Keep the gait and all the attachment frames. Only the cloth bridges
-    // the moving joints, with a short blend through the elbow or kneecap.
-    const dressLimb = (upper, lower, geometry, material, bendWidth, anchorStart) => {
-      const p = geometry.attributes.position;
-      const weights = new Float32Array(p.count * 4);
-      const indices = new Uint16Array(p.count * 4);
-      for (let i = 0; i < p.count; i++) {
-        const w = smoothstep(-bendWidth, bendWidth, lower.position.y - p.getY(i));
-        const anchor = smoothstep(anchorStart, 0.05, p.getY(i));
-        weights[i * 4] = 1 - w - anchor;
-        weights[i * 4 + 2] = anchor;
-        indices[i * 4 + 2] = 2;
-        weights[i * 4 + 1] = w;
-        indices[i * 4 + 1] = 1;
-      }
-      geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(indices, 4));
-      geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weights, 4));
-      const cloth = new THREE.SkinnedMesh(geometry, material);
-      upper.add(cloth);
-      upper.updateWorldMatrix(true, true);
-      cloth.bind(new THREE.Skeleton([upper, lower, upper.parent]));
-      // The straight rest pose's sphere doesn't cover all the swimming and
-      // crouching poses. Bound the full sweep about the upper joint.
-      geometry.computeBoundingSphere();
-      cloth.boundingSphere = new THREE.Sphere(new THREE.Vector3(),
-        geometry.boundingSphere.radius + geometry.boundingSphere.center.length());
-      cloth.castShadow = true;
-    };
     const arm = (side) => {
       const shoulder = joint(this.chest, side * 0.201, 0.420);
       const elbow = joint(shoulder, 0, -0.28);
-      dressLimb(shoulder, elbow, sleeve(side, (x, y, front) => {
-        const tone = y < -0.49 ? 0.44 : front < -0.5 && y < -0.23 && y > -0.40 ? 0.80 : 1;
-        return [tone, tone, tone];
-      }), shell, 0.062, -0.035);
-      piece(elbow, handShape(side), skin, 0, -0.229);
       return { shoulder, elbow };
     };
     this.armL = arm(1);
@@ -473,25 +353,57 @@ export class Character {
     this.handL = group(this.armL.elbow, 0, -0.27, 0);
     this.raisable = {}; // name -> { object, stowed }
 
-    // legs
     const leg = (side) => {
       const hip = joint(this.hips, side * HIP_X, HIP_Y);
       hip.rotation.order = 'ZXY';
       const knee = joint(hip, 0, -THIGH);
-      dressLimb(hip, knee, trouserLeg(side, (x, y, front) => {
-        const kneePanel = y >= -0.48 && y <= -0.31 && front > 0.15;
-        const tone = kneePanel ? 0.72 : y < -0.78 ? 0.64 : 1;
-        return [tone, tone, tone];
-      }), pants, 0.087, -0.18);
       const ankle = group(knee, 0, -SHIN, 0);
-      piece(ankle, bootUpper(), boot);
-      piece(ankle, outsole(), sole);
-      cord(ankle, sole, 0.003, [[-0.033, -0.006, 0.112], [0.032, 0.008, 0.094],
-        [-0.031, 0.023, 0.082], [0.029, 0.038, 0.067], [-0.029, 0.05, 0.059]]);
       return { side, hip, knee, ankle };
     };
     this.legL = leg(1);
     this.legR = leg(-1);
+  }
+
+  // Be someone else (one of hikers.js): their clothes, their size. What is
+  // held, worn or carried stays, and a strap round the head is let out or
+  // taken in to fit.
+  dress(who) {
+    if (!who || who === this.who) return;
+    this.#undress();
+    this.who = who;
+    this.size = who.size ?? 1;
+    this.root.scale.setScalar(this.size);
+    // Cloth is bound to the bones as they stand, so straighten the limbs
+    // while it is put on.
+    const limbs = [this.armL, this.armR, this.legL, this.legR].flatMap((L) => (L.shoulder ? [L.shoulder, L.elbow] : [L.hip, L.knee]));
+    const bent = limbs.map((b) => b.rotation.clone());
+    for (const b of limbs) b.rotation.set(0, 0, 0);
+    const there = new Set();
+    this.root.traverse((o) => there.add(o));
+    const { brow, crown, back } = who.dress(this);
+    this.root.traverse((o) => {
+      if (there.has(o)) return;
+      if (there.has(o.parent)) this.outfit.push(o);
+      if (!o.isMesh) return;
+      o.receiveShadow = true;
+      this.resources.add(o.geometry);
+      this.resources.add(o.material);
+      if (o.isSkinnedMesh) this.resources.add(o.skeleton);
+    });
+    limbs.forEach((b, i) => b.rotation.copy(bent[i]));
+
+    place(this.capFrame, brow.parent);
+    place(this.brow, brow);
+    place(this.back, back);
+    for (const w of this.worn) fit(w, crown);
+    this.cap.crown = { ...crown };
+  }
+
+  #undress() {
+    for (const o of this.outfit) o.removeFromParent();
+    this.outfit.length = 0;
+    for (const resource of this.resources) resource.dispose();
+    this.resources.clear();
   }
 
   // Something the hiker can carry in the right hand.
@@ -510,19 +422,24 @@ export class Character {
     for (const k in this.tools) this.tools[k].object.visible = k === this.tool;
   }
 
-  // Something the hiker wears on the front of the cap (a headlamp), placed in
-  // that spot's frame: +z out of the front panel, y up it. `band`, if given,
-  // is put round the crown at the same height, in the cap's frame (a strap):
-  // see head.js for its size (character.cap.crown).
+  // Something the hiker wears on the front of the head, or of the cap if
+  // there is one (a headlamp), placed in that spot's frame: +z out of the
+  // front, y up it. `band`, if given, is put round the head at the same
+  // height, in the cap's frame (a strap): character.cap.crown says how big
+  // it is round there. Dressed as someone else, the band is fitted to them.
   addWorn(object, { band = null } = {}) {
     this.cap.brow.add(object);
-    if (band) this.cap.brow.parent.add(band);
+    if (!band) return;
+    const holder = new THREE.Group();
+    holder.add(band);
+    this.capFrame.add(holder);
+    this.worn.push({ holder, crown: { ...this.cap.crown } });
   }
 
-  // Something the hiker wears on the back, over the daypack (a jetpack),
-  // placed in the frame of the back of the pack: +z into the pack (towards
-  // the hiker's front), y up the spine, +x to the hiker's left. It rides with
-  // the chest however the body leans. Its owner shows and hides it.
+  // Something the hiker wears on the back (a jetpack), over a pack if there
+  // is one, placed in the frame of the back: +z into the body, y up the
+  // spine, +x to the hiker's left. It rides with the chest however the body
+  // leans. Its owner shows and hides it.
   addOnBack(object) {
     this.back.add(object);
   }
@@ -668,7 +585,14 @@ export class Character {
   update(dt, speed, grounded, vy, turn) {
     dt = Math.min(dt, 1 / 15);
     this.time += dt;
-    const v = speed;
+    // Someone smaller walks the way the grown-up body would at a speed scaled
+    // down to them (by the root of their size, which keeps the Froude number),
+    // and their steps turn over quicker by the same root. The strides come
+    // out the right length for how fast they go in the world, so the feet
+    // don't skate, and a small child's legs go like the clappers.
+    const quick = 1 / Math.sqrt(this.size);
+    const v = speed * quick;
+    vy *= quick;
     const k = 1 - Math.exp(-dt * 8);
 
     // Smoothed speed and acceleration, to lean into starts and stops.
@@ -705,7 +629,7 @@ export class Character {
     const fRun = v / (2 * (0.35 + 0.27 * v));
     let f = Math.max(lerp(fWalk, fRun, rb), turning * 1.2, mb * 0.6);
     f *= 1 - ab; // hold the stride in the air
-    this.phase += f * dt;
+    this.phase += f * dt * quick;
     const stride = f > 1e-3 ? v / f : 0;
     const betaWalk = clamp(0.62 - 0.03 * v, 0.52, 0.62);
     const betaRun = clamp((0.9 * Math.max(fRun, 0.5)) / Math.max(v, 0.5), 0.22, 0.4);
@@ -884,14 +808,16 @@ export class Character {
       const lean = S.lean ?? 0.1;
       hx *= 1 - sit;
       hz *= 1 - sit;
-      hy = lerp(hy, HIPS_Y, sit);
+      // (the seat is in the world's metres, the body in the grown-up's)
+      const sz = this.size;
+      hy = lerp(hy, SEAT_HIPS / sz, sit);
       hPitch *= 1 - sit;
       hYaw *= 1 - sit;
       hRoll *= 1 - sit;
       for (const F of [this.footL, this.footR]) {
-        F.x = lerp(F.x, F.side * (S.spread + 0.05), sit);
-        F.y = lerp(F.y, HIPS_Y - S.hang, sit);
-        F.z = lerp(F.z, S.fwd ?? 0.1, sit);
+        F.x = lerp(F.x, F.side * (S.spread / sz + 0.05), sit);
+        F.y = lerp(F.y, (SEAT_HIPS - S.hang) / sz, sit);
+        F.z = lerp(F.z, (S.fwd ?? 0.1) / sz, sit);
         F.p = lerp(F.p, 0.35, sit);
         F.out = lerp(F.out, F.side * 0.22, sit);
         F.load *= 1 - sit;
@@ -1109,7 +1035,7 @@ export class Character {
   #swimPose(dt, w) {
     const { prone, pitch, under } = this.swimTo;
     const going = smoothstep(0.05, 0.6, prone);
-    this.stroke += dt * lerp(STROKES[0], STROKES[1], going);
+    this.stroke += (dt / Math.sqrt(this.size)) * lerp(STROKES[0], STROKES[1], going);
     const ph = this.stroke * TAU;
     const mix = (cur, val) => cur + (val - cur) * w;
 
@@ -1142,8 +1068,9 @@ export class Character {
     if (r.rotation.order !== 'YXZ') r.rotation.order = 'YXZ'; // pitch in the body's own frame
     const tilt = clamp((prone * 1.4 + pitch) * w, -0.3, 2.6);
     r.rotation.x = tilt;
-    const back = SWIM_PIVOT * Math.sin(tilt);
-    r.position.y += SWIM_PIVOT * (1 - Math.cos(tilt));
+    const pivot = SWIM_PIVOT * this.size;
+    const back = pivot * Math.sin(tilt);
+    r.position.y += pivot * (1 - Math.cos(tilt));
     r.position.x -= Math.sin(r.rotation.y) * back;
     r.position.z -= Math.cos(r.rotation.y) * back;
     this.spine.rotation.x = mix(this.spine.rotation.x, -0.12 * prone);
@@ -1181,11 +1108,14 @@ export class Character {
   }
 
   // Raise each foot to the ground under it and tip it to the slope.
+  // (The feet are placed in the body's own metres, the ground is in the
+  // world's: a smaller body's are that much smaller.)
   #feelGround(dt, w) {
     const r = this.root;
+    const sz = this.size;
     const yaw = r.rotation.y;
-    const cy = Math.cos(yaw);
-    const sy = Math.sin(yaw);
+    const cy = Math.cos(yaw) * sz;
+    const sy = Math.sin(yaw) * sz;
     const ks = 1 - Math.exp(-dt * 30);
     for (const F of [this.footL, this.footR]) {
       const wx = r.position.x + F.x * cy + F.z * sy;
@@ -1195,8 +1125,8 @@ export class Character {
       F.g = F.g === null ? gh : lerp(F.g, gh, ks);
       const ahead = this.groundAt(wx + sy * 0.12, wz + cy * 0.12);
       const behind = this.groundAt(wx - sy * 0.12, wz - cy * 0.12);
-      const slope = Number.isFinite(ahead) && Number.isFinite(behind) ? -Math.atan2(ahead - behind, 0.24) : 0;
-      F.y += clamp(F.g - r.position.y, -0.45, 0.45) * w;
+      const slope = Number.isFinite(ahead) && Number.isFinite(behind) ? -Math.atan2(ahead - behind, 0.24 * sz) : 0;
+      F.y += clamp((F.g - r.position.y) / sz, -0.45, 0.45) * w;
       F.p += clamp(slope, -0.5, 0.5) * w;
     }
   }

@@ -276,7 +276,8 @@ export class WorldSave extends Emitter {
 
   // ── Wiring ────────────────────────────────────────────────────────────────
   // peers: everyone else in the world (src/player/peers.js)
-  // where: () => { x, z, yaw }, where you are standing, to tell them
+  // where: () => { x, z, yaw, who }, where you are standing and who you are
+  //   (a hiker's id, player/hikers.js), to tell them
   attach({ peers = null, where }) {
     this.attached = { where };
     this.peers = peers;
@@ -322,7 +323,7 @@ export class WorldSave extends Emitter {
     if (this.connected && now - this.toldAt > AT_EVERY) {
       this.toldAt = now;
       const p = this.attached.where();
-      this.live.at(round(p.x), round(p.z), round(p.yaw, 100));
+      this.live.at(round(p.x), round(p.z), round(p.yaw, 100), p.who);
     }
 
     // Finding changes means looking over the whole world, which on a world

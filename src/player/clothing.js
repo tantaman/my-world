@@ -3,6 +3,7 @@
 // obliquely across the cloth and dies out wherever adjacent rows are flat.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { smoothstep } from '../noise.js';
 
 export function tailored(rows, { segments = 24, squareness = 1, side = 1, surface, crease } = {}) {
   // Extra sections let the folds narrow to a ridge and flatten out again.
@@ -145,16 +146,21 @@ export function sleeve(side, surface) {
   return cloth;
 }
 
-export function trouserLeg(side, surface, hipOffset = 0.095) {
-  const cloth = tailored([
-    [-0.80, 0.063, 0.064], [-0.783, 0.073, 0.074, 0, 0.008],
-    [-0.768, 0.065, 0.065, 0, 0.009], [-0.748, 0.075, 0.078, -0.004, 0.012],
-    [-0.72, 0.061, 0.065, 0, 0.014], [-0.63, 0.069, 0.082, -0.009],
-    [-0.54, 0.073, 0.084, -0.012], [-0.48, 0.065, 0.074, -0.003, -0.012],
-    [-0.45, 0.072, 0.078, 0.002, -0.012], [-0.42, 0.072, 0.083, 0.007],
-    [-0.38, 0.076, 0.088, 0.007], [-0.31, 0.08, 0.096, 0.003],
-    [-0.17, 0.093, 0.109], [-0.065, 0.10, 0.116, -0.004], [0.025, 0.102, 0.128], [0.07, 0.10, 0.118], [0.12, 0.095, 0.111],
-  ], { side, surface, segments: 24, crease: surface && ((y, x, front) =>
+// A grown-up's hiking trousers, hem to waist, in the hip's frame (the knee is
+// at -0.42): rows as tailored() takes them.
+const TROUSERS = [
+  [-0.80, 0.063, 0.064], [-0.783, 0.073, 0.074, 0, 0.008],
+  [-0.768, 0.065, 0.065, 0, 0.009], [-0.748, 0.075, 0.078, -0.004, 0.012],
+  [-0.72, 0.061, 0.065, 0, 0.014], [-0.63, 0.069, 0.082, -0.009],
+  [-0.54, 0.073, 0.084, -0.012], [-0.48, 0.065, 0.074, -0.003, -0.012],
+  [-0.45, 0.072, 0.078, 0.002, -0.012], [-0.42, 0.072, 0.083, 0.007],
+  [-0.38, 0.076, 0.088, 0.007], [-0.31, 0.08, 0.096, 0.003],
+  [-0.17, 0.093, 0.109], [-0.065, 0.10, 0.116, -0.004], [0.025, 0.102, 0.128], [0.07, 0.10, 0.118], [0.12, 0.095, 0.111],
+];
+
+// rows: the leg's sections, if not TROUSERS (joggers, gathered at the ankle)
+export function trouserLeg(side, surface, hipOffset = 0.095, rows = TROUSERS) {
+  const cloth = tailored(rows, { side, surface, segments: 24, crease: surface && ((y, x, front) =>
     0.006 * foldAt(y + 0.39 - 0.041 * x * side, 0.014) +
     0.005 * foldAt(y + 0.46 + 0.035 * x * side, 0.012) * (0.6 - 0.4 * front) +
     0.005 * foldAt(y + 0.72 - 0.042 * x * side, 0.012)) });
@@ -207,4 +213,67 @@ export function outsole() {
     [-0.07, 0.057, 0.12, 0.045], [-0.062, 0.061, 0.12, 0.045],
     [-0.047, 0.061, 0.119, 0.045], [-0.042, 0.058, 0.116, 0.045],
   ], { squareness: 0.75, segments: 20 });
+}
+
+// ── Putting it on ───────────────────────────────────────────────────────────
+// A hiker's clothes (hikers/) are hung from the bones of player/character.js
+// with these. Everything is placed in its bone's frame, in metres of the
+// grown-up body (a smaller hiker is the same body made smaller).
+
+export const material = (hex, rough = 0.85, extra) => new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: 0, ...extra });
+
+// A rigid piece, on whichever bone carries it.
+export function piece(parent, geometry, mat, x = 0, y = 0, z = 0) {
+  const mesh = new THREE.Mesh(geometry, mat);
+  mesh.castShadow = true;
+  mesh.position.set(x, y, z);
+  parent.add(mesh);
+  return mesh;
+}
+
+// A round strap or cord through points [[x, y, z], ...]. Its path is kept
+// on the geometry (geometry.parameters.path), to put things along it.
+export function cord(parent, mat, radius, points) {
+  const path = new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
+  return piece(parent, new THREE.TubeGeometry(path, points.length * 3, radius, 6), mat);
+}
+
+export function group(parent, x = 0, y = 0, z = 0) {
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  parent.add(g);
+  return g;
+}
+
+// Cloth that bridges a moving joint: a sleeve over shoulder and elbow, a
+// trouser leg over hip and knee. It follows the upper bone, blends into the
+// lower one over bendWidth (m) either side of the joint, and is held to the
+// body above it (the chest, the hips) from anchorStart (m, up the bone) on.
+// Dressed with the limb straight (Character.dress sees to that).
+export function limb(upper, lower, geometry, mat, bendWidth, anchorStart) {
+  const p = geometry.attributes.position;
+  const weights = new Float32Array(p.count * 4);
+  const indices = new Uint16Array(p.count * 4);
+  for (let i = 0; i < p.count; i++) {
+    const w = smoothstep(-bendWidth, bendWidth, lower.position.y - p.getY(i));
+    const anchor = smoothstep(anchorStart, 0.05, p.getY(i));
+    weights[i * 4] = 1 - w - anchor;
+    weights[i * 4 + 2] = anchor;
+    indices[i * 4 + 2] = 2;
+    weights[i * 4 + 1] = w;
+    indices[i * 4 + 1] = 1;
+  }
+  geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(indices, 4));
+  geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weights, 4));
+  const cloth = new THREE.SkinnedMesh(geometry, mat);
+  upper.add(cloth);
+  upper.updateWorldMatrix(true, true);
+  cloth.bind(new THREE.Skeleton([upper, lower, upper.parent]));
+  // The straight rest pose's sphere doesn't cover all the swimming and
+  // crouching poses. Bound the full sweep about the upper joint.
+  geometry.computeBoundingSphere();
+  cloth.boundingSphere = new THREE.Sphere(new THREE.Vector3(),
+    geometry.boundingSphere.radius + geometry.boundingSphere.center.length());
+  cloth.castShadow = true;
+  return cloth;
 }

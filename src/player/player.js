@@ -34,6 +34,9 @@ import { lerp, clamp, smoothstep } from '../noise.js';
 import { Emitter } from '../core/events.js';
 import { segDist, waterSample } from '../core/geom.js';
 
+// The heights and depths here are the grown-up hiker's; someone smaller
+// (character.size) has them that much smaller: their eyes, their head room,
+// how deep the water gets before they float, and how far it drags at them.
 const PLAYER_RADIUS = 0.32;
 // How high a ledge you can walk onto without jumping. Less than one course of
 // a log wall (0.32 m) so walls stay walls; sills and piers set their own
@@ -125,7 +128,8 @@ export class Player extends Emitter {
   // solids: built things you bump into and stand on (src/world/solids.js)
   // spaces: places under the ground you can be in (src/world/spaces.js)
   // basins: water held up in something built (src/world/basins.js)
-  constructor({ scene, camera, world, input, solids = null, spaces = null, basins = null }) {
+  // who: which hiker you are (hikers.js), if not the first; be() changes it
+  constructor({ scene, camera, world, input, solids = null, spaces = null, basins = null, who }) {
     super();
     this.camera = camera;
     this.world = world;
@@ -135,7 +139,7 @@ export class Player extends Emitter {
     this.basins = basins;
     // The space you're in (a cave), or null out under the sky.
     this.space = null;
-    this.character = new Character();
+    this.character = new Character(who);
     // Feet find the ground under each of them (terrain, or a sill underfoot).
     this.character.groundAt = (x, z) => this.groundAt(x, z, this.pos.y + 0.02);
     this.character.onFootstep = (run) => this.emit('footstep', run);
@@ -267,7 +271,7 @@ export class Player extends Emitter {
   // (Which solid that was, if any, is left in this.groundSolid.) afloat: in
   // deep water, where you float rather than the bed.
   groundAt(x, z, y = Infinity, afloat = true) {
-    let g = afloat ? standHeight(this.world, x, z, this.carrier ? this.carrier.depth : SWIM_DEPTH, y, this.spaces, this.basins) : this.world.heightAt(x, z);
+    let g = afloat ? standHeight(this.world, x, z, this.carrier ? this.carrier.depth : this.swimDepth, y, this.spaces, this.basins) : this.world.heightAt(x, z);
     this.groundSolid = null;
     if (this.solids) {
       this.solids.forEachNear(x, z, 1, (s) => {
@@ -281,6 +285,22 @@ export class Player extends Emitter {
       });
     }
     return g;
+  }
+
+  // How tall you are, beside the grown-up hiker (1).
+  get size() {
+    return this.character.size;
+  }
+
+  // How deep the water is before it floats you, on your own.
+  get swimDepth() {
+    return SWIM_DEPTH * this.character.size;
+  }
+
+  // Be someone else (one of hikers.js), wherever you are and whatever you're
+  // holding.
+  be(who) {
+    this.character.dress(who);
   }
 
   // Appear where a world opens. Call once the ground there has streamed in.
@@ -316,7 +336,7 @@ export class Player extends Emitter {
   }
 
   get eye() {
-    return this.carrier ? this.carrier.eye : lerp(EYE, EYE_FLAT, this.prone);
+    return this.carrier ? this.carrier.eye : lerp(EYE, EYE_FLAT, this.prone) * this.size;
   }
 
   update(dt) {
@@ -427,7 +447,7 @@ export class Player extends Emitter {
     this.space = this.spaces ? this.spaces.at(this.pos.x, this.pos.z, this.pos.y + 0.05) : null;
     const inWater = !this.space && this._water(this.pos.x, this.pos.z, this.pos.y, _w) && _w.depth > 0 && !(this.underfoot && this.pos.y > _w.level) && this.pos.y < _w.level + OVER_WATER;
     const depth = inWater ? _w.depth : 0;
-    const float = c ? c.depth : SWIM_DEPTH;
+    const float = c ? c.depth : this.swimDepth;
     const F = c && c.fly;
     this.flying = !!F && !this.grounded;
     this.wade = this.flying ? 0 : depth;
@@ -442,17 +462,17 @@ export class Player extends Emitter {
       else speed = (running ? c.run : c.walk) * amount * (1 - 0.5 * smoothstep(float * 0.15, float, depth));
       push = this.flying ? 0 : this.swimming ? c.push : c.push * 0.35 * smoothstep(float * 0.15, float, depth);
     } else {
-      const drag = this.swimming ? 0.42 : 1 - 0.5 * smoothstep(0.12, 1.0, depth);
+      const drag = this.swimming ? 0.42 : 1 - 0.5 * smoothstep(0.12 * this.size, 1.0 * this.size, depth);
       const run = running && !this.swimming;
       speed = (run ? CONFIG.runSpeed : CONFIG.walkSpeed) * amount * (1 - this.busy * 0.85) * drag;
       if (this.swimming) speed = SWIM.along * amount;
-      push = this.swimming ? PUSH.swim : PUSH.wade * smoothstep(WADE_PUSH[0], WADE_PUSH[1], depth);
+      push = this.swimming ? PUSH.swim : PUSH.wade * smoothstep(WADE_PUSH[0] * this.size, WADE_PUSH[1] * this.size, depth);
     }
     // On your own, out of your depth: where you'd float, and how far under it
     // you are. Under the surface, forward is the way the camera looks, up or
     // down.
     const diver = !c && this.swimming;
-    const floatY = diver ? _w.level - SWIM_DEPTH : -Infinity;
+    const floatY = diver ? _w.level - this.swimDepth : -Infinity;
     this.surface = diver ? _w.level : 0;
     this.under = diver ? Math.max(0, floatY - this.pos.y) : 0;
     let climb = 0;
@@ -546,7 +566,7 @@ export class Player extends Emitter {
 
     // Walls, footings, felled trunks: push out of anything that's not underfoot.
     if (this.solids) {
-      const head = c ? c.height : BODY_H;
+      const head = c ? c.height : BODY_H * this.size;
       this.solids.forEachNear(this.pos.x, this.pos.z, 1.2 + radius, (s) => {
         segDist(this.pos.x, this.pos.z, s.ax, s.az, s.bx, s.bz, _seg);
         const min = s.r + radius;
@@ -590,7 +610,7 @@ export class Player extends Emitter {
     }
     if (diver && (this.pos.y < floatY - 0.01 || (afloat && this.vel.y < 0))) {
       // under the surface (or on your way down from it): no lower than the bed
-      const bed = this.groundAt(this.pos.x, this.pos.z, this.pos.y, false) - PRONE_DROP * this.prone;
+      const bed = this.groundAt(this.pos.x, this.pos.z, this.pos.y, false) - PRONE_DROP * this.size * this.prone;
       if (this.pos.y < bed) {
         this.pos.y = bed;
         if (this.vel.y < 0) this.vel.y = 0;
@@ -635,7 +655,7 @@ export class Player extends Emitter {
     if (c) this.character.update(dt, 0, true, 0, 0);
     else this.character.update(dt, hs, this.grounded, this.vel.y, this.turnRate);
     // whether your head is under the water
-    this.submerged = diver && this.pos.y + lerp(HEAD[0], HEAD[1], this.prone) < this.surface - 0.05;
+    this.submerged = diver && this.pos.y + lerp(HEAD[0], HEAD[1], this.prone) * this.size < this.surface - 0.05;
 
     this.updateCamera(dt, false);
   }
@@ -661,7 +681,7 @@ export class Player extends Emitter {
     const floor = _in.floor;
     const c = this.carrier;
     const radius = c ? c.radius : PLAYER_RADIUS;
-    const head = c ? c.height : BODY_H;
+    const head = c ? c.height : BODY_H * this.size;
     sp.walls(this.pos.x, this.pos.z, _wall);
     if (_wall.d < radius) {
       const push = radius - _wall.d;

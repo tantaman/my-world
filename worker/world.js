@@ -53,7 +53,7 @@ export class World {
     this.ctx = ctx;
     this.env = env;
     this.sql = ctx.storage.sql;
-    this.live = new Map(); // ws -> { id, member, name, x, z, yaw, colour }
+    this.live = new Map(); // ws -> { id, member, name, x, z, yaw, colour, who }
     this.nextPeer = 1;
     ctx.blockConcurrencyWhile(async () => this.#schema());
   }
@@ -405,7 +405,9 @@ export class World {
       me.x = num(msg.x);
       me.z = num(msg.z);
       me.yaw = num(msg.yaw);
-      this.#tell({ t: 'at', id: me.id, x: me.x, z: me.z, yaw: me.yaw, name: me.name, colour: me.colour }, ws);
+      // which of the game's hikers they're playing as: only passed on
+      me.who = hikerId(msg.who);
+      this.#tell({ t: 'at', id: me.id, x: me.x, z: me.z, yaw: me.yaw, name: me.name, colour: me.colour, who: me.who }, ws);
       return;
     }
     if (msg.t === 'say') {
@@ -452,7 +454,7 @@ export class World {
     if (!me) {
       const kept = ws.deserializeAttachment() || {};
       if (!kept.member) return null;
-      this.live.set(ws, (me = { id: kept.id || `p${this.nextPeer++}`, member: kept.member, name: kept.name || '', colour: kept.colour || PEER_COLOURS[0], x: 0, z: 0, yaw: 0 }));
+      this.live.set(ws, (me = { id: kept.id || `p${this.nextPeer++}`, member: kept.member, name: kept.name || '', colour: kept.colour || PEER_COLOURS[0], x: 0, z: 0, yaw: 0, who: '' }));
     }
     return me;
   }
@@ -480,7 +482,7 @@ export class World {
     for (const ws of this.ctx.getWebSockets()) {
       if (ws === except) continue;
       const me = this.live.get(ws);
-      if (me && Number.isFinite(me.x)) out.push({ id: me.id, x: me.x, z: me.z, yaw: me.yaw, name: me.name, colour: me.colour });
+      if (me && Number.isFinite(me.x)) out.push({ id: me.id, x: me.x, z: me.z, yaw: me.yaw, name: me.name, colour: me.colour, who: me.who });
     }
     return out;
   }
@@ -558,6 +560,8 @@ function send(ws, text) {
 
 const int = (raw) => (raw === null || raw === '' || !Number.isInteger(Number(raw)) ? null : Number(raw));
 const num = (v) => (Number.isFinite(v) ? v : 0);
+// A hiker's id (src/player/hikers.js) as a client says it: a short word, or ''.
+const hikerId = (v) => (typeof v === 'string' && /^[a-z][a-z0-9-]{0,23}$/.test(v) ? v : '');
 const clampName = (raw) => (raw || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, MAX_NAME);
 const clean = clampName;
 // A name and a password, as sent: the name tidied, the password as typed.

@@ -17,7 +17,7 @@ export function installSave(game) {
 
   // Everyone else in this world (someone swimming floats, just as you do, and
   // someone in a cave walks on its floor).
-  const peers = new Peers(scene, (x, z, y) => standHeight(chunks, x, z, SWIM_DEPTH, y, spaces));
+  const peers = new Peers(scene, (x, z, y, size = 1) => standHeight(chunks, x, z, SWIM_DEPTH * size, y, spaces));
   game.provide('peers', peers);
 
   const share = new SharePanel({ save, peers, input, hud });
@@ -30,7 +30,7 @@ export function installSave(game) {
   commands.add({ id: 'save', keys: ['KeyL'], group: 'WANDER', label: 'save this world · get a link', run: toggle });
   hud.button('save-btn', toggle);
 
-  save.attach({ peers, where: () => ({ x: player.pos.x, z: player.pos.z, yaw: player.yaw }) });
+  save.attach({ peers, where: () => ({ x: player.pos.x, z: player.pos.z, yaw: player.yaw, who: player.character.who.id }) });
 
   game.addSystem({ name: 'peers', phase: 'world', update: ({ dt }) => peers.update(dt) });
   // A world on the server sends what you change within a moment, and tells

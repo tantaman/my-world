@@ -205,6 +205,17 @@ try {
     await ana.until(() => world.peers.list().some((p) => p.name === 'ben'), null, 'and ana can see ben');
   });
 
+  await step('ben comes in as Oliver, and ana sees Oliver', async () => {
+    await ben.page.keyboard.press('KeyO');
+    await ben.page.click('#settings [data-setting="hiker"] [data-value="oliver"]');
+    await ben.page.keyboard.press('KeyO');
+    await ana.until(() => {
+      const p = world.peers.list().find((q) => q.name === 'ben');
+      const c = p && world.peers.get(p.id).character;
+      return c && c.who.id === 'oliver' && c.size < 0.7;
+    }, null, 'ana sees ben the size of a five-year-old');
+  });
+
   await step('what ana changes, ben sees', async () => {
     await ana.page.evaluate((s) => {
       const B = world.builder.buildings;

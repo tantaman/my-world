@@ -5,21 +5,29 @@
 // those messages each one is eased along, and the walk animation is driven off
 // how fast they turned out to be moving, so they walk rather than teleport.
 //
+// Who they are (one of hikers.js, by id) comes with it, so someone playing as
+// Oliver is seen as Oliver, and if they change, they're seen to.
+//
 // Only where they are in plan is sent, not how high. Where that matters —
 // over a cave, in it or on the hill above — they are kept on whichever they
 // were on, so someone who walks in through the mouth is seen on its floor.
 
 import * as THREE from 'three';
 import { Character } from './character.js';
+import { hiker } from './hikers.js';
 import { Emitter } from '../core/events.js';
 
 const EASE = 9; // how hard a peer is pulled toward where they said they were
 const FADE = 25_000; // ms of silence before we assume someone is gone
+const TOP = 1.8; // m from a grown-up's feet to the top of their head
+const FLAG = 0.45; // m the pennant flies over that, whoever it is
 
 // Emits:
 //   'change'  (peers)   someone arrived or left
 export class Peers extends Emitter {
-  // ground(x, z, y): where someone at (x, z) with their feet about y stands
+  // ground(x, z, y, size): where someone at (x, z) with their feet about y
+  // stands, if they are `size` beside the grown-up hiker (deep water floats
+  // someone small sooner)
   constructor(scene, ground) {
     super();
     this.scene = scene;
@@ -40,15 +48,15 @@ export class Peers extends Emitter {
     return [...this.all.values()].map((p) => ({ id: p.id, name: p.name, colour: p.colour, x: p.pos.x, z: p.pos.z }));
   }
 
-  // Someone said where they are.
-  at({ id, x, z, yaw, name, colour }) {
+  // Someone said where they are, and who they are (a hiker's id).
+  at({ id, x, z, yaw, name, colour, who }) {
     if (!id || !Number.isFinite(x) || !Number.isFinite(z)) return;
     let p = this.all.get(id);
     const arrived = !p;
     if (arrived) {
-      p = this.#make(id, colour, x, z);
+      p = this.#make(id, colour, x, z, hiker(who));
       this.all.set(id, p);
-    }
+    } else if (who !== undefined) p.character.dress(hiker(who));
     if (name !== undefined) p.name = name || '';
     if (colour) p.flag.material.color.set(colour);
     p.colour = colour || p.colour;
@@ -87,7 +95,7 @@ export class Peers extends Emitter {
       const wasZ = p.pos.z;
       p.pos.x += (p.to.x - p.pos.x) * k;
       p.pos.z += (p.to.z - p.pos.z) * k;
-      p.pos.y = this.ground(p.pos.x, p.pos.z, p.pos.y + 0.5);
+      p.pos.y = this.ground(p.pos.x, p.pos.z, p.pos.y + 0.5, p.character.size);
       const moved = Math.hypot(p.pos.x - was, p.pos.z - wasZ) / Math.max(dt, 1e-4);
       p.speed += (moved - p.speed) * Math.min(1, dt * 8);
 
@@ -96,14 +104,14 @@ export class Peers extends Emitter {
       p.character.root.position.copy(p.pos);
       p.character.root.rotation.y = p.yaw;
       p.character.update(dt, p.speed, true, 0, turn / Math.max(dt, 1e-4));
-      p.flag.position.set(p.pos.x, p.pos.y + 2.25, p.pos.z);
+      p.flag.position.set(p.pos.x, p.pos.y + TOP * p.character.size + FLAG, p.pos.z);
     }
   }
 
-  #make(id, colour, x, z) {
-    const character = new Character();
-    const pos = new THREE.Vector3(x, this.ground(x, z, Infinity), z);
-    character.groundAt = (gx, gz) => this.ground(gx, gz, pos.y + 0.3);
+  #make(id, colour, x, z, who) {
+    const character = new Character(who);
+    const pos = new THREE.Vector3(x, this.ground(x, z, Infinity, character.size), z);
+    character.groundAt = (gx, gz) => this.ground(gx, gz, pos.y + 0.3, character.size);
     this.scene.add(character.root);
     // A small bright pennant above the head, so you can find each other.
     const flag = new THREE.Mesh(
