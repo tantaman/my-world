@@ -16,7 +16,7 @@ under *launch sites* in its routes, nearest first, for as far out as you
 scroll; pick one and *go here*, or follow the route. Whichever you're nearest
 is the one that stands ready, and its rocket flies to the same places.
 
-Walk up onto the pad and press **T** beside the rocket. Pick **Deep Space 9**
+Walk up onto the pad and press **T** (or **F**) beside the rocket. Pick **Deep Space 9**
 or **The Orrery** to board, or press **Esc** to stay on the pad.
 After a five-second countdown the engine lights and the rocket
 lifts off: you watch it go from the corner of the pad, then from below as it
@@ -67,7 +67,7 @@ with jump held and you're straight off again.
 
 | | |
 |---|---|
-| **T** by the rocket | choose a flight |
+| **T** (or **F**, the act key) by the rocket | choose a flight |
 | **W A S D**, mouse | run, strafe, look (in the arena) |
 | **click** | fire the railgun |
 | **space** | jump; hold it to keep hopping |

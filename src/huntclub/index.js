@@ -98,9 +98,9 @@ const overlaps = (b, x0, z0, x1, z1) => b[0] <= x1 && b[2] >= x0 && b[1] <= z1 &
 // clear of; towns for
 // the steward's body and voice; hunting for game and kills, and to put the
 // shotgun in the rifle's slot.
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'towns', 'wildlife', 'hunting', 'videostore', 'abandoned', 'airports', 'racetrack'];
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'towns', 'wildlife', 'hunting', 'videostore', 'abandoned', 'airports', 'racetrack', 'act'];
 export function installHuntclub(game) {
-  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway, spaceport, videostore, abandoned, airports, racetrack, wildlife, hunting } = game;
+  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway, spaceport, videostore, abandoned, airports, racetrack, wildlife, hunting, act } = game;
 
   // ── Where they are ────────────────────────────────────────────────────────
   // Clear of everything there first: what the video store keeps clear of,
@@ -464,6 +464,13 @@ export function installHuntclub(game) {
     return tool;
   }
 
+  // At the hatch, the act key (F) asks for a shotgun: what's at hand, as everywhere.
+  function ask() {
+    give();
+    say(SAYS.give);
+  }
+  act.offer({ id: 'huntclub', at: () => (!owned && atCounter() ? { d: 0.5, word: 'ask', run: ask } : null) });
+
   // ── What the field says ───────────────────────────────────────────────────
   let cardUntil = 0;
   let clock = 0;
@@ -579,14 +586,11 @@ export function installHuntclub(game) {
         }
       } else if (near > GREET * 2) greeted = false;
 
-      // at the hatch, without a gun: ask for one
+      // at the hatch, without a gun: ask for one (with a click, or the act key)
       let cue = null;
       if (!owned && atCounter()) {
-        cue = '<b>click</b> ask the steward for a shotgun';
-        if (input.tapped('use')) {
-          give();
-          say(SAYS.give);
-        }
+        cue = `<b>${act.key('ask')}</b> ask the steward for a shotgun`;
+        if (input.tapped('use')) ask();
       }
       if (cue) {
         hud.cue({ html: cue });

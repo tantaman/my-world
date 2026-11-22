@@ -104,10 +104,10 @@ const overlaps = (a, b) => a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] 
 // landmarks, towns, caves, railway, spaceport and airports for what the
 // stores keep clear of (and towns for where the branches are and its clerk's
 // body and voice; caves so the shop's quiet goes on after a cave's); pack to
-// say what's yours.
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks', 'towns', 'caves', 'railway', 'spaceport', 'airports', 'pack'];
+// say what's yours; act, whose key (F) rents and returns at the counter.
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks', 'towns', 'caves', 'railway', 'spaceport', 'airports', 'pack', 'act'];
 export function installVideostore(game) {
-  const { scene, camera, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, sky, landmarks, towns, caves, railway, spaceport, airports, pack } = game;
+  const { scene, camera, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, sky, landmarks, towns, caves, railway, spaceport, airports, pack, act } = game;
 
   // ── Where they are ────────────────────────────────────────────────────────
   // Rewind Video by the start, and its branches beside the villages
@@ -759,34 +759,42 @@ export function installVideostore(game) {
     },
   });
 
-  // What the crosshair is on, what a click would do, and doing it.
+  // What the crosshair is on, what a click would do, and doing it. Renting
+  // at the counter and returning at the counter or the drop box are the act
+  // key's too (F): what's at hand, as everywhere.
+  let deedHere = null; // { word, run }: what the act key would do here now
+  act.offer({ id: 'videostore', at: () => (deedHere ? { d: 0.5, word: deedHere.word, run: deedHere.run } : null) });
   function browse() {
     if (!where.inside) mark(null);
     const n = counter.hands.length;
     let cue = null;
-    let act = null;
+    let deed = null;
     let a = null;
+    deedHere = null;
     const returning = counter.out.length > 0 && atReturns();
     if (where.inside) {
       a = aimed();
       mark(a && !a.taken ? a : null);
       if (a && !a.taken && !a.gone) {
         cue = `<b>click</b> take down <i>${esc(a.film.title)}</i> (${a.film.year}) · ${a.film.format}${n ? ` · ${n + 1} of ${HANDS}` : ''}`;
-        act = () => take(a);
+        deed = () => take(a);
       } else if (a && a.gone) {
         cue = `every ${a.film.format} copy of <i>${esc(a.film.title)}</i> is out · try again tomorrow`;
       } else if (n && atCounter()) {
         const total = counter.hands.reduce((s, h) => s + termsOf(films().byId(h.id) || { section: h.section }).price, 0);
-        cue = `<b>click</b> ${n === 1 ? 'rent it' : `rent all ${n}`} · ${money(total)}`;
-        act = rent;
+        deedHere = { word: 'rent', run: rent };
+        cue = `<b>${act.key('rent')}</b> ${n === 1 ? 'rent it' : `rent all ${n}`} · ${money(total)}`;
+        deed = rent;
       } else if (returning) {
-        cue = `<b>click</b> return ${counter.out.length === 1 ? 'your movie' : `your ${counter.out.length} movies`}`;
-        act = () => giveBack(true);
+        deedHere = { word: 'return', run: () => giveBack(true) };
+        cue = `<b>${act.key('return')}</b> return ${counter.out.length === 1 ? 'your movie' : `your ${counter.out.length} movies`}`;
+        deed = deedHere.run;
       } else if (n) cue = `<b>right-click</b> put <i>${esc(films().byId(counter.hands[n - 1].id).title)}</i> back · rent at the counter`;
     } else if (returning) {
       mark(null);
-      cue = `<b>click</b> drop ${counter.out.length === 1 ? 'your movie' : `your ${counter.out.length} movies`} in the returns`;
-      act = () => giveBack(false);
+      deedHere = { word: 'return', run: () => giveBack(false) };
+      cue = `<b>${act.key('return')}</b> drop ${counter.out.length === 1 ? 'your movie' : `your ${counter.out.length} movies`} in the returns`;
+      deed = deedHere.run;
     }
     if (cue) {
       hud.cue({ html: cue });
@@ -795,7 +803,7 @@ export function installVideostore(game) {
       hud.cue(null);
       cued = false;
     }
-    if (act && input.tapped('use')) act();
+    if (deed && input.tapped('use')) deed();
     else if (where.inside && n && input.tapped('alt')) putBack();
 
     // the card: the box on top of what you're holding

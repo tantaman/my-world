@@ -2,10 +2,10 @@
 
 At the [launch site](../spaceport/README.md), at the front of the pad,
 between the fuel tank and the rocket, a jetpack hangs on a rack: two white
-tanks with red bands, a nozzle under each. Walk up to it and press **J**,
-and it's strapped to your back. It's yours from then on, wherever you go
-(and listed with what's yours in [your pack](../pack/README.md)), until you
-take it back to the rack and **J** hangs it up again.
+tanks with red bands, a nozzle under each. Walk up to it and press **F** (or
+**J**), and it's strapped to your back. It's yours from then on, wherever you
+go (and listed with what's yours in [your pack](../pack/README.md)), until you
+take it back to the rack and **F** hangs it up again.
 
 With it on your back you walk, run, build and jump as before. To fly, jump
 and keep holding **space**: a moment after you leave the ground the jets
@@ -14,7 +14,7 @@ in the air. (Step off a ledge and press space, and they catch then too.)
 
 | | |
 |---|---|
-| **J** at the rack | strap on the jetpack · hang it back up |
+| **J** (or **F**, the act key) at the rack | strap on the jetpack · hang it back up |
 | **space**, held, off the ground | fire the jets · climb |
 | **W A S D** | fly where the camera faces, at 12 m/s |
 | **shift** | dive, and go faster: 24 m/s along |

@@ -55,10 +55,11 @@ const _p = new THREE.Vector3();
 const round = (v, f = 10) => Math.round(v * f) / f;
 
 // The features this uses, so it is installed after them (game/features.js);
-// spaceport for where the launch site is.
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'spaceport', 'pack'];
+// spaceport for where the launch site is; pack to say it's yours; act, whose
+// key (F) takes it off its rack and hangs it back up.
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'spaceport', 'pack', 'act'];
 export function installJetpack(game) {
-  const { scene, solids, player, input, builder, hud, commands, save, sound, peers, spaceport } = game;
+  const { scene, solids, player, input, builder, hud, commands, save, sound, peers, spaceport, act } = game;
   const rack = rackAt(spaceport.sites.home);
   const jets = new Jets();
   let time = 0; // s since the game began, by this feature's frames
@@ -234,6 +235,14 @@ export function installJetpack(game) {
       hud.flash(`a jetpack hangs on a rack at the launch site, ${Math.round(d)} m ${WAYS[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8]} · the launch site is on the map`, SAY);
     },
   });
+  // At the rack, with the act key (F) too: what's at hand, as everywhere.
+  act.offer({
+    id: 'jetpack',
+    at() {
+      if (!rack || jets.on || player.carrier || player.aboard || !nearRack()) return null;
+      return { d: Math.hypot(player.pos.x - rack.x, player.pos.z - rack.z), word: jets.worn ? 'hang up' : 'strap on', run: () => wear(!jets.worn, true) };
+    },
+  });
   commands.describe({ group: 'JETPACK', help: 'space, held', pad: ['PadA'], label: 'off the ground: fire the jets · climb' });
   commands.describe({ group: 'JETPACK', help: 'shift', pad: ['PadB'], label: 'flying: dive, and faster' });
   commands.describe({ group: 'JETPACK', help: 'W A S D', pad: ['PadLS'], label: 'flying: steer · let go of space to come down' });
@@ -286,10 +295,7 @@ export function installJetpack(game) {
       // what J would do here, or how to fly
       let html = null;
       if (jets.on) html = input.isTouch ? `tap jump: climb · let go to come down · ${Math.round(player.height)} m up` : `<b>space</b> climb · <b>shift</b> dive · let go to come down · ${Math.round(player.height)} m up`;
-      else if (atRack()) {
-        const K = (word) => (input.isTouch ? word : 'J');
-        html = jets.worn ? `<b>${K('hang up')}</b> hang the jetpack back up` : `<b>${K('strap on')}</b> strap on the jetpack`;
-      }
+      else if (atRack()) html = jets.worn ? `<b>${act.key('hang up')}</b> hang the jetpack back up` : `<b>${act.key('strap on')}</b> strap on the jetpack`;
       if (html) {
         hud.cue({ html });
         cued = true;

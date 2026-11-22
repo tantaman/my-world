@@ -27,10 +27,11 @@ bar above the tool bar). Let go and it slowly forgets; rush it and you start
 again. When it trusts you, it's yours, and is listed with what else is yours
 in [your pack](../pack/README.md), with how far off it is and which way.
 
-**Riding.** Beside your own, **Z** climbs on and **Z** gets off. You steer
-with the movement keys as you walk, and your tools are put away while you
-ride. Leave it anywhere: it waits there, grazing, basking or perched. From
-anywhere else, **Z** whistles for it, and it comes (from out of sight, if it
+**Riding.** Beside your own, **F** climbs on and **F** gets off, as it gets
+you in and out of everything (see [Acting](../act/README.md)); **Z** does
+too. You steer with the movement keys as you walk, and your tools are put
+away while you ride. Leave it anywhere: it waits there, grazing, basking or
+perched. From anywhere else, **Z** whistles for it, and it comes (from out of sight, if it
 has to: a horse at a gallop, an eagle down out of the sky, a turtle up out of
 the nearest water, which it needs to reach you). Tame more than one, and **Z**
 again just after a whistle calls the next instead. On a game controller, **X**

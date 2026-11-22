@@ -105,7 +105,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
     // and along to the hatch
     await page.evaluate(() => world.huntclub.toCounter());
     await frames(8);
-    assert.equal(await prompt(), 'click ask the steward for a shotgun');
+    assert.equal(await prompt(), 'F ask the steward for a shotgun');
     assert.match(await toast(), new RegExp(`^${await page.evaluate(() => world.huntclub.steward)}: “`), 'the steward says hello');
     await shot('the hatch');
     await page.evaluate(() => T.tap('use'));

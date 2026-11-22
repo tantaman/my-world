@@ -1,6 +1,7 @@
 // Cars: a dealership beside most of the towns people live in that a road
 // comes to (roads/), with one of each car it sells out on its lot. Walk up to
-// one and click, and it's yours, on a handshake; you're in the driving seat.
+// one and press F (the act key), and it's yours, on a handshake; you're in
+// the driving seat.
 // Drive it down the road to the next town, or off the road as far as it will
 // take the rough; leave it anywhere, and it waits there. It's on the map, and
 // `go here` on it puts you beside its door.
@@ -90,10 +91,11 @@ const nameOf = (kind) => KINDS[kind].name;
 
 // The features this uses, so it is installed after them (game/features.js):
 // the roads it sells cars for and drives on, and the towns beside which the
-// dealerships stand; everything the roads keep clear of, the lots do too.
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'towns', 'railway', 'roads'];
+// dealerships stand; everything the roads keep clear of, the lots do too;
+// and act, whose key (F) buys a car, gets you in and gets you out.
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'towns', 'railway', 'roads', 'act'];
 export function installCars(game) {
-  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, towns, railway, roads, peers } = game;
+  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, towns, railway, roads, peers, act } = game;
   const T = towns.towns;
 
   // ── Where the dealerships are ─────────────────────────────────────────────
@@ -415,7 +417,7 @@ export function installCars(game) {
     player.character.seat(DRIVE);
     sound.sfx('car-door');
     setTimeout(() => driving && sound.sfx('car-start'), 450);
-    hud.flash(`in your ${nameOf(mine.kind)} · W drive · S brake, back up · A D steer · space the horn · click, stopped, to get out`, SAY + 1500);
+    hud.flash(`in your ${nameOf(mine.kind)} · W drive · S brake, back up · A D steer · space the horn · ${act.key('get out')}, stopped, to get out`, SAY + 1500);
     save.touch();
     tell();
     return true;
@@ -483,7 +485,12 @@ export function installCars(game) {
     const across = Math.max(0, Math.abs(dx * fz - dz * fx) - k.wide / 2);
     return Math.hypot(along, across);
   }
-  const besideMine = () => !driving && mine && !player.aboard && !player.carrier && Math.abs(player.pos.y - car.y) < 2 && fromSide(mine.kind, car.x, car.z, car.yaw) < DOOR_REACH;
+  // how far you are from your car's side, if you're beside it and could get in
+  const besideMine = () => {
+    if (driving || !mine || player.aboard || player.carrier || Math.abs(player.pos.y - car.y) >= 2) return null;
+    const d = fromSide(mine.kind, car.x, car.z, car.yaw);
+    return d < DOOR_REACH ? d : null;
+  };
 
   // ── The dealership you're at ──────────────────────────────────────────────
   // Stood up as you come near: the lot, the showroom, a car of each kind on
@@ -582,7 +589,7 @@ export function installCars(game) {
     sound.call('hello', w.x, at.site.top + 1.6, w.z, { pitch: p.who.her ? 1.25 : 0.85 });
     if (wave) p.body.waving = 1.8;
   }
-  // the car on the lot you're beside, if any
+  // the car on the lot you're beside, if any: { car, d }
   function onLot() {
     if (!at || driving || player.aboard || player.carrier) return null;
     let best = null;
@@ -591,9 +598,8 @@ export function installCars(game) {
       const d = fromSide(c2.kind, c2.x, c2.z, c2.yaw);
       if (d < BUY_REACH && Math.abs(player.pos.y - at.site.top) < 1.5 && (!best || d < best.d)) best = { car: c2, d };
     }
-    return best && best.car;
+    return best;
   }
-  builder.idleWhile(() => !!onLot() || !!besideMine());
 
   function buy(c2) {
     if (!at || !c2) return false;
@@ -605,24 +611,33 @@ export function installCars(game) {
     return true;
   }
 
-  // ── Click: buy, get in, get out ───────────────────────────────────────────
+  // ── Buying, getting in, getting out: the act key (F) ──────────────────────
+  act.offer({
+    id: 'car',
+    at() {
+      if (driving) return { d: 0, word: 'get out', run: () => getOut() };
+      const lot = onLot();
+      const door = besideMine();
+      if (lot && (door === null || lot.d < door)) return { d: lot.d, word: mine ? 'trade' : 'buy', run: () => buy(lot.car) };
+      return door === null ? null : { d: door, word: 'get in', run: getIn };
+    },
+  });
   let cued = false;
   function cue() {
     let html = '';
-    const K = input.isTouch ? 'use' : 'click';
     if (driving) {
       const k = `${Math.round(car.speed * 3.6)} km/h`;
-      html = car.stopped ? `<b>${K}</b> get out · ${k}` : `${nameOf(car.kind)} · ${k}`;
+      html = car.stopped ? `<b>${act.key('get out')}</b> get out · ${k}` : `${nameOf(car.kind)} · ${k}`;
     } else {
       const lot = onLot();
-      if (lot) html = `<b>${K}</b> ${mine ? `trade in your ${nameOf(mine.kind)} for` : 'buy'} the ${nameOf(lot.kind)} · ${priceOf(lot.kind)} · ${KINDS[lot.kind].blurb}`;
-      else if (besideMine()) html = `<b>${K}</b> get into your ${nameOf(mine.kind)}`;
+      if (lot) html = `<b>${act.key(mine ? 'trade' : 'buy')}</b> ${mine ? `trade in your ${nameOf(mine.kind)} for` : 'buy'} the ${nameOf(lot.car.kind)} · ${priceOf(lot.car.kind)} · ${KINDS[lot.car.kind].blurb}`;
+      else if (besideMine() !== null) html = `<b>${act.key('get in')}</b> get into your ${nameOf(mine.kind)}`;
     }
     if (html) hud.cue({ html });
     else if (cued) hud.cue(null);
     cued = !!html;
   }
-  commands.describe({ group: 'CARS', help: 'click', pad: ['PadRT'], label: 'at a dealership: buy the car beside you · beside your car: get in · stopped: get out' });
+  commands.describe({ group: 'CARS', help: 'F', pad: ['PadY'], label: 'at a dealership: buy the car beside you · beside your car: get in · stopped: get out' });
   commands.describe({ group: 'CARS', help: 'W S · A D', pad: ['PadLS'], label: 'driving: go, brake and back up · steer' });
   commands.describe({ group: 'CARS', help: 'space', pad: ['PadA'], label: 'driving: the horn' });
 
@@ -812,15 +827,6 @@ export function installCars(game) {
             save.touch();
           }
         } else if (near > GREET * 2) at.greeted = false;
-      }
-      // the click: buy, get in, get out
-      if (input.tapped('use')) {
-        if (driving) getOut();
-        else {
-          const lot = onLot();
-          if (lot) buy(lot);
-          else if (besideMine()) getIn();
-        }
       }
       // your car's lamps after dark, and its headlights' beam while you drive
       const on = !!(model && driving && SKY.uNight.value > 0.35);

@@ -68,7 +68,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
       return { at, prompt: T.prompt() };
     }, river);
     assert.ok(bank, 'a bank to stand on, beside the river');
-    assert.match(bank.prompt, /^V float down it in your inner tube$/, `walking by, the prompt says so (${bank.prompt})`);
+    assert.match(bank.prompt, /^F float down it in your inner tube$/, `walking by, the prompt says so (${bank.prompt})`);
     await key('KeyV');
     const ok = await page.evaluate(() => T.until(() => world.tubing.state() && !world.tubing.state().hopping, 10000));
     assert.ok(ok, 'hopped in');
@@ -92,8 +92,8 @@ export default async function ({ page, step, key, frames, open, shot }) {
     assert.ok(now.seated && now.rest === 1, 'sat in it, arms over the sides');
     assert.ok(now.level !== null && Math.abs(now.hips - now.level) < 0.3, `down in it at the water (hips ${now.hips.toFixed(2)}, water ${now.level?.toFixed(2)})`);
     assert.ok(now.idle, 'the tools put away');
-    assert.match(now.said, /^into your tube · the river carries you along · W A S D to paddle · V to get out$/);
-    assert.match(now.prompt, /^W A S D paddle · shift hard · V get out$/);
+    assert.match(now.said, /^into your tube · the river carries you along · W A S D to paddle · F to get out$/);
+    assert.match(now.prompt, /^W A S D paddle · shift hard · F get out$/);
     assert.match(now.readout, /^[\d.]+ km\/h/);
     await shot('tubing-in');
     return { state: now.state };

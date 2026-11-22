@@ -48,7 +48,7 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.keyboard.up('KeyZ');
     assert.ok(won, 'it trusts you');
     await frames(3);
-    assert.match(await page.evaluate(() => T.prompt()), /Z ride your horse/);
+    assert.match(await page.evaluate(() => T.prompt()), /F ride your horse/);
     const mine = await page.evaluate(() => world.pack.list().yours.filter((t) => /^your /.test(t.label)));
     assert.equal(mine.length, 1, 'your pack lists it with what else is yours');
     assert.equal(mine[0].label, 'your horse');
@@ -161,7 +161,7 @@ export default async function ({ page, step, key, frames, shot }) {
     await shot('eagle');
     // Z low in the air brings it down, and you're let off when it lands
     // (higher up, Z lets go of it and you glide: that's the gliding part)
-    assert.match(await page.evaluate(() => T.prompt()), /Z land/);
+    assert.match(await page.evaluate(() => T.prompt()), /F land/);
     await key('KeyZ');
     const down = await page.evaluate(() => T.until(() => !world.mounts.riding, 60000));
     assert.ok(down, 'down, and off');
