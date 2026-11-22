@@ -326,7 +326,7 @@ export function installHuntclub(game) {
     return p;
   }
   const doorIn = (s, x0, z0, x1, z1) => s.door.x >= x0 && s.door.x <= x1 && s.door.z >= z0 && s.door.z <= z1;
-  // how far from the start the first club's door can be, at the most
+  // how far from the start the first club's door (or any of it) can be, at the most
   const HOME_REACH = RING[1] + Math.hypot(PLAN[2] - PLAN[0], PLAN[3] - PLAN[1]);
   map.places.addSource({
     within: (x0, z0, x1, z1) => all(x0, z0, x1, z1, false).filter((s) => doorIn(s, x0, z0, x1, z1)).map(asPlace),
@@ -630,8 +630,14 @@ export function installHuntclub(game) {
       return home;
     },
     clubs,
-    // every club whose box overlaps a rectangle of the world
-    within: all,
+    // every club whose box overlaps a rectangle of the world, for what's
+    // grown after them to keep clear of: the first is found there and then
+    // if it might be there and hasn't been yet
+    within(x0, z0, x1, z1) {
+      const { x, z } = player.start;
+      if (!decided && x0 <= x + HOME_REACH && x1 >= x - HOME_REACH && z0 <= z + HOME_REACH && z1 >= z - HOME_REACH) decide();
+      return all(x0, z0, x1, z1);
+    },
     get lay() {
       return lay;
     },

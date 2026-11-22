@@ -108,8 +108,8 @@ const SLIDE_SEAT = { spread: 0.18, hang: 0.05, fwd: 0.8, lean: -0.55, reins: 0, 
 const _l = { x: 0, z: 0 };
 
 // The features this uses, so it is installed after them (game/features.js):
-// landmarks, towns, caves, the railway, the launch site, the video store,
-// the airports, the abandoned buildings and the hunt club for what the
+// landmarks, towns, caves, the railway, the launch sites, the video stores,
+// the airports, the abandoned buildings and the hunt clubs for what the
 // berths keep clear of; country for the haze the fog at sea thickens.
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks', 'towns', 'caves', 'railway', 'spaceport', 'videostore', 'airports', 'abandoned', 'huntclub', 'country'];
 export function installCruise(game) {
@@ -127,12 +127,12 @@ export function installCruise(game) {
   const mauiWays = mauiRegion ? regionsInTheWay(fields.regions, mauiRegion, true) : [];
   const known = (list) => list.every((g) => fields.site(g.id, false) !== undefined);
   const common = { landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, airfields: fields };
-  const others = () => [spaceport.site && spaceport.site.box, videostore.site && videostore.site.box, ...abandoned.sites.map((b) => b.box)];
-  // (every hunt club, the first and the far ones: not just the one you're nearest)
-  const clubs = (...box) => huntclub.within(...box).length > 0;
-  const nearStart = clearOf({ ...common, boxes: others });
-  const atMaui = clearOf(common);
-  const keepOff = [(...box) => nearStart(...box) || clubs(...box), (...box) => atMaui(...box) || clubs(...box)];
+  // Every launch site, video store, hunt club and abandoned building, the far
+  // ones too, at home and at Maui: not the ones nearest you, so where a
+  // berth is can't depend on where you were when it was looked for.
+  const plain = clearOf(common);
+  const placed = (...box) => spaceport.sites.within(...box).length > 0 || videostore.stores(...box).length > 0 || huntclub.within(...box).length > 0 || abandoned.within(...box).length > 0;
+  const keepOff = (...box) => plain(...box) || placed(...box);
   const from = [player.start, mauiRegion];
   const berths = [null, null]; // each port's, once found (null if there's none)
   const searches = [null, null]; // { steps } while one's being looked for; 'done' after
@@ -140,7 +140,7 @@ export function installCruise(game) {
   let voyage = null;
   function search(i) {
     if (searches[i] || !from[i]) return;
-    searches[i] = { steps: berthSearch(gen, from[i], keepOff[i], { round: i > 0 }) };
+    searches[i] = { steps: berthSearch(gen, from[i], keepOff, { round: i > 0 }) };
   }
   // Port i's berth, found now if it hasn't been (the airfields in its way
   // asked about then and there): for when she's about to be there.
