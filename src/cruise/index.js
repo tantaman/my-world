@@ -1234,6 +1234,28 @@ export function installCruise(game) {
   }
 
   // ── Each frame ────────────────────────────────────────────────────────────
+  // Where she is now, and where she's solid: at the start of the frame,
+  // before you move, so that you're carried by where she is this frame (and
+  // everything after, that asks where you are on her, asks of the same).
+  function place() {
+    if (!voyage) return;
+    voyage.at(clock(), voy, (i) => !!berths[i]);
+    now.known = voy.x !== undefined;
+    if (now.known) {
+      now.x = voy.x;
+      now.z = voy.z;
+      now.yaw = voy.yaw;
+    }
+    if (voy.port !== refPort && berths[voy.port]) setRef(voy.port);
+    putShip();
+  }
+  function putShip() {
+    if (!shown) return;
+    ship.position.set(now.x, now.y, now.z);
+    ship.rotation.y = now.yaw;
+  }
+  game.addSystem({ name: 'cruise-voyage', phase: 'input', update: place });
+
   let lastDeck = null;
   let lastRoom = null;
   let wasInside = false;
@@ -1256,27 +1278,16 @@ export function installCruise(game) {
       }
       stepSearches();
       if (!voyage) return;
+      if (!voy.phase) place();
 
-      // where she is now, and where she's solid
-      const t = clock();
-      voyage.at(t, voy, (i) => !!berths[i]);
-      now.known = voy.x !== undefined;
-      if (now.known) {
-        now.x = voy.x;
-        now.z = voy.z;
-        now.yaw = voy.yaw;
-      }
-      if (voy.port !== refPort && berths[voy.port]) setRef(voy.port);
+      // (where she is now was worked out at the start of the frame: place())
       const docked = voy.phase === 'docked';
       const f = game.focus;
       piersUpdate(f, docked);
       const d = now.known ? Math.hypot(now.x - f.x, now.z - f.z) : Infinity;
       if (d < SHOW) showOutside(true);
       else if (d > HIDE) showOutside(false);
-      if (shown) {
-        ship.position.set(now.x, now.y, now.z);
-        ship.rotation.y = now.yaw;
-      }
+      putShip();
       locate();
       if (!shown) {
         if (cued) hud.cue(null);
