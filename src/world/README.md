@@ -230,6 +230,7 @@ chunks.js             streaming, LOD, meshes, collision + height + water queries
 waterSurface.js       the water's mesh and shader, from above and from under it
 solids.js             built things you bump into and stand on
 spaces.js             places under the ground you can be in (caves): floor, walls, roof
+basins.js             water held up in something built (a pool, a tub), to swim in
 cuts.js               holes in the ground, where something else stands in for it
 models.js             procedural trees, bushes, ferns, rocks, logs: trunks, branches, and cards on them
 modelsIsland.js       and other countries': palm, ironwood, tree fern, silversword

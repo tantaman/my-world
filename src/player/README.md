@@ -23,7 +23,9 @@ let go and you drift slowly up to float. Under the surface you swim the way
 the camera looks, up and down as well as along, lying flat with a flutter
 kick and breaststroke, the body turning about the chest to lie along the way
 you go; still, you tread water upright. The camera follows you under. What
-it's like down there is [Under the water](../underwater/README.md).
+it's like down there is [Under the water](../underwater/README.md). Water
+held up in something built (a pool, a hot tub: `world/basins.js`) is waded
+and swum in the same way, wherever it is.
 
 ## With a game controller
 
