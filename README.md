@@ -205,6 +205,7 @@ place in that order, not at the end:
 | `player/player.js` | walking the hiker somewhere | `player.steer = { x, z, run }` |
 | `player/player.js` | something that carries you (how fast, how deep, whether it flies or floats) | `player.carrier = { walk, run, swim, depth, fly, keel, … }` |
 | `player/player.js` | something that moves you itself (a train you sit in, skis you steer, a tube the river carries) | `player.aboard = { place(out, dt) }` |
+| `player/player.js` | a floor that moves, carrying whoever's on it (a ship under way) | `player.deck = { still, at }`, `player.spawnOnDeck(…)` |
 | `player/player.js` | something held to the eye: look through it, magnified | `player.sight = { zoom }` |
 | `render/origin.js` | a uniform that says where something is | `game.origin.place(uniform)` |
 | `render/pipeline.js` | something drawn over the water, not seen through it (a splash, a spark), or over what's behind it | `object.layers.set(OVER)`; a light on it: `light.layers.enableAll()` |

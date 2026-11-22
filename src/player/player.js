@@ -19,6 +19,11 @@
 // Under the ground, in a cave (world/spaces.js), its floor is what you stand
 // on, its walls and roof keep you in, and the camera keeps to its air.
 //
+// Something you stand on can move (player.deck: a ship under way). What's
+// solid of it stays where it was made solid, and it's drawn where it is now;
+// while it carries you, you go about on it where it's solid, and are put
+// where that is on it now. So it carries you, and turns you with it.
+//
 // Water held up in something built (world/basins.js: a pool, a hot tub) is
 // waded and swum in like the land's, where your feet are about as high as it.
 
@@ -81,6 +86,8 @@ const ZOOM_HOLD = 2.5;
 // How near and far the camera can be (m).
 const CAM_DIST = [2.2, 16];
 const _dir = new THREE.Vector3();
+const _turn = new THREE.Quaternion();
+const _up = new THREE.Vector3(0, 1, 0);
 const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
 const _w = waterSample();
 const _in = { floor: 0, roof: Infinity };
@@ -227,6 +234,15 @@ export class Player extends Emitter {
     this._rode = false;
     this._heading = 0;
     this._looked = 0; // s since you last looked about, while aboard
+    // Something you stand on that moves, or null:
+    //   still      { x, z, yaw }: where what's solid of it is (its own
+    //              frame there, as landmarks/sites.js's toWorld has it)
+    //   at         { x, z, yaw }: where it is now, and drawn
+    // While it's set, you move about against what's solid of it at `still`,
+    // and are put where that is on it `at` now. Who sets it sets it while
+    // you're on it, and only then.
+    this.deck = null;
+    this._deckAt = null; // where the deck was when you were last put on it
     // Something held up to the eye (a rifle's scope), or null. While there
     // is one the camera looks out from your eye the way it was looking,
     // `zoom` times closer; you aren't drawn (it would be the back of your own
@@ -288,11 +304,70 @@ export class Player extends Emitter {
     this.updateCamera(1 / 60, true);
   }
 
+  // Stand at (x, z) of the deck's still frame (where what's solid of it is),
+  // and so wherever that is on it now. (Without a deck, as spawn.)
+  spawnOnDeck(x, z, yaw, camYaw = yaw + Math.PI, y = Infinity) {
+    const d = this.deck;
+    this.spawn(x, z, yaw, camYaw, y);
+    if (!d) return;
+    this._moveFrame(d.still, d.at);
+    this._deckAt = { x: d.at.x, z: d.at.z, yaw: d.at.yaw };
+  }
+
   get eye() {
     return this.carrier ? this.carrier.eye : lerp(EYE, EYE_FLAT, this.prone);
   }
 
   update(dt) {
+    const d = this.deck;
+    if (!d) {
+      this._deckAt = null;
+      return this._update(dt);
+    }
+    // onto the deck where it's solid, as it was when you were last put on it...
+    this._moveFrame(this._deckAt || d.at, d.still);
+    this._update(dt);
+    // ...and back to where that is on it now
+    this._moveFrame(d.still, d.at);
+    this._deckAt = { x: d.at.x, z: d.at.z, yaw: d.at.yaw };
+  }
+
+  // Everything about you placed relative to `from` ({ x, z, yaw }), placed
+  // the same relative to `to` instead: where you are and look from, which
+  // way you face and move.
+  _moveFrame(from, to) {
+    const turn = to.yaw - from.yaw;
+    if (!turn && from.x === to.x && from.z === to.z) return;
+    const cf = Math.cos(from.yaw);
+    const sf = Math.sin(from.yaw);
+    const ct = Math.cos(to.yaw);
+    const st = Math.sin(to.yaw);
+    const move = (v) => {
+      const dx = v.x - from.x;
+      const dz = v.z - from.z;
+      const lx = dx * cf - dz * sf;
+      const lz = dx * sf + dz * cf;
+      v.x = to.x + lx * ct + lz * st;
+      v.z = to.z - lx * st + lz * ct;
+    };
+    move(this.pos);
+    move(this.camTarget);
+    move(this.camera.position);
+    move(this.character.root.position);
+    const c = Math.cos(turn);
+    const s = Math.sin(turn);
+    const vx = this.vel.x;
+    this.vel.x = vx * c + this.vel.z * s;
+    this.vel.z = -vx * s + this.vel.z * c;
+    this.yaw += turn;
+    this.camYaw += turn;
+    this._heading += turn;
+    this.character.root.rotation.y += turn;
+    _turn.setFromAxisAngle(_up, turn);
+    this.camera.quaternion.premultiply(_turn);
+  }
+
+  _update(dt) {
     const input = this.input;
     const c = this.carrier;
     const look = input.consumeLook();

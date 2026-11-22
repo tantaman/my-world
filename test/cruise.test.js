@@ -22,7 +22,10 @@ import { toWorld } from '../src/landmarks/sites.js';
 import { findSite as findPad, clearOf as padClear } from '../src/spaceport/site.js';
 import { findSite as findStore, clearOf as storeClear } from '../src/videostore/site.js';
 import { Airports } from '../src/airports/airports.js';
-import { findBerth, clearOf, PIER } from '../src/cruise/site.js';
+import { findBuildings, overlaps } from '../src/abandoned/sites.js';
+import { findSite as findClub, clearOf as clubClear } from '../src/huntclub/site.js';
+import { findBerth, clearOf, regionsInTheWay, PIER, LANE } from '../src/cruise/site.js';
+import { Voyage, PORTS, CYCLE, DOCK, CALL } from '../src/cruise/voyage.js';
 import { layout, walls, floorStrips, flights, towerFlights, cabinsOn, cabinByNo, roomAt, deckAt, deckY, halfBeam, poolBed, subtract, intersect, DECKS, CORES, CORE, POOLS, TOWER, FIRST, LAST, HALF_BEAM, DRAFT, WALL_T, DECK_H, isCabinDeck } from '../src/cruise/plan.js';
 import { stateroom, describe, pickYours, PALETTES } from '../src/cruise/cabins.js';
 import { LiftRide, LIFT, travelTime, moveAt, moveTime } from '../src/cruise/lifts.js';
@@ -33,8 +36,9 @@ import { matchesGolden } from './helpers/golden.js';
 const SEED = 20261119;
 const STEP_UP = 0.28; // the player's (player/player.js)
 
-// The world as the game has it: what the berth keeps clear of, made the way
+// The world as the game has it: what the berths keep clear of, made the way
 // their features make them.
+const CARDS = HIKES.map(({ load, ...card }) => card);
 function worldOf(land) {
   const gen = growWorld(SEED, [], land);
   const start = gen.findSpawn(0, 0);
@@ -44,41 +48,62 @@ function worldOf(land) {
   const caves = new Caves({ gen, keepOff: keepHike });
   const lines = new Lines(gen, { start, keepClear: [clearOfPlaces(sites), clearOfCaves((a, b, c, d) => caves.inBox(a, b, c, d))], keepOff: keepHike });
   const towns = new Towns(gen, { start, sites, keepOff: keepHike });
-  const clear = padClear({ landforms, sites, towns, caves, lines });
-  const pad = findPad(gen, start, clear);
-  const store = findStore(gen, start, storeClear({ landforms, sites, towns, caves, lines, spaceport: pad }));
-  const keepAir = (x0, z0, x1, z1) => clear(x0, z0, x1, z1) || !!(pad && pad.box[0] <= x1 && pad.box[2] >= x0 && pad.box[1] <= z1 && pad.box[3] >= z0);
-  const home = new Airports(gen, { cards: HIKES.map(({ load, ...card }) => card), start, keepOff: keepAir }).site('home');
-  const boxes = [pad && pad.box, store && store.box, home && home.box];
-  return { gen, start, boxes, keepOff: clearOf({ landforms, sites, towns, caves, lines, boxes }) };
+  const pad = findPad(gen, start, padClear({ landforms, sites, towns, caves, lines }));
+  const reserved = storeClear({ landforms, sites, towns, caves, lines, spaceport: pad });
+  const store = findStore(gen, start, reserved);
+  const airports = new Airports(gen, { cards: CARDS, start, keepOff: (a, b, c, d) => reserved(a, b, c, d) });
+  const abandoned = findBuildings(gen, start, (...box) => (store && overlaps(box, store.box)) || reserved(...box));
+  const club = findClub(gen, start, clubClear({ reserved, boxes: () => [store.box, ...abandoned.map((s) => s.box)], airfields: airports }));
+  const boxes = () => [pad && pad.box, store && store.box, club && club.box, ...abandoned.map((s) => s.box)];
+  const keepOff = clearOf({ landforms, sites, towns, caves, lines, boxes, airfields: airports });
+  const maui = airports.regions.find((g) => g.hikes.includes(PORTS[1].hike));
+  return { gen, start, boxes, keepOff, airports, maui };
 }
 
 test('her pier is grown from the seed: the same every time, on the coast, in water deep enough for her, clear of what was there first', () => {
   for (const land of LANDS) {
-    const { gen, start, boxes, keepOff } = worldOf(land);
+    const w = worldOf(land);
+    const { gen, start, boxes, keepOff } = w;
     const b = findBerth(gen, start, keepOff);
     assert.ok(b, `land ${land} has a berth`);
     assert.deepEqual(findBerth(gen, start, keepOff), b, 'and the same one again');
     const d = Math.hypot(b.x - start.x, b.z - start.z);
     assert.ok(d > 300 && d < 2600, `a walk from the start (${d.toFixed(0)} m)`);
     // deep water under her and round her
-    const w = {};
+    const p = {};
     for (const x of [-HALF_BEAM - 4, 0, HALF_BEAM + 4]) {
       for (let z = -150; z <= 150; z += 15) {
-        toWorld(b, x, z, w);
-        assert.ok(gen.height(w.x, w.z) < SEA.level - DRAFT - 1, `deep enough under her at (${x}, ${z})`);
+        toWorld(b, x, z, p);
+        assert.ok(gen.height(p.x, p.z) < SEA.level - DRAFT - 1, `deep enough under her at (${x}, ${z})`);
       }
     }
     // the trestle meets the land as high as its deck, past the pier head
     assert.ok(b.land > PIER.x1, 'the trestle runs out from the land');
-    toWorld(b, b.land, 0, w);
-    assert.ok(gen.height(w.x, w.z) >= b.top - 0.6, 'it starts on the land, as high as its deck');
+    toWorld(b, b.land, 0, p);
+    assert.ok(gen.height(p.x, p.z) >= b.top - 0.6, 'it starts on the land, as high as its deck');
     assert.equal(b.y, SEA.level);
     assert.ok(!keepOff(...b.box), 'clear of everything it keeps clear of');
-    for (const o of boxes.filter(Boolean)) assert.ok(o[2] < b.box[0] || o[0] > b.box[2] || o[3] < b.box[1] || o[1] > b.box[3], 'the launch site, the video store and the airfield among them');
+    for (const o of boxes().filter(Boolean)) assert.ok(!overlaps(o, b.box), 'the launch site, the video store, the hunt club and the abandoned buildings among them');
+    // a way out to sea, straight out from the pier
+    assert.ok(b.lane.jump >= LANE.least && b.lane.jump <= LANE.most && b.lane.swing === LANE.side);
+    // Maui's, round about the hikes there, but on the land the seed grows, not theirs
+    const m = findBerth(gen, w.maui, keepOff, { round: true });
+    assert.ok(m, 'and one at Maui');
+    assert.ok(Math.hypot(m.x - w.maui.x, m.z - w.maui.z) < 15000, 'near the hikes');
+    assert.ok(!keepOff(...m.box), 'clear of their land, and its airfield');
+    const field = w.airports.site(w.maui.id);
+    if (field) assert.ok(!overlaps(field.box, m.box));
     const round = (v) => Math.round(v * 1000) / 1000;
-    matchesGolden(land > 1 ? `cruise-${SEED}-land${land}` : `cruise-${SEED}`, { id: b.id, x: round(b.x), z: round(b.z), yaw: round(b.yaw), land: round(b.land), door: { x: round(b.door.x), z: round(b.door.z) } }, { tolerance: 1e-6 });
+    const pin = (s) => ({ id: s.id, x: round(s.x), z: round(s.z), yaw: round(s.yaw), land: round(s.land), door: { x: round(s.door.x), z: round(s.door.z) }, lane: s.lane });
+    matchesGolden(land > 1 ? `cruise-${SEED}-land${land}` : `cruise-${SEED}`, { home: pin(b), maui: pin(m) }, { tolerance: 1e-6 });
   }
+});
+
+test('her berth waits for the airfields in its way, and asks about no others', () => {
+  const { airports, start } = worldOf(LANDS[LANDS.length - 1]);
+  assert.deepEqual(regionsInTheWay(airports.regions, start).map((g) => g.id), ['home'], 'at home, only the airfield there');
+  const maui = airports.regions.find((g) => g.hikes.includes('waihee-ridge'));
+  assert.ok(regionsInTheWay(airports.regions, maui, true).some((g) => g.id === maui.id), "at Maui, Maui's");
 });
 
 test('there is a berth for other seeds too', () => {
@@ -339,6 +364,70 @@ test('both slides go down, quickly but not too, clear of the decks, and end in t
   let closest = Infinity;
   for (const p of a) for (const q of b) closest = Math.min(closest, Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]));
   assert.ok(closest > 3, `the slides keep apart (${closest.toFixed(1)} m)`);
+});
+
+// ── Her voyages ──────────────────────────────────────────────────────────────
+
+test('she sails by the clock: alongside, off, out of sight of land, across in the fog, in and alongside again', () => {
+  const w = worldOf(LANDS[LANDS.length - 1]);
+  const home = findBerth(w.gen, w.start, w.keepOff);
+  const maui = findBerth(w.gen, w.maui, w.keepOff, { round: true });
+  const v = new Voyage([home, () => maui], SEED);
+  assert.equal(CYCLE, 2 * (DOCK + 1020));
+  const t0 = 1.8e9;
+  const seen = {};
+  let prev = null;
+  let jumps = 0;
+  for (let t = t0; t < t0 + CYCLE; t += 1) {
+    const o = v.at(t, {});
+    seen[o.phase] = (seen[o.phase] || 0) + 1;
+    if (o.phase === 'docked') {
+      const b = o.port === 0 ? home : maui;
+      assert.ok(o.x === b.x && o.z === b.z && o.yaw === b.yaw, 'alongside, she lies at the berth');
+    }
+    if (prev) {
+      const d = Math.hypot(o.x - prev.x, o.z - prev.z);
+      const turn = Math.abs(Math.atan2(Math.sin(o.yaw - prev.yaw), Math.cos(o.yaw - prev.yaw)));
+      if (d > 50) {
+        jumps++;
+        assert.ok(o.fog > 0.9 && prev.fog > 0.9, 'she only goes from one place to another in the thick of the fog');
+      } else {
+        assert.ok(d < 12, `no faster than a ship (${d.toFixed(1)} m in a second)`);
+        assert.ok(turn < 0.05, 'nor turning faster');
+      }
+    }
+    // in deep water all the while, her middle and her ends
+    if (t % 7 === 0) {
+      const c = Math.cos(o.yaw);
+      const s = Math.sin(o.yaw);
+      for (const [lx, lz] of [
+        [0, 0],
+        [0, 140],
+        [0, -140],
+      ])
+        assert.ok(w.gen.height(o.x + lx * c + lz * s, o.z - lx * s + lz * c) < SEA.level - DRAFT, `deep enough under her at ${t - t0} s (${o.phase})`);
+    }
+    prev = o;
+  }
+  assert.equal(jumps, 2, 'once each way');
+  assert.equal(seen.docked, 2 * DOCK);
+  // the next sailing from each, and arrival at each, are after now, alongside DOCK apart
+  for (const i of [0, 1]) {
+    const n = v.next(t0, i);
+    assert.ok(n.sails > t0 && n.arrives > t0 && n.sails <= t0 + CYCLE && n.arrives <= t0 + CYCLE);
+    assert.equal(v.at(n.arrives + 1).phase, 'docked');
+    assert.equal(v.at(n.sails - 1).phase, 'docked');
+    assert.equal(v.at(n.sails + 1).phase, 'leaving');
+    assert.equal(v.at(n.sails - CALL + 1).port, i);
+  }
+  // Maui's berth is only looked for when she's near it
+  let asked = 0;
+  const lazy = new Voyage([home, () => (asked++, maui)], SEED);
+  const n = lazy.next(t0, 0);
+  lazy.at(n.arrives + 10);
+  assert.equal(asked, 0, 'alongside at home, Maui is not asked about');
+  lazy.at(n.sails + 30);
+  assert.equal(asked, 0, 'nor leaving it');
 });
 
 // ── Pools ────────────────────────────────────────────────────────────────────

@@ -19,6 +19,13 @@
 //
 // No three.js in here: the tests read it.
 //
+// Out from each berth runs her lane to the open sea (lane()): deep water
+// straight out from the pier, room to swing her round off it, and at its end
+// no land within sight. That's the way she sails, out and in (voyage.js).
+//
+// Away from the start there's no knowing which way the sea is: the lines are
+// looked along all the way round (findBerth's `round`), further.
+//
 // A berth:
 //   id      'cruise:<x>:<z>': a place on the map
 //   x, z    the ship's middle; yaw, which way her bow (+z of her frame)
@@ -30,10 +37,14 @@
 //   plan    [[x0, z0, x1, z1]] in her frame: the pier head, the trestle
 //   door    where `go here` sets you down: on the pier at the foot of the
 //           gangway, facing it ({ x, z, yaw })
+//   lane    { swing, jump } (m along her −x, straight out to sea from her
+//           middle): where she swings round to head out, and where she's out
+//           of sight of land
 
 import { SEA } from '../world/sea.js';
 import { toWorld } from '../landmarks/sites.js';
 import { samplesNear } from '../railway/lines.js';
+import { mayReach } from '../huntclub/site.js';
 import { HALF_BEAM, BOW, STERN, DRAFT } from './plan.js';
 
 // The pier head, in her frame (m): it runs along her port side, FENDER off
@@ -48,7 +59,13 @@ export const GANGWAY = { x0: PIER.x0 + 1.4, x1: PIER.x0 + 3.4, foot: 0, head: -1
 const DEEP = DRAFT + 3; // m of water she wants under her and round her
 const ROOM = 6; // m of that water past her sides and ends
 const LOOK = { fan: 1.35, steps: 27, near: 150, far: 2600, step: 8 }; // the lines looked along: how wide a fan (radians each way), how many, from and to (m), how finely
-const OUT = { from: 60, to: 520, step: 10 }; // m out to sea from the water's edge, to where her middle is
+const ROUND = { steps: 40, far: 14000, step: 40 }; // ...or all the way round, further and more coarsely (the edge then found finely)
+// Her lane out to sea (m): she moves off the pier sideways this far, then
+// swings round in water this wide round her (half her length and some);
+// the lane runs straight out as far as LANE.most and must reach LANE.least,
+// and where she leaves the coast behind there's no land within LANE.clear.
+export const LANE = { side: 40, swing: 165, most: 3200, least: 900, clear: 450, wide: 30 };
+const OUT = { from: 60, to: 520, step: 10, keep: 3, apart: 60 }; // m out to sea from the water's edge, to where her middle is; how many spots kept along each line, how far apart
 const NORMAL_SPAN = 40; // m: the slope of the land is read across this much of it
 const TRESTLE_MOST = 700; // m: a longer one than this isn't worth it
 const NEARER = 0.2; // how much a metre nearer the start is worth, in metres of pier
@@ -60,22 +77,43 @@ const _w = { x: 0, z: 0 };
 // gen: the WorldGen. start: { x, z }. keepOff(x0, z0, x1, z1): whether a
 // square is somewhere it may not be (a hike, an old place, a town...).
 // -> a berth, or null where there's nowhere for one.
-export function findBerth(gen, start, keepOff = () => false) {
+// round: look all the way round start, out to ROUND.far (somewhere other
+// than where people arrive, where the sea could be any way).
+export function findBerth(gen, start, keepOff = () => false, opts = {}) {
+  const steps = berthSearch(gen, start, keepOff, opts);
+  let r = steps.next();
+  while (!r.done) r = steps.next();
+  return r.value;
+}
+
+// findBerth a step at a time: a generator that yields after each line looked
+// along and each candidate tried, and returns the berth (or null), so it can
+// be spread over frames.
+export function* berthSearch(gen, start, keepOff = () => false, { round = false } = {}) {
   const sea = SEA.level;
   const deep = sea - DEEP;
   const h = (x, z) => gen.height(x, z);
   const base = Math.atan2(gen.sea.dirZ, gen.sea.dirX);
   const found = [];
   const spot = { x: 0, z: 0, yaw: 0 };
-  for (let i = 0; i < LOOK.steps; i++) {
-    const a = base + (i / (LOOK.steps - 1) - 0.5) * 2 * LOOK.fan;
+  const steps = round ? ROUND.steps : LOOK.steps;
+  for (let i = 0; i < steps; i++) {
+    const a = round ? (i / steps) * Math.PI * 2 : base + (i / (LOOK.steps - 1) - 0.5) * 2 * LOOK.fan;
     const dx = Math.cos(a);
     const dz = Math.sin(a);
-    // the water's edge along this line
+    // the water's edge along this line (coarsely, then to within a step)
     let shore = null;
-    for (let t = LOOK.near; t <= LOOK.far; t += LOOK.step) {
+    const step = round ? ROUND.step : LOOK.step;
+    for (let t = LOOK.near; t <= (round ? ROUND.far : LOOK.far); t += step) {
       if (h(start.x + dx * t, start.z + dz * t) < sea - 0.3) {
-        shore = { x: start.x + dx * t, z: start.z + dz * t, t };
+        let lo = t - step;
+        let hi = t;
+        while (hi - lo > LOOK.step) {
+          const m = (lo + hi) / 2;
+          if (h(start.x + dx * m, start.z + dz * m) < sea - 0.3) hi = m;
+          else lo = m;
+        }
+        shore = { x: start.x + dx * hi, z: start.z + dz * hi, t: hi };
         break;
       }
     }
@@ -94,7 +132,10 @@ export function findBerth(gen, start, keepOff = () => false) {
     }
     // her frame: +x (port) toward the land, so the bow points along the coast
     spot.yaw = Math.atan2(nz, -nx);
-    for (let out = OUT.from; out <= OUT.to; out += OUT.step) {
+    // the nearest few spots out from it that she'd lie at (the further
+    // ones in case the nearest has no way out to sea)
+    let kept = 0;
+    for (let out = OUT.from; out <= OUT.to && kept < OUT.keep; out += OUT.step) {
       spot.x = shore.x + nx * out;
       spot.z = shore.z + nz * out;
       if (!deepAround(h, spot, deep)) continue;
@@ -102,13 +143,20 @@ export function findBerth(gen, start, keepOff = () => false) {
       const land = landward(h, spot, sea + PIER.up - 0.3);
       if (land === null) break;
       found.push({ x: spot.x, z: spot.z, yaw: spot.yaw, land, score: land - PIER.x1 + out + shore.t * NEARER });
-      break;
+      kept++;
+      out += OUT.apart - OUT.step;
     }
+    yield;
   }
+  // the best of them that nothing else is in the way of and that has a way
+  // out to sea (asked last, and of as few as can be: they're dear)
   found.sort((a, b) => a.score - b.score);
   for (const f of found) {
     const box = boxOf(f);
     if (keepOff(box[0] - CLEAR, box[1] - CLEAR, box[2] + CLEAR, box[3] + CLEAR)) continue;
+    f.lane = laneOf(h, f, deep, sea);
+    yield;
+    if (!f.lane) continue;
     const door = toWorld(f, (GANGWAY.x0 + GANGWAY.x1) / 2, GANGWAY.foot + 3);
     return {
       id: `cruise:${Math.round(f.x)}:${Math.round(f.z)}`,
@@ -121,6 +169,7 @@ export function findBerth(gen, start, keepOff = () => false) {
       box,
       plan: planOf(f),
       door: { x: door.x, z: door.z, yaw: f.yaw + Math.PI },
+      lane: f.lane,
     };
   }
   return null;
@@ -138,6 +187,44 @@ function deepAround(h, s, deep) {
     }
   }
   return true;
+}
+
+// Her lane out: room to move off the pier and swing round, then straight out
+// along her −x as far as it's deep enough either side of her, and somewhere
+// along that, as far out as can be, a spot with no land in sight.
+// -> { swing, jump } (m along −x), or null if there's no way out worth having.
+function laneOf(h, s, deep, sea) {
+  const w = {};
+  const at = (x, z) => {
+    toWorld(s, x, z, w);
+    return h(w.x, w.z);
+  };
+  const swing = LANE.side;
+  // the water she swings round in
+  for (const r of [LANE.swing / 2, LANE.swing]) {
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      if (at(-swing + Math.cos(a) * r, Math.sin(a) * r) > deep) return null;
+    }
+  }
+  // straight out
+  let far = swing;
+  for (let x = swing + 20; x <= LANE.most; x += 20) {
+    if ([-LANE.wide, 0, LANE.wide].some((z) => at(-x, z) > deep)) break;
+    far = x;
+  }
+  // as far out as can be, out of sight of land
+  for (let x = far; x >= LANE.least; x -= 50) {
+    let clear = true;
+    for (const r of [LANE.clear / 2, LANE.clear]) {
+      for (let k = 0; k < 16 && clear; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        if (at(-x + Math.cos(a) * r, Math.sin(a) * r) > sea - 1) clear = false;
+      }
+    }
+    if (clear) return { swing, jump: x };
+  }
+  return null;
 }
 
 // The pier head stands in the water on its piles, not on the land.
@@ -196,14 +283,19 @@ function boxOf(f) {
   return [x0, z0, x1, z1];
 }
 
-// What the berth keeps clear of, all of it there first: the land of a real
+// What a berth keeps clear of, all of it there first: the land of a real
 // place (world/landforms.js), the old places, towns, the mouths of caves,
-// the railway, and any other place's box (the launch site, the video store).
+// the railway, other places' boxes (boxes() -> [[x0, z0, x1, z1]]: the
+// launch site, the video store, the hunt club, the abandoned buildings), and
+// the airfields (airfields: the Airports, airports/airports.js, whose
+// airfields in the way are asked about: so ask once they've been found, as
+// fieldsKnown() says, or they're found then and there).
 // -> keepOff for findBerth.
-export function clearOf({ landforms, sites, towns, caves, lines, boxes = [] }) {
+export function clearOf({ landforms, sites, towns, caves, lines, boxes = () => [], airfields = null }) {
+  const over = (b, x0, z0, x1, z1) => b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0;
   return (x0, z0, x1, z1) => {
     if (landforms.reaches(x0, z0, x1, z1)) return true;
-    for (const b of boxes) if (b && b[0] < x1 && b[2] > x0 && b[1] < z1 && b[3] > z0) return true;
+    for (const b of boxes()) if (b && over(b, x0, z0, x1, z1)) return true;
     if (sites.within(x0, z0, x1, z1).length) return true;
     if (towns.within(x0, z0, x1, z1).length) return true;
     for (const c of caves.inBox(x0, z0, x1, z1)) {
@@ -217,6 +309,26 @@ export function clearOf({ landforms, sites, towns, caves, lines, boxes = [] }) {
       samplesNear(line, cx, cz, Math.max(x1 - x0, z1 - z0) / 2, () => (near = true));
       if (near) return true;
     }
+    if (airfields) {
+      const half = Math.hypot(x1 - x0, z1 - z0) / 2;
+      for (const g of airfields.regions) {
+        if (!mayReach(g, Math.hypot(cx - g.x, cz - g.z), half)) continue;
+        const field = airfields.site(g.id);
+        if (field && over(field.box, x0, z0, x1, z1)) return true;
+      }
+    }
     return false;
   };
+}
+
+// How far from where it's looked for round a berth can reach (m): from the
+// start, along its fan; elsewhere, all the way round.
+export const REACH = { coast: LOOK.far + TRESTLE_MOST + 200, round: ROUND.far + TRESTLE_MOST + 200 };
+
+// The airfields' regions whose airfield might be in the way of a berth
+// looked for round `from` (round, or along the start's fan): the ones
+// clearOf will ask about. (regions: the Airports' regions.)
+export function regionsInTheWay(regions, from, round = false) {
+  const far = round ? REACH.round : REACH.coast;
+  return regions.filter((g) => mayReach(g, Math.hypot(from.x - g.x, from.z - g.z), far));
 }
