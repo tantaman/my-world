@@ -7,8 +7,8 @@ on the map with a flying clay on its badge. Pick it and press **go here**,
 and you're set down at the foot of the porch steps, facing them; track it,
 and the HUD leads you there on foot.
 
-It isn't the only one. Out in the forest, a few kilometres apart, there are
-more: the same clubhouse and field, each with a name and a steward of its
+It isn't the only one. Out in the forest, ten or twenty kilometres apart,
+there are more: the same clubhouse and field, each with a name and a steward of its
 own. They're all on the map, and under **hunt clubs** in Routes, nearest
 first, as far out as you scroll. The shotgun, the rules and your best round
 are the same at any of them, and the map remembers which you've been to.
@@ -66,7 +66,7 @@ away from you. It's on the map a moment after the world opens, once the
 airfields it keeps clear of have been found (they're looked for a little at
 a time, so as not to hold up the start).
 
-For the rest, the world is cut into 6 km squares, and about half have a
+For the rest, the world is cut into 10 km squares, and about half have a
 spot chosen from the seed; the club is on the flattest dry ground within
 1.4 km of it, its clubhouse facing the way the square says or a quarter turn
 round. A square of rough or wet ground has none. A club stays inside its

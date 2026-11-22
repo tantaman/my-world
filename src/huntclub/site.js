@@ -344,9 +344,9 @@ export function clearOf({ reserved = () => false, boxes = () => [], airfields = 
 // ── Further out ──────────────────────────────────────────────────────────────
 
 export const FAR = {
-  cell: 6000, // m, the side of a square
-  chance: 0.55, // that a square has one, if the land will take it
-  inset: 0.3, // the spot it's looked for round keeps this fraction of the square in from its edges
+  cell: 10000, // m, the side of a square
+  chance: 0.5, // that a square has one, if the land will take it
+  inset: 0.25, // the spot it's looked for round keeps this fraction of the square in from its edges
   ring: [40, 1400], // m round that spot it's looked for, nearest first
   step: 40, // m between the spots looked at, round a ring and between rings
   turns: 4, // ways round its clubhouse is tried at each, a quarter turn apart
