@@ -149,6 +149,40 @@ export class ListNearest {
   }
 }
 
+// One place whose owner may still be working out where it is (or whether
+// there is one). get() -> the place, null for none, or undefined while it's
+// still being worked out (asked again on the next work()); low: how near it
+// could be meanwhile (m).
+export class PendingNearest {
+  constructor(x, z, get, low = 0) {
+    this.x = x;
+    this.z = z;
+    this.get = get;
+    this.bound = low;
+    this.list = null; // a ListNearest, once it's known
+  }
+  _known() {
+    if (!this.list) {
+      const place = this.get();
+      if (place !== undefined) this.list = new ListNearest(this.x, this.z, place ? [place] : []);
+    }
+    return this.list;
+  }
+  get low() {
+    return this.list ? this.list.low : this.bound;
+  }
+  get ready() {
+    return this.list ? this.list.ready : null;
+  }
+  take() {
+    return this.list ? this.list.take() : null;
+  }
+  work() {
+    if (this.list) return 'done';
+    return this._known() ? 'more' : 'wait';
+  }
+}
+
 // Several streams as one, nearest first across them all. Whichever stream
 // could still hold the nearest is the one asked to look further. A place
 // more than one stream holds (by id) is let go once.

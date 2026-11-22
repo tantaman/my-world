@@ -125,3 +125,14 @@ test('distant districts can be found again by a saved address', () => {
   assert.equal(districts.near(start.x, start.z), null);
   assert.equal(districts.byId('abandoned:district:bad:0'), null);
 });
+
+test("a district's building is found by any rectangle it overlaps, and only by those", () => {
+  const districts = new OutlyingBuildings(land, start, () => false);
+  const site = districts.near(10800, -8400);
+  const [x0, z0, x1, z1] = site.box;
+  const fresh = () => new OutlyingBuildings(land, start, () => false);
+  assert.deepEqual(fresh().within(x0, z0, x1, z1).map((s) => s.id), [site.id], 'its own box');
+  assert.deepEqual(fresh().within(x1 - 1, z1 - 1, x1 + 400, z1 + 400).map((s) => s.id), [site.id], 'a corner of it');
+  assert.ok(!fresh().within(x1 + 1, z0, x1 + 50, z1).some((s) => s.id === site.id), 'not just past it');
+  assert.deepEqual(fresh().within(start.x - 2000, start.z - 2000, start.x + 2000, start.z + 2000), [], 'none near the start');
+});

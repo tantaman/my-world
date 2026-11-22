@@ -5,10 +5,12 @@
 // led just right it breaks, shot behind it's lost and thrown again (the
 // option). The rest of the round shot from station to station, the card
 // keeping score; the best kept, and the shotgun still yours after a reload.
+// Then another club, out in the forest, picked from Routes: it stands when
+// you get there, and that you've been is kept.
 //
-// Needs: nothing in particular (the club is on the map from anywhere).
-// Leaves: you out on the skeet field, a shotgun of your own (in the rifle's
-// slot), and no round under way.
+// Needs: nothing in particular (the first club is on the map from anywhere).
+// Leaves: you at the foot of the first club's steps, a shotgun of your own
+// (in the rifle's slot), and no round under way.
 
 import assert from 'node:assert/strict';
 
@@ -71,8 +73,8 @@ export default async function ({ page, step, key, frames, open, shot }) {
   await step('to the hunt club, from the map', async () => {
     site = await page.evaluate(async () => {
       // found a moment after the world opens, once the airfields have been
-      await T.until(() => world.huntclub.site, 60000);
-      const s = world.huntclub.site;
+      await T.until(() => world.huntclub.home, 60000);
+      const s = world.huntclub.home;
       return s && { id: s.id, name: s.name, door: s.door };
     });
     assert.ok(site, 'there is a hunt club');
@@ -88,7 +90,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
     const there = await page.evaluate((s) => T.until(() => Math.hypot(world.player.pos.x - s.door.x, world.player.pos.z - s.door.z) < 1, 60000), site);
     assert.ok(there, 'go here sets you down at the foot of its steps');
     assert.ok(await page.evaluate((s) => Math.cos(world.player.yaw - s.door.yaw), site) > 0.99, 'facing them');
-    assert.ok(await page.evaluate(() => T.until(() => world.huntclub.ready, 60000)), 'the club stands there');
+    assert.ok(await page.evaluate((s) => T.until(() => world.huntclub.ready && world.huntclub.site.id === s.id, 60000), site), 'the club stands there');
     await shot('the hunt club');
     return { site: site.id, name: site.name };
   });
@@ -215,11 +217,52 @@ export default async function ({ page, step, key, frames, open, shot }) {
 
   await step('the shotgun and the best round are kept', async () => {
     await page.evaluate(() => T.frames(140)); // long enough for it to be written down
-    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem(world.save.local.keyFor('marks'))).huntclub);
+    const { been, ...kept } = await page.evaluate(() => JSON.parse(localStorage.getItem(world.save.local.keyFor('marks'))).huntclub);
     assert.deepEqual(kept, { gun: true, best: 24, rounds: 1, visited: true });
+    assert.ok(Array.isArray(been), 'and the other clubs you have been to');
     await open();
     const after = await page.evaluate(() => ({ owned: world.huntclub.owned, best: world.huntclub.best, slot: world.builder.slotOf('shotgun'), rifle: world.builder.slotOf('rifle') }));
     assert.deepEqual(after, { owned: true, best: 24, slot: after.rifle, rifle: after.rifle }, 'still yours after a reload, in its slot');
     return after;
+  });
+
+  await step('another club, out in the forest, from Routes', async () => {
+    await key('KeyM');
+    await page.click('[data-tab="routes"]');
+    await page.click('.route-lists button[data-list="hunt clubs"]');
+    // the first club nearest, and the rest further out, as they're found
+    const first = page.locator('.route-options button[data-destination^="huntclub:"]').first();
+    await first.waitFor();
+    const home = await page.evaluate(() => world.huntclub.home.id);
+    assert.equal(await first.getAttribute('data-destination'), home, 'the first club is the nearest');
+    const row = page.locator('.route-options button[data-destination^="huntclub:far:"]').first();
+    await row.waitFor({ timeout: 60000 });
+    const id = await row.getAttribute('data-destination');
+    const far = await page.evaluate((id) => {
+      const s = world.huntclub.clubs.byId(id);
+      return { id: s.id, name: s.name, door: s.door, home: world.huntclub.home.name };
+    }, id);
+    assert.notEqual(far.name, far.home, 'by a name of its own');
+    await page.click('[data-tab="places"]');
+    await page.evaluate((s) => {
+      world.map.centerOn(s.door.x, s.door.z);
+      world.map.selectPlace(s.id);
+    }, far);
+    await frames(5);
+    assert.equal(await page.evaluate(() => document.getElementById('place-name').textContent), far.name, 'it is on the map, by name');
+    await page.evaluate(() => document.querySelector('#place-card [data-act="place-go"]').click());
+    const there = await page.evaluate((s) => T.until(() => Math.hypot(world.player.pos.x - s.door.x, world.player.pos.z - s.door.z) < 1, 60000), far);
+    assert.ok(there, 'go here sets you down at the foot of its steps');
+    assert.ok(await page.evaluate((s) => T.until(() => world.huntclub.ready && world.huntclub.site.id === s.id, 60000), far), 'and it stands there, in place of the first');
+    assert.match(await toast(), new RegExp(far.name), 'with its name');
+    await shot('a hunt club out in the forest');
+    await page.evaluate(() => T.frames(140)); // long enough for it to be written down
+    const been = await page.evaluate(() => JSON.parse(localStorage.getItem(world.save.local.keyFor('marks'))).huntclub.been);
+    assert.ok(been.includes(far.id), 'that you have been there is kept');
+    assert.equal(await page.evaluate((id) => world.map.places.get(id).visited, far.id), true, 'and shown on the map');
+    // back to the first
+    await page.evaluate(() => world.huntclub.go(world.huntclub.home.id));
+    assert.ok(await page.evaluate(() => T.until(() => world.huntclub.ready && world.huntclub.site === world.huntclub.home, 60000)), 'the first club stands again when you are back');
+    return { id: far.id, name: far.name };
   });
 }

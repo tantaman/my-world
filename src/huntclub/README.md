@@ -1,4 +1,4 @@
-# The hunt club
+# The hunt clubs
 
 A longer walk out from where you first arrive than the video store, there's
 a hunt club: a timber clubhouse, stained brown under a green tin roof, with
@@ -6,6 +6,12 @@ its name on a board along the porch and a skeet field in front of it. It's
 on the map with a flying clay on its badge. Pick it and press **go here**,
 and you're set down at the foot of the porch steps, facing them; track it,
 and the HUD leads you there on foot.
+
+It isn't the only one. Out in the forest, a few kilometres apart, there are
+more: the same clubhouse and field, each with a name and a steward of its
+own. They're all on the map, and under **hunt clubs** in Routes, nearest
+first, as far out as you scroll. The shotgun, the rules and your best round
+are the same at any of them, and the map remembers which you've been to.
 
 **Get a shotgun.** Up on the porch, the steward serves from a hatch in the
 wall, with the gun room behind: a rack of shotguns, shelves of shells, a
@@ -52,26 +58,37 @@ The shotgun works anywhere, too. It takes game as the rifle does (see
 dress a kill with it in hand. A shot is heard a long way off, and the
 animals near enough run.
 
-**Where it is** is grown from the seed and the land, like the video store
-(`site.js`): the flattest dry ground in a ring 450 to 1000 m out from where
-you first arrive, a little nearer winning over a little flatter, clear of
-real places brought in from a photo, the old places, towns, the mouths of
-caves, the railway, the launch site, the video store, the abandoned
-buildings and the airfields. Its clubhouse is on the side you come from, so
-the shooting is away from you. Everyone in a world finds it in the same
-place, by the same name. It's on the map a moment after the world opens,
-once the airfields it keeps clear of have been found (they're looked for a
-little at a time, so as not to hold up the start). **Nothing about the land changes for it**: the
-clubhouse stands on a deck on posts, the houses and the pads on the ground,
-and the walks follow it; the trees, bushes and stones on the field are
-hidden as it comes into view, and grass doesn't grow under any of it.
-Building goes round the field.
+**Where they are** is grown from the seed and the land, like the video store
+(`site.js`). The first is on the flattest dry ground in a ring 450 to
+1000 m out from where you first arrive, a little nearer winning over a
+little flatter, its clubhouse on the side you come from, so the shooting is
+away from you. It's on the map a moment after the world opens, once the
+airfields it keeps clear of have been found (they're looked for a little at
+a time, so as not to hold up the start).
+
+For the rest, the world is cut into 6 km squares, and about half have a
+spot chosen from the seed; the club is on the flattest dry ground within
+1.4 km of it, its clubhouse facing the way the square says or a quarter turn
+round. A square of rough or wet ground has none. A club stays inside its
+square, so no two are near each other, and none comes near the first.
+They're looked for as you come within a few kilometres, a little at a
+time.
+
+Every club keeps clear of real places brought in from a photo, the old
+places, towns, the mouths of caves, the railway, the launch sites, the
+video stores, the abandoned buildings and the airfields. Everyone in a
+world finds them in the same places, by the same names. **Nothing about the
+land changes for one**: the clubhouse stands on a deck on posts, the houses
+and the pads on the ground, and the walks follow it; the trees, bushes and
+stones on the field are hidden as it comes into view, and grass doesn't
+grow under any of it. Building goes round the field. The nearest club is
+the one that stands.
 
 ## Keys
 
 | | |
 |---|---|
-| **click** at the hatch | ask the steward for a shotgun |
+| **click** at the hatch | ask the steward for a shotgun (at any club) |
 | **7** | the shotgun (in the rifle's slot: press again to change) |
 | **click** on a station | call "pull!" for the next targets |
 | **click** | shoot · beside a kill, hold to dress it |
@@ -80,8 +97,10 @@ Building goes round the field.
 From the console:
 
 ```js
-world.huntclub.site                  // where it is
-await world.huntclub.go()            // stand at the foot of the porch steps
+world.huntclub.site                  // the club you're at, or were last near
+world.huntclub.home                  // the first club
+world.huntclub.clubs.byId(id)        // one of the rest ('huntclub:far:<i>:<j>')
+await world.huntclub.go(id)          // stand at the foot of its porch steps (no id: the one you're at)
 world.huntclub.toCounter()           // stand at the hatch
 world.huntclub.toStation(4)          // stand on a station, facing the crossing point
 world.huntclub.give()                // be given the shotgun, wherever you are
@@ -93,8 +112,8 @@ world.huntclub.lead(target)          // where to aim to break one
 ## Files
 
 ```
-index.js        plugs it in: where it is, on the map, the club stood up as you come near, the steward, the card
-site.js         where the club is, grown from the seed and the land, its name, and how high everything in it stands
+index.js        plugs it in: where they are, on the map and in Routes, the nearest stood up as you come near, the steward, the card
+site.js         where the clubs are, grown from the seed and the land, their names, and how high everything in one stands
 skeet.js        the field's layout, a target's flight, the shot's pattern, the rules of a round, what's kept of you
 range.js        the field at work: the throw called for, targets flying, breaking and coming down, the score
 club.js         what it looks like: the clubhouse and its porch, the gun room, the houses, the pads, the walks

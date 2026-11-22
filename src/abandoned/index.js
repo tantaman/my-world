@@ -196,16 +196,7 @@ export function installAbandoned(game) {
     // the start, and those of the districts it touches (each in its own).
     // Asking doesn't count as having come near one: they aren't added to sites.
     within(x0, z0, x1, z1) {
-      const box = [x0, z0, x1, z1];
-      const out = home.filter((s) => overlaps(s.box, box));
-      const st = player.start;
-      for (let j = Math.floor((z0 - st.z) / DISTRICT); j <= Math.floor((z1 - st.z) / DISTRICT); j++) {
-        for (let i = Math.floor((x0 - st.x) / DISTRICT); i <= Math.floor((x1 - st.x) / DISTRICT); i++) {
-          const s = districts.cell(i, j);
-          if (s && overlaps(s.box, box)) out.push(s);
-        }
-      }
-      return out;
+      return [...home.filter((s) => overlaps(s.box, [x0, z0, x1, z1])), ...districts.within(x0, z0, x1, z1)];
     },
     get inside() {
       return visit?.site.id || null;

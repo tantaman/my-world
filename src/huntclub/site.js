@@ -1,12 +1,18 @@
-// Where the hunt club is.
+// Where the hunt clubs are.
 //
-// There is one, a longer walk out from where people first arrive than the
+// The first is a longer walk out from where people first arrive than the
 // video store: a timber clubhouse with a porch, and in front of it a skeet
 // field. Where exactly is grown from the seed and the land, like the video
 // store (videostore/site.js): the flattest dry ground in a ring round the
 // start, a little nearer winning over a little flatter, so everyone in a
 // world finds it in the same place and nothing about it is saved. Its name is
 // grown from the seed too.
+//
+// The rest are out in the forest (HuntClubs, below): the world is cut into
+// FAR.cell squares, and a little under half of them have one, looked for the
+// same way round a spot in its square chosen from the seed, each with a name
+// of its own and its own steward. A club stays inside its square, so no two meet,
+// and none is near the start, where the first one is.
 //
 // Nothing about the land changes for it. The clubhouse stands on a deck on
 // posts, the houses and the station pads on the ground as it is, and the
@@ -15,14 +21,17 @@
 //
 // The club's frame (m) is the skeet field's (skeet.js): station 8 at the
 // origin, the stations round towards +z, and the clubhouse behind them, its
-// porch facing the field. +z points to the start, so you come to the
-// clubhouse first, and the shooting is away from where people come from.
+// porch facing the field. For the first club, +z points to the start, so you
+// come to the clubhouse first, and the shooting is away from where people
+// come from; for the rest, it's the way the club's square says.
 //
 // No three.js in here: the tests read it.
 //
 // A site:
-//   id      'huntclub:<x>:<z>': a place on the map
+//   id      'huntclub:<x>:<z>' (the first), 'huntclub:far:<i>:<j>' (the rest):
+//           a place on the map
 //   name    'Grouse Creek Hunt Club'
+//   seed    for what differs from one club to the next (its steward)
 //   x, z    station 8; yaw: which way +z of the club's frame faces
 //   base    the height of the ground at station 8
 //   lo, hi  the lowest and highest ground looked at over the plan
@@ -71,22 +80,49 @@ export function clubName(seed) {
   return `${FIRST[Math.floor(r() * FIRST.length)]} ${SECOND[Math.floor(r() * SECOND.length)]} Hunt Club`;
 }
 
+// A far club's name: its first word goes round on a lattice (i + 4j, of 16),
+// so no two squares within three of each other either way share one; its
+// second, on another, for variety. Never the first club's name.
+const FAR_FIRST = [...FIRST, 'Woodcock', 'Moose', 'Whitetail', 'Pheasant'];
+const wrap = (k, n) => ((k % n) + n) % n;
+export function farName(seed, i, j) {
+  const first = FAR_FIRST[wrap(i + j * 4 + seed, FAR_FIRST.length)];
+  const k = wrap(i * 3 + j * 7 + (seed >> 4), SECOND.length);
+  const name = `${first} ${SECOND[k]} Hunt Club`;
+  return name === clubName(seed) ? `${first} ${SECOND[(k + 1) % SECOND.length]} Hunt Club` : name;
+}
+
 // gen: the WorldGen (height(x, z), water.edge after it). start: { x, z }.
 // keepOff(x0, z0, x1, z1): whether that square is somewhere it may not be.
-// -> a site, or null where there's nowhere for one.
+// -> the first club, or null where there's nowhere for one.
 export function findSite(gen, start, keepOff = () => false) {
   return pickSite(gen, candidates(gen, start), keepOff);
 }
 
-// It's found in two goes, so the first, the dear one, can be done before
-// what it has to keep clear of is all known (the airfields are found a little
-// at a time, after the world opens):
+// The first is found in two goes, so the first, the dear one, can be done
+// before what it has to keep clear of is all known (the airfields are found
+// a little at a time, after the world opens):
 //
 // candidates(gen, start) -> the spots flat and dry enough, best first: the
 //   ground looked at all over each (the dear part), nothing else asked
 // pickSite(gen, found, keepOff) -> the best of them nothing is in the way of,
 //   as a site
 export function candidates(gen, start) {
+  return finish(flats(gen, start, RING, STEP, (spot) => Math.atan2(start.x - spot.x, start.z - spot.z), NEARER));
+}
+
+export function pickSite(gen, found, keepOff = () => false) {
+  const s = choose(found, keepOff);
+  return s && siteOf(gen, s, `huntclub:${Math.round(s.x)}:${Math.round(s.z)}`, clubName(gen.seed), gen.seed);
+}
+
+// Every spot flat and dry enough in rings round `at`, from r0 out to r1, best
+// first: face(spot) says which way +z of the club's frame faces there (and
+// with `turns` more than 1, it's tried turned that many ways round), and a
+// metre nearer `at` is worth `nearer` m of rise. A generator, yielding now
+// and then, so a search far out can be run a little at a time.
+const YIELD_EVERY = 40; // spots looked at between yields
+function* flats(gen, at, [r0, r1], step, face, nearer, turns = 1) {
   const [x0, z0, x1, z1] = PLAN;
   const quick = [
     [x0, z0],
@@ -101,64 +137,81 @@ export function candidates(gen, start) {
   const found = [];
   const spot = { x: 0, z: 0, yaw: 0 };
   const _w = { x: 0, z: 0 };
-  for (let r = RING[0]; r <= RING[1]; r += STEP) {
-    const n = Math.max(12, Math.round((Math.PI * 2 * r) / STEP));
+  let looked = 0;
+  for (let r = r0; r <= r1; r += step) {
+    const n = Math.max(12, Math.round((Math.PI * 2 * r) / step));
     const turn = r * 0.618 + 2.3; // each ring starts somewhere else round, so the spots don't line up
     for (let k = 0; k < n; k++) {
+      if (++looked % YIELD_EVERY === 0) yield;
       const a = turn + (k / n) * Math.PI * 2;
-      spot.x = start.x + Math.cos(a) * r;
-      spot.z = start.z + Math.sin(a) * r;
-      spot.yaw = Math.atan2(start.x - spot.x, start.z - spot.z);
+      spot.x = at.x + Math.cos(a) * r;
+      spot.z = at.z + Math.sin(a) * r;
+      const facing = face(spot);
       const base = gen.height(spot.x, spot.z);
       if (gen.water.edge < DRY) continue;
-      let lo = base;
-      let hi = base;
-      let ok = true;
-      // a quick look first, and over the whole of it only if it's worth it
-      for (const pts of [quick, grid]) {
-        for (const [u, v] of pts) {
-          toWorld(spot, u, v, _w);
-          const h = gen.height(_w.x, _w.z);
-          if (gen.water.edge < 4) ok = false;
-          lo = Math.min(lo, h);
-          hi = Math.max(hi, h);
+      for (let t = 0; t < turns; t++) {
+        spot.yaw = (facing + (t * Math.PI * 2) / turns) % (Math.PI * 2);
+        let lo = base;
+        let hi = base;
+        let ok = true;
+        // a quick look first, and over the whole of it only if it's worth it
+        for (const pts of [quick, grid]) {
+          for (const [u, v] of pts) {
+            toWorld(spot, u, v, _w);
+            const h = gen.height(_w.x, _w.z);
+            if (gen.water.edge < 4) ok = false;
+            lo = Math.min(lo, h);
+            hi = Math.max(hi, h);
+            if (!ok || hi - lo > FLAT_MOST) break;
+          }
           if (!ok || hi - lo > FLAT_MOST) break;
         }
-        if (!ok || hi - lo > FLAT_MOST) break;
+        if (!ok || hi - lo > FLAT_MOST) continue;
+        found.push({ x: spot.x, z: spot.z, yaw: spot.yaw, base, lo, hi, score: hi - lo + r * nearer });
       }
-      if (!ok || hi - lo > FLAT_MOST) continue;
-      found.push({ x: spot.x, z: spot.z, yaw: spot.yaw, base, lo, hi, score: hi - lo + r * NEARER });
     }
   }
   found.sort((a, b) => a.score - b.score);
   return found;
 }
 
-export function pickSite(gen, found, keepOff = () => false) {
-  // the best of them that nothing else is in the way of (asked last, and of
-  // as few as can be: it can be dear)
+function finish(run) {
+  let r;
+  do r = run.next();
+  while (!r.done);
+  return r.value;
+}
+
+// The best of them that nothing else is in the way of (asked last, and of
+// as few as can be: it can be dear).
+function choose(found, keepOff) {
   for (const s of found) {
-    const site = { ...s, plan: [PLAN] };
-    const box = boxOf(site);
-    if (keepOff(box[0] - CLEAR, box[1] - CLEAR, box[2] + CLEAR, box[3] + CLEAR)) continue;
-    const { x, z, yaw } = s;
-    const steps = layout(site, (wx, wz) => gen.height(wx, wz)).steps;
-    const door = toWorld(site, 0, EDGE - steps.length * TREAD - DOOR_OUT);
-    return {
-      id: `huntclub:${Math.round(x)}:${Math.round(z)}`,
-      name: clubName(gen.seed),
-      x,
-      z,
-      yaw,
-      base: s.base,
-      lo: s.lo,
-      hi: s.hi,
-      plan: [PLAN],
-      box,
-      door: { x: door.x, z: door.z, yaw },
-    };
+    const box = boxOf({ ...s, plan: [PLAN] });
+    if (!keepOff(box[0] - CLEAR, box[1] - CLEAR, box[2] + CLEAR, box[3] + CLEAR)) return s;
   }
   return null;
+}
+
+// A spot chosen, as a site.
+function siteOf(gen, s, id, name, seed) {
+  const { x, z, yaw } = s;
+  const site = { x, z, yaw, plan: [PLAN] };
+  const steps = layout(site, (wx, wz) => gen.height(wx, wz)).steps;
+  const door = toWorld(site, 0, EDGE - steps.length * TREAD - DOOR_OUT);
+  return {
+    id,
+    name,
+    seed,
+    x,
+    z,
+    yaw,
+    base: s.base,
+    lo: s.lo,
+    hi: s.hi,
+    plan: [PLAN],
+    box: boxOf(site),
+    door: { x: door.x, z: door.z, yaw },
+  };
 }
 
 // How high everything stands, on the ground as it is: all of it in the
@@ -247,31 +300,210 @@ export function regionsInTheWay(regions, start) {
   return regions.filter((g) => mayReach(g, Math.hypot(start.x - g.x, start.z - g.z), far));
 }
 
-// What the club keeps clear of, all of it there first:
+// What a club keeps clear of, all of it there first:
 //   reserved   what the video store keeps clear of (videostore/site.js clearOf:
 //              real places, old places, towns, caves' mouths, the railway,
-//              the launch sites), and the store's branches
-//   boxes      () -> [[x0, z0, x1, z1]]: other places' boxes in the world (the
-//              first video store, the abandoned buildings)
+//              the launch sites), and the stores and the abandoned buildings;
+//              its ready(x0, z0, x1, z1), if it has one, says whether the
+//              railway there has been surveyed
+//   boxes      () -> [[x0, z0, x1, z1]]: other places' boxes in the world
 //   airfields  the Airports (airports/airports.js: regions, site(id)), or null:
-//              the airfields of regionsInTheWay are asked about, and found
-//              then and there if they haven't been
-// -> keepOff for findSite.
+//              those whose airfield might reach a square are asked about, and
+//              found then and there if they haven't been
+// -> keepOff for findSite and HuntClubs. Its ready(x0, z0, x1, z1) says
+// whether all that's dear to know there is known (the railway, the
+// airfields), and asks for what isn't, so a search far out can wait for it
+// rather than stall.
 export function clearOf({ reserved = () => false, boxes = () => [], airfields = null }) {
   const over = (b, x0, z0, x1, z1) => b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0;
-  return (x0, z0, x1, z1) => {
+  // the airfields' regions whose airfield might reach a square
+  const reaching = (x0, z0, x1, z1) => {
+    if (!airfields) return [];
+    const x = (x0 + x1) / 2;
+    const z = (z0 + z1) / 2;
+    const half = Math.hypot(x1 - x0, z1 - z0) / 2;
+    return airfields.regions.filter((g) => mayReach(g, Math.hypot(x - g.x, z - g.z), half));
+  };
+  const keepOff = (x0, z0, x1, z1) => {
     if (reserved(x0, z0, x1, z1)) return true;
     for (const b of boxes()) if (over(b, x0, z0, x1, z1)) return true;
-    if (airfields) {
-      const x = (x0 + x1) / 2;
-      const z = (z0 + z1) / 2;
-      const half = Math.hypot(x1 - x0, z1 - z0) / 2;
-      for (const g of airfields.regions) {
-        if (!mayReach(g, Math.hypot(x - g.x, z - g.z), half)) continue;
-        const field = airfields.site(g.id);
-        if (field && over(field.box, x0, z0, x1, z1)) return true;
-      }
+    for (const g of reaching(x0, z0, x1, z1)) {
+      const field = airfields.site(g.id);
+      if (field && over(field.box, x0, z0, x1, z1)) return true;
     }
     return false;
   };
+  keepOff.ready = (x0, z0, x1, z1) => {
+    let known = !reserved.ready || reserved.ready(x0, z0, x1, z1);
+    for (const g of reaching(x0, z0, x1, z1)) if (airfields.site(g.id, false) === undefined) known = false;
+    return known;
+  };
+  return keepOff;
+}
+
+// ── Further out ──────────────────────────────────────────────────────────────
+
+export const FAR = {
+  cell: 6000, // m, the side of a square
+  chance: 0.55, // that a square has one, if the land will take it
+  inset: 0.3, // the spot it's looked for round keeps this fraction of the square in from its edges
+  ring: [40, 1400], // m round that spot it's looked for, nearest first
+  step: 40, // m between the spots looked at, round a ring and between rings
+  turns: 4, // ways round its clubhouse is tried at each, a quarter turn apart
+  start: 3000, // m the spot keeps from the start, so none comes near the first club
+};
+const FAR_NEARER = 0.002; // m of rise a metre nearer the spot is worth
+const FAR_SALT = 0x6c1ab;
+// How far (m) the plan reaches from station 8, the most; and so how far a far
+// club's box reaches from its spot. (A spot keeps FAR.inset of its square in
+// from the edges, more than this and CLEAR, so a club is inside its square.)
+const PLAN_REACH = Math.max(...[[0, 1], [2, 1], [2, 3], [0, 3]].map(([a, b]) => Math.hypot(PLAN[a], PLAN[b])));
+export const FAR_REACH = FAR.ring[1] + PLAN_REACH;
+
+// What square (i, j) is to have, from the seed alone: { i, j, x, z, yaw,
+// name, seed }, the spot it's looked for round; or null for none.
+export function farSpot(seed, i, j) {
+  // (offset, because hash2i gives (x, z) and (-x, -z) the same hash when
+  // both are odd, and the squares either side of the middle would match)
+  const rng = mulberry32(hash2i(i + 7919, j + 104729, (seed ^ FAR_SALT) >>> 0));
+  if (rng() > FAR.chance) return null;
+  // drawn first, so that what the search finds can't change them
+  const yaw = rng() * Math.PI * 2;
+  const mine = Math.floor(rng() * 1e9);
+  const x = (i + FAR.inset + rng() * (1 - 2 * FAR.inset)) * FAR.cell;
+  const z = (j + FAR.inset + rng() * (1 - 2 * FAR.inset)) * FAR.cell;
+  return { i, j, x, z, yaw, name: farName(seed, i, j), seed: mine };
+}
+
+// The club round a spot, or null: a generator, yielding now and then, and,
+// while patient() says it may, until what's dear to know round it is known
+// (keepOff.ready) rather than find it there and then. Its clubhouse faces the
+// way the spot says, or a quarter turn round from it.
+export function* farSite(gen, spot, keepOff = () => false, patient = () => false) {
+  const found = yield* flats(gen, spot, FAR.ring, FAR.step, () => spot.yaw, FAR_NEARER, FAR.turns);
+  const r = FAR_REACH + CLEAR;
+  while (patient() && keepOff.ready && !keepOff.ready(spot.x - r, spot.z - r, spot.x + r, spot.z + r)) yield;
+  const s = choose(found, keepOff);
+  return s && siteOf(gen, s, `huntclub:far:${spot.i}:${spot.j}`, spot.name, spot.seed);
+}
+
+// The clubs out in the forest (not the first: index.js has that). Squares are
+// looked over the first time they're asked about, outright (cell), or a
+// little at a time (peek, then pump).
+//   start      where people first arrive
+//   keepOff    as findSite's (clearOf)
+//   away(x0, z0, x1, z1)   somewhere none may be looked for: real places
+export class HuntClubs {
+  constructor(gen, { start, keepOff = () => false, away = () => false }) {
+    this.gen = gen;
+    this.start = start;
+    this.keepOff = keepOff;
+    this.away = away;
+    this.cells = new Map(); // "i:j" -> site or null
+    this.growing = new Map(); // "i:j" -> a search under way
+    this.queue = new Set(); // squares asked about and not yet looked over
+    this.patient = true; // a search may wait for what's dear to know (not when one's wanted outright)
+  }
+
+  // The spot square (i, j) is looked for round, or null if it has none.
+  spot(i, j) {
+    const s = farSpot(this.gen.seed, i, j);
+    if (!s) return null;
+    if (Math.hypot(s.x - this.start.x, s.z - this.start.z) < FAR.start) return null;
+    const r = FAR_REACH + CLEAR;
+    return this.away(s.x - r, s.z - r, s.x + r, s.z + r) ? null : s;
+  }
+
+  // The club in square (i, j), or null; looked for now if it hasn't been.
+  cell(i, j) {
+    const k = `${i}:${j}`;
+    const known = this.cells.get(k);
+    if (known !== undefined) return known;
+    const run = this.growing.get(k) || this._grow(i, j);
+    this.patient = false;
+    try {
+      return this._done(k, finish(run));
+    } finally {
+      this.patient = true;
+    }
+  }
+
+  // ...or undefined if it hasn't been, and it's queued for pump().
+  peek(i, j) {
+    const k = `${i}:${j}`;
+    const known = this.cells.get(k);
+    if (known !== undefined) return known;
+    if (!this.spot(i, j)) return this._done(k, null);
+    this.queue.add(k);
+    return undefined;
+  }
+
+  // Look over queued squares for up to `ms` milliseconds. -> how many are left.
+  pump(ms) {
+    const t0 = performance.now();
+    for (const k of this.queue) {
+      let run = this.growing.get(k);
+      if (!run) {
+        const [i, j] = k.split(':').map(Number);
+        this.growing.set(k, (run = this._grow(i, j)));
+      }
+      for (;;) {
+        const r = run.next();
+        if (r.done) {
+          this._done(k, r.value);
+          break;
+        }
+        if (performance.now() - t0 > ms) return this.queue.size;
+      }
+    }
+    return this.queue.size;
+  }
+
+  // Ask for the squares whose clubs could be within r of (x, z) to be looked
+  // over in the background.
+  prefetch(x, z, r) {
+    this._squares(x - r, z - r, x + r, z + r, (i, j) => this.peek(i, j));
+  }
+
+  // Clubs whose box overlaps a rectangle of the world. With wait = false,
+  // only those already found.
+  within(x0, z0, x1, z1, wait = true) {
+    const out = [];
+    this._squares(x0, z0, x1, z1, (i, j) => {
+      const s = wait ? this.cell(i, j) : this.cells.get(`${i}:${j}`);
+      if (s && s.box[0] <= x1 && s.box[2] >= x0 && s.box[1] <= z1 && s.box[3] >= z0) out.push(s);
+    });
+    return out;
+  }
+
+  // The club with this id, or null.
+  byId(id) {
+    const m = /^huntclub:far:(-?\d+):(-?\d+)$/.exec(String(id));
+    const s = m && this.cell(Number(m[1]), Number(m[2]));
+    return s && s.id === id ? s : null;
+  }
+
+  // The squares with a spot whose club could reach the rectangle (a club is
+  // inside its own square).
+  _squares(x0, z0, x1, z1, fn) {
+    const C = FAR.cell;
+    for (let j = Math.floor(z0 / C); j <= Math.floor(z1 / C); j++) {
+      for (let i = Math.floor(x0 / C); i <= Math.floor(x1 / C); i++) {
+        const s = this.spot(i, j);
+        if (s && s.x + FAR_REACH >= x0 && s.x - FAR_REACH <= x1 && s.z + FAR_REACH >= z0 && s.z - FAR_REACH <= z1) fn(i, j);
+      }
+    }
+  }
+
+  *_grow(i, j) {
+    const spot = this.spot(i, j);
+    return spot ? yield* farSite(this.gen, spot, this.keepOff, () => this.patient) : null;
+  }
+
+  _done(k, site) {
+    this.growing.delete(k);
+    this.queue.delete(k);
+    this.cells.set(k, site);
+    return site;
+  }
 }
