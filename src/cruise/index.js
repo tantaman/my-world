@@ -1,14 +1,17 @@
-// The cruise ship: the Halcyon, a big modern cruise ship alongside a pier on
-// the coast a walk from where you first arrive. Walk out along the pier, up
-// the gangway and in through the door in her side, and she's yours to
-// wander: fifteen decks, three staircases and twelve lifts, nearly
-// seventeen hundred staterooms (one of them yours), a dining room, a theatre,
-// a nightclub, a casino, shops, pools and hot tubs you can swim in, and two
-// waterslides off a tower on her top deck.
+// The cruise ship: the Halcyon, a big modern cruise ship that sails between
+// a pier on the coast a walk from where you first arrive and another at
+// Maui. When she's alongside, walk out along the pier, up the gangway and in
+// through the door in her side, and she's yours to wander: fifteen decks,
+// three staircases and twelve lifts, nearly seventeen hundred staterooms
+// (one of them yours), a dining room, a theatre, a nightclub, a casino,
+// shops, pools and hot tubs you can swim in, and two waterslides off a tower
+// on her top deck. She keeps her timetable whether you're aboard or not.
 //
 //   plan.js     her decks on paper: the hull's shape, the rooms, the cabins,
 //               the stairs and lifts (no three.js)
-//   site.js     where her pier is, grown from the seed and the land
+//   site.js     where her piers are, and their lanes out to sea, grown from
+//               the seed and the land
+//   voyage.js   where she is, by the clock on the wall
 //   cabins.js   what's in each stateroom, grown from the seed
 //   lifts.js    a ride in a lift
 //   slides.js   the waterslides, and a ride down one
@@ -18,14 +21,29 @@
 //   rooms.js    what's in the rooms, and in a stateroom
 //   lido.js     the pools, the slide tower and the slides
 //   pier.js     the pier, the trestle out to it, the terminal, the gangway
+//   wake.js     the white water she leaves under way
 //   sound.js    her hum, the club's beat, the steel drums, her horn
+//
+// Two places matter at once while she's under way. What's solid of her (her
+// floors and walls, her pools) stays at `ref`, the berth she's alongside or
+// last left; she's drawn at `now`, where the clock has her. Aboard her,
+// you're carried (player.deck): you go about where she's solid and are put
+// where that is on her now. So what's worked out inside the player's own
+// step (the camera's walls, standing in a lift, going down a slide) is
+// worked out from `ref`, and what's worked out from where you are in the
+// world (which deck, which door, where the HUD points) from `now`. What's
+// solid of her is there only while she's alongside, or for you while you're
+// aboard: a ship that has sailed leaves nothing behind at the pier.
 //
 // Nothing about the land changes for her: see site.js. Which stateroom is
 // yours, and where you were aboard her when you left, are yours, saved.
 //
 // From the console:
-//   world.cruise.site            where she is
-//   await world.cruise.go()      stand at the foot of the gangway
+//   world.cruise.site            her home berth
+//   world.cruise.voyage          where she is in her round: phase, port, bound for, how long left
+//   world.cruise.soon(what, s)   move the clock so her next 'sails', 'arrives', 'home' (arrival)
+//                                or 'fog' (the thick of it, where she's carried across) is s seconds off
+//   await world.cruise.go(port)  stand at the foot of a pier's gangway (0 home, 1 Maui)
 //   await world.cruise.board()   ...or just inside the door in her side
 //   world.cruise.where           which deck you're on, and in what
 //   world.cruise.yours           your stateroom
@@ -35,8 +53,9 @@
 //   world.cruise.hurry()         skip to the end of a lift ride or a slide
 
 import * as THREE from 'three';
-import { findBerth, clearOf } from './site.js';
+import { berthSearch, clearOf, regionsInTheWay } from './site.js';
 import { layout, cabinsOn, cabinByNo, roomAt, roomName, deckAt, deckY, halfBeam, inner, whereAlong, DECK_BY_N, CORES, CORE, FIRST, LAST, STERN, BOW, DECK_H, SLAB, SHIP, isCabinDeck } from './plan.js';
+import { Voyage, PORTS, CALL, SEA as SEA_LEG } from './voyage.js';
 import { stateroom, describe, pickYours } from './cabins.js';
 import { LiftRide, LIFT } from './lifts.js';
 import { Ride, path as slidePath } from './slides.js';
@@ -45,17 +64,27 @@ import { buildHull } from './hull.js';
 import { buildDeck } from './decks.js';
 import { furnishCabin } from './rooms.js';
 import { buildLido } from './lido.js';
-import { buildPier } from './pier.js';
+import { buildPier, gangwayChain } from './pier.js';
+import { buildWake } from './wake.js';
 import { shipSounds } from './sound.js';
 import { onPlan, planDiscs, toWorld, toLocal } from '../landmarks/sites.js';
+import { regionsInTheWay as clubWays } from '../huntclub/site.js';
 import { VEG_STRIDE } from '../world/flora.js';
+import { SEA } from '../world/sea.js';
 import { SKY } from '../render/uniforms.js';
 import { mulberry32 } from '../noise.js';
 
-const SHOW = 3200; // m: she's stood up this close (her outside, her open decks, the pier)...
+const SHOW = 3200; // m: she's stood up this close (her outside, her open decks), and a pier...
 const HIDE = 3600; // ...and taken down past this
 const NEAR = 260; // m: within this, what's solid on all her decks is there
+const PIER_SOLID = 900; // m: within this of a pier, what's solid of it is there
 const ARRIVE = 40; // m from the gangway's foot that counts as there
+const SEA_FOG = SEA_LEG.fog; // s in the thick of the fog
+const SEARCH_MS = 6; // ms a frame given to looking for a berth
+const MAUI_AFTER = 20; // s after the world opens that Maui's berth is looked for (or as soon as she's bound there)
+const FOG_HAZE = 24; // how thick the air is in the thick of the fog at sea (1: the forest's)
+const FOG_HORN = 30; // s between blasts of her horn in fog
+const FULL_SPEED = 6; // m/s: under way, as fast as she goes in and out
 const LIT = 0.6; // how much of its own colour her inside gives off, lit by its lamps
 const CAM_IN = 2.6; // m: the camera comes in this close indoors
 const QUIET = 0.5; // how shut in you are, indoors aboard
@@ -67,7 +96,7 @@ const GLASS_NEAR = 2.6; // m from a glass door that it slides open
 const CABIN_NEAR = 8; // m from a stateroom's door that its things are put in it
 const CABINS_KEPT = 10; // the most staterooms furnished at once
 const SLIDE_REACH = 1.4; // m from the top of a slide
-const HORN_HOURS = [12, 17]; // she sounds her horn at these hours
+const HORN_HOURS = [12, 17]; // she sounds her horn at these hours, alongside
 const PICK_REPEAT = 0.28; // s between decks while W or S is held, in a lift
 const KEEP_BACK = { pine: 2, broad: 2.2, birch: 1.6, bush: 0.8, fern: 0.3, rock: 1.2, log: 2.6 };
 const SCALED = { rock: true, log: true };
@@ -77,41 +106,86 @@ const GLYPH = ['.......', '...#...', '..###..', '.#####.', '#######', '.#####.',
 const SLIDE_SEAT = { spread: 0.18, hang: 0.05, fwd: 0.8, lean: -0.55, reins: 0, rest: 1, stroke: null };
 
 const _l = { x: 0, z: 0 };
-const _w = { x: 0, z: 0 };
 
 // The features this uses, so it is installed after them (game/features.js):
-// landmarks, towns, caves, the railway, the launch site, the video store and
-// the airports for what the berth keeps clear of.
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks', 'towns', 'caves', 'railway', 'spaceport', 'videostore', 'airports'];
+// landmarks, towns, caves, the railway, the launch site, the video store,
+// the airports, the abandoned buildings and the hunt club for what the
+// berths keep clear of; country for the haze the fog at sea thickens.
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks', 'towns', 'caves', 'railway', 'spaceport', 'videostore', 'airports', 'abandoned', 'huntclub', 'country'];
 export function installCruise(game) {
-  const { scene, gen, chunks, grass, solids, basins, landforms, player, input, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway, spaceport, videostore, airports } = game;
+  const { scene, gen, chunks, grass, solids, basins, landforms, player, input, builder, map, hud, commands, save, sound, pipeline, landmarks, towns, caves, railway, spaceport, videostore, airports, abandoned, huntclub } = game;
 
-  // ── Where she is ──────────────────────────────────────────────────────────
-  let home = null;
-  try {
-    home = airports.airports.site('home');
-  } catch {
-    home = null;
+  // ── Where she lies ────────────────────────────────────────────────────────
+  // Her berths are looked for once what they keep clear of is known: the
+  // airfields in the way (the airports feature finds those a little at a
+  // time once the world is open, and this doesn't hurry it) and the hunt
+  // club (which waits for them too). Until then she isn't anywhere. Maui's
+  // is looked for a little later, a few milliseconds a frame.
+  const fields = airports.airports;
+  const mauiRegion = fields.regions.find((g) => g.hikes.includes(PORTS[1].hike)) || null;
+  const homeWays = [...regionsInTheWay(fields.regions, player.start), ...clubWays(fields.regions, player.start)];
+  const mauiWays = mauiRegion ? regionsInTheWay(fields.regions, mauiRegion, true) : [];
+  const known = (list) => list.every((g) => fields.site(g.id, false) !== undefined);
+  const common = { landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, airfields: fields };
+  const others = () => [spaceport.site && spaceport.site.box, videostore.site && videostore.site.box, huntclub.site && huntclub.site.box, ...abandoned.sites.map((b) => b.box)];
+  const keepOff = [clearOf({ ...common, boxes: others }), clearOf(common)];
+  const from = [player.start, mauiRegion];
+  const berths = [null, null]; // each port's, once found (null if there's none)
+  const searches = [null, null]; // { steps } while one's being looked for; 'done' after
+  let site = null; // home's berth
+  let voyage = null;
+  function search(i) {
+    if (searches[i] || !from[i]) return;
+    searches[i] = { steps: berthSearch(gen, from[i], keepOff[i], { round: i > 0 }) };
   }
-  const keepOff = clearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, boxes: [spaceport.site && spaceport.site.box, videostore.site && videostore.site.box, home && home.box] });
-  const site = findBerth(gen, player.start, keepOff);
-  const toW = (lx, lz, out = _w) => toWorld(site, lx, lz, out);
-  const toL = (x, z, out = _l) => toLocal(site, x, z, out);
+  function stepSearches() {
+    const until = performance.now() + SEARCH_MS;
+    for (let i = 0; i < 2; i++) {
+      const sr = searches[i];
+      if (!sr || sr === 'done') continue;
+      while (performance.now() < until) {
+        const r = sr.steps.next();
+        if (!r.done) continue;
+        searches[i] = 'done';
+        found(i, r.value);
+        break;
+      }
+    }
+  }
+  function found(i, b) {
+    berths[i] = b;
+    if (!b) return;
+    if (i === 0) {
+      site = b;
+      voyage = new Voyage([() => berths[0], () => berths[1]], gen.seed);
+    }
+    // the trees and the grass where the pier is, gone now it's there
+    for (const ch of chunks.chunks.values()) clearChunk(ch, b);
+    grass.invalidate(...b.box);
+    discs[i] = planDiscs(b, 3);
+  }
+
+  // Her two places: where her solids are (the berth she's at, or left), and
+  // where she's drawn (where she is now). y is her waterline, the sea's.
+  const ref = { x: 0, z: 0, yaw: 0, y: SEA.level };
+  const now = { x: 0, z: 0, yaw: 0, y: SEA.level, known: false };
+  let refPort = -1;
+  const voy = {};
+  const deckFrame = { still: ref, at: now };
+  const toL = (x, z, out = _l) => toLocal(now, x, z, out);
   const worldSolid = (s) => {
-    const a = toWorld(site, s.ax, s.az, {});
-    const b = toWorld(site, s.bx, s.bz, {});
-    return { ...s, ax: a.x, az: a.z, bx: b.x, bz: b.z, bottom: s.bottom + site.y, topA: s.topA + site.y, topB: s.topB + site.y };
+    const a = toWorld(ref, s.ax, s.az, {});
+    const b = toWorld(ref, s.bx, s.bz, {});
+    return { ...s, ax: a.x, az: a.z, bx: b.x, bz: b.z, bottom: s.bottom + ref.y, topA: s.topA + ref.y, topB: s.topB + ref.y };
   };
-  const groundLocal = (lx, lz) => {
-    toW(lx, lz);
-    return gen.height(_w.x, _w.z) + (chunks.heightOffset ? chunks.heightOffset(_w.x, _w.z) : 0) - (site ? site.y : 0);
-  };
+  let shift = 0; // s added to the clock: only ever from the console, to try things out
+  const clock = () => Date.now() / 1000 + shift;
 
   // ── What's yours ──────────────────────────────────────────────────────────
   let yours = null; // your stateroom's number, once you've come aboard
   let visited = false;
-  let backAboard = null; // where you were aboard when you left: { x, y, z, yaw }
-  const where = { onShip: false, deck: FIRST, x: 0, z: 0, y: 0, room: null, inside: false, near: Infinity };
+  let backAboard = null; // where you were aboard her when you left, in her frame: { x, y, z, yaw }
+  const where = { onShip: false, deck: FIRST, x: 0, z: 0, y: 0, room: null, inside: false, near: Infinity, pier: 0 };
   save.register({
     id: 'cruise',
     scope: 'yours',
@@ -119,7 +193,7 @@ export function installCruise(game) {
     collect: () => ({
       visited,
       cabin: yours,
-      ...(where.onShip ? { aboard: { x: round(player.pos.x), y: round(player.pos.y), z: round(player.pos.z), yaw: round(player.yaw, 1000) } } : {}),
+      ...(where.onShip ? { aboard: { x: round(where.x), y: round(where.y), z: round(where.z), yaw: round(player.yaw - now.yaw, 1000) } } : {}),
     }),
     validate: (raw) => {
       const r = raw && typeof raw === 'object' ? raw : {};
@@ -175,19 +249,17 @@ export function installCruise(game) {
   // ── The ship ──────────────────────────────────────────────────────────────
   const ship = new THREE.Group();
   ship.name = 'cruise-ship';
-  if (site) {
-    ship.position.set(site.x, site.y, site.z);
-    ship.rotation.y = site.yaw;
-  }
-  const heard = { inside: 0, club: 0, inClub: false, lido: 0, atrium: 0, lap: 0, beat: 0 };
+  const heard = { inside: 0, club: 0, inClub: false, lido: 0, atrium: 0, lap: 0, beat: 0, underway: 0, deck: 0 };
   sound.addLayer(shipSounds(heard));
   const overhead = new THREE.PointLight(0xfff4e0, 0, OVERHEAD.range, OVERHEAD.decay);
   overhead.castShadow = false;
   scene.add(overhead);
 
-  // her outside, open decks, pool deck and pier: built once she's in sight
-  let outside = null; // { hull, lido, tops: Map n -> deck, pier }
+  // her outside, open decks and pool deck: built once she's in sight
+  let outside = null; // { hull, lido, tops: Map n -> deck, wake }
   let shown = false;
+  // what's solid of her is in the world (at ref)
+  let solid = false;
   // every deck's solids and blockers, built (without drawing anything) once you're near
   const decks = new Map(); // n -> { solids, blockers, doors (plan doors), owner, doorOwner, grid }
   // the decks drawn round you, inside her
@@ -195,20 +267,17 @@ export function installCruise(game) {
   const doorState = new Map(); // `${n}:${i}` -> { open, want }
   const extras = new Map(); // n -> [{ kind, spec, obj }]: the dance floor, the mirror ball, the slot machines
   const furnished = new Map(); // cabin no -> { group, owner }
-  const solidOwners = new Set();
 
   function buildOutside() {
     const states = (c) => stateOf(c.no);
     const hull = buildHull({ materials, states });
     const lido = buildLido({ materials });
-    const pier = buildPier(site, groundLocal, { materials });
+    const wake = buildWake();
     const tops = new Map();
     for (const n of [14, 15, 16]) tops.set(n, buildDeck(n, { materials, seed: gen.seed, look: lookFor(n) }));
-    ship.add(hull.object, lido.object, pier.object);
+    ship.add(hull.object, lido.object, wake.object);
     for (const d of tops.values()) ship.add(d.object);
-    outside = { hull, lido, pier, tops };
-    // the pools: water held up on her decks
-    basins.set(ship, lido.pools.map(asBasin));
+    outside = { hull, lido, tops, wake };
   }
 
   function asBasin(pl) {
@@ -223,7 +292,7 @@ export function installCruise(game) {
       [p.x1, p.z1],
       [p.x0, p.z1],
     ]) {
-      const w = toWorld(site, u, v, {});
+      const w = toWorld(ref, u, v, {});
       x0 = Math.min(x0, w.x);
       z0 = Math.min(z0, w.z);
       x1 = Math.max(x1, w.x);
@@ -235,16 +304,16 @@ export function installCruise(game) {
       z0,
       x1,
       z1,
-      level: site.y + pl.level,
+      level: ref.y + pl.level,
       id: p.id,
       name: p.name,
       contains: (x, z) => {
-        toLocal(site, x, z, loc);
+        toLocal(ref, x, z, loc);
         return pl.contains(loc.x, loc.z);
       },
       bedAt: (x, z) => {
-        toLocal(site, x, z, loc);
-        return site.y + pl.bedAt(loc.x, loc.z);
+        toLocal(ref, x, z, loc);
+        return ref.y + pl.bedAt(loc.x, loc.z);
       },
     };
   }
@@ -265,19 +334,15 @@ export function installCruise(game) {
     if (on) {
       if (!outside) buildOutside();
       scene.add(ship);
-      solids.set(outside.pier, outside.pier.solids.map(worldSolid));
-      solids.set(outside.hull, outside.hull.solids.map(worldSolid));
-      basins.set(ship, outside.lido.pools.map(asBasin));
     } else {
       scene.remove(ship);
-      solids.clear(outside.pier);
-      solids.clear(outside.hull);
-      basins.clear(ship);
+      setSolid(false);
       dropDecks();
     }
   }
 
-  // Every deck's solids, built one a frame once you're near.
+  // Every deck's solids and blockers, built one a frame once you're near (in
+  // her frame: they're put in the world at ref while she's solid).
   function prepareDeck(n) {
     if (decks.has(n)) return decks.get(n);
     let d;
@@ -291,26 +356,63 @@ export function installCruise(game) {
     d.owner = { deck: n };
     d.doorOwner = { doors: n };
     d.grid = gridOf(d.blockers);
-    solids.set(d.owner, d.solids.map(worldSolid));
-    solidOwners.add(d.owner);
     decks.set(n, d);
-    refreshDoorSolids(n);
+    if (solid) {
+      solids.set(d.owner, d.solids.map(worldSolid));
+      refreshDoorSolids(n);
+    }
     return d;
   }
-  let lidoSolids = null;
-  function prepareLido() {
-    if (lidoSolids) return;
-    lidoSolids = { lido: true };
-    solids.set(lidoSolids, outside.lido.solids.map(worldSolid));
-    solidOwners.add(lidoSolids);
+  const allPrepared = () => decks.size >= LAST - FIRST + 1;
+
+  // What's solid of her, in the world at ref, or not: her decks, her pools,
+  // her sides at the waterline, the staterooms furnished.
+  const hullOwner = { hull: true };
+  const lidoOwner = { lido: true };
+  function setSolid(on) {
+    if (on === solid) return;
+    solid = on;
+    putSolids();
+  }
+  function putSolids() {
+    if (!solid || !outside) {
+      for (const d of decks.values()) {
+        solids.clear(d.owner);
+        solids.clear(d.doorOwner);
+      }
+      solids.clear(hullOwner);
+      solids.clear(lidoOwner);
+      basins.clear(ship);
+      for (const f of furnished.values()) solids.clear(f.owner);
+      return;
+    }
+    for (const [n, d] of decks) {
+      solids.set(d.owner, d.solids.map(worldSolid));
+      refreshDoorSolids(n);
+    }
+    solids.set(hullOwner, outside.hull.solids.map(worldSolid));
+    solids.set(lidoOwner, outside.lido.solids.map(worldSolid));
+    basins.set(ship, outside.lido.pools.map(asBasin));
+    for (const f of furnished.values()) solids.set(f.owner, f.solids.map(worldSolid));
+  }
+
+  // Her solids go to another berth: the one she's come alongside.
+  function setRef(i) {
+    const b = berths[i];
+    if (!b) return;
+    refPort = i;
+    ref.x = b.x;
+    ref.z = b.z;
+    ref.yaw = b.yaw;
+    putSolids();
   }
 
   function dropDecks() {
-    for (const o of solidOwners) solids.clear(o);
-    solidOwners.clear();
-    for (const d of decks.values()) solids.clear(d.doorOwner);
+    for (const d of decks.values()) {
+      solids.clear(d.owner);
+      solids.clear(d.doorOwner);
+    }
     decks.clear();
-    lidoSolids = null;
     for (const n of [...drawn.keys()]) undraw(n);
     for (const no of [...furnished.keys()]) unfurnish(no);
   }
@@ -339,7 +441,7 @@ export function installCruise(game) {
   }
   function refreshDoorSolids(n) {
     const d = decks.get(n);
-    if (!d) return;
+    if (!d || !solid) return;
     const L = layout(n);
     const y = deckY(n);
     const list = [];
@@ -487,8 +589,8 @@ export function installCruise(game) {
     }
     ship.add(group);
     const owner = { cabin: no };
-    solids.set(owner, list.map(worldSolid));
-    furnished.set(no, { group, owner, deck: c.deck });
+    if (solid) solids.set(owner, list.map(worldSolid));
+    furnished.set(no, { group, owner, deck: c.deck, solids: list });
   }
   function unfurnish(no) {
     const f = furnished.get(no);
@@ -499,81 +601,161 @@ export function installCruise(game) {
     furnished.delete(no);
   }
 
-  // ── The forest round the pier ─────────────────────────────────────────────
-  if (site) {
-    const planSite = { x: site.x, z: site.z, yaw: site.yaw, box: site.box, plan: site.plan };
-    chunks.on('vegetation', (ch) => {
-      const S = chunks.size;
-      const x0 = ch.cx * S;
-      const z0 = ch.cz * S;
-      const b = site.box;
-      if (b[0] > x0 + S + 3 || b[2] < x0 - 3 || b[1] > z0 + S + 3 || b[3] < z0 - 3) return;
-      for (const kind in ch.vegLists) {
-        const list = ch.vegLists[kind];
-        for (let o = 0, k = 0; o < list.length; o += VEG_STRIDE, k++) {
-          const scale = list[o + 4];
-          if (scale <= 0) continue;
-          const back = (KEEP_BACK[kind] ?? 0.6) * (SCALED[kind] ? scale : 1);
-          if (onPlan(planSite, list[o], list[o + 2], back)) chunks.hideInstance(ch, kind, k);
-        }
+  // ── The piers ─────────────────────────────────────────────────────────────
+  // One at each port, stood up as you come near it, and what's round it.
+  const piers = [null, null]; // { built, shown, solid, chain }
+  const discs = [[], []];
+  function clearChunk(ch, b) {
+    const S = chunks.size;
+    const x0 = ch.cx * S;
+    const z0 = ch.cz * S;
+    const bx = b.box;
+    if (bx[0] > x0 + S + 3 || bx[2] < x0 - 3 || bx[1] > z0 + S + 3 || bx[3] < z0 - 3) return;
+    for (const kind in ch.vegLists) {
+      const list = ch.vegLists[kind];
+      for (let o = 0, k = 0; o < list.length; o += VEG_STRIDE, k++) {
+        const scale = list[o + 4];
+        if (scale <= 0) continue;
+        const back = (KEEP_BACK[kind] ?? 0.6) * (SCALED[kind] ? scale : 1);
+        if (onPlan(b, list[o], list[o + 2], back)) chunks.hideInstance(ch, kind, k);
       }
-    });
-    grass.addClearing((x0, z0, x1, z1) => {
-      const b = site.box;
-      if (b[0] > x1 || b[2] < x0 || b[1] > z1 || b[3] < z0) return null;
-      return (x, z) => onPlan(planSite, x, z, 0.3);
-    });
-    const discs = planDiscs(planSite, 3);
-    builder.obstacles.addSource((x, z, R, out) => {
-      for (const d of discs) {
+    }
+  }
+  chunks.on('vegetation', (ch) => {
+    for (const b of berths) if (b) clearChunk(ch, b);
+  });
+  grass.addClearing((x0, z0, x1, z1) => {
+    const near = berths.filter((b) => b && !(b.box[0] > x1 || b.box[2] < x0 || b.box[1] > z1 || b.box[3] < z0));
+    if (!near.length) return null;
+    return (x, z) => near.some((b) => onPlan(b, x, z, 0.3));
+  });
+  builder.obstacles.addSource((x, z, R, out) => {
+    for (const list of discs) {
+      for (const d of list) {
         if (Math.hypot(d.x - x, d.z - z) > R + d.r + 1) continue;
         out.push({ x: d.x, z: d.z, what: 'the pier', dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
       }
-    });
+    }
+  });
+  function pierAt(i) {
+    const b = berths[i];
+    if (piers[i]) return piers[i];
+    const ground = (lx, lz) => {
+      const w = toWorld(b, lx, lz, {});
+      return gen.height(w.x, w.z) + (chunks.heightOffset ? chunks.heightOffset(w.x, w.z) : 0) - SEA.level;
+    };
+    const built = buildPier(b, ground, { materials });
+    const chain = gangwayChain(materials);
+    const group = new THREE.Group();
+    group.name = `pier-${PORTS[i].id}`;
+    group.position.set(b.x, SEA.level, b.z);
+    group.rotation.y = b.yaw;
+    group.add(built.object, chain.object);
+    const inWorld = (sd) => {
+      const a = toWorld(b, sd.ax, sd.az, {});
+      const c = toWorld(b, sd.bx, sd.bz, {});
+      return { ...sd, ax: a.x, az: a.z, bx: c.x, bz: c.z, bottom: sd.bottom + SEA.level, topA: sd.topA + SEA.level, topB: sd.topB + SEA.level };
+    };
+    piers[i] = { built, group, shown: false, solid: false, chained: null, solids: built.solids.map(inWorld), chainSolid: inWorld(chain.solid), chain, owner: { pier: i }, chainOwner: { chain: i } };
+    return piers[i];
+  }
+  function piersUpdate(f, docked) {
+    for (let i = 0; i < 2; i++) {
+      const b = berths[i];
+      if (!b) continue;
+      const d = Math.hypot(b.x - f.x, b.z - f.z);
+      if (d < SHOW && !piers[i]) pierAt(i);
+      const p = piers[i];
+      if (!p) continue;
+      const show = d < SHOW || (p.shown && d < HIDE);
+      if (show !== p.shown) {
+        p.shown = show;
+        if (show) scene.add(p.group);
+        else scene.remove(p.group);
+      }
+      const sol = d < PIER_SOLID;
+      if (sol !== p.solid) {
+        p.solid = sol;
+        if (sol) solids.set(p.owner, p.solids);
+        else solids.clear(p.owner);
+        p.chained = null;
+      }
+      // the chain across the gangway, while she isn't alongside here
+      const chained = !(docked && voy.port === i);
+      if (chained !== p.chained && p.solid) {
+        p.chained = chained;
+        p.chain.object.visible = chained;
+        if (chained) solids.set(p.chainOwner, [p.chainSolid]);
+        else solids.clear(p.chainOwner);
+      }
+    }
+  }
 
-    // ── On the map ──────────────────────────────────────────────────────────
-    const outline = [];
+  // ── On the map ────────────────────────────────────────────────────────────
+  // Each pier is a place, and says when she's in and when she sails.
+  const corners = (b, [x0, z0, x1, z1]) =>
+    [
+      [x0, z0],
+      [x1, z0],
+      [x1, z1],
+      [x0, z1],
+    ].map(([u, v]) => {
+      const p = toWorld(b, u, v, {});
+      return [p.x, p.z];
+    });
+  const outline = (b) => {
+    const o = [];
     for (let z = STERN; z <= BOW; z += 10) {
-      const p = toWorld(site, halfBeam(z), z, {});
-      outline.push([p.x, p.z]);
+      const p = toWorld(b, halfBeam(z), z, {});
+      o.push([p.x, p.z]);
     }
     for (let z = BOW; z >= STERN; z -= 10) {
-      const p = toWorld(site, -halfBeam(z), z, {});
-      outline.push([p.x, p.z]);
+      const p = toWorld(b, -halfBeam(z), z, {});
+      o.push([p.x, p.z]);
     }
-    const corners = ([x0, z0, x1, z1]) =>
-      [
-        [x0, z0],
-        [x1, z0],
-        [x1, z1],
-        [x0, z1],
-      ].map(([u, v]) => {
-        const p = toWorld(site, u, v, {});
-        return [p.x, p.z];
-      });
-    let place = null;
-    const asPlace = () => {
-      if (place && place.visited === visited) return place;
-      place = {
-        id: site.id,
-        x: site.door.x,
-        z: site.door.z,
-        yaw: site.door.yaw,
-        name: `MS ${titleCase(SHIP.name)}`,
-        kind: 'cruise ship',
-        note: 'step aboard: staterooms, a theatre, a nightclub, pools and waterslides',
-        glyph: GLYPH,
-        visited,
-        shape: [outline],
-        ground: site.plan.map(corners),
-      };
-      return place;
+    return o;
+  };
+  const places = [null, null];
+  function asPlace(i) {
+    const b = berths[i];
+    const note = schedule(i);
+    const p = places[i];
+    if (p && p.visited === visited && p.note === note) return p;
+    places[i] = {
+      id: b.id,
+      x: b.door.x,
+      z: b.door.z,
+      yaw: b.door.yaw,
+      name: `MS ${titleCase(SHIP.name)} · ${PORTS[i].short}`,
+      kind: 'cruise ship',
+      note,
+      glyph: GLYPH,
+      visited,
+      shape: [outline(b)],
+      ground: b.plan.map((r) => corners(b, r)),
     };
-    map.places.addSource({
-      destinations: () => [asPlace()],
-      within: (x0, z0, x1, z1) => (site.door.x >= x0 && site.door.x <= x1 && site.door.z >= z0 && site.door.z <= z1 ? [asPlace()] : []),
-      get: (id) => (id === site.id ? asPlace() : null),
-    });
+    return places[i];
+  }
+  map.places.addSource({
+    destinations: () => [0, 1].filter((i) => berths[i]).map(asPlace),
+    within: (x0, z0, x1, z1) => [0, 1].filter((i) => berths[i] && berths[i].door.x >= x0 && berths[i].door.x <= x1 && berths[i].door.z >= z0 && berths[i].door.z <= z1).map(asPlace),
+    get: (id) => {
+      const i = berths.findIndex((b) => b && b.id === id);
+      return i >= 0 ? asPlace(i) : null;
+    },
+  });
+
+  // When she's in at port i, and when she sails; or when she'll be back.
+  const hhmm = (t) => new Date((t - shift) * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const inMinutes = (s) => (s < 90 ? `${Math.max(1, Math.round(s))} s` : `${Math.round(s / 60)} min`);
+  function schedule(i) {
+    if (!voyage) return 'a cruise pier';
+    const t = clock();
+    const v = voyage.at(t, {}, () => false);
+    const nx = voyage.next(t, i);
+    const other = PORTS[1 - i].short;
+    if (v.phase === 'docked' && v.port === i) return `the ${titleCase(SHIP.name)} is alongside · sails for ${other} at ${hhmm(nx.sails)} (in ${inMinutes(nx.sails - t)})`;
+    return `the ${titleCase(SHIP.name)} is ${v.phase === 'docked' ? `alongside at ${PORTS[v.port].short}` : v.to === i ? `on her way here from ${other}` : `on her way to ${other}`} · in here at ${hhmm(nx.arrives)} (in ${inMinutes(nx.arrives - t)})`;
   }
 
   // ── The camera indoors ────────────────────────────────────────────────────
@@ -582,14 +764,15 @@ export function installCruise(game) {
   const _bo = [0, 0, 0];
   const _bd = [0, 0, 0];
   player.cameraBlockers.push((origin, dir, max) => {
-    if (!where.onShip || !site) return Infinity;
-    const c = Math.cos(site.yaw);
-    const s = Math.sin(site.yaw);
-    const dx = origin.x - site.x;
-    const dz = origin.z - site.z;
+    // (worked out inside the player's step: from where she's solid)
+    if (!where.onShip || !solid) return Infinity;
+    const c = Math.cos(ref.yaw);
+    const s = Math.sin(ref.yaw);
+    const dx = origin.x - ref.x;
+    const dz = origin.z - ref.z;
     _bo[0] = dx * c - dz * s;
     _bo[2] = dx * s + dz * c;
-    _bo[1] = origin.y - site.y;
+    _bo[1] = origin.y - ref.y;
     _bd[0] = dir.x * c - dir.z * s;
     _bd[2] = dir.x * s + dir.z * c;
     _bd[1] = dir.y;
@@ -617,15 +800,26 @@ export function installCruise(game) {
     toL(p.x, p.z);
     where.x = _l.x;
     where.z = _l.z;
-    where.y = p.y - site.y;
+    where.y = p.y - now.y;
     const hb = Math.max(halfBeam(_l.z), 0);
-    where.onShip = _l.z > STERN - 1 && _l.z < BOW + 1 && Math.abs(_l.x) < hb + 4 && where.y > deckY(FIRST) - 1.4;
+    // aboard her: over her, and up on her decks (where she's solid, if
+    // she's under way; alongside, the gangway's landing counts too)
+    const reach = voy.phase === 'docked' ? 4 : 0;
+    where.onShip = now.known && shown && _l.z > STERN - 1 && _l.z < BOW + 1 && Math.abs(_l.x) < hb + reach && where.y > deckY(FIRST) - 1.4;
     where.deck = deckAt(where.y);
     where.room = where.onShip ? roomAt(where.deck, _l.x, _l.z) : null;
     where.inside = !!where.room && !where.room.out;
-    const dx = p.x - site.door.x;
-    const dz = p.z - site.door.z;
-    where.near = Math.hypot(dx, dz);
+    // the nearest pier's gangway
+    where.near = Infinity;
+    for (let i = 0; i < 2; i++) {
+      const b = berths[i];
+      if (!b) continue;
+      const d = Math.hypot(p.x - b.door.x, p.z - b.door.z);
+      if (d < where.near) {
+        where.near = d;
+        where.pier = i;
+      }
+    }
   }
 
   // ── Coming aboard ─────────────────────────────────────────────────────────
@@ -643,12 +837,12 @@ export function installCruise(game) {
   // Where the HUD leads you once you have a stateroom and are aboard: to its
   // door, on its deck; otherwise to the stairs and lifts.
   hud.guide(() => {
-    if (!site || !where.onShip || !yours) return null;
+    if (!where.onShip || !yours) return null;
     const c = cabinByNo(yours);
     if (!c) return null;
     if (where.room && where.room.cabin === yours) return null;
     if (where.deck === c.deck) {
-      const p = toWorld(site, c.door.x - c.door.nx * 0.8, c.door.z, {});
+      const p = toWorld(now, c.door.x - c.door.nx * 0.8, c.door.z, {});
       return { id: `cruise-cabin-${yours}`, label: `stateroom ${yours}`, color: '#7fd0ff', x: p.x, z: p.z };
     }
     // the nearest lobby on this deck
@@ -659,7 +853,7 @@ export function installCruise(game) {
       if (!best || d < best.d) best = { core, d };
     }
     if (!best) return null;
-    const p = toWorld(site, 0, best.core.z, {});
+    const p = toWorld(now, 0, best.core.z, {});
     return { id: `cruise-lobby-${best.core.id}-${where.deck}`, label: `lifts to deck ${c.deck}`, color: '#7fd0ff', x: p.x, z: p.z };
   });
 
@@ -712,12 +906,12 @@ export function installCruise(game) {
     carModels.set(glass, group);
     return group;
   }
+  // (worked out inside the player's step: from where she's solid)
   const liftHold = {
     place(at) {
-      at.x = car.held.x;
-      at.z = car.held.z;
-      at.y = site.y + (car.ride ? car.ride.y : deckY(car.deck));
-      at.yaw = site.yaw + Math.PI;
+      toWorld(ref, car.held.x, car.held.z, at);
+      at.y = ref.y + (car.ride ? car.ride.y : deckY(car.deck));
+      at.yaw = ref.yaw + Math.PI;
       at.back = -1.4;
     },
   };
@@ -728,13 +922,13 @@ export function installCruise(game) {
     // somewhere well inside it
     const lx = Math.max(room.liftX - 0.6, Math.min(room.liftX + 0.6, _l.x));
     const lz = Math.max(room.z0 + 0.6, Math.min(room.z1 - 0.5, _l.z));
-    const held = toWorld(site, lx, lz, {});
+    const held = { x: lx, z: lz };
     car = { core, x: room.liftX, z: core.z + (CORE.lifts.z0 + CORE.lifts.z1) / 2, deck: where.deck, state: 'here', pick: where.deck, ride: null, held };
   }
   function choose() {
     car.state = 'choose';
     car.pick = car.deck;
-    car.held = { x: player.pos.x, z: player.pos.z };
+    car.held = { x: where.x, z: where.z };
     player.aboard = liftHold;
     camBefore = camBefore ?? player.camDist;
     player.camDist = Math.min(player.camDist, 2);
@@ -856,8 +1050,7 @@ export function installCruise(game) {
     if (slide) return;
     if (!outside || where.y < deckY(16)) return;
     for (const s of outside.lido.starts) {
-      const p = toWorld(site, s.x, s.z, {});
-      if (Math.hypot(p.x - player.pos.x, p.z - player.pos.z) < SLIDE_REACH && Math.abs(player.pos.y - site.y - s.y) < 1.2) {
+      if (Math.hypot(s.x - where.x, s.z - where.z) < SLIDE_REACH && Math.abs(where.y - s.y) < 1.2) {
         cue(`<b>click</b> down ${s.slide.name}`);
         if (input.tapped('use')) startSlide(s);
         return;
@@ -867,14 +1060,13 @@ export function installCruise(game) {
   function startSlide(s) {
     const ride = new Ride(pathOf(s.slide));
     const rider = {
+      // (worked out inside the player's step: from where she's solid)
       place(at, dt) {
         ride.update(dt);
         const a = ride.at;
-        const w = toWorld(site, a.x, a.z, {});
-        at.x = w.x;
-        at.z = w.z;
-        at.y = site.y + a.y;
-        at.yaw = site.yaw + a.yaw;
+        toWorld(ref, a.x, a.z, at);
+        at.y = ref.y + a.y;
+        at.yaw = ref.yaw + a.yaw;
         at.behind = 3;
         at.back = 1;
       },
@@ -896,10 +1088,10 @@ export function installCruise(game) {
     const a = slide.ride.at;
     player.aboard = null;
     player.character.seat(null);
-    const w = toWorld(site, a.x, a.z, {});
-    player.pos.set(w.x, site.y + a.y - 0.6, w.z);
+    const w = toWorld(now, a.x, a.z, {});
+    player.pos.set(w.x, now.y + a.y - 0.6, w.z);
     const sp = Math.min(4, a.v * 0.4);
-    player.vel.set(Math.sin(site.yaw + a.yaw) * sp, -2, Math.cos(site.yaw + a.yaw) * sp);
+    player.vel.set(Math.sin(now.yaw + a.yaw) * sp, -2, Math.cos(now.yaw + a.yaw) * sp);
     sound.sfx('slide-splash');
     slide = null;
   }
@@ -938,8 +1130,8 @@ export function installCruise(game) {
         const inCabin = where.room && where.room.cabin === door.cabin;
         if (d > DOOR_SHUT && !inCabin) s.want = 0;
         // the one you're facing, of those in reach
-        const fx = Math.sin(player.yaw - site.yaw);
-        const fz = Math.cos(player.yaw - site.yaw);
+        const fx = Math.sin(player.yaw - now.yaw);
+        const fz = Math.cos(player.yaw - now.yaw);
         const score = d - 0.8 * ((-dx * fx - dz * fz) / Math.max(d, 1e-3));
         if (d < DOOR_REACH && score < nearD && s.want === 0) {
           near = { door, i, s };
@@ -977,57 +1169,155 @@ export function installCruise(game) {
     }
   }
 
+  // ── What's said, and heard, as she goes ──────────────────────────────────
+  // The calls aboard, and on the pier she's at or coming to; her horn.
+  let said = null; // the last thing said about her round: `${phase}:${port}`
+  let called = -1; // the port the call for all aboard went out at, this time
+  let fogHorn = 0;
+  let lastSailed = -1;
+  const name = titleCase(SHIP.name);
+  const horn = () => {
+    if (!now.known) return;
+    const fp = toWorld(now, 0, -62, {});
+    sound.call('ship-horn', fp.x, now.y + 58, fp.z);
+  };
+  function announce(dt) {
+    const key = `${voy.phase}:${voy.port}`;
+    const onPier = !where.onShip && where.near < ARRIVE * 3;
+    const here = where.onShip || (onPier && where.pier === (voy.phase === 'arriving' ? voy.to : voy.port));
+    const other = voy.to !== null ? PORTS[voy.to].short : PORTS[1 - voy.port].short;
+    if (voy.phase === 'docked' && voy.left <= CALL && called !== voy.port && here) {
+      called = voy.port;
+      hud.flash(`All aboard! The ${name} sails for ${PORTS[1 - voy.port].short} in ${inMinutes(voy.left)}.`, 5000);
+      sound.sfx('lift-ding', { down: true });
+    }
+    if (voy.phase !== 'docked') called = -1;
+    if (key === said) return;
+    const was = said;
+    said = key;
+    if (was === null) return; // (not on opening the world)
+    if (voy.phase === 'leaving') {
+      horn();
+      lastSailed = voy.port;
+      if (where.onShip) hud.flash(`We're under way, bound for ${other}. We'll be alongside there in about 17 minutes.`, 5000);
+      else if (onPier && where.pier === voy.port) {
+        const back = voyage.next(clock(), voy.port).arrives;
+        hud.flash(`There she goes: the ${name} has sailed for ${other}. She's back here at ${hhmm(back)}.`, 5000);
+      }
+    } else if (voy.phase === 'sea' && where.onShip) {
+      hud.flash(`Out of sight of land, at sea, bound for ${other}.`, 4000);
+    } else if (voy.phase === 'arriving') {
+      horn();
+      if (where.onShip) hud.flash(`Land ahead: we're coming in to ${PORTS[voy.to].name}.`, 4000);
+      else if (onPier && where.pier === voy.to) hud.flash(`Here she comes: the ${name}, in from ${PORTS[voy.port].short}.`, 4000);
+    } else if (voy.phase === 'docked' && where.onShip && lastSailed >= 0) {
+      const nx = voyage.next(clock(), voy.port);
+      hud.flash(`Welcome to ${PORTS[voy.port].name}! We're alongside until ${hhmm(nx.sails)}; all aboard by then. Down the gangway to go ashore.`, 6500);
+    }
+    void dt;
+  }
+
+  // Aboard her, or standing on her: at (lx, lz) of her frame, ly over her
+  // waterline, facing lyaw from her bow. Under way, onto where she's solid.
+  function standOn(lx, ly, lz, lyaw) {
+    if (!solid) setSolid(true);
+    const p = toWorld(ref, lx, lz, {});
+    const yaw = ref.yaw + lyaw;
+    if (voy.phase === 'docked') {
+      player.deck = null;
+      player.spawn(p.x, p.z, yaw, yaw + Math.PI, ref.y + ly);
+    } else {
+      player.deck = deckFrame;
+      player.spawnOnDeck(p.x, p.z, yaw, yaw + Math.PI, ref.y + ly);
+    }
+    return toWorld(now, lx, lz, {});
+  }
+
   // ── Each frame ────────────────────────────────────────────────────────────
-  let clock = 0;
   let lastDeck = null;
   let lastRoom = null;
   let wasInside = false;
   let arrived = false;
   let hornHour = -1;
-  let restored = false;
+  let elapsed = 0;
+  let pierSaid = -1;
   game.addSystem({
     name: 'cruise',
     phase: 'world',
     update({ dt }) {
-      if (!site) return;
-      clock += dt;
+      elapsed += dt;
       cueText = null;
+      // her berths, once what they keep clear of is known
+      if (!searches[0] && known(homeWays)) search(0);
+      if (site && !searches[1] && mauiRegion) {
+        const t = voyage.at(clock(), {}, () => false);
+        const bound = (t.to === 1 && t.phase !== 'leaving') || (t.phase === 'docked' && t.port === 1) || t.port === 1;
+        if ((elapsed > MAUI_AFTER || bound || Math.hypot(game.focus.x - mauiRegion.x, game.focus.z - mauiRegion.z) < 20000) && known(mauiWays)) search(1);
+      }
+      stepSearches();
+      if (!voyage) return;
+
+      // where she is now, and where she's solid
+      const t = clock();
+      voyage.at(t, voy, (i) => !!berths[i]);
+      now.known = voy.x !== undefined;
+      if (now.known) {
+        now.x = voy.x;
+        now.z = voy.z;
+        now.yaw = voy.yaw;
+      }
+      if (voy.port !== refPort && berths[voy.port]) setRef(voy.port);
+      const docked = voy.phase === 'docked';
       const f = game.focus;
-      const d = Math.hypot(site.x - f.x, site.z - f.z);
+      piersUpdate(f, docked);
+      const d = now.known ? Math.hypot(now.x - f.x, now.z - f.z) : Infinity;
       if (d < SHOW) showOutside(true);
       else if (d > HIDE) showOutside(false);
+      if (shown) {
+        ship.position.set(now.x, now.y, now.z);
+        ship.rotation.y = now.yaw;
+      }
+      locate();
       if (!shown) {
         if (cued) hud.cue(null);
         cued = false;
         overhead.intensity = 0;
-        heard.inside = heard.club = heard.lido = heard.atrium = heard.lap = 0;
+        heard.inside = heard.club = heard.lido = heard.atrium = heard.lap = heard.underway = 0;
+        if (player.deck === deckFrame) player.deck = null;
         return;
       }
-      // her decks' solids, one a frame once you're near
-      if (d < NEAR + 200) {
-        prepareLido();
+      // her decks' solids, one a frame once you're near; in the world while
+      // she's alongside, or you're aboard her (or coming back aboard)
+      if (d < NEAR + 200 || where.onShip || backAboard) {
         for (let n = FIRST; n <= LAST; n++) {
           if (!decks.has(n)) {
             prepareDeck(n);
             break;
           }
         }
-      } else if (d > NEAR + 400 && decks.size) dropDecks();
+      } else if (d > NEAR + 400 && decks.size && !where.onShip) {
+        setSolid(false);
+        dropDecks();
+      }
+      setSolid(allPrepared() && (docked || where.onShip || !!backAboard) && d < NEAR + 400);
+      // carried, while she's under way and you're aboard
+      if (where.onShip && !docked) player.deck = deckFrame;
+      else if (player.deck === deckFrame) player.deck = null;
 
       // back aboard where you were when you left, once she's solid
-      if (backAboard && !restored && decks.size >= LAST - FIRST + 1) {
-        restored = true;
+      if (backAboard && solid) {
         const a = backAboard;
         backAboard = null;
-        player.spawn(a.x, a.z, a.yaw, a.yaw + Math.PI, a.y);
+        standOn(a.x, a.y, a.z, a.yaw);
+        locate();
       }
 
-      locate();
       const night = SKY.uNight.value;
       materials.lit.color.setScalar(0.18 + 0.82 * Math.min(1, night * 1.5));
       materials.backing.color.setScalar(0.35 + 0.2 * (1 - night));
       if (outside.hull.lit) outside.hull.lit.visible = !where.onShip;
       if (outside.hull.backing) outside.hull.backing.visible = !where.onShip;
+      outside.wake.update(voy.v || 0, dt);
 
       // which decks are drawn: yours and those either side of it, inside her
       const want = new Set();
@@ -1035,7 +1325,7 @@ export function installCruise(game) {
         const n = car && car.ride ? deckAt(car.ride.y) : where.deck;
         for (let k = n - 1; k <= n + 1; k++) if (k >= FIRST && k <= 13) want.add(k);
         if (where.room && (where.room.kind === 'atrium' || where.room.kind === 'theatre' || where.room.kind === 'dining')) for (let k = 4; k <= 6; k++) want.add(k);
-      } else if (where.near < ARRIVE * 2) want.add(4);
+      } else if (docked && where.pier === voy.port && where.near < ARRIVE * 2) want.add(4);
       for (const n of [...drawn.keys()]) if (!want.has(n)) undraw(n);
       for (const n of want) {
         if (!drawn.has(n) && decks.has(n)) {
@@ -1059,10 +1349,17 @@ export function installCruise(game) {
         lastDeck = where.deck;
       }
       if (!where.onShip && where.near > ARRIVE * 4) arrived = false;
-      if (!where.onShip && where.near < ARRIVE && !visited) {
-        visited = true;
-        save.touch();
-      }
+      if (!where.onShip && where.near < ARRIVE) {
+        if (!visited) {
+          visited = true;
+          save.touch();
+        }
+        // on a pier: when she's in, or when she sails
+        if (pierSaid !== where.pier) {
+          pierSaid = where.pier;
+          hud.flash(`${PORTS[where.pier].name} · ${schedule(where.pier)}`, 4500);
+        }
+      } else if (where.near > ARRIVE * 4) pierSaid = -1;
 
       // saying where you are, as it changes
       if (where.onShip) {
@@ -1081,6 +1378,17 @@ export function installCruise(game) {
         lastDeck = null;
         lastRoom = null;
       }
+      announce(dt);
+
+      // the fog at sea: thick round her, while she's carried across in it
+      if (where.onShip && voy.fog > 0) {
+        pipeline.haze = Math.max(pipeline.haze, 1 + FOG_HAZE * voy.fog);
+        fogHorn -= dt;
+        if (voy.fog > 0.5 && fogHorn <= 0) {
+          fogHorn = FOG_HORN;
+          horn();
+        }
+      } else fogHorn = 4;
 
       // the camera, the light and the sound indoors
       if (where.inside && !wasInside) {
@@ -1096,7 +1404,7 @@ export function installCruise(game) {
       overhead.position.set(player.pos.x, player.pos.y + OVERHEAD.up, player.pos.z);
       const k = Math.min(1, dt * 3);
       heard.inside += ((where.inside ? 1 : 0) - heard.inside) * k;
-      const clubAt = toWorld(site, 0, -112, {});
+      const clubAt = toWorld(now, 0, -112, {});
       const toClub = Math.hypot(player.pos.x - clubAt.x, player.pos.z - clubAt.z);
       const clubDeck = where.onShip ? Math.abs(where.deck - 6) : 9;
       heard.inClub = !!(where.room && where.room.kind === 'club');
@@ -1104,14 +1412,16 @@ export function installCruise(game) {
       heard.lido += ((where.onShip && where.deck >= 14 && !where.inside ? 1 : where.onShip && where.deck >= 13 ? 0.15 : 0) - heard.lido) * k;
       heard.atrium += ((where.room && where.room.kind === 'atrium' ? 1 : 0) - heard.atrium) * k;
       heard.lap += ((!where.onShip && where.near < 120 ? 1 - where.near / 120 : where.onShip && where.deck <= 6 && !where.inside ? 0.4 : 0) - heard.lap) * k;
+      // under way: her engines working, the wind over her open decks, the water going by
+      heard.underway += ((where.onShip || d < 300 ? Math.min(1, (voy.v || 0) / FULL_SPEED) : 0) - heard.underway) * k;
+      heard.deck = where.onShip && !where.inside ? 1 : 0;
       if (heard.inside > 0.01) sound.setEnclosed(Math.max(sound.enclosed || 0, QUIET * heard.inside));
 
-      // her horn, on the hour
+      // her horn, on the hour, alongside
       const hour = Math.floor(game.sky ? game.sky.hours : 0);
-      if (HORN_HOURS.includes(hour) && hour !== hornHour && d < 2000) {
+      if (docked && HORN_HOURS.includes(hour) && hour !== hornHour && d < 2000) {
         hornHour = hour;
-        const fp = toWorld(site, 0, -62, {});
-        sound.call('ship-horn', fp.x, site.y + 58, fp.z);
+        horn();
       }
       if (!HORN_HOURS.includes(hour)) hornHour = -1;
 
@@ -1163,15 +1473,48 @@ export function installCruise(game) {
 
   // ── From the console ──────────────────────────────────────────────────────
   game.provide('cruise', {
-    site,
+    get site() {
+      return site;
+    },
+    get berths() {
+      return berths.slice();
+    },
     get where() {
-      return { onShip: where.onShip, deck: where.deck, room: where.room && (where.room.name || roomName(where.room.kind)), roomId: where.room && where.room.id, x: where.x, z: where.z, y: where.y, inside: where.inside };
+      return { onShip: where.onShip, deck: where.deck, room: where.room && (where.room.name || roomName(where.room.kind)), roomId: where.room && where.room.id, x: where.x, z: where.z, y: where.y, inside: where.inside, pier: where.pier, near: where.near };
+    },
+    get voyage() {
+      if (!voyage) return null;
+      const v = voyage.at(clock(), {}, () => false);
+      return { phase: v.phase, port: PORTS[v.port].id, to: v.to === null ? null : PORTS[v.to].id, left: Math.round(v.left), fog: v.fog, carried: player.deck === deckFrame, solid };
+    },
+    // move the clock on (or back) so that her next sailing from the port
+    // she's at ('sails'), or her next arrival anywhere ('arrives'), is s off
+    soon(what = 'sails', s = 5) {
+      if (!voyage) return null;
+      const t = clock();
+      const v = voyage.at(t, {}, () => false);
+      let at;
+      if (what === 'sails') at = voyage.next(t, v.port).sails;
+      else if (what === 'arrives') at = voyage.next(t, v.phase === 'docked' ? 1 - v.port : v.to).arrives;
+      else if (what === 'home') at = voyage.next(t, 0).arrives;
+      else if (what === 'fog') {
+        // the thick of her next fog: when she's carried across
+        for (let u = t; u < t + 2 * 3600; u += 2) {
+          if (voyage.at(u, {}, () => false).fog > 0.99) {
+            at = u + SEA_FOG / 2;
+            break;
+          }
+        }
+      } else return null;
+      if (at === undefined) return null;
+      shift += at - s - t;
+      return Math.round(shift);
     },
     get yours() {
       return yours;
     },
     get ready() {
-      return shown && decks.size >= LAST - FIRST + 1;
+      return shown && allPrepared() && solid;
     },
     get drawn() {
       return [...drawn.keys()].sort((a, b) => a - b);
@@ -1182,46 +1525,39 @@ export function installCruise(game) {
     get slide() {
       return slide && { t: slide.ride.t, d: slide.ride.d, v: slide.ride.v };
     },
-    // stand at the foot of the gangway, facing it
-    async go() {
-      if (!site) return null;
-      await game.api.teleport(site.door.x, site.door.z, site.door.yaw);
-      return { x: site.door.x, z: site.door.z };
+    // stand at the foot of a pier's gangway, facing it (0: home, 1: Maui)
+    async go(port = 0) {
+      const b = berths[port];
+      if (!b) return null;
+      await game.api.teleport(b.door.x, b.door.z, b.door.yaw);
+      return { x: b.door.x, z: b.door.z };
     },
     // stand just inside the door in her side, facing in
     async board() {
-      if (!site) return null;
-      await game.api.teleport(site.door.x, site.door.z, site.door.yaw);
-      await until(() => decks.size >= LAST - FIRST + 1);
-      const p = toWorld(site, inner(-24, -20) - 1.5, -22, {});
-      player.spawn(p.x, p.z, site.yaw - Math.PI / 2, site.yaw + Math.PI / 2, site.y + deckY(4));
-      return { x: p.x, z: p.z };
+      if (!voyage) return null;
+      const v = voyage.at(clock(), {}, () => false);
+      await this.go(v.port);
+      await until(() => allPrepared());
+      return standOn(inner(-24, -20) - 1.5, deckY(4), -22, -Math.PI / 2);
     },
     // stand in the lobby of a core on deck n, facing its lifts
     toDeck(n, core = 'mid') {
       const c = CORES.find((k) => k.id === core) || CORES[1];
-      const p = toWorld(site, 0, c.z, {});
-      player.spawn(p.x, p.z, site.yaw, site.yaw + Math.PI, site.y + deckY(n));
-      return { x: p.x, z: p.z };
+      return standOn(0, deckY(n), c.z, 0);
     },
     // in the corridor outside a stateroom's door, facing it
     toCabin(no) {
       const c = cabinByNo(no);
       if (!c) return null;
-      const p = toWorld(site, c.door.x - c.door.nx * 0.9, c.door.z, {});
-      // facing her +x is her yaw and a quarter turn; −x, less a quarter
-      const yaw = site.yaw + (c.door.nx > 0 ? Math.PI / 2 : -Math.PI / 2);
-      player.spawn(p.x, p.z, yaw, yaw + Math.PI, site.y + deckY(c.deck));
-      return { x: p.x, z: p.z };
+      // facing her +x is a quarter turn from her bow; −x, the other way
+      return standOn(c.door.x - c.door.nx * 0.9, deckY(c.deck), c.door.z, c.door.nx > 0 ? Math.PI / 2 : -Math.PI / 2);
     },
     // stand on the tower's platform by a slide
     toSlide(id = 'corkscrew') {
-      const s = outside.lido.starts.find((k) => k.slide.id === id);
+      const s = outside && outside.lido.starts.find((k) => k.slide.id === id);
       if (!s) return null;
       const back = 0.6;
-      const p = toWorld(site, s.x - Math.sin(s.yaw) * back, s.z - Math.cos(s.yaw) * back, {});
-      player.spawn(p.x, p.z, site.yaw + s.yaw, site.yaw + s.yaw + Math.PI, site.y + s.y);
-      return { x: p.x, z: p.z };
+      return standOn(s.x - Math.sin(s.yaw) * back, s.y, s.z - Math.cos(s.yaw) * back, s.yaw);
     },
     // skip to the last moments of a lift ride, or a slide (so a play-through needn't wait)
     hurry() {

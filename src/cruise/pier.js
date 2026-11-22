@@ -232,3 +232,28 @@ function gangway(kits, solid, rect, blockers, solids) {
   k.words('ALL ABOARD', xm, top + 1.6, G.foot + 1.75, 0, 1, 0.035, WHITE);
   blockers.push([G.x0, top, G.head, G.x1, y4, G.foot]);
 }
+
+// While she isn't alongside, a chain across where the bridge goes off the
+// landing to her door, and a sign on it. -> { object, solid } in her frame
+// (the solid to be put in the world, the object shown, only then).
+export function gangwayChain(materials) {
+  const k = new ShipKit();
+  const y4 = deckY(4);
+  const [z0, z1] = GANGWAY.door;
+  const x = LANDING.x0 + 0.1;
+  for (const z of [z0, z1]) k.cyl(x, y4, z, y4 + 1.1, 0.05, YELLOW, 6);
+  const sag = 0.25;
+  const n = 8;
+  for (let i = 0; i < n; i++) {
+    const a = z0 + ((z1 - z0) * i) / n;
+    const b = z0 + ((z1 - z0) * (i + 1)) / n;
+    const ya = y4 + 1.0 - sag * Math.sin((Math.PI * i) / n);
+    const yb = y4 + 1.0 - sag * Math.sin((Math.PI * (i + 1)) / n);
+    k.rod([x, ya, a], [x, yb, b], 0.025, i % 2 ? BLACK : YELLOW, 4);
+  }
+  k.panel(x + 0.03, y4 + 0.62, (z0 + z1) / 2, 1, 0, 0.9, 0.36, col(0xc82a2a));
+  k.words('NO BOARDING', x + 0.05, y4 + 0.62, (z0 + z1) / 2, 1, 0, 0.018, WHITE);
+  const object = new THREE.Mesh(k.build(), materials.outside);
+  object.name = 'gangway-chain';
+  return { object, solid: { ax: x, az: z0, bx: x, bz: z1, r: 0.12, bottom: y4, topA: y4 + 2, topB: y4 + 2 } };
+}
