@@ -4,10 +4,16 @@
 // come up to them; inside, its buttons take you up a deck. Your stateroom's
 // door opens with your key card, and in you go. At the top of the slide
 // tower, a click sends you down the Corkscrew, and you come out swimming in
-// the splash pool.
+// the splash pool. Then she sails, with you aboard: she carries you out to
+// sea, across in the fog to Maui, and in alongside there, and you walk ashore
+// down her gangway.
 //
-// Needs: nothing in particular (she's on the map from anywhere).
-// Leaves: you on the pier at the foot of her gangway.
+// Her timetable is the clock on the wall's, so the clock is moved on (from
+// the console) to have her alongside when this starts, and to the parts of
+// her voyage it plays, rather than waiting for them.
+//
+// Needs: nothing in particular (her pier is on the map from anywhere).
+// Leaves: you on the home pier at the foot of her gangway, the clock moved on.
 
 import assert from 'node:assert/strict';
 
@@ -37,11 +43,15 @@ export default async function ({ page, step, frames, shot }) {
   };
 
   await step('to the ship, from the map', async () => {
+    // her pier is found once the airfields in its way have been
+    assert.ok(await page.evaluate(() => T.until(() => world.cruise.site, 180000)), 'there is a pier');
     const site = await page.evaluate(() => {
       const s = world.cruise.site;
-      return s && { id: s.id, door: s.door };
+      return { id: s.id, door: s.door };
     });
-    assert.ok(site, 'there is a ship');
+    // she's alongside, half a minute in
+    await page.evaluate(() => world.cruise.soon('home', -30));
+    assert.equal(await page.evaluate(() => world.cruise.voyage.phase), 'docked');
     await page.keyboard.press('KeyM');
     await frames(3);
     await page.evaluate((s) => {
@@ -131,8 +141,55 @@ export default async function ({ page, step, frames, shot }) {
     return { swimming: await page.evaluate(() => world.player.swimming) };
   });
 
-  await step('back ashore', async () => {
-    await page.evaluate(() => world.cruise.go());
+  await step('she sails, with you aboard', async () => {
+    // out on the open deck, by the main pool
+    await page.evaluate(() => world.cruise.toDeck(14));
+    await frames(4);
+    await page.evaluate(() => world.cruise.soon('sails', 2));
+    assert.ok(await page.evaluate(() => T.until(() => world.cruise.voyage.phase === 'leaving', 30000)), 'she lets go');
+    const before = await page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z }));
+    // a few minutes on: out along her lane
+    await page.evaluate(() => world.cruise.soon('sails', -200));
+    await frames(10);
+    const v = await page.evaluate(() => world.cruise.voyage);
+    const w = await where();
+    const after = await page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z }));
+    const moved = Math.hypot(after.x - before.x, after.z - before.z);
+    assert.ok(v.carried && w.onShip && w.deck === 14, `still aboard, carried (${JSON.stringify({ v, w })})`);
+    assert.ok(moved > 100, `and carried out with her (${moved.toFixed(0)} m)`);
+    await shot('under way');
+    return { moved: Math.round(moved) };
+  });
+
+  await step('across in the fog, to Maui', async () => {
+    await page.evaluate(() => world.cruise.soon('fog', 4));
+    assert.ok(await page.evaluate(() => T.until(() => Math.abs(world.player.pos.x) > 100000, 60000)), 'carried across the world');
+    await frames(10);
+    const w = await where();
+    assert.ok(w.onShip && w.deck === 14, `still aboard (${JSON.stringify(w)})`);
+    const maui = await page.evaluate(() => world.cruise.berths[1]);
+    assert.ok(maui, 'to her berth at Maui');
+    return { maui: maui.id };
+  });
+
+  await step('alongside at Maui, and ashore down her gangway', async () => {
+    await page.evaluate(() => world.cruise.soon('arrives', -10));
+    assert.ok(await page.evaluate(() => T.until(() => world.cruise.voyage.phase === 'docked' && world.cruise.voyage.port === 'maui', 30000)), 'alongside');
+    await frames(10);
+    assert.ok((await where()).onShip, 'still aboard');
+    // just inside her door, and out of it backwards, down onto the landing
+    await page.evaluate(() => world.cruise.board());
+    await frames(6);
+    await page.keyboard.down('KeyS');
+    const ashore = await page.evaluate(() => T.until(() => !world.cruise.where.onShip && world.cruise.where.pier === 1, 30000));
+    await page.keyboard.up('KeyS');
+    assert.ok(ashore, 'off her, at the Maui pier');
+    await frames(5);
+    await shot('alongside at Maui');
+  });
+
+  await step('back ashore at home', async () => {
+    await page.evaluate(() => world.cruise.go(0));
     await frames(5);
     assert.equal((await where()).onShip, false);
   });
