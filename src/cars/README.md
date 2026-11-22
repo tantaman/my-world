@@ -15,7 +15,8 @@ salesperson waits among them who says hello as you walk up.
 | **Ridgeback** | a pickup with a bed for logs, and the legs for a forest track |
 | **Bramble** | a square-rigged four-by-four: slow on the road, and goes almost anywhere off it |
 
-**Buying one.** Walk up beside a car on the lot and **click**: it's yours,
+**Buying one.** Walk up beside a car on the lot and press **F** (the key
+that acts on what's at hand: see [Acting](../act/README.md)): it's yours,
 on a handshake (there's no money in the forest), and you're in the driving
 seat. You have one car at a time: buy another and the dealer takes the old
 one off your hands.
@@ -31,8 +32,8 @@ slope before it rolls back, and won't drive into water deeper than it can
 wade. It stops dead against a tree, a boulder or a wall. After dark its
 headlights light the road ahead.
 
-**Leaving it.** Stopped, **click** to get out beside the driver's door. It
-waits wherever you left it, and you can walk up and **click** beside it to
+**Leaving it.** Stopped, **F** gets you out beside the driver's door. It
+waits wherever you left it, and you can walk up and press **F** beside it to
 get back in. It's on the map as *your car* (and under *car dealerships* in its
 routes), and `go here` on it puts you beside its door.
 Taken somewhere else all at once (back to the start, say), you're out of it

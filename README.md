@@ -69,6 +69,7 @@ See [Building together](src/save/README.md) to set the server up, or skip it
 | **Space** | jump |
 | **Shift** / **Space**, out of your depth | dive / come back up (under water, **W** swims the way you look) |
 | **click**, then move the mouse | look around (pointer lock; drag works too) |
+| **F** | act on what's at hand: get into a car, a boat or a train and out again, on your horse and off, buy, ask (see [Acting](src/act/README.md)) |
 | **Q / E** | turn the camera |
 | **scroll** | zoom |
 | **R** | back to the starting path |
@@ -181,6 +182,7 @@ place in that order, not at the end:
 
 | in | to add… | …call |
 |---|---|---|
+| `act/index.js` | something at hand that the act key (F) does: get in or out, on or off, buy, ask | `game.act.offer({ id, at })`, and `game.act.key(word)` in its prompt |
 | `adventures/adventures.js` | an adventure to start from the board | `game.adventures.define({ id, title, blurb, where?, start })` |
 | `audio/calls.js` | an animal's voice | `defineCall(kind, reach, play)` |
 | `audio/footsteps.js` | a kind of ground underfoot | `defineSurface(name, { thump, step })` |

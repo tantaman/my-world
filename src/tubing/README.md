@@ -16,6 +16,7 @@ water to where it runs out again, and on down.
 | | |
 |---|---|
 | **V** | pull out your tube and get in · get out |
+| **F** | beside running water: get in · in it: get out (the act key, as for everything you get into: see [Acting](../act/README.md)) |
 | **W A S D** | paddle with your hands, the way the camera faces |
 | **shift** | paddle hard |
 
@@ -27,9 +28,9 @@ to get out, or push off when you've run aground in the shallows. The camera
 swings round behind the way you're going, and round the bends with you,
 unless you're looking about.
 
-**Getting out.** **V** climbs out onto the nearest bank, or into shallows you
+**Getting out.** **F** (or **V**) climbs out onto the nearest bank, or into shallows you
 can stand in. Out in deep water with no bank in reach, paddle over to one, or
-press **V** twice to slip out into the water and swim. You're told how far you
+press it twice to slip out into the water and swim. You're told how far you
 floated and how long it took; your longest float in each world is kept.
 
 **How much river is left.** While you float, how fast you're going, how far

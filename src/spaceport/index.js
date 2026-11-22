@@ -86,10 +86,11 @@ const _s = new THREE.Vector3();
 const _p = new THREE.Vector3();
 
 // The features this uses, so it is installed after them (game/features.js);
-// landmarks, towns, caves and railway for what the site keeps clear of.
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks', 'towns', 'caves', 'railway'];
+// landmarks, towns, caves and railway for what the site keeps clear of; act,
+// whose key (F) climbs aboard the rocket too.
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks', 'towns', 'caves', 'railway', 'act'];
 export function installSpaceport(game) {
-  const { scene, camera, pipeline, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway } = game;
+  const { scene, camera, pipeline, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway, act } = game;
 
   // ── Where they are ────────────────────────────────────────────────────────
   // Clear of real places, the old places, towns, the mouths of caves and the
@@ -525,6 +526,15 @@ export function installSpaceport(game) {
       hud.flash(`the nearest launch site is ${formatDistance(n.d)} ${WAYS[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8]} · it’s on the map`, 3200);
     },
   });
+  // Aboard with the act key (F) too: what's at hand, as everywhere.
+  act.offer({
+    id: 'rocket',
+    at() {
+      if (flight.phase !== 'ground' || player.aboard || player.carrier || !nearRocket()) return null;
+      const r = atSite(ROCKET_AT.x, ROCKET_AT.z);
+      return { d: Math.hypot(player.pos.x - r.x, player.pos.z - r.z), word: 'aboard', run: chooseFlight };
+    },
+  });
   commands.add({
     id: 'station-deck', keys: ['Enter'], group: 'ORBIT', label: 'Deep Space 9: dock or view the exterior',
     run: changeDeck,
@@ -633,7 +643,7 @@ export function installSpaceport(game) {
       ui.launchTouch.hidden = !input.isTouch || input.blocked || !(can || arena);
       if (!ui.launchTouch.hidden) ui.launchTouch.textContent = can ? 'Choose destination' : 'Fly home';
       if (can) {
-        hud.cue({ html: '<b>T</b> climb aboard the rocket · choose destination' });
+        hud.cue({ html: `<b>${act.key('aboard')}</b> climb aboard the rocket · choose destination` });
         cued = true;
       } else if (cued) {
         hud.cue(null);

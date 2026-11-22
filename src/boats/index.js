@@ -59,10 +59,11 @@ const _v = new THREE.Vector3();
 // The features this uses, so it is installed after them (game/features.js).
 // And after hunting for its place on the tool bar (the boat tool comes after
 // the rifle), and after mounts, whose word on what Z would do is said every
-// frame, so that what F would do is said over it.
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'splashes', 'hunting', 'mounts'];
+// frame, so that what F would do is said over it; and after act, whose key
+// (F) gets you in and out.
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'splashes', 'hunting', 'mounts', 'act'];
 export function installBoats(game) {
-  const { scene, camera, chunks, solids, player, input, hud, commands, save, sound, builder, map, splashes, peers } = game;
+  const { scene, camera, chunks, solids, player, input, hud, commands, save, sound, builder, map, splashes, peers, act } = game;
 
   // ── The land and the water, as shore.js asks for them ─────────────────────
   const world = {
@@ -260,31 +261,25 @@ export function installBoats(game) {
     return true;
   }
 
-  // ── F: get in, get out ────────────────────────────────────────────────────
+  // ── Getting in and out: the act key (F) ───────────────────────────────────
   const nearest = () => boats.near(player.pos.x, player.pos.z, BOARD_REACH);
-  function press() {
-    if (aboard) return getOut();
-    const b = nearest();
-    if (b) return board(b);
-    hud.flash(`no boat within reach · build one at the water’s edge with the boat tool (${toolKey()})`, SAY);
-    return false;
-  }
-  // What F would do here, in a word ('get in', 'get out'), while it would do
-  // anything: what the pack lists it by, and a touch screen's button says.
-  let doing = '';
-  commands.add({ id: 'boat', keys: ['KeyF'], group: 'BOATS', help: 'F', label: 'get into the boat beside you · get out of it', run: press, now: () => doing });
+  act.offer({
+    id: 'boat',
+    at() {
+      if (aboard) return { d: 0, word: 'get out', run: getOut };
+      if (player.carrier || player.aboard) return null;
+      const b = nearest();
+      return b ? { d: hullDistance(b, player.pos.x, player.pos.z), word: 'get in', run: () => board(b) } : null;
+    },
+  });
+  commands.describe({ group: 'BOATS', help: 'F', label: 'get into the boat beside you · get out of it' });
   commands.describe({ group: 'BOATS', help: 'W A S D', label: 'in a boat: paddle (shift: paddle hard)' });
 
   // What F would do here, said in place of the tool's prompt (unless the tool
   // has something to say, or something under way: the rod, its float out).
   let cued = false;
   function cue() {
-    const touch = input.isTouch;
-    let word = '';
-    const K = (w) => {
-      word = w;
-      return touch ? w : 'F';
-    };
+    const K = (w) => act.key(w);
     let html = '';
     if (aboard) {
       const out = K('get out');
@@ -304,7 +299,6 @@ export function installBoats(game) {
     if (html) hud.cue({ html });
     else if (cued) hud.cue(null);
     cued = !!html;
-    doing = word;
   }
 
   // ── Everyone else here ────────────────────────────────────────────────────

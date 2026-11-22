@@ -89,7 +89,7 @@ the one that stands.
 
 | | |
 |---|---|
-| **click** at the hatch | ask the steward for a shotgun (at any club) |
+| **F** (or **click**) at the hatch | ask the steward for a shotgun (at any club) |
 | **7** | the shotgun (in the rifle's slot: press again to change) |
 | **click** on a station | call "pull!" for the next targets |
 | **click** | shoot · beside a kill, hold to dress it |

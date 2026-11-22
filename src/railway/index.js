@@ -81,10 +81,11 @@ const _v = new THREE.Vector3();
 
 // The features this uses, so it is installed after them (game/features.js).
 // The lines keep clear of the old places and the caves' mouths, which were
-// there first, and off the real land the hikes bring in (world/landforms.js).
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks', 'caves', 'save'];
+// there first, and off the real land the hikes bring in (world/landforms.js);
+// and after act, whose key (F) gets you on and off a train too.
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks', 'caves', 'save', 'act'];
 export function installRailway(game) {
-  const { scene, camera, gen, landforms, chunks, grass, solids, player, input, builder, map, hud, commands, save, sound, landmarks, caves, peers } = game;
+  const { scene, camera, gen, landforms, chunks, grass, solids, player, input, builder, map, hud, commands, save, sound, landmarks, caves, peers, act } = game;
   const keepClear = [];
   if (landmarks) keepClear.push(clearOfPlaces(landmarks.sites));
   if (caves) keepClear.push(clearOfCaves((x0, z0, x1, z1) => caves.inBox(x0, z0, x1, z1)));
@@ -440,7 +441,19 @@ export function installRailway(game) {
   // What Y would do here, in a word ('board', 'get off'), when there's a
   // train to do it with: what the pack lists it by, and a touch screen's button says.
   let doing = '';
-  commands.add({ id: 'railway', keys: ['KeyY', 'PadY'], group: 'WANDER', label: 'railway: stations to go to · get on a train · get off', run: press, now: () => doing });
+  commands.add({ id: 'railway', keys: ['KeyY'], group: 'WANDER', label: 'railway: stations to go to · get on a train · get off', run: press, now: () => doing });
+  // On and off with the act key (F, a pad's Y, its button on a touch screen)
+  // too, as with everything else you get into.
+  act.offer({
+    id: 'train',
+    at() {
+      if (aboard) return { d: 0, word: 'get off', run: () => leave() };
+      if (player.carrier || player.aboard) return null;
+      const c = coachNear();
+      if (!c) return null;
+      return { d: c.d, word: 'get on', run: () => (c.e.w.v < STOOD ? board(c.e, c.car, c.seat) : hud.flash('wait for it to stop at a station')) };
+    },
+  });
 
   // Off to a station: onto its platform, facing the track.
   let arriving = null;
@@ -696,7 +709,7 @@ export function installRailway(game) {
           }
         }
         // arriving, with you aboard
-        if (aboard && aboard.key === e.key && w.at >= 0 && was.at < 0) hud.flash(`${e.line.stations[w.at].name} · Y to get off`, SAY);
+        if (aboard && aboard.key === e.key && w.at >= 0 && was.at < 0) hud.flash(`${e.line.stations[w.at].name} · ${input.isTouch ? 'get off here' : 'F to get off'}`, SAY);
         const h = e.heard || (e.heard = { id: e.key, d: 0, stack: new THREE.Vector3(), mid: new THREE.Vector3(), v: 0, odo: 0, braking: false });
         e.train.stack(h.stack);
         e.train.middle(h.mid);
@@ -741,26 +754,21 @@ export function installRailway(game) {
     smoke.puff(stack, _p.dx * w.v * 0.55, up, _p.dz * w.v * 0.55, working ? (pulling ? 1.5 : 1.1) : 0.55, working ? 0.6 : 0.1);
   }
 
-  // What Y would do here, said in place of the tool's prompt.
+  // What the act key would do here, said in place of the tool's prompt.
   function cue() {
-    const K = (word) => (input.isTouch ? word : 'Y');
+    const K = (word) => act.key(word);
     let html = '';
-    let word = '';
     if (aboard) {
       const e = trains.get(aboard.key);
       if (e) {
         const st = stationAt(e);
-        if (st) {
-          word = 'get off';
-          html = `<b>${K(word)}</b> get off at ${st.name} · it leaves in ${when(e.w.leaves)}`;
-        } else html = `next stop ${nextStop(e).name} · ${when(e.w.due)}`;
+        if (st) html = `<b>${K('get off')}</b> get off at ${st.name} · it leaves in ${when(e.w.leaves)}`;
+        else html = `next stop ${nextStop(e).name} · ${when(e.w.due)}`;
       }
     } else {
       const c = coachNear();
-      if (c && c.e.w.v < STOOD) {
-        word = 'board';
-        html = `<b>${K(word)}</b> get on · ${c.e.line.name} · next stop ${nextStop(c.e).name}`;
-      } else if (c) html = 'the train is moving';
+      if (c && c.e.w.v < STOOD) html = `<b>${K('get on')}</b> get on · ${c.e.line.name} · next stop ${nextStop(c.e).name}`;
+      else if (c) html = 'the train is moving';
     }
     if (html) hud.cue({ html });
     else if (cued) hud.cue(null);

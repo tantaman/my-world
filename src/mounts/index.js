@@ -78,9 +78,9 @@ const _sphere = new THREE.Sphere();
 const _pm = new THREE.Matrix4();
 
 // The features this uses, so it is installed after them (game/features.js).
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'splashes', 'gliding', 'pack'];
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'splashes', 'gliding', 'pack', 'act'];
 export function installMounts(game) {
-  const { scene, camera, gen, chunks, solids, player, input, hud, commands, save, sound, builder, map, splashes, peers, gliding, pack } = game;
+  const { scene, camera, gen, chunks, solids, player, input, hud, commands, save, sound, builder, map, splashes, peers, gliding, pack, act } = game;
 
   // ── Where they live, and what you know of it ──────────────────────────────
   const start = player.start;
@@ -381,14 +381,7 @@ export function installMounts(game) {
   };
 
   function press() {
-    if (riding) {
-      if (player.flying && player.height > GLIDE_FROM && riding.kind === 'eagle') jumpOff();
-      else if (player.flying) {
-        player.carrier.landing = true;
-        hud.flash('coming in to land');
-      } else getOff();
-      return;
-    }
+    if (riding) return dismount();
     // gliding: the eagle, if it's yours, comes to catch you (and none of
     // them is in reach to climb on, whatever is under you)
     if (gliding.active) {
@@ -405,6 +398,30 @@ export function installMounts(game) {
     if (tameOnes().length) return whistle();
     tellWhereToLook();
   }
+
+  // Off the one you're riding: down off it on the ground, in to land in the
+  // air, and high up on the eagle, letting go of it to glide.
+  function dismount() {
+    if (player.flying && player.height > GLIDE_FROM && riding.kind === 'eagle') jumpOff();
+    else if (player.flying) {
+      player.carrier.landing = true;
+      hud.flash('coming in to land');
+    } else getOff();
+  }
+  // ...what that is called
+  const dismounting = () => (player.flying && player.height > GLIDE_FROM && riding.kind === 'eagle' ? 'let go' : player.flying ? 'land' : 'get off');
+
+  // On and off yours with the act key (F) too, as with everything else you
+  // get on or into.
+  act.offer({
+    id: 'mount',
+    at() {
+      if (riding) return player.carrier && player.carrier.landing ? null : { d: 0, word: dismounting(), run: dismount };
+      if (gliding.active || player.carrier || player.aboard) return null;
+      const mine = nearest(tameOnes(), REACH + 0.6);
+      return mine ? { d: Math.hypot(mine.x - player.pos.x, mine.z - player.pos.z), word: 'ride', run: () => ride(mine) } : null;
+    },
+  });
 
   // Which of yours to call: the next one if you've just called, else the
   // turtle if you're by water, else the one you rode last.
@@ -706,13 +723,15 @@ export function installMounts(game) {
       cued = false;
       return;
     }
+    // (on and off: the act key, whose button on a touch screen says so)
+    const A = (w) => act.key(w);
     if (riding) {
       const d = riding.def;
       if (player.carrier.landing) html = 'coming in to land…';
-      else if (player.flying && riding.kind === 'eagle' && player.height > GLIDE_FROM) html = `<b>space</b> climb · <b>shift</b> stoop · <b>${K('let go')}</b> let go and glide`;
-      else if (player.flying) html = `<b>space</b> climb · <b>shift</b> stoop · <b>${K('land')}</b> land`;
-      else if (riding.kind === 'turtle' && !player.swimming) html = `<b>${K('get off')}</b> get off · slow on land: find water`;
-      else html = `<b>${K('get off')}</b> get off · ${d.keys}`;
+      else if (player.flying && riding.kind === 'eagle' && player.height > GLIDE_FROM) html = `<b>space</b> climb · <b>shift</b> stoop · <b>${A('let go')}</b> let go and glide`;
+      else if (player.flying) html = `<b>space</b> climb · <b>shift</b> stoop · <b>${A('land')}</b> land`;
+      else if (riding.kind === 'turtle' && !player.swimming) html = `<b>${A('get off')}</b> get off · slow on land: find water`;
+      else html = `<b>${A('get off')}</b> get off · ${d.keys}`;
     } else if (wild) {
       const d = wild.def;
       if (wild.taming.mood === 'bolt' || wild.shy) {
@@ -724,7 +743,7 @@ export function installMounts(game) {
       }
     } else {
       const mine = nearest(tameOnes(), REACH + 0.6);
-      if (mine) html = `<b>${K('ride')}</b> ride your ${mine.def.name}`;
+      if (mine) html = `<b>${A('ride')}</b> ride your ${mine.def.name}`;
       else if (tameOnes().length) K('call');
     }
     // (and leave the prompt alone when there's nothing to say, for whoever else has)

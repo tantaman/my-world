@@ -21,7 +21,7 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.equal(await onBack(), false, 'nothing on your back yet');
     await page.evaluate(() => world.jetpack.go());
     await frames(5);
-    assert.match(await page.evaluate(() => T.prompt()), /J strap on the jetpack/, 'in front of the rack, J would strap it on');
+    assert.match(await page.evaluate(() => T.prompt()), /F strap on the jetpack/, 'in front of the rack, F (or J) would strap it on');
     await shot('the rack');
     await key('KeyJ');
     assert.equal(await page.evaluate(() => world.jetpack.have), true, 'J, and it is yours');
@@ -74,7 +74,7 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.deepEqual(kept, { have: true }, 'kept with the rest of what is yours');
     await page.evaluate(() => world.jetpack.go());
     await frames(5);
-    assert.match(await page.evaluate(() => T.prompt()), /J hang the jetpack back up/);
+    assert.match(await page.evaluate(() => T.prompt()), /F hang the jetpack back up/);
     await key('KeyJ');
     assert.equal(await page.evaluate(() => world.jetpack.have), false, 'back on its rack');
     assert.equal(await onBack(), false, 'off your back');

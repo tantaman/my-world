@@ -9,9 +9,9 @@ tender stacked with firewood, and two open cars with benches.
 | | |
 |---|---|
 | **Y**, or **M** then *stations* | the stations within reach, beside the map: pick one (click, or its number) to go there |
-| **Y** beside a standing train | get on |
-| **Y** at a station | get off |
-| on a pad | **Y** does what Y does; in the list, the d-pad goes from station to station and **A** picks |
+| **F** (or **Y**) beside a standing train | get on |
+| **F** (or **Y**) at a station | get off |
+| on a pad | **Y** gets on and off, as it does everything at hand (see [Acting](../act/README.md)); the stations are a tab beside the map (**select**), where the d-pad goes from station to station and **A** picks |
 
 **Getting there.** Press **Y** away from a train, or open the map (**M**) and
 its *stations* tab, for the stations within about 7 km, nearest first: which line each is on, how far it is and
@@ -20,11 +20,11 @@ platform, looking along it; **Y** again closes the map. The lines are on the map
 where it is right now, and the stations are places there like the old ones:
 you can track one and walk.
 
-**Riding.** When a train stands at the platform, **Y** beside one of its cars
+**Riding.** When a train stands at the platform, **F** beside one of its cars
 gets you on: you sit on a bench, and the HUD says where it stops next and
 when. It stands about 25 seconds at each station, whistles, and pulls away.
 Your tools are put away while you ride, and the camera swings round the bends
-with you. At the next station, **Y** gets you off onto the platform beside
+with you. At the next station, **F** gets you off onto the platform beside
 your car. Close the game on a train and you open on it again, wherever it has
 got to.
 
