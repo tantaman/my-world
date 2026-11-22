@@ -134,15 +134,18 @@ function pool(kits, p, solid, rect) {
   } else {
     const mid = (p.x0 + p.x1) / 2;
     const { wide, tread, rise } = { wide: 3, tread: 0.4, rise: 0.25 };
+    const dir = p.fwd ? -1 : 1; // which way the steps go down, from their end
+    const end = p.fwd ? p.z1 : p.z0;
     for (let i = 0; ; i++) {
       const top = p.rim - rise * (i + 1);
       if (y + top <= bottom) break;
-      const z0 = p.z0 + i * tread;
-      rect(mid - wide / 2, z0, mid + wide / 2, z0 + tread, bottom, y + top);
-      k.box(mid - wide / 2, bottom, z0, mid + wide / 2, y + top, z0 + tread, RIM, 'y-');
+      const za = end + dir * i * tread;
+      const zb = za + dir * tread;
+      rect(mid - wide / 2, Math.min(za, zb), mid + wide / 2, Math.max(za, zb), bottom, y + top);
+      k.box(mid - wide / 2, bottom, Math.min(za, zb), mid + wide / 2, y + top, Math.max(za, zb), RIM, 'y-');
     }
     // a steel rail down the steps
-    kits.outside.rod([mid - wide / 2 - 0.05, rimTop + 0.9, p.z0 - 0.2], [mid - wide / 2 - 0.05, level + 0.6, p.z0 + 2.2], 0.03, STEEL);
+    kits.outside.rod([mid - wide / 2 - 0.05, rimTop + 0.9, end - dir * 0.2], [mid - wide / 2 - 0.05, level + 0.6, end + dir * 2.2], 0.03, STEEL);
   }
   // the water
   kits.water.flat(p.x0, p.z0, p.x1, p.z1, level, WATER);

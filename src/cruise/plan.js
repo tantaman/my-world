@@ -578,10 +578,12 @@ export const POOLS = [
   { id: 'tub-2', deck: 14, x0: -13, z0: -12, x1: -10, z1: -9, rim: 0.6, deep: 0.9, free: 0.12, tub: true, name: 'a hot tub' },
   { id: 'tub-3', deck: 14, x0: 10, z0: 44, x1: 13, z1: 47, rim: 0.6, deep: 0.9, free: 0.12, tub: true, name: 'a hot tub' },
   { id: 'tub-4', deck: 14, x0: -13, z0: 44, x1: -10, z1: 47, rim: 0.6, deep: 0.9, free: 0.12, tub: true, name: 'a hot tub' },
-  { id: 'splash', deck: 15, x0: -8, z0: -128, x1: 4, z1: -110, rim: 0.5, deep: 1.4, free: 0.15, splash: true, name: 'the splash pool' },
+  // (its steps at the forward end: the slides come in at the other)
+  { id: 'splash', deck: 15, x0: -8, z0: -128, x1: 4, z1: -110, rim: 0.5, deep: 1.4, free: 0.15, splash: true, fwd: true, name: 'the splash pool' },
 ];
-// The steps down into a pool, at its aft end, across its middle: this wide,
-// this deep a tread, this far down each (m). A tub's bench, this wide.
+// The steps down into a pool, at its aft end (forward, for one that says
+// so), across its middle: this wide, this deep a tread, this far down each
+// (m). A tub's bench, this wide.
 export const POOL_STEPS = { wide: 3, tread: 0.4, rise: 0.25 };
 export const TUB_BENCH = 0.45;
 // The floor of a pool (or tub) at (x, z) in the ship's frame, over its deck's
@@ -595,7 +597,7 @@ export function poolBed(p, x, z) {
   }
   const mid = (p.x0 + p.x1) / 2;
   if (Math.abs(x - mid) < POOL_STEPS.wide / 2) {
-    const k = Math.floor((z - p.z0) / POOL_STEPS.tread);
+    const k = Math.floor((p.fwd ? p.z1 - z : z - p.z0) / POOL_STEPS.tread);
     const top = p.rim - POOL_STEPS.rise * (k + 1);
     if (top > bottom) return top;
   }
