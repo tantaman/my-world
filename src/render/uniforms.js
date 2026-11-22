@@ -111,3 +111,18 @@ export const UNDER = {
   uUnderLevel: { value: 0 }, // the surface over the camera (m), while it is under
   uUnderSea: { value: 0 }, // 0 in fresh water .. 1 in the sea: clearer, and bluer
 };
+// Waves breaking on a shore (world/breakers.js), for the water to rise and
+// whiten with: set every frame by the Breakers from the break it has been
+// handed and the waves in now. uBreakAt is a place, slid with the scene; the
+// rest is measured from it. uBreakWay.w is 0 with no break.
+const vec4s = (n) => ({ value: Array.from({ length: n }, () => new THREE.Vector4()) });
+export const BREAKERS = {
+  uBreakAt: { value: new THREE.Vector2() },
+  uBreakWay: { value: new THREE.Vector4(1, 0, 6, 0) },
+  uBreakSpan: { value: new THREE.Vector4(100, 50, 50, 100) },
+  uBreakTime: { value: new THREE.Vector4(1, 10, 0, 0) },
+  uBreakShore: vec4s(5),
+  uBreakDepth: vec4s(7),
+  uBreakCrest: vec4s(12),
+  uBreakWaves: vec4s(5),
+};

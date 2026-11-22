@@ -231,6 +231,7 @@ place in that order, not at the end:
 | `wildlife/wildlife.js` | a new kind of creature altogether | `defineAnimalClass(name, make)` |
 | `wildlife/wildlife.js` | shooting at the animals, or startling them with a loud noise | `wildlife.aimed(o, d, far)`, `kill(hit)`, `startle(x, z, reach)` |
 | `world/basins.js` | water held up in something built (a pool, a tub), to wade and swim in | `game.basins.set(owner, [basin])` |
+| `world/breakers.js` | waves breaking on a shore, for the sea to rise with and anyone to ride | `game.breakers.set(break)`; how high they stand: `breakers.sample(x, z)`, `chunks.waterAt`'s `rise` |
 | `world/country.js` | a kind of country (its ground, plants, sky, animals, what its trees are called) | an entry in `COUNTRY` |
 | `world/cuts.js` | a hole in the ground, for something to stand in for it | `setCuts([{ ax, az, bx, bz, fa, fb, w, h }])` |
 | `world/flora.js` | a plant | an entry in `FLORA`, a model, and where it grows (`chunkGen.js`) |

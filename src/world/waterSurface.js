@@ -43,15 +43,22 @@
 //
 // The forest's own sea (sea.js) rises and falls in a slow swell and is bluer
 // than a lake; it breaks white along the shore, as a real place's sea does,
-// by the foam it carries. Seen from underneath, any water is a ceiling of
-// moving light: the sky through a bright round window straight overhead, and
-// beyond it, the water mirrored back down (Snell's window).
+// by the foam it carries. Where a break has been set (breakers.js), the sets
+// of waves come in over it: the water rises with them, their faces draw up
+// steep and hollow, and they break and roll in white (BREAKER_GLSL, the same
+// sum the Breakers work out for whoever rides them). They lie down to
+// nothing where the water does, so its edge stays on the sand.
+//
+// Seen from underneath, any water is a ceiling of moving light: the sky
+// through a bright round window straight overhead, and beyond it, the water
+// mirrored back down (Snell's window).
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL, UNDER_GLSL, PERIOD, wave } from '../render/glsl.js';
-import { SHARED, SKY, WADE, UNDER, BEHIND, WATERS, MAX_COUNTRIES } from '../render/uniforms.js';
+import { SHARED, SKY, WADE, UNDER, BEHIND, WATERS, BREAKERS, MAX_COUNTRIES } from '../render/uniforms.js';
 import { NO_WATER } from './water.js';
+import { BREAKER_GLSL } from './breakers.js';
 import { WATER_STRIDE as WS, SURFACE_STRIDE as SS } from './chunkGen.js';
 
 
@@ -287,7 +294,7 @@ export function createWaterMaterial() {
     side: THREE.DoubleSide, // so it can be seen from under it
   });
   mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, SKY, WADE, UNDER, BEHIND, WATERS, { uPlayer: SHARED.uPlayer, uWind: SHARED.uWind, uOrigin: SHARED.uOrigin });
+    Object.assign(shader.uniforms, SKY, WADE, UNDER, BEHIND, WATERS, BREAKERS, { uPlayer: SHARED.uPlayer, uWind: SHARED.uWind, uOrigin: SHARED.uOrigin });
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -308,7 +315,8 @@ export function createWaterMaterial() {
         varying float vOwn;
         flat varying float vCountry;
         ${WORLD_GLSL}
-        ${SWELL_GLSL}`,
+        ${SWELL_GLSL}
+        ${BREAKER_GLSL}`,
       )
       .replace(
         '#include <begin_vertex>',
@@ -316,8 +324,10 @@ export function createWaterMaterial() {
         // the sea's swell, lower over the shallows
         vSea = abs(position.y - uSea) < 0.02 ? 1.0 : 0.0;
         if (vSea > 0.5) {
-          vec2 wxz = worldXZ((modelMatrix * vec4(position, 1.0)).xyz);
-          transformed.y += swell(wxz, uTime).x * mix(0.35, 1.0, smoothstep(0.3, 3.0, aDepth));
+          vec3 drawn = (modelMatrix * vec4(position, 1.0)).xyz;
+          transformed.y += swell(worldXZ(drawn), uTime).x * mix(0.35, 1.0, smoothstep(0.3, 3.0, aDepth));
+          // and the waves breaking, if there's a break here; nothing at the water's edge
+          transformed.y += breakers(drawn.xz - uBreakAt).x * smoothstep(0.0, 0.8, aDepth);
         }`,
       )
       .replace(
@@ -363,6 +373,7 @@ export function createWaterMaterial() {
         ${SKY_GLSL}
         ${UNDER_GLSL}
         ${SWELL_GLSL}
+        ${BREAKER_GLSL}
         ${WIND_GLSL}
         // Smooth value noise (quintic, so its slope has no creases) with its
         // gradient: (value, d/dx, d/dy). Its lattice repeats every m cells.
@@ -487,6 +498,14 @@ export function createWaterMaterial() {
         // the sea's swell under the ripples
         float depthV = max(vDepth, 0.0);
         if (vSea > 0.5) g += swell(wp, uTime).yz * mix(0.35, 1.0, smoothstep(0.3, 3.0, depthV));
+        // ...and the waves breaking at a break (as the vertices rose with them)
+        vec4 brk = vec4(0.0);
+        if (vSea > 0.5) {
+          brk = breakers(vWPos.xz - uBreakAt);
+          float shoal = smoothstep(0.0, 0.8, depthV);
+          g += brk.yz * shoal;
+          brk.w *= smoothstep(0.0, 0.3, depthV);
+        }
 
         // rings spreading out from your legs as you wade
         vec2 toMe = vWPos.xz - uPlayer.xz;
@@ -527,7 +546,13 @@ export function createWaterMaterial() {
         float flecks = fleck(run0 * vec2(1.2, 2.6), 0.08 + 0.5 * vFoam) * wt0
                      + fleck(run1 * vec2(1.2, 2.6), 0.08 + 0.5 * vFoam) * (1.0 - wt0);
         foam = max(foam, flecks * smoothstep(0.25, 0.8, speed) * 0.85);
-        float cloud = vFoam * (1.0 - foam) * 0.3;
+        // the white water of a break: clots and streaks, carried in with it
+        if (brk.w > 0.0) {
+          vec2 inn = -uBreakWay.xy * uTime * 2.5;
+          float clot = wnoise(wp, 0.55, inn * 0.55) * 0.6 + wnoise(wp, 2.3, inn * 2.3 + 4.0) * 0.4;
+          foam = max(foam, smoothstep(0.3, 0.75, brk.w * (0.45 + 0.9 * clot)));
+        }
+        float cloud = (vFoam + brk.w * 0.8) * (1.0 - foam) * 0.3;
 
         // How much water the light from what's under it comes up through to
         // the eye (m), from the copy of what's behind: and so how much of what

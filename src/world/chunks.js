@@ -160,6 +160,9 @@ export class ChunkManager extends Emitter {
     // (x, z) -> how far the ground has been moved from where it was grown.
     // Asked only where no chunk is loaded; set by whoever keeps the edits.
     this.heightOffset = null;
+    // Waves breaking somewhere on the sea (breakers.js), which raise it for
+    // whoever asks waterAt; set by the world.
+    this.breakers = null;
     this.trunkRadius = {};
     for (const k of VEG_KINDS) this.trunkRadius[k] = models[k].trunkRadius;
 
@@ -272,7 +275,10 @@ export class ChunkManager extends Emitter {
 
   // The water at (x, z), if any may stand there. Fills out.level, out.depth
   // (level − ground: > 0 in the water, < 0 on the bank), out.flowX/Z and
-  // out.foam, and returns true; false where there's no water about.
+  // out.foam, and returns true; false where there's no water about. And
+  // out.rise: how far waves breaking on the sea raise it there just now (m),
+  // over the level, which stays the sea's own (as the water draws it, they
+  // lie down to nothing at its edge).
   waterAt(x, z, out) {
     const ch = this.chunkAt(x, z);
     if (ch && ch.heights) {
@@ -284,6 +290,7 @@ export class ChunkManager extends Emitter {
       out.flowX = ch.sampleGrid(ch.wData, x, z, WS, 1);
       out.flowZ = ch.sampleGrid(ch.wData, x, z, WS, 2);
       out.foam = ch.sampleGrid(ch.wData, x, z, WS, 3);
+      out.rise = this._rise(x, z, out);
       return true;
     }
     const h = this.gen.height(x, z) + (this.heightOffset ? this.heightOffset(x, z) : 0);
@@ -294,7 +301,15 @@ export class ChunkManager extends Emitter {
     out.flowX = w.flowX;
     out.flowZ = w.flowZ;
     out.foam = w.foam;
+    out.rise = this._rise(x, z, out);
     return true;
+  }
+
+  _rise(x, z, w) {
+    const b = this.breakers;
+    if (!b || !b.spot || !this.gen.sea || Math.abs(w.level - this.gen.sea.level) > 0.02 || w.depth <= 0) return 0;
+    const t = Math.min(1, w.depth / 0.8);
+    return b.rise(x, z) * t * t * (3 - 2 * t);
   }
 
   // Calls fn(x, z, r) for every tree/rock collider near (x, z).

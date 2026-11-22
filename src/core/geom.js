@@ -39,7 +39,7 @@ const KEY_SPAN = 2 ** 26;
 export const cellKey = (i, j) => (i + KEY_OFF) * KEY_SPAN + (j + KEY_OFF);
 
 // A scratch record for ChunkManager.waterAt(x, z, out).
-export const waterSample = () => ({ level: 0, depth: 0, flowX: 0, flowZ: 0, foam: 0 });
+export const waterSample = () => ({ level: 0, depth: 0, flowX: 0, flowZ: 0, foam: 0, rise: 0 });
 
 // How far along a ray (origin, dir: anything with x, y, z) it meets a box
 // { inv, half }: `inv` takes the world into the box's frame (a Matrix4, read
