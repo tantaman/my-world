@@ -81,6 +81,7 @@ export function rifleTool({ wildlife, fires, carcasses, spits, scope, which, eat
     id: 'rifle',
     label: 'rifle',
     short: 'rifle',
+    kit: 'guns', // alone until another gun joins it (the hunt club's shotgun)
     held: { name: 'rifle', make: makeRifle, rest: 2.6, elbow: -0.45 },
 
     get rounds() {

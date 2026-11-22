@@ -9,6 +9,7 @@
 
 import * as THREE from 'three';
 import { LINE } from './line.js';
+import { OVER } from '../render/pipeline.js';
 
 const N = 24; // points along the line
 const ARC = 0.28; // how high the float goes as it's cast, per metre out
@@ -35,6 +36,7 @@ export class LineLook {
     this.line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xe8e2d0, transparent: true, opacity: 0.85 }));
     this.line.frustumCulled = false;
     this.line.visible = false;
+    this.line.layers.set(OVER); // see-through, over the water: drawn after it (render/pipeline.js)
     scene.add(this.line);
 
     this.from = new THREE.Vector3(); // where the rod's tip was when it was cast

@@ -12,10 +12,10 @@ import { localFrame, tileXY, terrarium, toTerrarium } from '../tools/hike/geo.js
 import { readTiff, writeTiff } from '../tools/hike/tiff.js';
 import { blockOf, blockTiles, missing, BLOCK } from '../tools/hike/usgs.js';
 import { makeChains } from '../src/hikes/waymarks.js';
-import { parseOsm, trails, waters, coastlines, roads, streams, covers } from '../tools/hike/osm.js';
-import { buildHike, splitHike, fineBox, simplify, signedDistance, coastDistance, walkFromRoad, fillRings } from '../tools/hike/build.js';
+import { parseOsm, trails, waters, coastlines, roads, streams, covers, falls } from '../tools/hike/osm.js';
+import { buildHike, splitHike, fineTiles, simplify, signedDistance, coastDistance, walkFromRoad, walkBetween, fillRings } from '../tools/hike/build.js';
 import { placeHike, project, centreOf, ORIGIN } from '../tools/hike/place.js';
-import { Landform, packHeights, unpackHeights, packShore, unpackShore, packCover, unpackCover } from '../src/world/landform.js';
+import { Landform, packHeights, unpackHeights, packHeights2, unpackHeights2, packShore, unpackShore, packCover, unpackCover } from '../src/world/landform.js';
 import { winterSnow, snowlineFrom } from '../tools/hike/snow.js';
 import { growWorld, LANDS } from '../src/world/lands.js';
 import { generateVegetation, generateTerrain } from '../src/world/chunkGen.js';
@@ -23,7 +23,7 @@ import { sampleFar } from '../src/far/grid.js';
 import { NO_WATER, LANDFORM_REACH, LANDFORM_DRY } from '../src/world/water.js';
 import { NET } from '../src/world/drainage.js';
 import { HIKES } from '../src/world/hikes.js';
-import { Landforms, loadAll, reachOf } from '../src/world/landforms.js';
+import { Landforms, loadAll, loadHike, reachOf } from '../src/world/landforms.js';
 import { tiffExif, jpegWith, heifWith } from './helpers/photos.js';
 
 const SEED = 20261119;
@@ -457,11 +457,11 @@ const watered = buildHike({
   coast: [[toLL(COAST_AT, -6000), toLL(COAST_AT, -COVE), toLL(COAST_AT - 2 * COVE, -COVE), toLL(COAST_AT - 2 * COVE, COVE), toLL(COAST_AT, COVE), toLL(COAST_AT, 6000)]],
   roads: [[toLL(1000, -3000), toLL(1000, 3000)]],
   streams: [
-    { name: 'Brook', river: false, points: Array.from({ length: 23 }, (_, k) => toLL(...brookAt(k))) },
-    { name: 'Brook', river: false, points: [toLL(100, 300), toLL(...brookAt(0))] },
-    { name: 'Beck', river: false, points: [toLL(400, 200), toLL(...brookAt(8))] },
+    { name: 'Brook', river: false, width: 25, points: Array.from({ length: 23 }, (_, k) => toLL(...brookAt(k))) },
+    { name: 'Brook', river: false, width: 25, points: [toLL(100, 300), toLL(...brookAt(0))] },
+    { name: 'Beck', river: false, width: 15, points: [toLL(400, 200), toLL(...brookAt(8))] },
     { name: '', river: false, points: Array.from({ length: 9 }, (_, k) => toLL(-300 - k * 50, -600)) },
-    { name: 'Out', river: true, points: Array.from({ length: 30 }, (_, k) => toLL(-3200 + k * 100, -1200)) },
+    { name: 'Out', river: true, width: 40, points: Array.from({ length: 30 }, (_, k) => toLL(-3200 + k * 100, -1200)) },
   ],
   at: AT,
   radius: 2400,
@@ -516,10 +516,16 @@ test('a real stream runs downhill all the way, into what the map says it runs in
   // gives out nor starts again, and is as wide as it was
   gen.height(...at(...brookAt(0)));
   assert.ok(gen.water.region && gen.water.edge < -0.8, `running through the join (${gen.water.edge})`);
-  // the beck comes in half way down, and the brook is the bigger for it
-  const fed = L.segs.filter((s) => s.acc1 - s.acc0 > 12);
+  // the beck comes in half way down; the brook is as wide as the map says,
+  // there as elsewhere
+  const brook = watered.streams[0].width / 2;
+  for (const s of L.segs.filter((s) => s.w0 > 0 && s.w1 > 0 && Math.abs(s.w0 - brook) < 1e-9)) assert.equal(s.w1, brook, 'as wide below the beck as above it');
+  // where nobody says how wide, the brook is the bigger for it
+  const unsaid = world([{ ...watered, streams: watered.streams.map(({ width, ...r }) => r) }]).landforms[0];
+  const fed = unsaid.segs.filter((s) => s.acc1 - s.acc0 > 12);
   assert.equal(fed.length, 1, 'one stretch takes on more than it gathers');
   assert.ok(fed[0].W[0] > fed[0].W[fed[0].count], 'falling still');
+  assert.ok(fed[0].w1 > fed[0].w0, 'and widens');
   gen.height(...at(550, 350));
   assert.ok(gen.water.region && gen.water.kind === 'stream', 'the beck, on its way down');
   // it comes down to the sea, at the sea's level
@@ -988,10 +994,17 @@ test('a finer grid along the walk keeps a narrow ridge narrow', () => {
   const f = fineFin.ground.fine;
   assert.ok(f && !coarseFin.ground.fine, 'asked for, there is one');
   near(f.cell, 1, 1e-9, '5 m at 1 : 5');
-  // it covers the walk and the margin round it, and keeps inside the real land
-  const [x0, z0, x1, z1] = fineBox([[0, 240], [0, 0]], { cell: 5, margin: 150 }, 0.2, 400);
-  assert.deepEqual([f.x, f.z, f.x + (f.w - 1) * f.cell, f.z + (f.h - 1) * f.cell], [x0, z0, x1, z1]);
-  assert.ok(x0 <= -30 && x1 >= 30 && z0 <= -30 && z1 >= 240, 'the walk and 30 m round it');
+  // it is kept as tiles along the walk, and the margin round it
+  assert.deepEqual(
+    f.tiles.map(([ti, tj]) => [ti, tj]),
+    fineTiles([[0, 240], [0, 0]], { cell: 5, margin: 150 }, 0.2, 400, [[0, 0]]),
+  );
+  const L0 = new Landform(fineFin);
+  const inFine = (x, z) => L0.fine.edge(x, z) > 0;
+  for (let z = 0; z <= 240; z += 4) for (const x of [-29.5, 0, 29.5]) assert.ok(inFine(x, z), `${x}, ${z}: within 30 m of the walk, the fine grid`);
+  assert.ok(!inFine(100, 100) && !inFine(0, 340), 'and well away from it, none');
+  let x1 = 0;
+  while (inFine(x1, 100)) x1 += 0.25;
   // 3 m (game) aside from the crest, the fine land has fallen away; the coarse hasn't, much
   const drop = (def) => {
     const L = new Landform(def);
@@ -1017,6 +1030,187 @@ test('a finer grid along the walk keeps a narrow ridge narrow', () => {
   const { card, land } = splitHike(fineFin);
   assert.equal(card.ground, undefined);
   assert.deepEqual(JSON.parse(JSON.stringify(land.ground)), fineFin.ground);
+});
+
+// A long walk across a smooth slope, the fine grid along it as tiles: as
+// smooth across where one tile meets the next as anywhere, and the same
+// ground the old way of keeping it (one box) gives.
+const SLOPE = { lat: 36.25, lon: -112.7, bearing: 0, hour: 12 };
+const slopeFrame = localFrame(SLOPE.lat, SLOPE.lon);
+const slopeGround = (lat, lon) => {
+  const [e, n] = slopeFrame.toEN(lat, lon);
+  return 900 + 0.3 * e - 0.12 * n + 25 * Math.sin(e / 90) * Math.cos(n / 70);
+};
+const slopeHike = buildHike({
+  id: 'slope',
+  name: 'Slope',
+  photo: SLOPE,
+  elevation: slopeGround,
+  trails: [{ name: 'Across', points: Array.from({ length: 61 }, (_, k) => slopeFrame.toLatLon(-1500 + k * 50, (k % 7) * 20)) }],
+  roads: [[slopeFrame.toLatLon(-1500, -300), slopeFrame.toLatLon(-1500, 300)]],
+  at: [40000, -9000],
+  radius: 2000,
+  fade: 400,
+  cell: 30,
+  fine: { cell: 5, margin: 120 },
+}).def;
+
+test('the finer grid is kept as tiles along the walk, and is one ground across them', () => {
+  const f = slopeHike.ground.fine;
+  const S = f.size;
+  // a long walk costs its own strip of land, not the box round it
+  const kept = f.tiles.length * (S * f.cell) ** 2;
+  const box = (600 + 2 * 24) * (24 + 2 * 24);
+  assert.ok(kept < box, `${Math.round(kept)} m² of tiles, where a box round the walk and its margin is ${box} m²`);
+  const L = new Landform(slopeHike);
+  // where tiles meet (every S m), no step: the ground goes on as smoothly as
+  // between any two points inside one
+  // (how sharply it bends, every 0.2 m: a step would be a spike)
+  const bend = { seam: 0, inside: 0 };
+  let seams = 0;
+  const at = (x) => L.raw(L.cx + x, L.cz - 8);
+  for (let x = -280; x <= 260; x += 0.2) {
+    if (L.fine.edge(x - 0.4, -8) < 10 || L.fine.edge(x + 0.4, -8) < 10) continue;
+    const T = S * f.cell;
+    const seam = Math.floor((x - 2) / T) !== Math.floor((x + 2) / T);
+    seams += Math.floor((x - 0.1) / T) !== Math.floor((x + 0.1) / T) ? 1 : 0;
+    const b = Math.abs(at(x + 0.2) - 2 * at(x) + at(x - 0.2));
+    bend[seam ? 'seam' : 'inside'] = Math.max(bend[seam ? 'seam' : 'inside'], b);
+  }
+  assert.ok(seams >= 6, `crossing where tiles meet (${seams} times)`);
+  assert.ok(bend.seam <= bend.inside * 1.25 && bend.inside < 0.02, `no step where tiles meet (it bends by ${bend.seam.toFixed(4)} m there, ${bend.inside.toFixed(4)} m inside them)`);
+  // it is the real ground
+  near(L.raw(L.cx + 50, L.cz - 8), (slopeGround(...slopeFrame.toLatLon(250, 40)) - slopeHike.base) * 0.2, 0.15, 'the real height');
+  // kept as one box instead, the same points give the same ground
+  const ti0 = Math.min(...f.tiles.map((t) => t[0]));
+  const tj0 = Math.min(...f.tiles.map((t) => t[1]));
+  const ti1 = Math.max(...f.tiles.map((t) => t[0]));
+  const tj1 = Math.max(...f.tiles.map((t) => t[1]));
+  const [w, h] = [(ti1 - ti0 + 1) * S, (tj1 - tj0 + 1) * S];
+  const H = new Float32Array(w * h).fill(-50);
+  for (const [ti, tj, packed] of f.tiles) {
+    const T = unpackHeights2(packed, S, S);
+    for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) H[((tj - tj0) * S + j) * w + (ti - ti0) * S + i] = T[j * S + i];
+  }
+  const one = new Landform({ ...slopeHike, ground: { ...slopeHike.ground, fine: { x: ti0 * S * f.cell, z: tj0 * S * f.cell, w, h, cell: f.cell, heights: packHeights2(H, w, h) } } });
+  let compared = 0;
+  for (let x = -250; x <= 250; x += 7.3) {
+    if (L.fine.edge(x, -8) < 10) continue;
+    near(L.raw(L.cx + x, L.cz - 8), one.raw(one.cx + x, one.cz - 8), 0.051, `at ${x.toFixed(1)}: tiles and box agree`);
+    compared++;
+  }
+  assert.ok(compared > 30, `compared at ${compared} points`);
+});
+
+test('the walk can start where it is said to, and go on past the photo', () => {
+  // A path from the west to the photo and on east; a short cut round the
+  // north is closed to walkers. A lane runs off it to a village.
+  const line = (pts, extra = {}) => ({ name: '', pts, ...extra });
+  const west = line([[-300, 0], [-150, 0], [0, 0]], { name: 'Canyon Trail' });
+  const east = line([[0, 0], [200, 0], [400, 0]], { name: 'Canyon Trail' });
+  const lane = line([[-150, 0], [-150, 40]]);
+  const cut = line([[-300, 0], [-300, -200], [400, -200], [400, 0]], { closed: true });
+  const lines = [west, east, lane, cut];
+  const w = walkBetween(lines, [[-302, 3], [0, 1], [398, -2]]);
+  assert.deepEqual([w.pts[0], w.pts[w.pts.length - 1]], [[-300, 0], [400, 0]], 'from where it is said to start to where it is said to end');
+  assert.ok(w.pts.some((p) => p[0] === 0 && p[1] === 0), 'by way of the photo');
+  near(w.length, 700, 1e-9, 'along the paths, not the closed one');
+  assert.equal(w.name, 'Canyon Trail');
+  near(Math.sin(w.yaw), 1, 1e-9, 'setting off east');
+  // the village's lane is a road to walkFromRoad, which would start there
+  assert.deepEqual(walkFromRoad(lines, [[[-150, 40], [-100, 40]]]).pts[0], [-150, 40]);
+  assert.equal(walkBetween(lines, [[-300, 0], [0, 500]]), null, 'a stop off the paths: no walk');
+  assert.equal(walkBetween([west, line([[600, 0], [700, 0]])], [[-300, 0], [700, 0]]), null, 'nor between paths that never meet');
+  // It goes where it has to: along a village's lanes, and across a gap the
+  // map left between two paths (a scramble down beside a fall). Each stretch
+  // of that is said, so it can be made a path.
+  const upper = line([[0, 0], [0, 100]], { name: 'Upper' });
+  const lower = line([[0, 108], [0, 200]], { name: 'Lower' });
+  const village = line([[-100, 0], [-60, 0]], { name: 'Trail' });
+  const lanes = [[[-60, 0], [-30, 5], [0, 0]]];
+  const far = walkBetween([village, upper, lower], [[-100, 0], [0, 200]], { roads: lanes, gap: 12 });
+  assert.deepEqual([far.pts[0], far.pts[far.pts.length - 1]], [[-100, 0], [0, 200]]);
+  assert.deepEqual(far.added, [{ pts: [[-60, 0], [-30, 5], [0, 0]], gap: false }, { pts: [[0, 100], [0, 108]], gap: true }]);
+  assert.equal(walkBetween([village, upper, lower], [[-100, 0], [0, 200]], { roads: lanes, gap: 6 }), null, 'a wider gap is not crossed');
+  assert.equal(walkBetween([village, upper, lower], [[-100, 0], [0, 200]], { gap: 12 }), null, 'nor is a road there unless it is said');
+  // built into a hike: the trailhead is where it starts, and it ends past the photo
+  const LL = (e, n) => slopeFrame.toLatLon(e, n);
+  const ll = (e, n) => ({ lat: LL(e, n)[0], lon: LL(e, n)[1] });
+  const through = {
+    id: 'through',
+    name: 'Through',
+    photo: SLOPE,
+    elevation: slopeGround,
+    trails: [
+      { name: 'Canyon Trail', points: [LL(-1500, 0), LL(-750, 0), LL(0, 0), LL(1000, 0), LL(1500, 0)] },
+      { name: '', points: [LL(-750, 0), LL(-750, 200)] },
+    ],
+    roads: [[LL(-800, 200), LL(-700, 200)]],
+    from: ll(-1500, 0),
+    to: ll(1500, 0),
+    at: [40000, -9000],
+    radius: 2000,
+    fade: 400,
+    cell: 30,
+  };
+  const walked = buildHike(through).def;
+  near(walked.trailhead.x, -300, 0.1, 'from the west end, not the road');
+  assert.deepEqual(walked.end, { x: 300, z: 0 }, 'and on to the east end');
+  near(walked.trail.length, 600, 0.5, 'the whole of it');
+  near(walked.trail.climb, (slopeGround(...LL(1500, 0)) - slopeGround(...LL(-1500, 0))) * 0.2, 1, 'from start to end');
+  assert.deepEqual(splitHike(walked).card.end, walked.end, 'where it ends is on the card');
+  assert.equal(buildHike({ ...through, from: null, to: null }).def.trailhead.x, -150, 'unsaid, it starts at the road');
+  assert.throws(() => buildHike({ ...through, to: ll(0, 1500) }), /no paths lead/, 'and says so if the paths do not lead there');
+  // a gap the walk crosses is a path on the ground, with chains where it's steep
+  const cliff = (lat, lon) => {
+    const [e] = slopeFrame.toEN(lat, lon);
+    return slopeGround(lat, lon) - (e > 1020 ? 80 : 0);
+  };
+  const scramble = buildHike({
+    ...through,
+    elevation: cliff,
+    trails: [
+      { name: 'Canyon Trail', points: [LL(-1500, 0), LL(0, 0), LL(1000, 0)] },
+      { name: 'Canyon Trail', points: [LL(1045, 0), LL(1500, 0)] },
+    ],
+  }).def;
+  assert.deepEqual(scramble.end, { x: 300, z: 0 }, 'across the gap to the end');
+  assert.ok(scramble.paths.some((p) => p.length === 4 && Math.abs(p[0] - 200) < 0.1 && Math.abs(p[2] - 209) < 0.1), 'the gap is a path');
+  assert.equal(scramble.ropes.length, 1, 'with chains down the drop');
+});
+
+test('OpenStreetMap: waterfalls, and paths closed to walkers', () => {
+  const xml = `<osm>
+    <node id="1" lat="36.25" lon="-112.69"><tag k="waterway" v="waterfall"/><tag k="name" v="Havasu Falls"/><tag k="height" v="28"/></node>
+    <node id="2" lat="36.26" lon="-112.70"><tag k="waterway" v="waterfall"/><tag k="name" v="Mooney Falls"/></node>
+    <node id="3" lat="36.26" lon="-112.71"><tag k="tourism" v="viewpoint"/><tag k="name" v="Mooney Falls"/></node>
+    <node id="5" lat="36.247" lon="-112.698"><tag k="natural" v="spring"/><tag k="name" v="Little Navajo Falls"/></node>
+    <node id="4" lat="36.27" lon="-112.71"/>
+    <way id="10"><nd ref="3"/><nd ref="4"/><tag k="highway" v="path"/><tag k="access" v="private"/></way>
+    <way id="11"><nd ref="3"/><nd ref="4"/><tag k="highway" v="path"/></way>
+  </osm>`;
+  const osm = parseOsm(xml);
+  assert.deepEqual(falls(osm), [
+    { name: 'Havasu Falls', lat: 36.25, lon: -112.69, height: 28 },
+    { name: 'Mooney Falls', lat: 36.26, lon: -112.7 },
+    { name: 'Little Navajo Falls', lat: 36.247, lon: -112.698 },
+  ], 'a fall by name though tagged a spring; never a viewpoint of one');
+  assert.deepEqual(trails(osm).map((t) => !!t.closed), [true, false]);
+  // on a hike, the falls on its land, where they are
+  const photos = [{ name: 'Beaver Falls', lat: 36.258, lon: -112.7, bearing: 147, hour: 14.5 }];
+  const def = buildHike({ id: 'f', name: 'F', photo: { lat: 36.255, lon: -112.695, bearing: 0, hour: 12 }, elevation: () => 900, falls: falls(osm), photos, at: [0, 0], radius: 2000, fade: 400, cell: 60 }).def;
+  assert.deepEqual(def.falls.map((f) => f.name), ['Havasu Falls', 'Mooney Falls', 'Little Navajo Falls']);
+  // and a more photo taken on the walk, a spot of its own on the card, kept clear as the view is
+  assert.equal(def.photos.length, 1);
+  assert.deepEqual([def.photos[0].name, def.photos[0].bearing, def.photos[0].hour], ['Beaver Falls', 147, 14.5]);
+  assert.deepEqual(splitHike(def).card.photos, def.photos);
+  const L = new Landform(def);
+  assert.ok(L.clearing(L.cx + def.photos[0].x, L.cz + def.photos[0].z) < 0, 'no tree where it was taken');
+  const [e, n] = localFrame(36.255, -112.695).toEN(36.25, -112.69);
+  near(def.falls[0].x, e * 0.2, 0.05, 'east');
+  near(def.falls[0].z, -n * 0.2, 0.05, 'south');
+  assert.equal(def.falls[0].height, 28);
+  assert.deepEqual(splitHike(def).card.falls, def.falls, 'kept on the card, for the map');
 });
 
 test("a cliff on a real place is bare rock: no trees, no grass", () => {
@@ -1092,4 +1286,75 @@ for (const land of LANDS) test(`the hikes leave the rest of the world exactly as
   const v0 = generateVegetation(plain, 2, -3, 64, TRUNK);
   const v1 = generateVegetation(withHikes, 2, -3, 64, TRUNK);
   for (const k of Object.keys(v0.lists)) assert.deepEqual(v1.lists[k], v0.lists[k], k);
+});
+
+test("a canyon far below the forest is as deep as it really is: the forest's own streams, given way, raise no walls in it", async () => {
+  // Havasu Canyon's floor is 200 m below the forest round it; the forest's
+  // streams run on over it, unseen, at the forest's level. Below Beaver
+  // Falls, where they cross it, the ground is the real ground.
+  const def = await loadHike(HIKES.find((h) => h.id === 'havasu-falls'));
+  const gen = world([def]);
+  const L = gen.landforms[0];
+  const [cx, cz] = [def.at[0] + def.photos[1].x, def.at[1] + def.photos[1].z];
+  let worst = 0;
+  for (let z = -100; z <= 100; z += 2.3) {
+    for (let x = -100; x <= 100; x += 2.3) worst = Math.max(worst, gen.height(cx + x, cz + z) - (L.ground(cx + x, cz + z) + L.offset));
+  }
+  assert.ok(worst < 2.5, `the ground stands at most ${worst.toFixed(1)} m over the real ground (a bank)`);
+  assert.ok(L.raw(cx, cz) + L.offset < gen.forestHeight(cx, cz) - 100, 'and it is a canyon, far below the forest');
+});
+
+test('a stream is as wide as it really is: as the map says, between its banks, or as such a stream usually is', () => {
+  const P = { lat: 36.3, lon: -112.76, bearing: 0, hour: 12 };
+  const f = localFrame(P.lat, P.lon);
+  const LL = (e, n) => f.toLatLon(e, n);
+  // a river running east along n = 0, drawn between banks 50 m apart
+  const banks = [[LL(-1500, -25), LL(1500, -25), LL(1500, 25), LL(-1500, 25), LL(-1500, -25)]];
+  const line = (n) => Array.from({ length: 31 }, (_, k) => LL(-1500 + k * 100, n));
+  const def = buildHike({
+    id: 'wide',
+    name: 'Wide',
+    photo: P,
+    elevation: () => 600,
+    streams: [
+      { name: 'Banked', river: true, points: line(4) },
+      { name: 'Unbanked', river: true, points: line(600) },
+      { name: 'Brook', river: false, points: line(-600) },
+      { name: 'Said', river: false, width: 6, points: line(-900) },
+    ],
+    riverbanks: banks,
+    at: [0, 0],
+    radius: 2000,
+    fade: 400,
+    cell: 60,
+  }).def;
+  const width = (name) => def.streams.find((s) => s.name === name).width / def.scale;
+  near(width('Banked'), 50, 9, 'between its banks (off the middle, read the wider way)');
+  near(width('Unbanked'), 10, 1e-9, 'a river the map draws no banks for');
+  near(width('Brook'), 3, 1e-9, 'a brook');
+  near(width('Said'), 6, 1e-9, 'as the map says');
+  // and in the world, that wide
+  const L = world([def]).landforms[0];
+  const piece = L.segs.find((s) => Math.abs(s.pts[1] - L.cz + 600 * 0.2) < 1 && s.w0 > 0 && s.w1 > 0);
+  near(piece.w0 * 2, 10 * 0.2, 1e-9, 'half its width either side of its line');
+});
+
+test('heights pack smaller still, the plane through the ones before saying the rest', () => {
+  const n = 61;
+  const h = new Float32Array(n * n);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) h[j * n + i] = Math.round((40 + i * 0.7 - j * 0.3 + 6 * Math.sin(i / 9) * Math.cos(j / 7)) * 10) / 10;
+  const two = packHeights2(h, n);
+  assert.deepEqual(Array.from(unpackHeights2(two, n)).map((v) => Math.round(v * 10)), Array.from(h).map((v) => Math.round(v * 10)), 'back as they went, to a tenth of a metre');
+  assert.ok(two.length < packHeights(h, n).length * 0.75, `smaller (${two.length} against ${packHeights(h, n).length})`);
+  // a point nobody asks about is left as the plane says (a nibble), and the
+  // rest are kept as they were
+  const kept = (i, j) => Math.hypot(i - 30, j - 30) < 25;
+  const back = unpackHeights2(packHeights2(h, n, n, kept), n);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) if (kept(i, j)) assert.equal(Math.round(back[j * n + i] * 10), Math.round(h[j * n + i] * 10));
+  // a hike says which way its heights are packed: the old way still reads
+  assert.equal(hike.ground.pack, 2);
+  const H = unpackHeights2(hike.ground.heights, hike.ground.n);
+  const old = new Landform({ ...hike, ground: { n: hike.ground.n, cell: hike.ground.cell, heights: packHeights(H, hike.ground.n) } });
+  const now = new Landform(hike);
+  for (const [x, z] of [[10, -20], [-55.5, 31], [80, 80]]) near(old.raw(old.cx + x, old.cz + z), now.raw(now.cx + x, now.cz + z), 1e-6, 'one packed either way is the same ground');
 });

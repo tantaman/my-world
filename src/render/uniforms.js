@@ -65,6 +65,17 @@ export const LAND = {
   uRubble: { value: new Array(MAX_COUNTRIES).fill(0) }, // how much of its bare ground is broken stone, 0..1
 };
 
+// What colour each kind of country's streams and lakes are (world/country.js,
+// `water`), by its id, filled in by the country feature: the colour the water
+// itself sends back over a shallow bed and over a deep one, and how milky it
+// is. The water says, vertex by vertex, which country it is in and how far
+// (waterSurface.js). Every country starts with the forest's own.
+export const WATERS = {
+  uWaterShallow: each(0.05, 0.085, 0.06),
+  uWaterDeep: each(0.02, 0.06, 0.07),
+  uWaterMilk: { value: new Array(MAX_COUNTRIES).fill(0) },
+};
+
 // A layer of cloud over the country you're in (world/country.js), drawn by
 // the composite pass (pipeline.js): from under it, a grey sky with the
 // hilltops lost in it; from over it, a sea of cloud. Set by the country
@@ -74,6 +85,16 @@ export const DECK = {
   uDeck: { value: 0 }, // m: how high it lies
   uDeckCover: { value: 0 }, // 0..1: how much of it is cloud; 0, and there is none
   uDeckMid: { value: new THREE.Vector2() },
+};
+
+// What lies behind whatever is drawn on the OVER layer (render/pipeline.js):
+// the scene as drawn before it, which the water shows through itself and
+// mirrors. Set by the pipeline each frame.
+export const BEHIND = {
+  tBehind: { value: null }, // rgb: its colour (HDR); a: how far off it is (view depth, m)
+  uBehindRes: { value: new THREE.Vector2(1, 1) }, // its size in pixels, as drawn
+  uProj: { value: new THREE.Matrix4() }, // the camera's projection, to find a point on it
+  uAirFog: { value: 0.002 }, // how thick the air is (per m), for what is seen far off in it
 };
 
 // The water around the player's legs: how much it's stirred up (0..1), and

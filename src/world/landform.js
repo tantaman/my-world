@@ -15,12 +15,19 @@
 //   at: [x, z]      where its middle sits in the world
 //   scale           game metres per real metre
 //   radius, fade    real land out to radius, gone by radius + fade
-//   ground          { n, cell, heights, fine? }: an n × n grid of heights
-//                   `cell` apart, centred on `at`, packed by packHeights().
-//                   fine: { x, z, w, h, cell, heights }, a finer w × h grid
-//                   over part of it (the walk), from (x, z) relative to `at`:
-//                   where it is, it is the ground, giving way to the coarse
-//                   grid over FINE_EDGE at its edge
+//   ground          { n, cell, heights, fine?, pack? }: an n × n grid of
+//                   heights `cell` apart, centred on `at`, packed by
+//                   packHeights(), or packHeights2() if pack is 2 (its fine
+//                   grid too).
+//                   fine: a finer grid over part of it (the walk): where it
+//                   is, it is the ground, giving way to the coarse grid over
+//                   FINE_EDGE at its edge. Either one box of it,
+//                   { x, z, w, h, cell, heights }, w × h from (x, z) relative
+//                   to `at`; or, for a walk too long for one box to be small,
+//                   tiles of it, { cell, size, tiles: [[ti, tj, heights], ...] }:
+//                   tile (ti, tj) holds the size × size points from
+//                   (ti·size, tj·size) cells from `at`, and only the tiles
+//                   near the walk are kept
 //   lakes           [{ name, level, box: [i0, j0, w, h], shore, sea? }]: the
 //                   water level, and the signed distance to the shore
 //                   (negative in the water) over part of the same grid, packed
@@ -28,8 +35,10 @@
 //                   breaks along its shore and nothing grows in it. Its shore
 //                   is on a finer grid of its own ({ x, z, w, h, cell } in
 //                   place of box, as a beach's is)
-//   streams         [{ name, big, pts: [x, z, x, z, ...] }]: running water,
-//                   relative to `at`, each the way it flows; big for a river
+//   streams         [{ name, big, pts: [x, z, x, z, ...], width? }]: running
+//                   water, relative to `at`, each the way it flows; big for a
+//                   river. width: how wide it is (m), where that's known; if
+//                   not, as wide as what it carries makes it
 //   beaches         [{ x, z, w, h, cell, shore }]: each beach, as the signed
 //                   distance to its edge (negative on it) over a w × h grid
 //                   of its own, `cell` apart from (x, z) relative to `at`,
@@ -43,12 +52,19 @@
 //                   packed by packCover(). Where it says nothing, or there is
 //                   no cover, the land is wooded by `trees` and steep ground
 //                   is rock
+//   falls           [{ name, x, z, height? }]: waterfalls, each a point on
+//                   its stream (relative to `at`), with its real height (m)
+//                   where the map says. The ground and the stream make the
+//                   drop; the falls feature puts the falling water on it
 //   view            { x, z, bearing, hour }: where the photo was taken from
 //                   (relative to `at`: the middle of the land, unless it was
 //                   centred somewhere else to take in the whole of a long
 //                   trail), which way it looked (degrees clockwise from
 //                   north) and when
+//   photos          [{ name, x, z, bearing, hour }]: more photos taken on the
+//                   walk, each a spot of its own, kept clear as the view is
 //   trailhead       { x, z, yaw }: where the walk to the view begins
+//   end             { x, z }: where the walk ends, if it goes on past the view
 //   trees           { cover, species }: how thickly it is wooded (0..1; at 0
 //                   nothing stands on it at all, as above the tree line) and
 //                   with what (-1 broadleaf .. 1 conifers), before slope and
@@ -109,8 +125,13 @@ const SEA_EDGE = 40;
 // own (water.js), as pieces of channel; these say how one is made from the
 // line on the map.
 const STREAM_STEP = 5; // m between the points its fall is worked out at
+// …and where the ground drops more than STREAM_DROP (m) between two of them,
+// every STREAM_FINE (m) between them, so a fall comes down where the cliff is,
+// not as a ramp from the point before it to the point after
+const STREAM_DROP = 1;
+const STREAM_FINE = 0.5;
 const STREAM_CUT = 0.3; // m its water lies under the ground the line was drawn over
-const STREAM_PIECE = 8; // of those steps to a piece of channel
+const STREAM_PIECE = 8; // of those steps (their length) to a piece of channel
 const STREAM_REACH = 60; // m to either side that a piece may shape the ground
 // How much water it carries, in the drainage network's terms (nodes of
 // catchment: drainage.js): at a spring; where it comes onto the land already
@@ -253,6 +274,67 @@ export function unpackHeights(s, n, rows = n) {
   return h;
 }
 
+// Heights packed smaller (`ground.pack: 2`, what the importer writes now): each
+// is the difference from what the three before it say (the one to its left,
+// the one above, less the one above that: a plane through them), so on any
+// steady slope it's next to nothing, as zig-zag varints of three bits and a
+// "more" bit to a nibble, two nibbles to a byte, in base64. A point nobody
+// will ask about (`keep(i, j)` false: outside the land's circle) is left as
+// what the plane says, which costs one nibble. Old hikes keep the first way.
+// (n to a row; as many rows, unless it says)
+export function packHeights2(h, n, rows = n, keep = null) {
+  const q = new Int32Array(n * rows);
+  const nib = [];
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < n; i++) {
+      const k = j * n + i;
+      const guess = predict(q, n, i, j);
+      q[k] = keep && !keep(i, j) ? guess : Math.round(h[k] / HEIGHT_UNIT);
+      const d = q[k] - guess;
+      let z = d >= 0 ? d * 2 : -d * 2 - 1;
+      while (z >= 8) {
+        nib.push((z & 7) | 8);
+        z = Math.floor(z / 8);
+      }
+      nib.push(z);
+    }
+  }
+  const out = new Uint8Array(Math.ceil(nib.length / 2));
+  for (let k = 0; k < nib.length; k++) out[k >> 1] |= nib[k] << ((k & 1) * 4);
+  return toB64(out);
+}
+
+export function unpackHeights2(s, n, rows = n) {
+  const b = fromB64(s);
+  const q = new Int32Array(n * rows);
+  const h = new Float32Array(n * rows);
+  let p = 0; // in nibbles
+  for (let k = 0; k < n * rows; k++) {
+    let z = 0;
+    let mul = 1;
+    let v;
+    do {
+      v = (b[p >> 1] >> ((p & 1) * 4)) & 15;
+      p++;
+      z += (v & 7) * mul;
+      mul *= 8;
+    } while (v & 8);
+    const i = k % n;
+    q[k] = predict(q, n, i, (k - i) / n) + (z & 1 ? -(z + 1) / 2 : z / 2);
+    h[k] = q[k] * HEIGHT_UNIT;
+  }
+  return h;
+}
+
+// What the points before (i, j) say it is: the plane through the one to its
+// left, the one above, and the one above that; along the first row or down
+// the first column, the one before.
+function predict(q, n, i, j) {
+  if (i && j) return q[j * n + i - 1] + q[(j - 1) * n + i] - q[(j - 1) * n + i - 1];
+  if (i) return q[j * n + i - 1];
+  return j ? q[(j - 1) * n] : 0;
+}
+
 // Shore distances: one signed byte each, half a metre a step.
 export function packShore(d) {
   const b = new Uint8Array(d.length);
@@ -342,6 +424,114 @@ function gridAt(H, w, h, fx, fz) {
   return cr(row(j - 1), row(j), row(j + 1), row(j + 2), v);
 }
 
+// How much a channel carries for it to be `half` metres across from its
+// middle to its bank (channelHalf, the other way round): what shapes a real
+// stream whose width is known as a channel that wide.
+function accOfHalf(half) {
+  const k = Math.max(0, half - 0.4);
+  const l = (-0.5 + Math.sqrt(0.25 + 0.48 * k)) / 0.24;
+  return NET.springAcc * 2 ** l * 1.001;
+}
+
+// The finer grid as one box (see `ground.fine`). edge() says how far in from
+// its edge (lx, lz) is, measured from the land's middle (0 or less: outside
+// it); height() is the ground there, once edge() has said it's inside.
+class FineBox {
+  constructor(f, unpack = unpackHeights) {
+    Object.assign(this, { x: f.x, z: f.z, w: f.w, h: f.h, cell: f.cell, H: unpack(f.heights, f.w, f.h) });
+    this._fx = 0;
+    this._fz = 0;
+  }
+
+  edge(lx, lz) {
+    this._fx = (lx - this.x) / this.cell;
+    this._fz = (lz - this.z) / this.cell;
+    return Math.min(this._fx, this._fz, this.w - 1 - this._fx, this.h - 1 - this._fz) * this.cell;
+  }
+
+  height() {
+    return gridAt(this.H, this.w, this.h, this._fx, this._fz);
+  }
+}
+
+// The finer grid as tiles along the walk (see `ground.fine`), with the same
+// edge() and height() as a box. The edge of what is kept is wherever a tile
+// has no neighbour, across a side or a corner; a tile is bigger than the
+// FINE_EDGE over which the grid gives way to the coarse one, so only its
+// own neighbours ever need asking about.
+const tileKey = (ti, tj) => (ti + 32768) * 65536 + tj + 32768;
+// (which neighbours a tile has, as bits of its mask)
+const SIDES = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+class FineTiles {
+  constructor(f, unpack = unpackHeights) {
+    this.cell = f.cell;
+    this.size = f.size;
+    this.tiles = new Map();
+    for (const [ti, tj, heights] of f.tiles) this.tiles.set(tileKey(ti, tj), { ti, tj, H: unpack(heights, f.size, f.size), mask: 0 });
+    for (const t of this.tiles.values()) SIDES.forEach(([a, b], k) => (t.mask |= this.tiles.has(tileKey(t.ti + a, t.tj + b)) ? 1 << k : 0));
+    this._t = null;
+    this._u = 0;
+    this._v = 0;
+  }
+
+  edge(lx, lz) {
+    const S = this.size;
+    const fi = lx / this.cell;
+    const fj = lz / this.cell;
+    const ti = Math.floor(fi / S);
+    const tj = Math.floor(fj / S);
+    const t = this.tiles.get(tileKey(ti, tj));
+    this._t = t;
+    if (!t) return 0;
+    // in the tile's own points: 0 at its first, S − 1 at its last
+    const u = fi - ti * S;
+    const v = fj - tj * S;
+    this._u = u;
+    this._v = v;
+    const [ur, vb] = [S - 1 - u, S - 1 - v];
+    const m = t.mask;
+    let d = Infinity;
+    if (!(m & 1)) d = Math.min(d, u);
+    if (!(m & 2)) d = Math.min(d, ur);
+    if (!(m & 4)) d = Math.min(d, v);
+    if (!(m & 8)) d = Math.min(d, vb);
+    if (!(m & 16)) d = Math.min(d, Math.hypot(u, v));
+    if (!(m & 32)) d = Math.min(d, Math.hypot(Math.max(0, ur), v));
+    if (!(m & 64)) d = Math.min(d, Math.hypot(u, Math.max(0, vb)));
+    if (!(m & 128)) d = Math.min(d, Math.hypot(Math.max(0, ur), Math.max(0, vb)));
+    return d * this.cell;
+  }
+
+  height() {
+    const S = this.size;
+    const t = this._t;
+    const [u, v] = [this._u, this._v];
+    // well inside the tile, its own heights are all that's asked
+    if (u >= 1 && v >= 1 && u < S - 2 && v < S - 2) return gridAt(t.H, S, S, u, v);
+    // across its edge, a neighbour's
+    const [I, J] = [t.ti * S + Math.floor(u), t.tj * S + Math.floor(v)];
+    const [fu, fv] = [u - Math.floor(u), v - Math.floor(v)];
+    const row = (jj) => cr(this._at(I - 1, jj), this._at(I, jj), this._at(I + 1, jj), this._at(I + 2, jj), fu);
+    return cr(row(J - 1), row(J), row(J + 1), row(J + 2), fv);
+  }
+
+  // The height at point (I, J) of the whole grid; where no tile has it, the
+  // nearest of the current tile's own (moved across, or down, or both).
+  _at(I, J) {
+    const S = this.size;
+    const t = this._t;
+    let o = this.tiles.get(tileKey(Math.floor(I / S), Math.floor(J / S)));
+    if (!o) {
+      const Ic = Math.min(t.ti * S + S - 1, Math.max(t.ti * S, I));
+      const Jc = Math.min(t.tj * S + S - 1, Math.max(t.tj * S, J));
+      if ((o = this.tiles.get(tileKey(Math.floor(Ic / S), Math.floor(J / S))))) I = Ic;
+      else if ((o = this.tiles.get(tileKey(Math.floor(I / S), Math.floor(Jc / S))))) J = Jc;
+      else [o, I, J] = [t, Ic, Jc];
+    }
+    return o.H[(J - o.tj * S) * S + I - o.ti * S];
+  }
+}
+
 export class Landform {
   constructor(def) {
     this.def = def;
@@ -356,12 +546,16 @@ export class Landform {
     this.n = g.n;
     this.cell = g.cell;
     this.half = ((g.n - 1) / 2) * g.cell;
-    this.h = unpackHeights(g.heights, g.n);
+    // (packed the first way, or, saying so, the second: packHeights2)
+    const unpack = g.pack === 2 ? unpackHeights2 : unpackHeights;
+    this.h = unpack(g.heights, g.n);
     const f = g.fine;
-    this.fine = f ? { x: f.x, z: f.z, w: f.w, h: f.h, cell: f.cell, H: unpackHeights(f.heights, f.w, f.h) } : null;
+    this.fine = f ? (f.tiles ? new FineTiles(f, unpack) : new FineBox(f, unpack)) : null;
     this.lakes = (def.lakes || []).map((l) => ({ ...l, sea: !!l.sea, d: unpackShore(l.shore) }));
     this.beaches = (def.beaches || []).map((b) => ({ ...b, d: unpackShore(b.shore) }));
     this.view = def.view;
+    // where each photo was taken: the view, and any more on the walk
+    this.shots = [def.view, ...(def.photos || [])].filter(Boolean);
     this.trailhead = def.trailhead;
     this.trees = { cover: 0.85, species: 0.6, ...def.trees };
     this.country = countryOf(def.country);
@@ -425,12 +619,10 @@ export class Landform {
   raw(x, z) {
     const f = this.fine;
     if (f) {
-      const fx = (x - this.cx - f.x) / f.cell;
-      const fz = (z - this.cz - f.z) / f.cell;
       // metres in from its edge
-      const m = Math.min(fx, fz, f.w - 1 - fx, f.h - 1 - fz) * f.cell;
+      const m = f.edge(x - this.cx, z - this.cz);
       if (m > 0) {
-        const g = gridAt(f.H, f.w, f.h, fx, fz);
+        const g = f.height();
         if (m >= FINE_EDGE) return g;
         const h = this._coarse(x, z);
         return h + (g - h) * smoothstep(0, FINE_EDGE, m);
@@ -446,10 +638,7 @@ export class Landform {
   // The spacing of the heights at (x, z).
   cellAt(x, z) {
     const f = this.fine;
-    if (!f) return this.cell;
-    const fx = (x - this.cx - f.x) / f.cell;
-    const fz = (z - this.cz - f.z) / f.cell;
-    return fx > 0 && fz > 0 && fx < f.w - 1 && fz < f.h - 1 ? f.cell : this.cell;
+    return f && f.edge(x - this.cx, z - this.cz) > 0 ? f.cell : this.cell;
   }
 
   // Rise over run of the real ground.
@@ -558,13 +747,22 @@ export class Landform {
       for (let k = 0; k + 3 < st.pts.length; k += 2) {
         const [ax, az, bx, bz] = [st.pts[k] + this.cx, st.pts[k + 1] + this.cz, st.pts[k + 2] + this.cx, st.pts[k + 3] + this.cz];
         const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / STREAM_STEP));
-        for (let i = k ? 1 : 0; i <= steps; i++) P.push([ax + ((bx - ax) * i) / steps, az + ((bz - az) * i) / steps]);
+        for (let i = k ? 1 : 0; i <= steps; i++) {
+          const p = [ax + ((bx - ax) * i) / steps, az + ((bz - az) * i) / steps];
+          // where it drops steeply since the point before, finer
+          const q = P[P.length - 1];
+          if (q && Math.abs(this.raw(p[0], p[1]) - this.raw(q[0], q[1])) > STREAM_DROP) {
+            const fine = Math.ceil(Math.hypot(p[0] - q[0], p[1] - q[1]) / STREAM_FINE);
+            for (let f = 1; f < fine; f++) P.push([q[0] + ((p[0] - q[0]) * f) / fine, q[1] + ((p[1] - q[1]) * f) / fine]);
+          }
+          P.push(p);
+        }
       }
       if (P.length < 2) continue;
       const last = P.length - 1;
       const along = [0];
       for (let i = 1; i <= last; i++) along.push(along[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
-      all.push({ big: !!st.big, P, last, along, into: null, at: 0, fed: [], W: null, acc: null });
+      all.push({ big: !!st.big, width: st.width || 0, P, last, along, into: null, at: 0, fed: [], W: null, acc: null });
     }
     // what each runs into: the stream whose line its end is on (anywhere
     // but that one's own end: two that end together both run on into a third)
@@ -622,14 +820,21 @@ export class Landform {
       levels(a);
       carries(a);
     }
-    for (const { P, last, along, W, acc, mouth, fedAtTop } of all) {
-      const half = acc.map(channelHalf);
+    for (const { P, last, along, W, acc: carried, mouth, fedAtTop, width } of all) {
+      // as wide as it really is, where that's known, and shaped like a
+      // channel that wide (as deep, its valley as broad); else as wide as
+      // what it carries makes it
+      const acc = width ? carried.map(() => accOfHalf(width / 2)) : carried;
+      const half = width ? acc.map(() => width / 2) : acc.map(channelHalf);
       // it rises from nothing, unless another runs into the top of it, and
       // dwindles to nothing unless it has somewhere to run to
       if (!fedAtTop) half[0] = 0;
       if (!mouth) half[last] = 0;
-      for (let a = 0; a < last; a += STREAM_PIECE) {
-        const b = Math.min(last, a + STREAM_PIECE);
+      // (pieces of the same length however finely their points are spaced:
+      // a point is shaped by the few pieces near it, not dozens)
+      for (let a = 0, b; a < last; a = b) {
+        b = a + 1;
+        while (b < last && along[b] - along[a] < STREAM_PIECE * STREAM_STEP) b++;
         const seg = {
           real: true,
           frozen: this.frozen,
@@ -669,6 +874,28 @@ export class Landform {
         }
       }
     }
+  }
+
+  // Metres from (x, z) to the edge of its own water: the bank of one of its
+  // streams or the shore of one of its lakes (negative in it); SHORE_FAR or
+  // more if there's none near.
+  waterNear(x, z) {
+    const [level, sea] = [this.level, this.sea]; // (shore() sets these: put back)
+    let best = this.shore(x, z);
+    [this.level, this.sea] = [level, sea];
+    for (const s of this.streamsNear(x, z)) {
+      const P = s.pts;
+      for (let i = 0; i < s.count; i++) {
+        const [ax, az, bx, bz] = [P[i * 2], P[i * 2 + 1], P[i * 2 + 2], P[i * 2 + 3]];
+        const dx = bx - ax;
+        const dz = bz - az;
+        const l2 = dx * dx + dz * dz;
+        const t = l2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0;
+        const half = s.w0 + ((s.w1 - s.w0) * (i + t)) / s.count;
+        best = Math.min(best, Math.hypot(x - ax - dx * t, z - az - dz * t) - half);
+      }
+    }
+    return best;
   }
 
   // The pieces of stream that could reach (x, z): hand each to Water._hit.
@@ -906,12 +1133,12 @@ export class Landform {
     const lz = z - this.cz;
     // facing (fx, fz) from (px, pz): how far outside the camera's clearing
     const camera = (px, pz, fx, fz) => Math.hypot(lx - px + fx * CAMERA_BACK, lz - pz + fz * CAMERA_BACK) - CAMERA_CLEAR;
-    const v = this.view;
-    if (v) {
+    // (the view, and any more photos taken on the walk)
+    for (const v of this.shots) {
       const dx = lx - v.x;
       const dz = lz - v.z;
       const d = Math.hypot(dx, dz);
-      best = d - VIEW_CLEAR;
+      best = Math.min(best, d - VIEW_CLEAR);
       if (v.bearing !== null && v.bearing !== undefined) {
         // the angle off the line the camera looked along, as metres of arc
         const b = (v.bearing * Math.PI) / 180;

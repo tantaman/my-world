@@ -30,7 +30,9 @@ can still be used: say where it was taken with `--lat` and `--lon`, and
 In the game, open the map (**M**) and the *hikes* tab beside it for the list
 of them: each with its
 trail, how long it is, how far it climbs (or drops: a cove is walked down
-to) and the water on it, and two ways in. **trailhead** puts you at the
+to) and the water on it, its falls among it, and two ways in (three, for a
+walk that goes on past the photo: **the end** puts you where it ends,
+facing back up it). **trailhead** puts you at the
 start, by a signpost, with the HUD pointing the way to the top. The trail is
 the real one, switchbacks and all, cut into the hillside as a level tread.
 Where the map says it has chains to hold on to, as on the last of Angels
@@ -40,9 +42,11 @@ where you took the photo. **the view** takes you
 straight there: you're standing where you stood, facing the way you faced, at
 the hour you were there. From the top you can see across the whole of it, the
 lake below, the ridges beyond, the valley running off into the haze. The map
-opens on the tab you last had, so the hikes are there again next time.
+opens on the tab you last had, so the hikes are there again next time. On a
+walk that goes on past the photo, once you've stood where it was taken the
+HUD points on to the end of the trail.
 
-A hike's trailhead and its view are on [the map](../map/README.md) too, as
+A hike's trailhead and its view (and where its walk ends, if it goes on) are on [the map](../map/README.md) too, as
 places with a name that you can look up and track like any other. What the
 forest has of its own that way, its [old places](../landmarks/README.md),
 keeps off a hike: a real place has what is really there.
@@ -72,11 +76,47 @@ ones that run all year: a gulch that is dry till it rains is left dry.) The
 walk starts where you'd leave the car, at the nearest road or car park along
 the paths, and goes by them to where the photo was taken, uphill or down.
 (Failing a road, it's the trail the photo was taken on, from its lower end.)
+Or it starts where you say (`--from lat,lon`), and goes on past the photo
+to where you say it ends (`--to`): Havasu Falls is walked from the car park
+on Hualapai Hilltop, down Hualapai Canyon to the village of Supai, past
+Navajo Falls to Havasu Falls, where the photo was taken, and on past Mooney
+and Beaver Falls down Havasu Creek to where it meets the Colorado, 25 km
+and a kilometre down. A walk like that goes where it has to: along a
+village's lanes, which the map calls roads, and across a gap of a few
+metres the map leaves between two paths (the scramble down the cliff beside
+Mooney Falls), each of which is a path on the ground too, the gap with
+chains if it's steep. A path the map says is private, or closed to walkers,
+is on the ground but the walk keeps off it.
+Where the map marks a waterfall on a stream, the water falls there, as high
+as the cliff really is: see [Waterfalls](../falls/README.md). A point the map
+names as a fall but tags as something else (Little Navajo Falls is a spring
+to it) is one too, and a fall the map doesn't have at all can be given:
+`--fall "Rock Falls@36.25174,-112.69876"`.
+
+**More photos.** A walk you took more than one photo on can have each of
+them: `--photo "Beaver Falls@36.28118,-112.72965,147,14.5"` (where, which way
+it looked, at what hour), as many as you like. Each is a spot of its own,
+kept clear as the view is, with a cairn, a place on the map, and a button
+in the list beside **the view** that puts you there, facing the way it
+looked, at that hour. Havasu Falls has the falls from the pool below, Beaver
+Falls from the creek under it, and the open canyon floor on the way down to
+the Colorado.
+
+**How wide its water is.** A stream or a river is as wide as it really is:
+as the map says (`width`), or between the banks of the area the map draws a
+river over (the Colorado, 36 to 48 m there), or as a stream or a river
+usually is (3 m, 10 m) where the map says nothing; and its channel is cut as
+deep as a channel that wide. Where its water drops more than a little from
+one point of it to the next, its level is worked out every half metre, so it
+comes down a cliff where the cliff is.
 Where OpenStreetMap says what covers the land, it comes too: woods, willow
 scrub and wetland, meadow, alpine tundra, scree and bare rock, glaciers. A
 scree is grey with broken stone and strewn with boulders, bare rock that
 isn't a cliff is a jumble of them, scrub is a thicket of shrubs over your
 head, tundra is thin turf among stones, and a glacier lies white all year.
+A pool too small for the ground's grid (the one at the foot of a fall, a
+few tens of metres across) keeps its shore on a grid of its own, half a
+metre fine, so it's there and the shape it really is.
 Wherever the map says nothing, steep ground is bare rock, with not a blade
 of grass on it, and the rest is wooded (`--cover`, `--species`; `--cover 0`
 for land above the tree line, with nothing standing on it at all). The spot
@@ -93,13 +133,16 @@ part way up it.
 (6 m in the game) is plenty for the far side of a valley, but seen close a
 narrow ridge on it comes out a broad hump. `--fine 5` keeps a second, finer
 grid, a height every 5 m (a metre in the game, as fine as the ground is
-drawn), along the walk and `--fine-margin` (400 m) round it, which gives way
-to the coarse one at its edge. In the United States `--dem 3dep` takes the
+drawn), along the walk and `--fine-margin` (400 m) round it, and round where
+the photo was taken and each fall, which gives way to the coarse one at its
+edge. It's kept in tiles, only those the walk comes near, so a walk of many
+kilometres costs its own strip of land and not the box round it: Havasu's
+25 km is 14 km² of it. In the United States `--dem 3dep` takes the
 heights from the USGS's own elevation, which is lidar for most of the country
 and good to a metre or two, in place of Terrain Tiles, which are coarser and
 in steep country can be tens of metres out. With both, Angels Landing is the
 narrow fin it really is, with sheer drops either side, and Refrigerator
-Canyon a slot.
+Canyon a slot. And a waterfall is a cliff: Mooney Falls drops 55 m.
 
 **What kind of country it is.** Not everywhere is a northern forest. A hike
 says what kind of country it's in (`--country "cinder desert"`), and that
@@ -117,6 +160,7 @@ sky over it is doing, each as one entry in one table
 | `red rock canyon` | red sand and slickrock; sandstone cliffs in beds, streaked dark, turning white towards the rim | ponderosa pines and oaks over scrub | clear and dry, fair-weather cloud over the rims |
 | `high mountains` | granite cliffs, talus of broken stone, pale grit paths; turf and stones over a treeline at 3,000 m, snow lying above it | slim spruces and firs, a few aspens, willow thickets | clear, thin air |
 | `snowy mountains` | snow on all of it but the crags, its lakes frozen over and snowed on: a ski resort in winter | firs in the valleys, thinning out to none at 2,050 m; the odd bush | clear and crisp |
+| `travertine canyon` | red sandstone walls in ledges, pale towards the rim; travertine where the water runs, which is a milky blue-green | cottonwoods along the water; away from it, the odd squat juniper over mesquite and catclaw; no reeds or lilies in its pools | thunderheads over the rims |
 
 **Snow** lies where a real place's country has a snow line, at its real
 height: up on high mountains, everywhere on snowy mountains. A photo taken in
@@ -152,6 +196,11 @@ hikes on Maui, 4,200 km away, are 835 km off to the south-west. The forest
 round the middle is the game's own, not the real Hoh, so a hike is kept a
 few kilometres clear of it (`tools/hike/place.js`). Between hikes it's
 forest; the list beside the map is the quick way across.
+
+A real place can go down a long way below the forest round it (a canyon
+cut into a plateau, its trailhead on the rim): the haze is as clear down in
+it as on the forest floor, and the forest's own streams, which run on over
+it unseen at the forest's level, leave no trace in it.
 
 Hikes close enough to overlap are the same land, and join: the second is
 placed from the first by the real distance between their photos, and stands
@@ -208,6 +257,10 @@ each wait for it.
 | `--dem` | `terrain` | where the heights come from: `terrain` (AWS Terrain Tiles) or `3dep` (USGS, US only) |
 | `--cover`, `--species` | `0.85`, `0.6` | how wooded (0–1), and broadleaf (−1) to conifers (1), where the map doesn't say |
 | `--middle lat,lon` | the photo | where to centre the land: somewhere along a long trail, to take in the whole of it |
+| `--from lat,lon` | the nearest road | where the walk starts: the point of a path nearest there |
+| `--to lat,lon` | the photo | where the walk ends, if it goes on past the photo |
+| `--fall "Name@lat,lon"` | the map's | a waterfall the map doesn't have (as many as you like) |
+| `--photo "Name@lat,lon,bearing,hour"` | none | another photo taken on the walk, a spot of its own (as many as you like) |
 | `--country "…"` | forest | what kind of country it is (above) |
 | `--snow` | in winter, where it lay then; else the country's | the real height snow lies from, or `none` |
 | `--lat --lon --bearing --hour` | from the photo | for a photo that doesn't say |

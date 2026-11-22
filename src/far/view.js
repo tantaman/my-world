@@ -10,7 +10,10 @@
 //
 // Where the chunks are, it sinks out of sight under them, so near you the
 // real ground and the real trees are what you see, and it only shows past
-// their edge.
+// their edge. Its points are far apart, so where the land falls away steeply
+// between them (a canyon's walls) a face of it can stand well over the real
+// ground between: each point sinks further by as much as the land falls
+// from it to the next.
 //
 // Each mesh is measured from its own corner and put there, like a chunk
 // (render/origin.js).
@@ -111,6 +114,7 @@ export class FarView {
           `#include <common>
           attribute float aCanopy;
           attribute float aWater;
+          attribute float aDrop;
           uniform vec2 uMid;
           uniform float uHalf;
           varying float vWater;
@@ -124,7 +128,7 @@ export class FarView {
             // how far inside the loaded chunks' square this is
             float e = uHalf - max(abs(wp.x - uMid.x), abs(wp.z - uMid.y));
             float under = smoothstep(0.0, ${SINK_BAND.toFixed(1)}, e);
-            transformed.y += aCanopy * (1.0 - under) - under * ${SINK.toFixed(1)} - ${UNDER.toFixed(2)};
+            transformed.y += aCanopy * (1.0 - under) - under * (${SINK.toFixed(1)} + aDrop) - ${UNDER.toFixed(2)};
             vWater = aWater;
             vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
           }`,
@@ -155,7 +159,7 @@ export class FarView {
           #include <opaque_fragment>`,
         );
     };
-    mat.customProgramCacheKey = () => 'far-view-v2';
+    mat.customProgramCacheKey = () => 'far-view-v3';
     return mat;
   }
 }
@@ -170,6 +174,15 @@ function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, c
   const wet = new Float32Array(N);
   const y = new Float32Array(N);
   for (let k = 0; k < N; k++) y[k] = water[k] > NO_WATER * 0.5 ? water[k] : h[k];
+  // how far the land falls from each point to the lowest next to it
+  const drop = new Float32Array(N);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      let low = y[j * n + i];
+      for (let b = Math.max(0, j - 1); b <= Math.min(n - 1, j + 1); b++) for (let a = Math.max(0, i - 1); a <= Math.min(n - 1, i + 1); a++) low = Math.min(low, y[b * n + a]);
+      drop[j * n + i] = y[j * n + i] - low;
+    }
+  }
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const k = j * n + i;
@@ -239,6 +252,7 @@ function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, c
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   geo.setAttribute('aCanopy', new THREE.BufferAttribute(canopy, 1));
   geo.setAttribute('aWater', new THREE.BufferAttribute(wet, 1));
+  geo.setAttribute('aDrop', new THREE.BufferAttribute(drop, 1));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.computeVertexNormals();
   geo.computeBoundingSphere();

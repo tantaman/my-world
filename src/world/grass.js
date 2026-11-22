@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { mulberry32, hash2i, smoothstep, createSimplex2 } from '../noise.js';
 import { NO_WATER } from './water.js';
+import { COUNTRIES } from './country.js';
 import { SEA } from './sea.js';
 import { growRect, cellKey as tileKey } from '../core/geom.js';
 
@@ -301,7 +302,9 @@ export class Grass {
       const calm = (1 - smoothstep(0.2, 0.6, _g.wSpeed)) * (1 - smoothstep(0.12, 0.28, _g.wFoam));
       gPath = -1;
       gForest = 0;
-      const reedP = smoothstep(0.05, 0.45, this.nReed(wx / 11, wz / 11)) * (1 - smoothstep(0.35, 0.6, wd)) * (0.25 + 0.75 * calm) * (1 - smoothstep(0.2, 0.28, _g.wFoam));
+      // (as much as grows in a real place's own shallows: country.js)
+      const shallows = (COUNTRIES[_g.country] || COUNTRIES[0]).shallows;
+      const reedP = smoothstep(0.05, 0.45, this.nReed(wx / 11, wz / 11)) * (1 - smoothstep(0.35, 0.6, wd)) * (0.25 + 0.75 * calm) * (1 - smoothstep(0.2, 0.28, _g.wFoam)) * (1 + (shallows.reeds - 1) * _g.land);
       if (r1 < reedP * 0.55) {
         const y0 = _g.h - 0.05;
         const blades = 3 + Math.floor(r2 * 5);
@@ -341,7 +344,7 @@ export class Grass {
         }
         continue;
       }
-      const lilyP = smoothstep(0.15, 0.5, this.nLily(wx / 7, wz / 7)) * smoothstep(0.25, 0.45, wd) * calm * calm;
+      const lilyP = smoothstep(0.15, 0.5, this.nLily(wx / 7, wz / 7)) * smoothstep(0.25, 0.45, wd) * calm * calm * (1 + (shallows.lilies - 1) * _g.land);
       if (r1 < reedP * 0.55 + lilyP * 0.5) {
         // a lily pad: a disc with a notch, floating
         const y = _g.wLevel + 0.012;

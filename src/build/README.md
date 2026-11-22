@@ -80,7 +80,12 @@ pips on a slot are its tools, the lit one the tool it gives you.
   materials back, unless something rests on it.
 
 Round logs get clay chinking between the courses. Hewn timbers stack flush
-with tight corners.
+with tight corners. What you build looks like what it's made of: bark in
+plates along the logs and rings at their cut ends, grain along the hewn
+faces and the gable boards, shakes in courses on the roof, granular stone in
+the footings (see [the look](../render/README.md)). The old places and the
+towns are drawn the same way, with paint, slate, tin and glass, and worn
+with their age: moss on old roofs, rain streaks down the walls.
 
 Everything you change is saved in your browser, separately for each world
 seed. That covers felled trees, stumps, the shape of the ground, buildings,
@@ -102,6 +107,7 @@ obstacles.js          what work has to go round
 previews.js           ghosts, grid dots, the shovel's ring
 chips.js              wood chips and clods
 aim.js                rays against ground and trunks
-geometry.js           logs, timbers, chinking, piers, roofs, stumps, tools
+geometry.js           logs, timbers, chinking, piers, roofs, stumps, tools; the Mesher that puts them together
+surfaces.js           what built things are made of, and the material that draws it: bark, grain, paint, stone, shingles, tin, glass
 constants.js          dimensions: course height, overhang, pier range, reach…
 ```

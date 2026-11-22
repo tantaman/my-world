@@ -1,6 +1,7 @@
 # Hunting
 
-There's a rifle in your pack: **7** on the tool bar. Hunt game with it,
+There's a rifle in your pack: **7** on the tool bar (where a shotgun from
+the [hunt club](../huntclub/README.md) goes too). Hunt game with it,
 dress what you shoot for its meat, roast the meat on a spit over a
 [campfire](../fires/README.md), and eat it.
 

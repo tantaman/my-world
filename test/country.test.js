@@ -31,7 +31,13 @@ test('every country says everything, in words the rest of the game knows', () =>
     assert.ok(c.ground.barren >= 0 && c.ground.barren <= 1 && c.ground.shelf >= 0 && c.ground.rubble >= 0 && c.ground.rubble <= 1, name);
     const L = c.ground.layers;
     if (L) assert.ok(L.upper.length === 3 && L.upper.every((v) => v >= 0 && v < 2) && L.at > 0 && L.bed > 0 && L.varnish >= 0 && L.varnish <= 1, `${name}: its layers`);
-    for (const [kind, k] of Object.entries(c.slim)) assert.ok(TIMBER[kind] && k >= 0 && k < 1, `${name}: ${kind} grows slimmer`);
+    for (const [kind, k] of Object.entries(c.slim)) assert.ok(TIMBER[kind] && k > -2 && k < 1, `${name}: ${kind} grows slimmer, or broader`);
+    for (const [kind, k] of Object.entries(c.sizes)) assert.ok(TIMBER[kind] && k > 0 && k < 2, `${name}: how big a ${kind} grows`);
+    assert.ok(c.shallows.reeds >= 0 && c.shallows.reeds <= 1 && c.shallows.lilies >= 0 && c.shallows.lilies <= 1, `${name}: what grows in its shallows`);
+    const R = c.riparian;
+    if (R) assert.ok(R.reach > 0 && R.dry >= 0 && R.dry <= 1 && R.trees.every(([kind, share]) => TREE_KINDS.includes(kind) && TIMBER[kind] && share > 0 && share <= 1), `${name}: what grows by its water`);
+    const W = c.water;
+    if (W) assert.ok([W.shallow, W.deep].every((col) => col.length === 3 && col.every((v) => v >= 0 && v < 1)) && W.milk >= 0 && W.milk <= 1, `${name}: the colour of its water`);
     for (const [kind, col] of Object.entries(c.tints)) assert.ok(FLORA[kind] && col.length === 3 && col.every((v) => v > 0 && v < 2), `${name}: what colour a ${kind} is`);
     for (const line of [c.treeline, c.snowline].filter(Boolean)) assert.ok(line.length === 2 && line[0] < line[1], `${name}: a treeline or snow line, from low to high`);
     for (const [kind, share] of c.trees || []) {
@@ -329,7 +335,9 @@ test('the weather is the country’s, as far as you are onto it', () => {
   assert.ok(Math.abs(deck - top - (2250 - 1015) * 0.2) < 2, `${Math.round(deck - top)} m over a 1015 m top`);
   assert.ok(Number.isNaN(deckHeight(world([island()]).landforms[0])), 'the forest has none');
   // under it, on the land: its cover, and (cinder desert: shade 0) the sun still out
-  assert.deepEqual(weatherAt(L, ...AT, top), { cover: 0.97, haze: 0.35, overcast: 0 });
+  const { floor, ...weather } = weatherAt(L, ...AT, top);
+  assert.deepEqual(weather, { cover: 0.97, haze: 0.35, overcast: 0 });
+  assert.equal(floor, Math.min(0, L.offset), 'the haze thins out up from its lowest ground, where that is below the forest');
   const C = cloud.landforms[0];
   const under = weatherAt(C, ...AT, deckHeight(C) - 50);
   assert.ok(Math.abs(under.overcast - 0.35 * 0.8) < 1e-9, 'under a cloud forest’s cloud, the light is flat');
@@ -337,8 +345,13 @@ test('the weather is the country’s, as far as you are onto it', () => {
   // it clears as you walk off the land
   const edge = weatherAt(C, AT[0] + 600 + 250, AT[1], 0);
   assert.ok(edge.cover > 0.2 && edge.cover < 0.6 && edge.haze > 1 && edge.haze < 1.5);
-  assert.deepEqual(weatherAt(C, AT[0] + 600 + 600, AT[1], 0), { cover: 0, haze: 1, overcast: 0 });
-  assert.deepEqual(weatherAt(null, 0, 0, 0), { cover: 0, haze: 1, overcast: 0 });
+  assert.deepEqual(weatherAt(C, AT[0] + 600 + 600, AT[1], 0), { cover: 0, haze: 1, overcast: 0, floor: 0 });
+  assert.deepEqual(weatherAt(null, 0, 0, 0), { cover: 0, haze: 1, overcast: 0, floor: 0 });
+  // a canyon cut down into a plateau: down in it, the air is as clear as on
+  // the forest floor, not as thick as it would be that far below it
+  const canyon = Object.assign(Object.create(Object.getPrototypeOf(C)), C, { offset: -180 });
+  assert.equal(weatherAt(canyon, ...AT, -170).floor, -180);
+  assert.ok(weatherAt(canyon, AT[0] + 600 + 250, AT[1], 0).floor > -180, 'and goes back to the forest’s as you walk off it');
 });
 
 test('from far off the land is its own colour too', () => {
@@ -348,4 +361,51 @@ test('from far off the land is its own colour too', () => {
   assert.ok(g.forest[12] < 0, 'and nothing standing on it to raise a canopy');
   const out = sampleFar(world(), 0, 0, 3, 100);
   assert.deepEqual([...out.bare, ...out.land], new Array(18).fill(0));
+});
+
+test('in a desert canyon, cottonwoods by the creek, the odd juniper away from it, and nothing in the pools', () => {
+  // a creek running east across a gentle plain, in travertine canyon country
+  const P = { lat: 36.25, lon: -112.7, bearing: 0, hour: 12 };
+  const frame = localFrame(P.lat, P.lon);
+  const def = buildHike({
+    id: 'oasis',
+    name: 'Oasis',
+    photo: P,
+    elevation: (lat, lon) => 900 - frame.toEN(lat, lon)[0] * 0.01,
+    streams: [{ name: 'Creek', river: true, width: 10, points: Array.from({ length: 41 }, (_, k) => frame.toLatLon(-1000 + k * 50, 0)) }],
+    at: [-300000, 90000],
+    radius: 1200,
+    fade: 300,
+    cell: 20,
+    trees: { cover: 0.9, species: 0 },
+    country: 'travertine canyon',
+  }).def;
+  const gen = world([def]);
+  const c = COUNTRY['travertine canyon'];
+  const by = { broad: 0, pine: 0 };
+  const off = { broad: 0, pine: 0 };
+  let sized = 0;
+  let pines = 0;
+  for (let dz = -3; dz <= 2; dz++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      const v = generateVegetation(gen, Math.floor(def.at[0] / 64) + dx, Math.floor(def.at[1] / 64) + dz, 64, TRUNK);
+      for (const kind of ['broad', 'pine']) {
+        const L = v.lists[kind];
+        for (let i = 0; i < L.length; i += 7) {
+          const fromCreek = Math.abs(L[i + 2] - def.at[1]) - 1; // the creek runs along z = at, a metre each side
+          const band = fromCreek < c.riparian.reach - 2 ? by : fromCreek > c.riparian.reach + 2 ? off : null;
+          if (band) band[kind]++;
+          if (kind === 'pine') pines++;
+          if (kind === 'pine' && L[i + 4] <= (0.75 + 0.5) * c.sizes.pine * 1.36) sized++;
+        }
+      }
+    }
+  }
+  assert.ok(by.broad > 10 && by.pine === 0, `cottonwoods by the creek (${by.broad}, and ${by.pine} junipers)`);
+  assert.ok(off.pine > 0 && off.broad === 0, `junipers away from it (${off.pine}, and ${off.broad} cottonwoods)`);
+  const across = (n) => n / (c.riparian.reach * 2);
+  assert.ok(across(off.pine) / (5 * 64 - c.riparian.reach * 2) < across(by.broad) / (c.riparian.reach * 2), 'and far fewer of them');
+  assert.equal(sized, pines, 'small ones');
+  assert.deepEqual(c.shallows, { reeds: 0.12, lilies: 0 }, 'and no lilies in its pools');
+  assert.deepEqual(COUNTRY.forest.shallows, { reeds: 1, lilies: 1 }, 'where the forest has its own');
 });

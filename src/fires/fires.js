@@ -98,6 +98,7 @@ export class Fires extends Emitter {
       // and lets the light reach the edge of the clearing.
       const l = new THREE.PointLight(0xff8c40, 0, 16, 1.5);
       l.castShadow = false;
+      l.layers.enableAll(); // and on the water (render/pipeline.js)
       scene.add(l);
       this.lights.push(l);
     }
