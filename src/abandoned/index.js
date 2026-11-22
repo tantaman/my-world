@@ -40,9 +40,13 @@ export function installAbandoned(game) {
     if (s) known.set(s.id, s);
     return s;
   }
-  function localSites(x, z) {
+  // The buildings by the start, and the district's nearest (x, z). keep:
+  // counted as come near (sites, the map), as it is round you; not when
+  // something else only asks what's in the way there (whether a road is
+  // clear far off, say), as with within().
+  function localSites(x, z, keep = true) {
     const outer = districts.near(x, z);
-    return outer ? [...home, remember(outer)] : home;
+    return outer ? [...home, keep ? remember(outer) : outer] : home;
   }
   const byId = (id) => known.get(id) || remember(districts.byId(id));
   const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset?.(x, z) || 0);
@@ -65,7 +69,7 @@ export function installAbandoned(game) {
   const discs = new WeakMap();
   builder.obstacles.addSource((x, z, r, out) => {
     if (checking) return;
-    localSites(x, z).forEach((s) => {
+    localSites(x, z, false).forEach((s) => {
       if (!overlaps(s.box, [x - r - 3, z - r - 3, x + r + 3, z + r + 3]) || !stands(s)) return;
       if (!discs.has(s)) discs.set(s, planDiscs(s, 3));
       for (const p of discs.get(s))
