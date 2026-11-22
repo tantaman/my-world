@@ -83,20 +83,9 @@ export function installHunting(game) {
     munch = 0.35;
     player.character.raise('food');
   }
-  commands.add({ id: 'eat', keys: ['KeyU'], group: 'HUNT', label: "eat something you've roasted", run: eat });
-
-  // On a touch screen, a button for it, while there's something to eat.
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.id = 'act-eat';
-  btn.hidden = true;
-  btn.textContent = 'eat';
-  btn.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    eat();
-  });
-  document.getElementById('touch-act')?.prepend(btn);
+  // At hand while there's something to eat: listed so in the pack, with a
+  // button of its own on a touch screen.
+  commands.add({ id: 'eat', keys: ['KeyU'], group: 'HUNT', label: "eat something you've roasted", run: eat, now: () => (builder.creative || builder.inv.roast > 0 ? 'eat' : '') });
 
   // ── Saving ────────────────────────────────────────────────────────────────
   save.register({
@@ -130,8 +119,6 @@ export function installHunting(game) {
           hud.flash(`${RELISH[Math.floor(Math.random() * RELISH.length)]}${left}`);
         }
       }
-      const show = input.isTouch && (builder.creative || builder.inv.roast > 0);
-      if (btn.hidden === show) btn.hidden = !show;
     },
   });
 }

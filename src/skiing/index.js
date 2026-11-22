@@ -362,21 +362,10 @@ export function installSkiing(game) {
   adventures.define(descent(() => active));
 
   commands.add({ id: 'skis', keys: ['KeyI'], group: 'WANDER', label: 'skis on · off (they go on by themselves heading down steep snow)', run: toggle });
-  commands.add({ id: 'snowboard', keys: ['Backquote'], help: '`', group: 'WANDER', label: 'skis or a snowboard', run: swap });
+  // (at hand while you ski: in the pack, and a button on a touch screen, named for the other one)
+  commands.add({ id: 'snowboard', keys: ['Backquote'], help: '`', group: 'WANDER', label: 'skis or a snowboard', run: swap, now: () => (active ? (kind === 'skis' ? 'board' : 'skis') : '') });
   commands.describe({ group: 'WANDER', help: 'on skis', label: 'A D turn · W tuck · S brake · space jump' });
   commands.describe({ group: 'WANDER', help: 'in the air', label: 'A D spin · W S flip · shift grab' });
-
-  // On a touch screen, a button to swap skis for a board, while you ski.
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.id = 'act-ski';
-  btn.hidden = true;
-  btn.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    swap();
-  });
-  document.getElementById('touch-act')?.prepend(btn);
 
   // ── The readout: how fast, and the points ─────────────────────────────────
   const readout = document.createElement('div');
@@ -402,8 +391,6 @@ export function installSkiing(game) {
   // What the keys do now, in place of the tool's prompt.
   function cue() {
     const touch = input.isTouch;
-    btn.hidden = !touch || !active;
-    if (active) btn.textContent = kind === 'skis' ? 'board' : 'skis';
     if (!active) {
       if (cued) hud.cue(null);
       cued = false;

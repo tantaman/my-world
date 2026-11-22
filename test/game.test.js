@@ -102,6 +102,70 @@ test('the help panel is written from what is bound', () => {
   ]);
 });
 
+test('what there is to do is on offer without its key, with what it would do now', () => {
+  const commands = new Commands();
+  let afloat = false;
+  let beside = false;
+  commands.add({ id: 'tube', keys: ['KeyV', 'PadR3'], group: 'RIVER', label: 'inner tube', run() {}, now: () => (afloat ? 'get out' : beside ? 'float' : '') });
+  commands.add({ id: 'pixels', keys: ['KeyP'], group: 'LOOK', label: 'pixel art on / off', run() {} });
+  commands.add({ id: 'map', keys: ['KeyM'], group: 'WANDER', help: 'M', label: 'map', run() {} });
+  commands.add({ id: 'secret', keys: ['KeyZ'], run() {} }); // no label: not on offer
+  commands.add({ id: 'talk', keys: ['KeyC'], group: 'TALK', label: 'talk', run() {}, hold() {} }); // held, and doesn't say what a press does
+  commands.add({ id: 'calm', keys: ['KeyX'], group: 'RIVER', label: 'calm it', run() {}, hold() {}, now: () => 'calm' }); // held, but says
+  const offers = () => commands.offers().map((o) => ({ ...o }));
+  // group by group as the help panel has them: the ones it knows first, then as they came
+  assert.deepEqual(offers(), [
+    { id: 'map', group: 'WANDER', label: 'map', help: 'M', word: null },
+    { id: 'pixels', group: 'LOOK', label: 'pixel art on / off', help: 'P', word: null },
+    { id: 'tube', group: 'RIVER', label: 'inner tube', help: 'V', pad: ['PadR3'], word: '' },
+    { id: 'calm', group: 'RIVER', label: 'calm it', help: 'X', word: 'calm' },
+  ]);
+  beside = true;
+  assert.equal(offers().find((o) => o.id === 'tube').word, 'float', 'the word is as things are now');
+  afloat = true;
+  assert.equal(offers().find((o) => o.id === 'tube').word, 'get out');
+  // and what is added later is on offer too
+  commands.add({ id: 'home', keys: ['KeyR'], group: 'WANDER', label: 'back to the start', run() {} });
+  assert.deepEqual(offers().map((o) => o.id), ['map', 'home', 'pixels', 'tube', 'calm']);
+});
+
+test('a command needs no key: it is on offer, and has no line on the help panel', () => {
+  const commands = new Commands();
+  let waved = 0;
+  commands.add({ id: 'map', keys: ['KeyM'], group: 'WANDER', label: 'map', run() {} });
+  commands.add({ id: 'wave', group: 'WANDER', label: 'wave to whoever is about', run: () => waved++, now: () => 'wave' });
+  assert.deepEqual(commands.help(), [{ group: 'WANDER', rows: [{ help: 'M', label: 'map' }] }]);
+  assert.deepEqual({ ...commands.offers()[1] }, { id: 'wave', group: 'WANDER', label: 'wave to whoever is about', help: '', word: 'wave' });
+  commands.update(keys(), 0.016);
+  assert.equal(waved, 0, 'no key runs it');
+  commands.run('wave');
+  assert.equal(waved, 1, 'whoever offers it does');
+});
+
+test('a press from a button on the screen runs it once, and holds it until it is let go', () => {
+  const commands = new Commands();
+  const input = keys();
+  let ran = 0;
+  const held = [];
+  commands.add({ id: 'calm', keys: ['KeyZ'], run: () => ran++, hold: (dt, key) => held.push(key) });
+  commands.add({ id: 'map', keys: ['KeyM'], run() {} }); // nothing to hold: pressing it is only running it
+  commands.press('calm');
+  commands.press('map');
+  assert.equal(ran, 1, 'it runs on the press');
+  commands.update(input, 0.016);
+  commands.update(input, 0.016);
+  assert.deepEqual(held, [null, null], 'and is held each frame after, with no key to name');
+  assert.equal(ran, 1, 'without running again');
+  input.hold('KeyZ');
+  commands.update(input, 0.016);
+  assert.deepEqual(held.slice(2), ['KeyZ', null], 'beside its key, if that is down too');
+  commands.release('calm');
+  commands.release('map');
+  input.endFrame();
+  commands.update(keys(), 0.016);
+  assert.equal(held.length, 4, 'let go, it is held no longer');
+});
+
 test('two features wanting the same key are told', (t) => {
   const warned = [];
   t.mock.method(console, 'warn', (msg) => warned.push(msg));

@@ -330,7 +330,8 @@ export function installMounts(game) {
   }
 
   // ── Z: calm, ride, get off, whistle ───────────────────────────────────────
-  let held = false; // Z is down this frame (the touch button: touchHeld)
+  let held = false; // Z is down this frame (or its button, on a touch screen)
+  let doing = ''; // what Z would do here, in a word: see cue()
   let calling = null; // { kind, t } the one you last whistled for
   let time = 0;
 
@@ -483,6 +484,7 @@ export function installMounts(game) {
     label: 'ride · get off · whistle for yours · hold to calm a wild one',
     run: press,
     hold: () => (held = true),
+    now: () => doing,
   });
   commands.describe({ group: 'WANDER', help: 'Z, high on the eagle', pad: ['PadX'], label: 'let go of it and glide down · Z again: it catches you' });
 
@@ -493,22 +495,6 @@ export function installMounts(game) {
     if (eagle.mode === 'catch') return `your ${eagle.def.name} is coming`;
     return `<b>${input.isTouch ? 'call' : 'Z'}</b> call your ${eagle.def.name}`;
   });
-
-  // On a touch screen, a button for it, named for what it would do.
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.id = 'act-mount';
-  btn.hidden = true;
-  btn.textContent = 'ride';
-  let touchHeld = false;
-  btn.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    touchHeld = true;
-    press();
-  });
-  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) btn.addEventListener(ev, () => (touchHeld = false));
-  document.getElementById('touch-act')?.prepend(btn);
 
   // ── On the map ────────────────────────────────────────────────────────────
   map.addLayer(
@@ -603,7 +589,7 @@ export function installMounts(game) {
     phase: 'update',
     update({ dt }) {
       time += dt;
-      const hand = held || touchHeld;
+      const hand = held;
       held = false;
       camera.updateMatrixWorld();
       _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
@@ -696,7 +682,9 @@ export function installMounts(game) {
     hud.flash(`${listOf(names)} ${wild.length > 1 ? 'are' : 'is'} yours · Z whistles for one, wherever you are`, SAY);
   }
 
-  // What Z would do here, said in place of the tool's prompt.
+  // What Z would do here, said in place of the tool's prompt; and in a word
+  // (`doing`: 'ride', 'get off', 'calm', 'call'), which is what the pack
+  // lists it by and a touch screen's button says.
   let cued = false;
   function cue(wild) {
     const touch = input.isTouch;
@@ -712,8 +700,7 @@ export function installMounts(game) {
       // (the glider says what the keys do, Z among them: see cueAlso above)
       const eagle = mounts.eagle;
       if (eagle && eagle.tame && eagle.mode !== 'catch') K('call');
-      btn.hidden = !touch || !word;
-      if (word && btn.textContent !== word) btn.textContent = word;
+      doing = word;
       cued = false;
       return;
     }
@@ -742,8 +729,7 @@ export function installMounts(game) {
     if (html) hud.cue({ html, bad, progress });
     else if (cued) hud.cue(null);
     cued = !!html;
-    btn.hidden = !touch || !word;
-    if (word && btn.textContent !== word) btn.textContent = word;
+    doing = word;
   }
 
   // ── From the console ──────────────────────────────────────────────────────

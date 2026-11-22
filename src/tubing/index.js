@@ -487,21 +487,11 @@ export function installTubing(game) {
     hud.flash(`no water deep enough to float in here · the nearest ${r.river ? 'river' : 'stream'} to float down is ${formatDistance(r.d)} ${way(r.x - p.x, r.z - p.z)}, and runs ${formatDistance(r.far)} from there`, SAY);
     return false;
   }
-  commands.add({ id: 'tube', keys: ['KeyV', 'PadR3'], group: 'WANDER', label: 'inner tube: pull it out and float down the river · get out', run: press });
+  // What V would do here, in a word ('float', 'get out'), while there is
+  // water to do it on: what the pack lists it by, and a touch screen's button says.
+  let doing = '';
+  commands.add({ id: 'tube', keys: ['KeyV', 'PadR3'], group: 'WANDER', label: 'inner tube: pull it out and float down the river · get out', run: press, now: () => doing });
   commands.describe({ group: 'WANDER', help: 'in the tube', label: 'W A S D paddle with your hands · shift paddle hard' });
-
-  // On a touch screen, a button for it, named for what it would do.
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.id = 'act-tube';
-  btn.hidden = true;
-  btn.textContent = 'float';
-  btn.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    press();
-  });
-  document.getElementById('touch-act')?.prepend(btn);
 
   // ── What the keys do now, and how it's going ──────────────────────────────
   // Running water you could float down, beside you: looked for now and then.
@@ -550,8 +540,7 @@ export function installTubing(game) {
     if (html) hud.cue({ html });
     else if (cued) hud.cue(null);
     cued = !!html;
-    btn.hidden = !touch || !word;
-    if (word && btn.textContent !== word) btn.textContent = word;
+    doing = word;
   }
 
   const readout = document.createElement('div');
