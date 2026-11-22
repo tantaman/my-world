@@ -286,7 +286,7 @@ function boxOf(f) {
 // What a berth keeps clear of, all of it there first: the land of a real
 // place (world/landforms.js), the old places, towns, the mouths of caves,
 // the railway, other places' boxes (boxes() -> [[x0, z0, x1, z1]]: the
-// launch site, the video store, the hunt club, the abandoned buildings), and
+// launch site, the video store, the abandoned buildings), and
 // the airfields (airfields: the Airports, airports/airports.js, whose
 // airfields in the way are asked about: so ask once they've been found, as
 // fieldsKnown() says, or they're found then and there).
