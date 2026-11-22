@@ -3,7 +3,7 @@
 An inner tube in your pack, for floating down a river for as long as you
 like.
 
-Stand at the edge of a stream or a river (or in it) and press **V**: you
+Stand at the edge of a stream or a river (or in it) and press **F**: you
 toss the tube onto the water and drop into it, legs over the front and arms
 out over the sides. From there the river does the work. It carries you at
 its own pace, which is slow and easy on the long pools and quicker down the
@@ -15,12 +15,12 @@ water to where it runs out again, and on down.
 
 | | |
 |---|---|
-| **V** | pull out your tube and get in · get out |
-| **F** | beside running water: get in · in it: get out (the act key, as for everything you get into: see [Acting](../act/README.md)) |
+| **F** | beside water deep enough: pull out your tube and get in · in it: get out (the act key, as for everything you get into: see [Acting](../act/README.md)) |
+| **V** | where the nearest river to float down is |
 | **W A S D** | paddle with your hands, the way the camera faces |
 | **shift** | paddle hard |
 
-On a game controller, clicking the right stick is **V**.
+On a game controller, **Y** is F, and clicking the right stick is **V**.
 
 **Paddling.** Your hands only go so fast, but the river is slow too, so a
 little paddling hurries you along nicely; it's also how you make for a bank
@@ -28,8 +28,8 @@ to get out, or push off when you've run aground in the shallows. The camera
 swings round behind the way you're going, and round the bends with you,
 unless you're looking about.
 
-**Getting out.** **F** (or **V**) climbs out onto the nearest bank, or into shallows you
-can stand in. Out in deep water with no bank in reach, paddle over to one, or
+**Getting out.** **F** climbs out onto the nearest bank, or into shallows
+you can stand in. Out in deep water with no bank in reach, paddle over to one, or
 press it twice to slip out into the water and swim. You're told how far you
 floated and how long it took; your longest float in each world is kept.
 

@@ -9,11 +9,11 @@ tender stacked with firewood, and two open cars with benches.
 | | |
 |---|---|
 | **Y**, or **M** then *stations* | the stations within reach, beside the map: pick one (click, or its number) to go there |
-| **F** (or **Y**) beside a standing train | get on |
-| **F** (or **Y**) at a station | get off |
+| **F** beside a standing train | get on |
+| **F** at a station | get off |
 | on a pad | **Y** gets on and off, as it does everything at hand (see [Acting](../act/README.md)); the stations are a tab beside the map (**select**), where the d-pad goes from station to station and **A** picks |
 
-**Getting there.** Press **Y** away from a train, or open the map (**M**) and
+**Getting there.** Press **Y**, or open the map (**M**) and
 its *stations* tab, for the stations within about 7 km, nearest first: which line each is on, how far it is and
 which way, and when the next train is due. Pick one and you're on its
 platform, looking along it; **Y** again closes the map. The lines are on the map, with each train

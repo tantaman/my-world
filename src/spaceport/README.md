@@ -4,8 +4,8 @@ A few hundred metres from where you first arrive, in a clearing of its own,
 a rocket stands ready on a concrete pad: two white stages and a capsule on
 top, a red lattice tower beside it with a walkway out to the hatch, a fuel
 tank, a blockhouse, floodlights that come on after dark and a beacon blinking
-on the tower. It's on the map as the *Skyhook launch site*, and **T** from
-anywhere says how far the nearest launch site is and which way.
+on the tower. It's on the map as the *Skyhook launch site*, and the launch
+sites are under *launch sites* in its routes, nearest first.
 
 **Other launch sites.** Skyhook isn't the only one, though the rest are few
 and far between: one in a stretch of thirty kilometres or so, if that, none
@@ -16,7 +16,8 @@ under *launch sites* in its routes, nearest first, for as far out as you
 scroll; pick one and *go here*, or follow the route. Whichever you're nearest
 is the one that stands ready, and its rocket flies to the same places.
 
-Walk up onto the pad and press **T** (or **F**) beside the rocket. Pick **Deep Space 9**
+Walk up onto the pad and press **F** (the key that acts on what's at hand:
+see [Acting](../act/README.md)) beside the rocket. Pick **Deep Space 9**
 or **The Orrery** to board, or press **Esc** to stay on the pad.
 After a five-second countdown the engine lights and the rocket
 lifts off: you watch it go from the corner of the pad, then from below as it
@@ -32,7 +33,7 @@ Press **Enter** or click **View exterior** to see the docking ring, six curved
 pylons and central Ops tower against the Bajoran wormhole. Move the mouse or
 press **A/D** to circle the station. **W/S** and the scroll wheel change your
 distance. **Enter** returns you to the spot where you were walking.
-**T** flies you home from either view.
+**F** flies you home from either view.
 
 ## The Orrery
 
@@ -67,13 +68,13 @@ with jump held and you're straight off again.
 
 | | |
 |---|---|
-| **T** (or **F**, the act key) by the rocket | choose a flight |
+| **F** by the rocket | choose a flight |
 | **W A S D**, mouse | run, strafe, look (in the arena) |
 | **click** | fire the railgun |
 | **space** | jump; hold it to keep hopping |
 | **A** / **D** and turn, in the air | strafe-jump: go faster |
 | **click**, fragged | come back in |
-| **T**, then **T** again | fly home (once a match is over, **T** once) |
+| **F**, then **F** again | fly home (once a match is over, **F** once) |
 | on a pad | sticks to move and look, **RT** fires, **A** jumps |
 
 The forest's HUD makes way for the arena's: the crosshair and its charge
@@ -83,7 +84,7 @@ your health (always 100, until it isn't), your ammunition (∞) and your frags.
 When it's over, the scores; and your record here (matches, wins, your best)
 is kept with the rest of what's yours.
 
-**Coming home.** **T** and the capsule comes back down under a red and white
+**Coming home.** **F** and the capsule comes back down under a red and white
 parachute onto the pad, where the next rocket is already standing. You step
 out beside it; it's taken away once you've walked off.
 
@@ -117,7 +118,7 @@ world.spaceport.leave()       // fly home now
 ## Files
 
 ```
-index.js        plugs it in: the sites in the forest and on the map, the nearest stood up, T, the trip, the arena drawn in the forest's place
+index.js        plugs it in: the sites in the forest and on the map, the nearest stood up, F by the rocket, the trip, the arena drawn in the forest's place
 site.js         where the launch sites are, grown from the seed and the land: Skyhook, and the rest on a grid
 launchSite.js   the pad, the tower, the rocket, the capsule and its parachute, the flame and the smoke
 flight.js       the trip: boarding, the countdown, the climb, the way home, over time

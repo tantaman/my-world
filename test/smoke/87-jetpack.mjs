@@ -1,8 +1,7 @@
-// The jetpack: walk up to its rack at the launch site and J straps it on;
-// jump and hold space and the jets fire, you climb and W flies you along,
-// the tools put away; shift dives, and touching down cuts the jets out. It's
-// kept as yours, J away from the rack leaves it on, and J at the rack hangs
-// it back up.
+// The jetpack: walk up to its rack at the launch site and F (the act key)
+// straps it on; jump and hold space and the jets fire, you climb and W flies
+// you along, the tools put away; shift dives, and touching down cuts the jets
+// out. It's kept as yours, and F at the rack hangs it back up.
 //
 // Needs: nothing in particular (go() takes you to the rack from anywhere).
 // Leaves: you in front of the rack at the launch site, the jetpack hung back
@@ -21,10 +20,10 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.equal(await onBack(), false, 'nothing on your back yet');
     await page.evaluate(() => world.jetpack.go());
     await frames(5);
-    assert.match(await page.evaluate(() => T.prompt()), /F strap on the jetpack/, 'in front of the rack, F (or J) would strap it on');
+    assert.match(await page.evaluate(() => T.prompt()), /F strap on the jetpack/, 'in front of the rack, F would strap it on');
     await shot('the rack');
-    await key('KeyJ');
-    assert.equal(await page.evaluate(() => world.jetpack.have), true, 'J, and it is yours');
+    await key('KeyF');
+    assert.equal(await page.evaluate(() => world.jetpack.have), true, 'F, and it is yours');
     assert.equal(await onBack(), true, 'on your back');
     assert.deepEqual(await inPack(), [{ label: 'a jetpack', note: 'on your back' }], 'and in your pack, with what else is yours');
     return rack;
@@ -60,10 +59,6 @@ export default async function ({ page, step, key, frames, shot }) {
     await frames(5);
     const after = await page.evaluate(() => ({ carried: !!world.player.carrier, flying: world.player.flying, idle: world.builder.idle, hanging: !!world.player.character.stood, have: world.jetpack.have }));
     assert.deepEqual(after, { carried: false, flying: false, idle: false, hanging: false, have: true }, 'on your own feet, the tools back, the jetpack still on');
-    // J away from the rack leaves it on, and says how to fly
-    await key('KeyJ');
-    assert.equal(await page.evaluate(() => world.jetpack.have), true);
-    assert.match(await page.evaluate(() => document.getElementById('toast').textContent), /hold space to fly/);
   });
 
   await step('kept as yours, and hung back up', async () => {
@@ -75,7 +70,7 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.evaluate(() => world.jetpack.go());
     await frames(5);
     assert.match(await page.evaluate(() => T.prompt()), /F hang the jetpack back up/);
-    await key('KeyJ');
+    await key('KeyF');
     assert.equal(await page.evaluate(() => world.jetpack.have), false, 'back on its rack');
     assert.equal(await onBack(), false, 'off your back');
     assert.deepEqual(await inPack(), [], 'and no longer in your pack');

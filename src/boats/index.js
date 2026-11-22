@@ -82,7 +82,7 @@ export function installBoats(game) {
   const boats = new Boats({ scene, solids, world });
 
   // ── The tool, and what other work goes round ──────────────────────────────
-  const tool = builder.register(boatTool({ boats, world, solids, board: (b) => board(b) }));
+  const tool = builder.register(boatTool({ boats, world, solids, key: (w) => act.key(w) }));
   builder.obstacles.addSource((x, z, R, out) => {
     for (const b of boats.list.values()) {
       const def = BOATS[b.kind];

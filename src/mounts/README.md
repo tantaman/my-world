@@ -6,7 +6,7 @@ Three animals in every world will carry you, each its own way:
 |---|---|---|
 | **a wild horse** | the widest meadow within a long walk of the start | trots, gallops (**shift**) at 11 m/s and jumps (**space**) more than a metre; swims, slowly |
 | **a great snapping turtle** | a lake, or a good big pond | crawls on land, hardly faster than a snail, and swims at 5 m/s, or 8 with **shift**, against any current |
-| **a great golden eagle** | a high, bare summit, a good way off | flies: **space** takes off and climbs, **shift** stoops (fast and down), let go of both to glide; **Z** low in the air comes in to land, and high up lets go of it: your hang glider opens and you glide down |
+| **a great golden eagle** | a high, bare summit, a good way off | flies: **space** takes off and climbs, **shift** stoops (fast and down), let go of both to glide; **F** low in the air comes in to land, and high up lets go of it: your hang glider opens and you glide down |
 
 **Finding one.** You start knowing nothing. A little while in, word comes of
 the nearest (*a wild horse has been seen grazing in a big meadow, about 250 m
@@ -21,23 +21,23 @@ own says where to look.
 **Winning one over.** A wild one watches you come. Run at it and it's off (a
 horse gallops away across its meadow, a turtle makes for the deep water, an
 eagle takes to the air and circles until it settles again). Walk up to it
-quietly instead, and when you're beside it **hold Z**: the hiker holds out a
+quietly instead, and when you're beside it **hold F**: the hiker holds out a
 hand, and while you stand still with it the animal comes to trust you (the
 bar above the tool bar). Let go and it slowly forgets; rush it and you start
 again. When it trusts you, it's yours, and is listed with what else is yours
 in [your pack](../pack/README.md), with how far off it is and which way.
 
 **Riding.** Beside your own, **F** climbs on and **F** gets off, as it gets
-you in and out of everything (see [Acting](../act/README.md)); **Z** does
-too. You steer with the movement keys as you walk, and your tools are put
-away while you ride. Leave it anywhere: it waits there, grazing, basking or
-perched. From anywhere else, **Z** whistles for it, and it comes (from out of sight, if it
+you in and out of everything (see [Acting](../act/README.md)). You steer
+with the movement keys as you walk, and your tools are put away while you
+ride. Leave it anywhere: it waits there, grazing, basking or perched. From
+anywhere else, **Z** whistles for it, and it comes (from out of sight, if it
 has to: a horse at a gallop, an eagle down out of the sky, a turtle up out of
 the nearest water, which it needs to reach you). Tame more than one, and **Z**
-again just after a whistle calls the next instead. On a game controller, **X**
-does all that Z does, and **A** and **B** are space and shift.
+again just after a whistle calls the next instead. On a game controller, **Y**
+is F and **X** is Z, and **A** and **B** are space and shift.
 
-**Letting go of the eagle.** More than fifteen metres up, **Z** lets go of
+**Letting go of the eagle.** More than fifteen metres up, **F** lets go of
 it, and your hang glider opens over you (see [Gliding](../gliding/README.md)).
 The eagle flies on, peels off, and comes down to wait somewhere ahead. Whistle
 (**Z**) while you're still gliding and it comes to catch you: it swoops in
@@ -65,7 +65,7 @@ world.mounts.ride('eagle')
 ## Files
 
 ```
-index.js              plugs it into the game: Z, riding, what you've heard, on the map and its option, saved as yours
+index.js              plugs it into the game: F on and off, Z to whistle, riding, what you've heard, on the map and its option, saved as yours
 haunts.js             where each lives, grown from the seed; the circles on the map
 hints.js              what you know of where they are, and when you hear more
 taming.js             winning a wild one over

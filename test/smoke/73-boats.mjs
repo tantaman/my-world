@@ -68,7 +68,7 @@ export default async function ({ page, step, key, frames, open, shot, made }) {
     assert.ok(Math.hypot(b.x - spot.x, b.z - spot.z) < 0.01, 'where it was aimed');
     assert.equal(await page.evaluate(() => world.builder.inv.log), logs - 5, 'from 5 m of log');
     assert.match(await toast(), /a dugout canoe, at the water’s edge · F to get in/);
-    assert.match(await prompt(), /click get in the canoe · hold right-click break it up \(\+3 m of log\)/);
+    assert.match(await prompt(), /F get in the canoe · hold right-click break it up \(\+3 m of log\)/);
     await shot('canoe-built');
     return { afloat: b.afloat };
   });

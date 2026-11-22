@@ -42,3 +42,16 @@ test('an offer needs a name of its own, and something to do', () => {
   offers.offer({ id: 'c', at: () => ({ d: 0, word: 'broken' }) });
   assert.equal(offers.here(), null, 'one with nothing to run is passed over');
 });
+
+test('held down, it does what is done by holding it', () => {
+  const offers = new Offers();
+  let calm = 0;
+  let near = true;
+  offers.offer({ id: 'wild', at: () => (near ? { d: 2, word: 'calm', run() {}, hold: (dt) => (calm += dt) } : null) });
+  offers.offer({ id: 'boat', at: () => ({ d: 3, word: 'get in', run() {} }) });
+  assert.ok(offers.hold(0.5));
+  assert.equal(calm, 0.5);
+  near = false;
+  assert.equal(offers.hold(0.5), false, 'the nearest now is pressed, not held');
+  assert.equal(calm, 0.5);
+});

@@ -1,5 +1,5 @@
 // Gliding: a hang glider, for coming down from a long way up. Let go of your
-// eagle high in the air (Z, see mounts) and it opens over you: you drop while
+// eagle high in the air (F, see mounts) and it opens over you: you drop while
 // the sail fills, then it takes your weight and you fly, lying flat under it
 // with your hands on the bar. A D shift your weight to bank it round, W
 // pulls the bar in (faster, and steeper), S pushes it out (slower, and

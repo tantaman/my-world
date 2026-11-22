@@ -14,7 +14,7 @@
 import './railway.css';
 
 const TEMPLATE = /* html */ `
-  <p class="rail-note">Go to a station, wait for a train, and <b>Y</b> beside it to get on.</p>
+  <p class="rail-note">Go to a station, wait for a train, and <b>F</b> beside it to get on.</p>
   <ol class="rail-list" aria-label="Stations"></ol>
   <p class="rail-more" hidden>surveying further…</p>
 `;

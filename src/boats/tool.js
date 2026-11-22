@@ -1,9 +1,10 @@
-// The boat tool: build a canoe or a raft at the water's edge, get into one,
-// or break one up again for its logs.
+// The boat tool: build a canoe or a raft at the water's edge, or break one
+// up again for its logs.
 //
 //   hold click         hollow a dugout canoe out of a log
 //   hold right-click   lash a raft together out of logs
-//   ...and aimed at a boat: click gets in, hold right-click breaks it up
+//   ...and aimed at a boat: hold right-click breaks it up (and the act key,
+//   F, gets you in: index.js)
 //
 // It is an ordinary tool (the contract is at the top of build/builder.js),
 // registered by the boats feature. The hiker carries the axe for it: that's
@@ -29,8 +30,8 @@ const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
 
 // boats: the boats (boats.js)   world: the land and water, as shore.js wants it
 // solids: built things, to keep a boat off them
-// board(boat): climb into one (index.js)
-export function boatTool({ boats, world, solids, board }) {
+// key(word): how a prompt names the act key, which gets you in (act/index.js)
+export function boatTool({ boats, world, solids, key = () => 'F' }) {
   const ghosts = {};
   const button = { canoe: 'click', raft: 'right-click' };
 
@@ -69,11 +70,6 @@ export function boatTool({ boats, world, solids, board }) {
 
     work(b, t, io) {
       if (t && t.type === 'boat') {
-        if (io.useTap && t.ok) {
-          b.dropHold();
-          board(t.boat);
-          return false;
-        }
         if (io.alt && t.ok) {
           const boat = t.boat;
           b.face(boat.x, boat.z);
@@ -132,7 +128,7 @@ export function boatTool({ boats, world, solids, board }) {
     const name = `the ${def.name}`;
     if (hullDistance(boat, b.player.pos.x, b.player.pos.z) > BOARD_REACH) return { type: 'boat', boat, prompt: `${name}: <i>come closer</i>` };
     const back = b.creative ? '' : ` <i>(+${def.back} m of log)</i>`;
-    return { type: 'boat', boat, ok: true, prompt: `<b>click</b> get in ${name} · <b>hold right-click</b> break it up${back}` };
+    return { type: 'boat', boat, ok: true, prompt: `<b>${key('get in')}</b> get in ${name} · <b>hold right-click</b> break it up${back}` };
   }
 
   // ── Whether a boat of `kind` could be built at (x, z), and how it'd lie ──

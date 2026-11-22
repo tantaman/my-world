@@ -46,8 +46,8 @@ seed. Everyone in the same world sees the same shelves.
 |---|---|
 | **click** a box on a shelf | take it down: you hold it up and read the back (three at a time) |
 | **right-click** | put the one in your hand back where it came from |
-| **F** (or **click**) at the counter | rent what you're holding: the clerk rings it up and hands you a receipt |
-| **F** (or **click**) at the counter, or at the drop box by the doors | return what you have out |
+| **F** at the counter | rent what you're holding: the clerk rings it up and hands you a receipt |
+| **F** at the counter, or at the drop box by the doors | return what you have out |
 | on a pad | **RT** takes one down and rents, **LT** puts one back |
 
 The box you're holding is on the screen beside you, front and back, with

@@ -44,7 +44,7 @@ export class ArenaHud {
         <div class="station-place"><small></small><strong></strong></div>
         <div class="station-actions">
           <button type="button" data-deck><kbd>Enter</kbd> <span></span></button>
-          <button type="button" data-home><kbd>T</kbd> Fly home</button>
+          <button type="button" data-home><kbd>F</kbd> Fly home</button>
         </div>
       </div>
       <div class="big"></div>`;

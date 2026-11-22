@@ -28,8 +28,8 @@ export default async function ({ page, step, key, frames, shot }) {
       await T.frames(3);
     });
     assert.ok(await climb(page, 30), 'up high');
-    assert.match(await page.evaluate(() => T.prompt()), /F let go and glide/, 'the prompt says what F (or Z) does up here');
-    await key('KeyZ');
+    assert.match(await page.evaluate(() => T.prompt()), /F let go and glide/, 'the prompt says what F does up here');
+    await key('KeyF');
     const off = await page.evaluate(() => ({
       riding: world.mounts.riding,
       gliding: world.gliding.active,
@@ -94,7 +94,7 @@ export default async function ({ page, step, key, frames, shot }) {
       await T.frames(3);
     });
     assert.ok(await climb(page, 22), 'up again');
-    await key('KeyZ');
+    await key('KeyF');
     assert.equal(await page.evaluate(() => world.gliding.active), true, 'gliding');
     // circle down over the meadow, then straighten up to land
     await page.keyboard.down('KeyD');

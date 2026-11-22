@@ -329,9 +329,9 @@ export function installMounts(game) {
     root.position.copy(_v).sub(_o);
   }
 
-  // ── Z: calm, ride, get off, whistle ───────────────────────────────────────
-  let held = false; // Z is down this frame (or its button, on a touch screen)
-  let doing = ''; // what Z would do here, in a word: see cue()
+  // ── Calm, ride, get off (the act key); whistle (Z) ────────────────────────
+  let held = false; // the act key is held down this frame, beside a wild one
+  let doing = ''; // what Z would do here, in a word ('call'): see cue()
   let calling = null; // { kind, t } the one you last whistled for
   let time = 0;
 
@@ -380,10 +380,12 @@ export function installMounts(game) {
     return best ? best.m : null;
   };
 
+  // Z: a whistle for yours, wherever it is (gliding, the eagle comes to
+  // catch you); with none of your own yet, where to look for one. Getting on
+  // and off, and calming a wild one, are the act key's (F), as with
+  // everything at hand.
   function press() {
-    if (riding) return dismount();
-    // gliding: the eagle, if it's yours, comes to catch you (and none of
-    // them is in reach to climb on, whatever is under you)
+    if (riding) return hud.flash(input.isTouch ? '“get off” gets you down' : 'F gets you down');
     if (gliding.active) {
       const eagle = mounts.eagle;
       if (eagle && eagle.tame) {
@@ -392,9 +394,6 @@ export function installMounts(game) {
       else tellWhereToLook();
       return;
     }
-    const mine = nearest(tameOnes(), REACH + 0.6);
-    if (mine) return ride(mine);
-    if (wildInReach()) return; // hold to calm it
     if (tameOnes().length) return whistle();
     tellWhereToLook();
   }
@@ -411,15 +410,18 @@ export function installMounts(game) {
   // ...what that is called
   const dismounting = () => (player.flying && player.height > GLIDE_FROM && riding.kind === 'eagle' ? 'let go' : player.flying ? 'land' : 'get off');
 
-  // On and off yours with the act key (F) too, as with everything else you
-  // get on or into.
+  // On and off yours, and calming a wild one (held down), with the act key
+  // (F), as with everything else at hand.
   act.offer({
     id: 'mount',
     at() {
       if (riding) return player.carrier && player.carrier.landing ? null : { d: 0, word: dismounting(), run: dismount };
       if (gliding.active || player.carrier || player.aboard) return null;
       const mine = nearest(tameOnes(), REACH + 0.6);
-      return mine ? { d: Math.hypot(mine.x - player.pos.x, mine.z - player.pos.z), word: 'ride', run: () => ride(mine) } : null;
+      if (mine) return { d: Math.hypot(mine.x - player.pos.x, mine.z - player.pos.z), word: 'ride', run: () => ride(mine) };
+      const wild = wildInReach();
+      if (wild) return { d: Math.hypot(wild.x - player.pos.x, wild.z - player.pos.z), word: 'calm', run() {}, hold: () => (held = true) };
+      return null;
     },
   });
 
@@ -484,7 +486,7 @@ export function installMounts(game) {
     let text;
     const far = Math.hypot(m.x - player.pos.x, m.z - player.pos.z) > 40;
     if (stage === STAGE.SEEN && now && far) text = `you saw ${d.wild} ${bearing(player.pos.x, player.pos.z, m.x, m.z).words} · it's on your map (M)`;
-    else if (stage === STAGE.SEEN) text = `${d.seen} · ${d.howTo} Z beside it`;
+    else if (stage === STAGE.SEEN) text = `${d.seen} · ${d.howTo} ${input.isTouch ? '“calm”' : 'F'} beside it`;
     else if (stage === STAGE.SIGNS) text = `${d.signs} · the map (M) narrows it down`;
     else {
       const a = hints.area(kind) || m.haunt;
@@ -500,12 +502,12 @@ export function installMounts(game) {
     keys: ['KeyZ', 'PadX'],
     group: 'WANDER',
     help: 'Z',
-    label: 'ride · get off · whistle for yours · hold to calm a wild one',
+    label: 'whistle for your mount · with none yet: where to look for one',
     run: press,
-    hold: () => (held = true),
     now: () => doing,
   });
-  commands.describe({ group: 'WANDER', help: 'Z, high on the eagle', pad: ['PadX'], label: 'let go of it and glide down · Z again: it catches you' });
+  commands.describe({ group: 'WANDER', help: 'F', pad: ['PadY'], label: 'beside your mount: ride · get off · hold beside a wild one: calm it' });
+  commands.describe({ group: 'WANDER', help: 'F, high on the eagle', pad: ['PadY'], label: 'let go of it and glide down · Z: it comes to catch you' });
 
   // While you glide, what Z does.
   gliding.cueAlso(() => {
@@ -641,7 +643,7 @@ export function installMounts(game) {
         if (m.tame && m.arrived) {
           m.arrived = false;
           if (calling && calling.kind === m.kind) {
-            hud.flash(`your ${m.def.name} is here · Z to get on`, 2400);
+            hud.flash(`your ${m.def.name} is here · ${input.isTouch ? '“ride”' : 'F'} to get on`, 2400);
             if (m.kind === 'horse') sound.call('nicker', m.x, m.y + 1.5, m.z);
             calling = null;
           }
@@ -685,7 +687,7 @@ export function installMounts(game) {
     claim(m);
     if (m.kind === 'horse') sound.call('nicker', m.x, m.y + 1.5, m.z);
     if (m.kind === 'eagle') sound.call('eagle', m.x, m.y + 1, m.z, { gain: 0.5 });
-    hud.flash(`the ${m.def.name} trusts you: it's yours · Z to get on, and Z to whistle for it from anywhere`, SAY);
+    hud.flash(`the ${m.def.name} trusts you: it's yours · ${input.isTouch ? '“ride”' : 'F'} to get on, and Z to whistle for it from anywhere`, SAY);
     save.touch();
   }
 
@@ -701,9 +703,10 @@ export function installMounts(game) {
     hud.flash(`${listOf(names)} ${wild.length > 1 ? 'are' : 'is'} yours · Z whistles for one, wherever you are`, SAY);
   }
 
-  // What Z would do here, said in place of the tool's prompt; and in a word
-  // (`doing`: 'ride', 'get off', 'calm', 'call'), which is what the pack
-  // lists it by and a touch screen's button says.
+  // What the act key (F) would do here, said in place of the tool's prompt;
+  // and what Z would do, in a word (`doing`: 'call', with a mount of your own
+  // to whistle for and nothing else to say), which is what the pack lists it
+  // by and a touch screen's button says.
   let cued = false;
   function cue(wild) {
     const touch = input.isTouch;
@@ -738,7 +741,7 @@ export function installMounts(game) {
         html = `the ${d.name} is wary: walk up slowly`;
         bad = true;
       } else {
-        html = `<b>hold ${K('calm')}</b> calm the ${d.wild.replace(/^an? /, '')}`;
+        html = `<b>hold ${A('calm')}</b> calm the ${d.wild.replace(/^an? /, '')}`;
         progress = wild.taming.trust > 0 ? wild.taming.trust : null;
       }
     } else {

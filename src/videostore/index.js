@@ -761,7 +761,7 @@ export function installVideostore(game) {
 
   // What the crosshair is on, what a click would do, and doing it. Renting
   // at the counter and returning at the counter or the drop box are the act
-  // key's too (F): what's at hand, as everywhere.
+  // key's (F): what's at hand, as everywhere.
   let deedHere = null; // { word, run }: what the act key would do here now
   act.offer({ id: 'videostore', at: () => (deedHere ? { d: 0.5, word: deedHere.word, run: deedHere.run } : null) });
   function browse() {
@@ -784,17 +784,14 @@ export function installVideostore(game) {
         const total = counter.hands.reduce((s, h) => s + termsOf(films().byId(h.id) || { section: h.section }).price, 0);
         deedHere = { word: 'rent', run: rent };
         cue = `<b>${act.key('rent')}</b> ${n === 1 ? 'rent it' : `rent all ${n}`} · ${money(total)}`;
-        deed = rent;
       } else if (returning) {
         deedHere = { word: 'return', run: () => giveBack(true) };
         cue = `<b>${act.key('return')}</b> return ${counter.out.length === 1 ? 'your movie' : `your ${counter.out.length} movies`}`;
-        deed = deedHere.run;
       } else if (n) cue = `<b>right-click</b> put <i>${esc(films().byId(counter.hands[n - 1].id).title)}</i> back · rent at the counter`;
     } else if (returning) {
       mark(null);
       deedHere = { word: 'return', run: () => giveBack(false) };
       cue = `<b>${act.key('return')}</b> drop ${counter.out.length === 1 ? 'your movie' : `your ${counter.out.length} movies`} in the returns`;
-      deed = deedHere.run;
     }
     if (cue) {
       hud.cue({ html: cue });

@@ -1,8 +1,8 @@
 // The video store: picked on the map, `go here` sets you down outside its
 // doors, facing them; walk in and they slide open. A click on a box takes it
 // off the shelf (into your hands, its back on the screen, a gap where it
-// stood), a right-click puts it back; take two to the counter and a click
-// rents them, with a receipt; drop them in the returns outside and they're
+// stood), a right-click puts it back; take two to the counter and F (the act
+// key) rents them, with a receipt; drop them in the returns (F) and they're
 // back. Walk out with one you haven't rented, and the gate goes off. Beside
 // a village there's a branch, the same shop.
 //
@@ -132,8 +132,8 @@ export default async function ({ page, step, key, frames, shot }) {
   await step('rent them at the counter', async () => {
     await page.evaluate(() => world.videostore.toCounter());
     await frames(6);
-    assert.match((await store()).prompt, /rent all 2/, 'at the counter, a click would rent them');
-    await page.evaluate(() => T.tap('use'));
+    assert.match((await store()).prompt, /rent all 2/, 'at the counter, F would rent them');
+    await key('KeyF');
     const s = await store();
     assert.equal(s.out.length, 2, 'rented');
     assert.equal(s.hands.length, 0, 'out of your hands');
@@ -155,8 +155,8 @@ export default async function ({ page, step, key, frames, shot }) {
 
   await step('drop them in the returns', async () => {
     await standAt(3.1, 10.9, Math.PI);
-    assert.match((await store()).prompt, /drop your 2 movies in the returns/, 'by the drop box, a click would return them');
-    await page.evaluate(() => T.tap('use'));
+    assert.match((await store()).prompt, /drop your 2 movies in the returns/, 'by the drop box, F would return them');
+    await key('KeyF');
     assert.deepEqual((await store()).out, [], 'returned');
     assert.deepEqual(await page.evaluate(() => world.pack.list().yours.filter((t) => /^rented/.test(t.note))), [], 'and out of your pack');
   });
