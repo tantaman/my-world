@@ -7,8 +7,9 @@
 
 import { HIKER } from './hikers/hiker.js';
 import { OLIVER } from './hikers/oliver.js';
+import { ELLIOTT } from './hikers/elliott.js';
 
-export const HIKERS = [HIKER, OLIVER];
+export const HIKERS = [HIKER, OLIVER, ELLIOTT];
 
 // The hiker with this id, or the first if there's none (someone newer than
 // this build, or nobody said).

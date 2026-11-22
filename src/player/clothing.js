@@ -124,19 +124,26 @@ export function textile(type) {
 
 // The elbow and knee sit at -0.28 and -0.42 in both human rigs. Leave
 // several sections across each bend so a sleeve or trouser leg flexes.
-export function sleeve(side, surface) {
-  const cloth = tailored([
-    [-0.52, 0.043, 0.045, 0], [-0.493, 0.045, 0.047],
-    [-0.48, 0.054, 0.058, -0.003, 0.006], [-0.46, 0.05, 0.052, 0, 0.009],
-    [-0.40, 0.057, 0.059, 0.004], [-0.335, 0.061, 0.064, -0.003, -0.012],
-    [-0.315, 0.055, 0.056, -0.005, -0.01], [-0.282, 0.061, 0.064, -0.009, -0.007],
-    [-0.25, 0.059, 0.061], [-0.18, 0.067, 0.073], [-0.085, 0.078, 0.08],
-    [-0.025, 0.08, 0.082], [0.028, 0.065, 0.066], [0.056, 0.036, 0.041],
-    [0.063, 0.012, 0.016],
-  ], { side, surface, segments: 24, crease: surface && ((y, x, front) =>
+// A grown-up's sleeve, cuff to shoulder, in the shoulder's frame: rows as
+// tailored() takes them.
+const SLEEVE = [
+  [-0.52, 0.043, 0.045, 0], [-0.493, 0.045, 0.047],
+  [-0.48, 0.054, 0.058, -0.003, 0.006], [-0.46, 0.05, 0.052, 0, 0.009],
+  [-0.40, 0.057, 0.059, 0.004], [-0.335, 0.061, 0.064, -0.003, -0.012],
+  [-0.315, 0.055, 0.056, -0.005, -0.01], [-0.282, 0.061, 0.064, -0.009, -0.007],
+  [-0.25, 0.059, 0.061], [-0.18, 0.067, 0.073], [-0.085, 0.078, 0.08],
+  [-0.025, 0.08, 0.082], [0.028, 0.065, 0.066], [0.056, 0.036, 0.041],
+  [0.063, 0.012, 0.016],
+];
+
+// rows: the sleeve's sections, if not SLEEVE; crease: (y, across, front) ->
+// how far the cloth stands out there, if not the folds a sleeve has at the
+// elbow (a quilted one's channels, say)
+export function sleeve(side, surface, { rows = SLEEVE, crease } = {}) {
+  const cloth = tailored(rows, { side, surface, segments: 24, crease: crease || (surface && ((y, x, front) =>
     0.005 * foldAt(y + 0.32 + 0.041 * x * side, 0.012) * (0.65 + 0.35 * front) +
     0.004 * foldAt(y + 0.22 - 0.065 * x * side, 0.014) +
-    0.003 * foldAt(y + 0.446 + 0.023 * front, 0.011)) });
+    0.003 * foldAt(y + 0.446 + 0.023 * front, 0.011))) });
   const p = cloth.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const inset = THREE.MathUtils.smoothstep(p.getY(i), -0.045, 0.063);
