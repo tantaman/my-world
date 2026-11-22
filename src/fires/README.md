@@ -30,7 +30,10 @@ scrub with **, .**). So everyone in a world watches the same fire burn down,
 and one you left burning is cold ash when you come back tomorrow. You can't
 walk into a fire with wood in it, and neither the shovel nor a footing, a wall
 or a roof will go where a fire ring is. A fire also lights the world around
-it, which matters a great deal more after dark than at noon.
+it, which matters a great deal more after dark than at noon: the trees and
+whoever is by it cast shadows away from it, and the smoke over it glows. Its
+flames are a volume of burning gas, round from any side and fading into the
+coals, and the air over them shimmers (see [the look](../render/README.md)).
 
 ## Files
 

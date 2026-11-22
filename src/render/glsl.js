@@ -141,6 +141,32 @@ float wnoise(vec2 wp, float f, vec2 off) {
   return tnoise(wp * (m / PERIOD) + off, m);
 }
 float wnoise(vec2 wp, float f) { return wnoise(wp, f, vec2(0.0)); }
+// Cells over the world, about f to the metre (a crust's plates, cobbles):
+// the nearest and next-nearest of points scattered one to a cell (x, y), and
+// which cell the nearest is in (z, 0..1). The cells wrap on the period, as
+// the noise does, so nothing jumps when the origin moves.
+vec3 wcells(vec2 wp, float f) {
+  float m = cellsIn(f);
+  vec2 p = wp * (m / PERIOD);
+  vec2 i = floor(p);
+  vec2 fr = p - i;
+  float d1 = 8.0;
+  float d2 = 8.0;
+  float id = 0.0;
+  for (int y = -1; y <= 1; y++)
+  for (int x = -1; x <= 1; x++) {
+    vec2 o = vec2(float(x), float(y));
+    vec2 c = wrapCell(i + o, m);
+    vec2 at = o + vec2(hash12(c), hash12(c + 19.7)) * 0.8 + 0.1;
+    float d = length(at - fr);
+    if (d < d1) {
+      d2 = d1;
+      d1 = d;
+      id = hash12(c + 3.1);
+    } else if (d < d2) d2 = d;
+  }
+  return vec3(d1, d2, id);
+}
 float wfbm4(vec2 wp, float f, vec2 off) {
   float s = 0.0;
   float a = 0.5;
@@ -340,3 +366,151 @@ vec3 waterGlow(float k, float depth) {
   return tint * day * exp(-depth * waterAbsorb(k) * 0.8);
 }
 `;
+
+// ── Noise in three dimensions ──────────────────────────────────────────────
+// For patterns over something's own shape rather than over the ground: a
+// demon's hide, a horn, a rock, measured in its own frame (which never
+// moves, so these need nothing of the origin). (requires NOISE_GLSL)
+//   vnoise3(p)     smooth value noise, 0..1, a cell to the unit
+//   fbm3(p)        four octaves of it
+//   cells3(p)      the nearest and next-nearest of points scattered one to a
+//                  cell (x, y), and which cell the nearest is in (z, 0..1):
+//                  plates and scales are (y - x), and their seams are where
+//                  that is small
+export const NOISE3_GLSL = /* glsl */ `
+float vnoise3(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  vec3 u = f * f * (3.0 - 2.0 * f);
+  float a = hash13(i);
+  float b = hash13(i + vec3(1.0, 0.0, 0.0));
+  float c = hash13(i + vec3(0.0, 1.0, 0.0));
+  float d = hash13(i + vec3(1.0, 1.0, 0.0));
+  float e = hash13(i + vec3(0.0, 0.0, 1.0));
+  float g = hash13(i + vec3(1.0, 0.0, 1.0));
+  float h = hash13(i + vec3(0.0, 1.0, 1.0));
+  float k = hash13(i + vec3(1.0, 1.0, 1.0));
+  return mix(mix(mix(a, b, u.x), mix(c, d, u.x), u.y), mix(mix(e, g, u.x), mix(h, k, u.x), u.y), u.z);
+}
+float fbm3(vec3 p) {
+  float s = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 4; i++) {
+    s += a * vnoise3(p);
+    p = p * 2.03 + vec3(17.1, -9.7, 5.3);
+    a *= 0.5;
+  }
+  return s / 0.9375;
+}
+vec3 cells3(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  float d1 = 8.0;
+  float d2 = 8.0;
+  float id = 0.0;
+  for (int z = -1; z <= 1; z++)
+  for (int y = -1; y <= 1; y++)
+  for (int x = -1; x <= 1; x++) {
+    vec3 o = vec3(float(x), float(y), float(z));
+    vec3 c = i + o;
+    vec3 at = o + vec3(hash13(c), hash13(c + 19.7), hash13(c - 7.3)) * 0.8 + 0.1;
+    float d = length(at - f);
+    if (d < d1) {
+      d2 = d1;
+      d1 = d;
+      id = hash13(c + 3.1);
+    } else if (d < d2) d2 = d;
+  }
+  return vec3(d1, d2, id);
+}
+`;
+
+// ── Relief ─────────────────────────────────────────────────────────────────
+// The small shape of a surface — the grain of stone, the pores and veins of
+// a hide, the plates of a crust — drawn rather than built: a height worked
+// out pixel by pixel tips the normal, so a low light picks it out, without
+// a triangle more. How the height changes across the screen (dFdx, dFdy)
+// is all it takes; no texture, and no tangents (Mikkelsen, "Bump Mapping
+// Unparametrized Surfaces on the GPU", 2010).
+//   relief(n, pos, h)   n, the normal, and pos, the position, both in view
+//                       space (in a three.js material: normal, and
+//                       -vViewPosition); h the height there, m
+//   fine(p, size)       how much of a pattern whose features are `size`
+//                       (in p's units) is worth drawing here, 0..1: it fades
+//                       as they come down to a couple of pixels, before they
+//                       would shimmer
+export const RELIEF_GLSL = /* glsl */ `
+vec3 relief(vec3 n, vec3 pos, float h) {
+  vec3 dpdx = dFdx(pos);
+  vec3 dpdy = dFdy(pos);
+  vec3 r1 = cross(dpdy, n);
+  vec3 r2 = cross(n, dpdx);
+  float det = dot(dpdx, r1);
+  vec3 grad = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+  vec3 r = abs(det) * n - grad;
+  // (a triangle seen exactly edge on has no slope across the screen at all)
+  float l = length(r);
+  return l > 1.0e-12 ? r / l : n;
+}
+float fine(vec3 p, float size) {
+  float px = length(fwidth(p));
+  return 1.0 - smoothstep(0.25, 0.6, px / max(size, 1.0e-6));
+}
+`;
+
+// ── A mirror ───────────────────────────────────────────────────────────────
+// What a shiny surface drawn on the OVER layer (render/pipeline.js) sees of
+// the rest of the picture: the copy of it (BEHIND, uniforms.js) is all
+// there is to go on, so a mirrored ray is followed across the copy until it
+// passes behind something drawn there (screen-space reflection). The
+// material needs tBehind, uBehindRes and uProj (BEHIND's).
+//   behindZ(uv)      how far off what lies behind is (view depth, m) at uv
+//   onScreen(q)      where a point in view space is in the picture (uv)
+//   mirrored(p, r)   follow a ray from p along r (both view space) until it
+//                    passes behind something: (uv, how sure, how far along,
+//                    m); sure is 0 if it met nothing in sight
+// steps: how many steps it takes, each `grow` times the last, from `first`
+// (m), out to `far`; refine: halvings to find where it met what it met;
+// farSky: further than this in the copy is the sky.
+export function mirrorGLSL({ steps, first, far, refine, grow, farSky }) {
+  return /* glsl */ `
+float behindZ(vec2 uv) {
+  return texelFetch(tBehind, ivec2(clamp(uv, 0.0, 1.0) * uBehindRes - 0.5), 0).a;
+}
+vec2 onScreen(vec3 q) {
+  vec4 c = uProj * vec4(q, 1.0);
+  return c.xy / c.w * 0.5 + 0.5;
+}
+vec4 mirrored(vec3 p, vec3 r) {
+  float t0 = 0.0;
+  float t = ${first.toFixed(3)};
+  for (int i = 0; i < ${steps}; i++) {
+    vec3 q = p + r * t;
+    if (q.z > -0.05) break; // behind the eye
+    vec2 uv = onScreen(q);
+    if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) break;
+    float zb = behindZ(uv);
+    float dz = -q.z - zb;
+    // behind it, but not so far that it went behind something thin and is
+    // out the other side
+    if (dz > 0.0 && zb < ${farSky.toFixed(1)} && dz < (t - t0) * 1.5 + zb * 0.02 + 0.2) {
+      float a = t0;
+      float b = t;
+      for (int k = 0; k < ${refine}; k++) {
+        float m = 0.5 * (a + b);
+        vec3 qm = p + r * m;
+        if (-qm.z > behindZ(onScreen(qm))) b = m;
+        else a = m;
+      }
+      vec2 hit = onScreen(p + r * b);
+      vec2 edge = min(hit, 1.0 - hit);
+      float sure = smoothstep(0.0, 0.07, min(edge.x, edge.y)) * (1.0 - smoothstep(${(far * 0.6).toFixed(1)}, ${far.toFixed(1)}, b));
+      return vec4(hit, sure, b);
+    }
+    t0 = t;
+    t *= ${grow.toFixed(6)};
+  }
+  return vec4(0.0);
+}
+`;
+}

@@ -42,6 +42,8 @@ export function installRender(game) {
   game.provide('scene', scene);
   game.provide('camera', camera);
   game.provide('pipeline', pipeline);
+  // light given off by things (a fire, lava): lights.js
+  game.provide('lights', pipeline.lights);
 
   // What the visitor chose last time, unless the address bar says otherwise.
   const soft = settings.get('softness', 'number');

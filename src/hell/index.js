@@ -44,8 +44,9 @@ import { HellWeather } from './weather.js';
 import { Rides } from './rides.js';
 import { Denizens } from './denizens.js';
 import { hellSounds } from './sound.js';
-import { createHellGround, createHellStone } from './look.js';
-import { makeCreature, CREATURE_NAMES } from './creatures.js';
+import { createHellGround, createHellStone, createHellLiquid, createHellLiquidHaze } from './look.js';
+import { createSkinMaterial } from '../render/skin.js';
+import { makeCreature, meltSome, CREATURE_NAMES } from './creatures.js';
 import { findGate } from './site.js';
 import { Gate, doorFrame, DOORWAY } from './gate.js';
 import { Card } from './card.js';
@@ -62,6 +63,7 @@ const REARM = 3.5; // m you must be from a door you came out of before it takes 
 const FALL = 14; // m/s: land harder than this and the poem has a word for it
 const CENTRE = 30; // m from the axis: Lucifer's flank, where the way out begins
 const FALLS_HEARD = 260; // m: how far off the brook's fall is heard
+const MELT_MS = 4; // ms a frame spent melting the creatures' flesh (creatures.js), while you're down there
 // What the ground of each region sounds like underfoot (audio/footsteps.js).
 const UNDERFOOT = { limbo: 'grass', gluttons: 'dirt', styx: 'dirt', wood: 'litter', sand: 'dirt', blood: 'dirt', cocytus: 'snow' };
 
@@ -86,15 +88,23 @@ export function installHell(game) {
 
   // Hell's own scene: what is drawn while you're down there.
   const under = new THREE.Scene();
-  const terrain = new HellTerrain({ land, material: createHellGround(), group: under });
+  // (the air shimmers over its fires: render/pipeline.js, HEAT)
+  under.userData.heat = true;
+  const terrain = new HellTerrain({ land, material: createHellGround(), liquid: createHellLiquid(), haze: createHellLiquidHaze(), group: under });
   const furniture = new Furniture({ land, space, group: under });
   const built = new Structures({ land, group: under, stone: createHellStone({ hot: true }), fire: furniture.kit.flame.mat });
+  // the light the fires give, from those near where you look from
+  // (render/lights.js picks the few that matter most)
+  game.lights.addSource(under, (eye, out) => {
+    furniture.lightsNear(eye, out);
+    built.lightsNear(eye, out);
+  });
   const air = new HellAir(under);
   origin.keep(air.hemi);
   const weather = new HellWeather(under);
   const card = new Card();
   // the keepers and monsters, and whatever carries you
-  const flesh = createHellStone({ hot: true, flesh: true });
+  const flesh = createSkinMaterial({ hot: true, baked: true });
   const make = (name) => makeCreature(CREATURE_NAMES.includes(name) ? name : 'figure', flesh);
   const rides = new Rides({ land, group: under, make });
   const denizens = new Denizens({ land, group: under, make });
@@ -189,8 +199,13 @@ export function installHell(game) {
   let fell = 0; // how fast you were falling, last frame
   const brought = () => [player.character.root, ...(game.headlamp ? [game.headlamp.beam, game.headlamp.beam.target, game.headlamp.glow] : [])];
   const isIn = (p) => p.y < space.lid && Math.hypot(p.x - land.cx, p.z - land.cz) < land.reach;
+  let ready = false; // every creature's shape asked for, to be melted in the background
   function cross(now) {
     inside = now;
+    if (now && !ready) {
+      ready = true;
+      for (const name of CREATURE_NAMES) makeCreature(name, flesh, { later: true });
+    }
     for (const o of brought()) (now ? under : scene).add(o);
     air.fresh = true;
     weather.fresh = true;
@@ -268,6 +283,7 @@ export function installHell(game) {
         }
         return;
       }
+      meltSome(MELT_MS);
       const ref = space.follow(p.x, p.z);
       if (Math.round(ref / TAU) !== turn) {
         turn = Math.round(ref / TAU);
@@ -451,6 +467,8 @@ export function installHell(game) {
     },
     // through the door, as walking into it does: pass(true) down, pass(false) up
     pass,
+    // melt every creature's flesh now, rather than a little each frame
+    melt: () => meltSome(Infinity),
     get passing() {
       return passing;
     },

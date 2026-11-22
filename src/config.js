@@ -62,6 +62,11 @@ export const CONFIG = {
   // Lighting
   shadowMapSize: low ? 1024 : 2048,
   shadowExtent: 60,
+  // Light given off by things (fires, lava, a lantern: render/lights.js):
+  // how many of them near you are real lights at once, and how many of those
+  // cast shadows of what stands in their light.
+  lights: num('lights', low ? 3 : 5),
+  lightShadows: num('lightShadows', low ? 0 : 1),
   timeOfDay: num('time', 16.6), // hours, 0-24
 
   // Player (m/s). A brisk hiking walk; much faster than this and a real

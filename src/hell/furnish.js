@@ -17,13 +17,19 @@ import { mulberry32, hash2i } from '../noise.js';
 import { R, ONE, BOLGE, LIQUID, TAU, bankTop, zoneAt } from './plan.js';
 import { boulder, crag, thornTree, bareTree, reeds, tomb, hole, iceHead, shade, cloaked, weight } from './models.js';
 import { createHellStone } from './look.js';
-import { createShadeMaterial, createFlameMaterial, flameGeometry } from './shades.js';
+import { createShadeMaterial, createFlameMaterial, createFlameHaze, flameGeometry, hazeOver } from './shades.js';
 import { makeCreature } from './creatures.js';
+import { SHARED } from '../render/uniforms.js';
+import { OVER, HEAT } from '../render/pipeline.js';
 
 export const CELL = 64; // m
 const NEAR = 250; // m: squares this close are furnished
 const FAR = 330; // m: and let go of this far off
 const SPOTS = 8; // spots along a square's side (the wood has half as many again)
+// The light a flame gives (render/lights.js), for one a metre high and half
+// as wide: how bright, and how far it reaches. Bigger ones give more.
+const FIRE_LIGHT = { power: 16, range: 16, decay: 2, color: [1, 0.42, 0.13] };
+const LIT_NEAR = 90; // m: flames further off than this light nothing you'd see
 
 const _o = {};
 const _a = {};
@@ -37,7 +43,7 @@ const _c = new THREE.Color();
 // One of the creatures' shapes (creatures.js), as a geometry to strew.
 function shapeOf(name) {
   let geo = null;
-  makeCreature(name, null).traverse((o) => {
+  makeCreature(name, null, { rough: true }).traverse((o) => {
     if (o.isMesh && !geo) geo = o.geometry;
   });
   return geo;
@@ -75,7 +81,7 @@ function makeKit() {
     supine: K(shade('supine'), body),
     prone: K(shade('prone'), body),
     cloaked: K(cloaked(), body),
-    flame: K(flameGeometry(), fire),
+    flame: { ...K(flameGeometry(), fire), haze: createFlameHaze() },
     serpent: K(shapeOf('serpent'), stone),
   };
 }
@@ -196,19 +202,65 @@ export class Furniture {
       mesh.castShadow = false;
       mesh.receiveShadow = false;
       group.add(mesh);
+      // (a flame is drawn over the rest, which it reads: render/flame.js; and
+      // the air over it shimmers)
+      if (kind === 'flame') {
+        mesh.layers.set(OVER);
+        group.add(hazeOver(mesh, k.haze));
+      }
       count += n;
     }
     this.group.add(group);
-    this.cells.set(q.key, { group, cx: x0 + CELL / 2, cz: z0 + CELL / 2, count, solid: solids.length > 0 });
+    // the flames' light: where each stands (its top, where it is brightest
+    // and the light gets over the rim of a tomb), and the ones that walk,
+    // with how
+    const fires = [];
+    for (const it of lists.get('flame') || []) {
+      const big = it.scale * Math.sqrt(it.tall || 1);
+      fires.push({
+        x: x0 + it.x,
+        y: it.y + it.scale * (it.tall || 1) * 0.7,
+        z: z0 + it.z,
+        color: FIRE_LIGHT.color,
+        power: FIRE_LIGHT.power * big * big,
+        range: FIRE_LIGHT.range * big,
+        decay: FIRE_LIGHT.decay,
+        flicker: (it.x * 7.1 + it.z * 3.3) % 97,
+        go: it.go || null,
+        at: it,
+      });
+    }
+    this.cells.set(q.key, { group, cx: x0 + CELL / 2, cz: z0 + CELL / 2, count, solid: solids.length > 0, fires, x0, z0 });
     if (solids.length) this.space.solids.set(q.key, solids);
     this.count += count;
+  }
+
+  // The flames near `eye` that give light, for the picture's lights
+  // (render/lights.js): pushed onto out. One that walks is where its
+  // instance is drawn just now (shades.js: travel).
+  lightsNear(eye, out) {
+    const t = SHARED.uTime.value;
+    for (const c of this.cells.values()) {
+      if (!c.fires.length || Math.abs(c.cx - eye.x) > CELL / 2 + LIT_NEAR || Math.abs(c.cz - eye.z) > CELL / 2 + LIT_NEAR) continue;
+      for (const f of c.fires) {
+        if (f.go) {
+          const [dx, dz, speed, span] = f.go;
+          const it = f.at;
+          const s = ((((t * speed + (it.phase || 0) * span) % span) + span) % span) - 0.5 * span;
+          f.x = c.x0 + it.x + dx * s;
+          f.z = c.z0 + it.z + dz * s;
+          f.y = it.y - (it.sink || 0) + (it.rise || 0) * (s / span) + it.scale * (it.tall || 1) * 0.7;
+        }
+        if (Math.abs(f.x - eye.x) < LIT_NEAR && Math.abs(f.z - eye.z) < LIT_NEAR) out.push(f);
+      }
+    }
   }
 
   _letGo(key, c) {
     this.group.remove(c.group);
     for (const mesh of c.group.children) {
       // (a shape shared by every square stays; the per-instance buffers go)
-      if (mesh.geometry.attributes.aGo) {
+      if (mesh.geometry.attributes.aGo && mesh.layers.mask !== 1 << HEAT) {
         mesh.geometry.deleteAttribute('aGo');
         mesh.geometry.deleteAttribute('aHow');
       }
