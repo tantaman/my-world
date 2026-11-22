@@ -177,9 +177,10 @@ const BY_KIND = {
         const fore = list.filter((q) => q.z0 > r.z1);
         const aft = list.filter((q) => q.z1 < r.z0);
         const span = (l) => (l.length ? `${Math.min(...l.map((q) => q.no))}-${Math.max(...l.map((q) => q.no))}` : '');
-        const sx = s * (CORE.half - 0.09);
-        if (fore.length) sign(k, `FWD ${span(fore)}`, sx, y + 1.9, r.z1 - 1.2, -s, 0, 0.025, BRASS, col(0x1e2a44));
-        if (aft.length) sign(k, `AFT ${span(aft)}`, sx, y + 1.9, r.z0 + 1.2, -s, 0, 0.025, BRASS, col(0x1e2a44));
+        // on the far wall of the corridor, over the doors, facing you as you come out of the lobby
+        const sx = s * (CORR[1] - 0.09);
+        if (fore.length) sign(k, `FWD ${span(fore)}`, sx, y + 2.36, r.z1 - 1.3, -s, 0, 0.02, BRASS, col(0x1e2a44));
+        if (aft.length) sign(k, `AFT ${span(aft)}`, sx, y + 2.36, r.z0 + 1.3, -s, 0, 0.02, BRASS, col(0x1e2a44));
       }
     }
     plant(k, -2.6, y, r.z0 + 0.5, 0.8);
