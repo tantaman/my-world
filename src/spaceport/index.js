@@ -208,6 +208,9 @@ export function installSpaceport(game) {
   let wasVisible = true;
   // Where the hiker is while the trip carries them: in the capsule.
   const aboard = {
+    get posesCharacter() {
+      return onStation();
+    },
     place(out) {
       out.x = seat.x;
       out.y = seat.y;
@@ -285,10 +288,10 @@ export function installSpaceport(game) {
     built.rocket.visible = false;
     seatIn(ROCKET_AT.x, ROCKET_AT.z, 0.2);
     if (flight.destination === 'ds9') {
-      if (station) station.reset();
-      else station = new StationVisit(camera.aspect);
+      if (!station) station = new StationVisit(camera.aspect);
+      station.arrive(player.character, (run) => sound.sfx('arena-land', { size: 0.22 + run * 0.14 }));
       ui.quiet();
-      ui.stationDeck(false);
+      ui.stationDeck(true);
       ui.station.hidden = false;
     } else {
       arena = new Arena({ bots: BOTS, seed: (Math.random() * 2 ** 31) | 0 });
@@ -308,6 +311,7 @@ export function installSpaceport(game) {
   }
 
   function fromOrbit() {
+    if (station?.character) station.depart();
     arena = null;
     ui.station.hidden = true;
     ui.show(false);

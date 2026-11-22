@@ -21,6 +21,7 @@ import { paintCover, Atlas, COVER, titleBand } from '../src/videostore/covers.js
 import { Counter, HANDS, TERMS, DAY, dueAt, daysLate, termsOf } from '../src/videostore/browse.js';
 import { glyph, layout } from '../src/videostore/font.js';
 import { matchesGolden } from './helpers/golden.js';
+import { movieDetails } from '../worker/movies.js';
 
 const SEED = 20261119;
 
@@ -190,7 +191,7 @@ test('nothing solid stands in the doorway or the gate', () => {
 
 // ── The films ───────────────────────────────────────────────────────────────
 
-test('the films are grown from the seed: the same every time, different in another world', () => {
+test('the shelves are repeatable, with generated films that vary by world', () => {
   const a = new Catalog(SEED);
   const b = new Catalog(SEED);
   assert.deepEqual(
@@ -198,31 +199,35 @@ test('the films are grown from the seed: the same every time, different in anoth
     b.films.map((f) => f.title),
   );
   const c = new Catalog(42);
-  const same = c.films.filter((f, i) => a.films[i] && a.films[i].title === f.title).length;
+  const same = c.films.filter((f, i) => !f.tmdbId && a.films[i]?.title === f.title).length;
   assert.ok(same < a.films.length * 0.05, `another seed, other films (${same} the same)`);
 });
 
-test('every slot on every shelf has a film, each title is unique, and the back of every box is filled in', () => {
+test('every slot holds a distinct edition, and every generated sleeve has its details', () => {
   const cat = new Catalog(SEED);
   const slots = FACES.reduce((n, f) => n + f.cols * f.rows, 0);
   assert.equal(cat.slots.size, slots, 'no empty slots');
   assert.ok(cat.films.length > 1500, `plenty to choose from (${cat.films.length})`);
-  const titles = new Set(cat.films.map((f) => f.title));
-  assert.equal(titles.size, cat.films.length, 'no two the same');
+  const editions = new Set(cat.films.map((f) => `${f.title} · ${f.format}`));
+  assert.equal(editions.size, cat.films.length, 'a movie can come in both formats');
   const ratings = new Set(['G', 'PG', 'PG-13', 'R', 'NR']);
   for (const f of cat.films) {
-    const text = [f.title, f.tagline, f.blurb, f.director, ...f.cast, f.quote.text, f.quote.by].join(' ');
-    assert.ok(!/[{}]|undefined|null/.test(text), `${f.title}: nothing left unfilled (${text})`);
-    assert.ok(ratings.has(f.rating), f.rating);
     assert.ok(f.year <= STORE.year && f.year >= 1930, `${f.title} (${f.year})`);
-    assert.ok(f.mins >= 70 && f.mins <= 160);
-    assert.ok(f.stars >= 2 && f.stars <= 5);
     assert.ok(GENRES[f.genre], f.genre);
     assert.equal(cat.byId(f.id), f);
     assert.equal(cat.slotsOf(f.id).length, f.copies, `${f.title}: as many slots as copies`);
-    if (f.section === 'new') assert.equal(f.year, STORE.year, 'a new release came out this year');
-    if (f.genre === 'foreign') assert.ok(f.lang && f.means, 'a foreign film says what it means');
     if (f.section === 'picks') assert.ok(f.staff && f.note, 'a staff pick says who picked it, and why');
+    if (f.section === 'picks' || f.section === 'new') {
+      assert.ok(Number.isInteger(f.tmdbId), 'curated shelves carry real films');
+      assert.equal(f.quote, undefined, 'real films have no invented critic quote');
+      continue;
+    }
+    const text = [f.title, f.tagline, f.blurb, f.director, ...f.cast, f.quote.text, f.quote.by].join(' ');
+    assert.ok(!/[{}]|undefined|null/.test(text), `${f.title}: nothing left unfilled (${text})`);
+    assert.ok(ratings.has(f.rating), f.rating);
+    assert.ok(f.mins >= 70 && f.mins <= 160);
+    assert.ok(f.stars >= 2 && f.stars <= 5);
+    if (f.genre === 'foreign') assert.ok(f.lang && f.means, 'a foreign film says what it means');
   }
   // "a slacker pizza guy has"; "two best friends have"
   const blurbs = cat.films.map((f) => f.blurb).join(' ');
@@ -305,7 +310,7 @@ test('a cover is painted edge to edge, each a little different, and the atlas ho
   }
   const atlas = new Atlas(cat.films.length);
   atlas.paint(cat.films, 0, 50);
-  const r = atlas.rect(49);
+  const r = atlas.rect(cat.films[49].id);
   assert.ok(r.u0 >= 0 && r.u1 <= 1 && r.v0 >= 0 && r.v1 <= 1 && r.u1 > r.u0 && r.v1 > r.v0);
   assert.ok(Math.abs((r.u1 - r.u0) * atlas.width - COVER.w) < 1e-9 && Math.abs((r.v1 - r.v0) * atlas.height - COVER.h) < 1e-9);
 });
@@ -395,4 +400,69 @@ test('what you have out is kept, and a save with nonsense in it is tidied', () =
   const tidy = Counter.validate({ out: [{ id: 'x' }, null, saved.out[0], { ...saved.out[0], title: 7 }], owned: 'lots', card: { number: 5 } });
   assert.deepEqual(tidy, { out: [saved.out[0]], owned: [], card: null });
   assert.deepEqual(Counter.validate(null), { out: [], owned: [], card: null });
+});
+
+test('a saved VHS rental does not hide the DVD or a movie that replaced its old slot', () => {
+  const cat = new Catalog(SEED);
+  const editions = cat.section('new').filter((f) => f.tmdbId === 558);
+  const vhs = editions.find((f) => f.format === 'VHS');
+  const dvd = editions.find((f) => f.format === 'DVD');
+  assert.notEqual(vhs.id, dvd.id);
+  const keyFor = (id) => {
+    const { face, col, row } = cat.slotsOf(id)[0];
+    return `${face}:${col}:${row}`;
+  };
+  const vhsKey = keyFor(vhs.id);
+  const dvdKey = keyFor(dvd.id);
+  const k = new Counter();
+  k.take(vhs, vhsKey);
+  const checkout = k.checkout(NOW, (id) => cat.byId(id));
+  assert.equal(checkout.items[0].format, 'VHS');
+  const saved = k.serialize();
+  saved.out.push({ ...saved.out[0], id: 18, title: 'Old Generated Movie', key: dvdKey });
+  k.load(saved);
+  assert.deepEqual([...k.taken((key) => cat.slots.get(key))], [vhsKey]);
+  assert.deepEqual(k.returnAll(NOW).items.map((item) => item.title), [vhs.title, 'Old Generated Movie']);
+});
+
+test('film details request only stocked IDs and use the U.S. theatrical certification', async (t) => {
+  const api = t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url.origin, 'https://api.themoviedb.org');
+    assert.equal(url.pathname, '/3/movie/558');
+    assert.equal(url.searchParams.get('append_to_response'), 'credits,release_dates');
+    assert.equal(options.headers.authorization, 'Bearer test-token');
+    return Response.json({
+      id: 558,
+      title: 'Spider-Man 2',
+      runtime: 127,
+      tagline: 'A test tagline',
+      overview: 'A test synopsis',
+      credits: { cast: [{ name: 'Tobey Maguire' }], crew: [{ job: 'Director', name: 'Sam Raimi' }] },
+      release_dates: { results: [
+        { iso_3166_1: 'GB', release_dates: [{ type: 3, certification: 'PG' }] },
+        { iso_3166_1: 'US', release_dates: [
+          { type: 5, certification: 'NR', release_date: '2007-10-30T00:00:00.000Z' },
+          { type: 3, certification: 'PG-13' },
+          { type: 5, release_date: '2004-11-30T00:00:00.000Z' },
+        ] },
+      ] },
+    });
+  });
+  const url = 'https://game.example/api/videostore/movies/558';
+  assert.equal((await movieDetails(new Request(url), '', null, '558')).status, 204);
+  assert.equal((await movieDetails(new Request(url), 'test-token', null, '999999999')).status, 404);
+  assert.equal((await movieDetails(new Request(url, { method: 'POST' }), 'test-token', null, '558')).status, 405);
+  assert.equal(api.mock.callCount(), 0);
+  const response = await movieDetails(new Request(url), 'test-token', null, '558');
+  assert.deepEqual(await response.json(), {
+    title: 'Spider-Man 2',
+    tagline: 'A test tagline',
+    blurb: 'A test synopsis',
+    mins: 127,
+    rating: 'PG-13',
+    homeYear: '2004',
+    cast: ['Tobey Maguire'],
+    director: 'Sam Raimi',
+  });
+  assert.equal(api.mock.callCount(), 1);
 });

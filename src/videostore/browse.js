@@ -48,6 +48,7 @@ const KEPT_OWNED = 200; // the most bought tapes remembered
 
 export const termsOf = (film) => TERMS[(SECTIONS[film.section] && SECTIONS[film.section].rent) || 'catalog'];
 export const money = (v) => `$${v.toFixed(2)}`;
+export const sameCopy = (film, rental) => !!film && film.id === rental.id && (!!film.tmdbId || film.title === rental.title);
 
 // Midnight at the end of the day `nights` days after `now`, on this
 // machine's calendar.
@@ -99,16 +100,17 @@ export class Counter extends Emitter {
     let due = Infinity;
     for (const h of this.hands) {
       const film = byId(h.id) || { section: h.section };
+      const format = film.format || 'VHS';
       const T = termsOf(film);
       total += T.price;
       if (T.buy) {
         this.owned.push({ id: h.id, title: h.title });
-        items.push({ title: h.title, price: T.price, buy: true });
+        items.push({ title: h.title, format, price: T.price, buy: true });
       } else {
         const d = dueAt(now, T.nights);
         due = Math.min(due, d);
         this.out.push({ id: h.id, title: h.title, key: h.key, at: now, due: d, kind: film.section === 'new' ? 'new' : 'catalog' });
-        items.push({ title: h.title, price: T.price, due: d });
+        items.push({ title: h.title, format, price: T.price, due: d });
       }
     }
     if (this.owned.length > KEPT_OWNED) this.owned.splice(0, this.owned.length - KEPT_OWNED);
@@ -133,8 +135,11 @@ export class Counter extends Emitter {
 
   // The slots whose boxes are off the shelf, by you: in your hands, or out
   // at home with you.
-  taken() {
-    return new Set([...this.hands.map((h) => h.key), ...this.out.map((o) => o.key)]);
+  taken(atSlot) {
+    return new Set([
+      ...this.hands.map((h) => h.key),
+      ...this.out.filter((o) => !atSlot || sameCopy(atSlot(o.key), o)).map((o) => o.key),
+    ]);
   }
 
   serialize() {

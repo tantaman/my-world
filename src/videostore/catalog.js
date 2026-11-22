@@ -2,15 +2,13 @@
 // world's seed like everything else, so everyone in a world browses the same
 // shop, with the same tapes in the same places.
 //
-// None of them is a real film. Each genre has a grammar for its titles (an
+// New Releases and Staff Picks draw from a fixed lineup of real films.
+// Each genre also has a grammar for its generated titles (an
 // action film is a hard word and a harder one; a horror film is a night, a
 // place and something in it), and for the back of the box: a tagline, a few
 // lines of what it's about, who's in it, who made it, its rating and running
 // time, and a quote from a critic. What its cover looks like is a few choices
 // (a motif, colours, where the title goes) that covers.js draws.
-//
-// The shop is in 1997 (STORE.year): the new releases came out that year, and
-// nothing on the shelves is newer.
 //
 //   const cat = new Catalog(seed)
 //   cat.films              every film: { id, title, genre, section, year,
@@ -25,9 +23,11 @@
 
 import { mulberry32 } from '../noise.js';
 import { FACES, SECTIONS, fillOrder } from './floorplan.js';
+import { LINEUP } from './lineup.js';
 
-export const STORE = { name: 'Rewind Video', year: 1997, motto: 'Make it a Rewind night!' };
+export const STORE = { name: 'Rewind Video', year: 2004, motto: 'Make it a Rewind night!' };
 const SALT = 0x5ee7a9e;
+const LEGACY_NEW_YEAR = 1997;
 
 // The people who work there, and what each puts on their end of an aisle.
 export const STAFF = [
@@ -410,7 +410,7 @@ export const GENRES = {
   },
 };
 
-// The new releases are whatever came out this year, of any of these.
+// Genres for the generated stock.
 const NEW_GENRES = [['action', 4], ['comedy', 4], ['thriller', 3], ['drama', 3], ['horror', 2], ['scifi', 3], ['romance', 2], ['family', 2]];
 
 // ── A film ──────────────────────────────────────────────────────────────────
@@ -501,6 +501,7 @@ function makeFilm(id, genre, rnd, { year = null, section } = {}) {
     title,
     genre,
     section,
+    format: 'VHS',
     year: y,
     rating: weighted(G.rating, rnd),
     mins: between(G.mins[0], G.mins[1], rnd),
@@ -525,6 +526,31 @@ function makeFilm(id, genre, rnd, { year = null, section } = {}) {
     film.means = means;
   }
   return film;
+}
+
+const byTitle = (a, b) => {
+  const ka = sortKey(a.title);
+  const kb = sortKey(b.title);
+  return ka < kb ? -1 : ka > kb ? 1 : 0;
+};
+
+function realFilm([tmdbId, title, year, genre], section, format) {
+  const rnd = mulberry32(tmdbId);
+  const C = GENRES[genre].cover;
+  return {
+    // The old generated IDs are small dense integers. Leave their range
+    // available for old saves and key real rentals by title edition.
+    id: 10000 + tmdbId * 2 + Number(format === 'DVD'),
+    tmdbId, title, year, genre, section, format, copies: 1,
+    cover: {
+      motif: pick(C.motifs, rnd),
+      bg: pick(C.bgs, rnd),
+      ink: pick(C.inks, rnd),
+      layout: Math.floor(rnd() * 4),
+      bw: genre === 'classics' && year < 1958,
+      seed: tmdbId,
+    },
+  };
 }
 
 // ── The shop's stock ─────────────────────────────────────────────────────────
@@ -584,6 +610,7 @@ export class Catalog {
         this._shelve(section, list, films);
       }
     }
+    this.ids = new Map(this.films.map((film) => [film.id, film]));
   }
 
   // Alphabetical, across a section's faces in turn, bay by bay.
@@ -622,8 +649,17 @@ export class Catalog {
         }
       }
     }
-    const films = runs.map(() => fresh(weighted(NEW_GENRES, rnd), { year: STORE.year, section: 'new' }));
-    films.sort((a, b) => (sortKey(a.title) < sortKey(b.title) ? -1 : 1));
+    const films = runs.map((_, i) => {
+      // Consume the same draws as the original shop so the other aisles
+      // keep the same generated titles and IDs for existing worlds.
+      const former = fresh(weighted(NEW_GENRES, rnd), { year: LEGACY_NEW_YEAR, section: 'new' });
+      const entry = LINEUP.new[Math.floor(i / 2)];
+      if (!entry) return former;
+      const film = realFilm(entry, 'new', i % 2 === 0 ? 'DVD' : 'VHS');
+      this.films[former.id] = film;
+      return film;
+    });
+    films.sort(byTitle);
     this.bySection.set('new', films);
     runs.forEach((run, i) => {
       const f = films[i];
@@ -640,12 +676,16 @@ export class Catalog {
       const who = STAFF[face.staff % STAFF.length];
       const films = [];
       for (let i = 0; i < face.cols * face.rows; i++) {
-        const f = fresh(pick(who.likes, rnd), { section: 'picks' });
-        f.staff = who.name;
-        f.note = pick(who.says, rnd);
-        films.push(f);
+        const former = fresh(pick(who.likes, rnd), { section: 'picks' });
+        const note = pick(who.says, rnd);
+        const entry = LINEUP[who.name][i];
+        const film = entry ? realFilm(entry, 'picks', i % 3 === 0 ? 'DVD' : 'VHS') : former;
+        film.staff = who.name;
+        film.note = entry ? pick(['I always come back to this one.', 'A favorite from my shelf at home.', 'Worth a second watch.'], mulberry32(film.tmdbId)) : note;
+        this.films[former.id] = film;
+        films.push(film);
       }
-      films.sort((a, b) => (sortKey(a.title) < sortKey(b.title) ? -1 : 1));
+      films.sort(byTitle);
       fillOrder(face).forEach(([col, row], k) => this._put({ face: face.id, col, row }, films[k]));
       all.push(...films);
     }
@@ -657,7 +697,7 @@ export class Catalog {
   }
 
   byId(id) {
-    return this.films[id] || null;
+    return this.ids.get(id) || null;
   }
 
   slotsOf(id) {

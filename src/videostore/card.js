@@ -32,7 +32,7 @@ export class Card {
     el.hidden = true;
     el.innerHTML = `
       <div class="box">
-        <div class="front"><canvas width="${BIG.w}" height="${BIG.h}"></canvas><div class="title"></div><div class="sticker"></div></div>
+        <div class="front"><canvas width="${BIG.w}" height="${BIG.h}"></canvas><div class="title"></div><div class="sticker"></div><div class="format"></div></div>
         <div class="back"></div>
       </div>
       <div class="hands"></div>
@@ -41,6 +41,7 @@ export class Card {
     this.canvas = el.querySelector('.front canvas');
     this.titleEl = el.querySelector('.front .title');
     this.sticker = el.querySelector('.front .sticker');
+    this.format = el.querySelector('.front .format');
     this.back = el.querySelector('.back');
     this.handsEl = el.querySelector('.hands');
     this.hintEl = el.querySelector('.hint');
@@ -49,6 +50,7 @@ export class Card {
     this.slip.hidden = true;
     document.body.appendChild(this.slip);
     this._shown = null;
+    this._details = new Map();
     this._others = '';
     this._slipTimer = 0;
   }
@@ -58,13 +60,15 @@ export class Card {
     this.el.hidden = false;
     if (this._shown !== film.id) {
       this._shown = film.id;
-      this._front(film);
-      this._back(film);
+      const details = this._details.get(film.tmdbId);
+      this._front(film, details?.data);
+      this._back(film, details?.data, !!film.tmdbId && !details?.done);
+      if (film.tmdbId && !details?.done) this._load(film);
     }
     const key = others.map((f) => f.id).join(',');
     if (key !== this._others) {
       this._others = key;
-      this.handsEl.innerHTML = others.length ? `<span>also in your hands</span>${others.map((f) => `<i title="${esc(f.title)}">${miniCover(f)}<b>${esc(f.title)}</b></i>`).join('')}` : '';
+      this.handsEl.innerHTML = others.length ? `<span>also in your hands</span>${others.map((f) => `<i title="${esc(f.title)}">${miniCover(f)}<b>${esc(f.title)} · ${f.format}</b></i>`).join('')}` : '';
     }
     if (this.hintEl.innerHTML !== hint) this.hintEl.innerHTML = hint;
   }
@@ -81,35 +85,69 @@ export class Card {
     this._slipTimer = setTimeout(() => (this.slip.hidden = true), ms);
   }
 
-  _front(film) {
+  async _load(film) {
+    const id = film.tmdbId;
+    let entry = this._details.get(id);
+    if (!entry) {
+      const request = fetch(`/api/videostore/movies/${id}`, { signal: AbortSignal.timeout(7000) })
+        .then((res) => res.status === 200 && res.headers.get('content-type')?.includes('application/json') ? res.json() : null)
+        .catch(() => null);
+      entry = { request };
+      this._details.set(id, entry);
+    }
+    const data = await entry.request;
+    entry.data = data;
+    entry.done = true;
+    if (!data) this._details.delete(id);
+    if (this._shown === film.id) {
+      this._title(data?.title || film.title);
+      this._back(film, data);
+    }
+  }
+
+  _title(title) {
+    this.titleEl.textContent = title;
+    this.titleEl.classList.toggle('long', title.length > 22);
+  }
+
+  _front(film, details) {
     const ctx = this.canvas.getContext('2d');
     const img = ctx.createImageData(BIG.w, BIG.h);
     paintCover(film, img, 0, 0, BIG.w, BIG.h, { letters: false });
     ctx.putImageData(img, 0, 0);
     const T = titleBand(film);
-    this.titleEl.textContent = film.title;
+    this._title(details?.title || film.title);
     this.titleEl.style.color = css(T.text);
     this.titleEl.style.top = T.at === 'top' ? '0' : '';
     this.titleEl.style.bottom = T.at === 'top' ? '' : `${T.foot * 100}%`;
     this.titleEl.style.height = `${T.h * 100}%`;
-    this.titleEl.classList.toggle('long', film.title.length > 22);
+    this.el.classList.toggle('dvd', film.format === 'DVD');
+    this.format.textContent = film.format;
     const sticker = film.section === 'new' ? 'NEW!' : film.section === 'sale' ? '$9.99' : film.staff ? 'STAFF PICK' : '';
     this.sticker.textContent = sticker;
     this.sticker.hidden = !sticker;
   }
 
-  _back(film) {
+  _back(film, details, loading = false) {
     const T = termsOf(film);
     const price = T.buy ? `${money(T.price)} · yours to keep` : `${money(T.price)} · ${T.nights} ${T.nights === 1 ? 'night' : 'nights'}`;
+    const data = film.tmdbId ? details || {} : film;
     const lang = film.lang ? `<div class="lang">In ${film.lang} with English subtitles · <i>${esc(film.means)}</i></div>` : '';
     const note = film.note ? `<div class="note">${esc(film.staff)} says: “${esc(film.note)}”</div>` : '';
+    const cast = data.cast?.length ? `Starring <b>${data.cast.map(esc).join(', ')}</b>` : '';
+    const director = data.director ? `Directed by <b>${esc(data.director)}</b>` : '';
+    const facts = [film.year, film.format, data.mins && `${data.mins} min`, !film.tmdbId && (film.cover.bw ? 'black &amp; white' : 'color')].filter(Boolean);
+    const homeVideo = film.section === 'new' && data.homeYear ? `<div class="facts">U.S. home video · ${esc(data.homeYear)}</div>` : '';
+    const status = loading ? 'Loading film details…' : 'Film details are unavailable.';
     this.back.innerHTML = `
-      <div class="tagline">${esc(film.tagline)}</div>
-      <p class="blurb">${esc(film.blurb)}</p>
+      ${data.tagline ? `<div class="tagline">${esc(data.tagline)}</div>` : ''}
+      ${data.blurb ? `<p class="blurb">${esc(data.blurb)}</p>` : ''}
+      ${film.tmdbId && !details ? `<p class="blurb status">${status}</p>` : ''}
       ${lang}
-      <div class="credits">Starring <b>${film.cast.map(esc).join(', ')}</b><br>Directed by <b>${esc(film.director)}</b></div>
-      <div class="facts"><span class="rating">${film.rating}</span>${film.year} · ${film.mins} min · ${film.cover.bw ? 'black &amp; white' : 'color'}</div>
-      <div class="quote"><span class="stars">${STARS(film.stars)}</span> “${esc(film.quote.text)}”<small>— ${esc(film.quote.by)}</small></div>
+      ${cast || director ? `<div class="credits">${[cast, director].filter(Boolean).join('<br>')}</div>` : ''}
+      <div class="facts">${data.rating ? `<span class="rating">${esc(data.rating)}</span>` : ''}${facts.join(' · ')}</div>
+      ${homeVideo}
+      ${film.quote ? `<div class="quote"><span class="stars">${STARS(film.stars)}</span> “${esc(film.quote.text)}”<small>— ${esc(film.quote.by)}</small></div>` : ''}
       ${note}
       <div class="price">${price}</div>`;
   }
@@ -137,13 +175,14 @@ function miniCover(film) {
 //   r       the checkout (browse.js)
 //   number  your membership number
 export function receiptHtml(r, number, when = (t) => new Date(t).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })) {
+  const farewell = r.items.some((i) => i.format === 'VHS') ? 'Be kind, please rewind!' : 'Thanks for renting with Rewind!';
   const rows = r.items
-    .map((i) => `<div class="row"><span>${esc(i.title)}</span><b>${money(i.price)}</b></div><div class="sub">${i.buy ? 'previously viewed · yours to keep' : `due back ${when(i.due)} by midnight`}</div>`)
+    .map((i) => `<div class="row"><span>${esc(i.title)}</span><b>${money(i.price)}</b></div><div class="sub">${i.format} · ${i.buy ? 'previously viewed · yours to keep' : `due back ${when(i.due)} by midnight`}</div>`)
     .join('');
   return `
     <div class="head">${esc(STORE.name.toUpperCase())}</div>
     <div class="sub">member no. ${esc(number)}</div>
     <hr>${rows}<hr>
     <div class="row total"><span>TOTAL</span><b>${money(r.total)}</b></div>
-    <div class="foot">${r.buy ? 'Enjoy!' : 'Be kind, please rewind!'}</div>`;
+    <div class="foot">${r.buy ? 'Enjoy!' : farewell}</div>`;
 }

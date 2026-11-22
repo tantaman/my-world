@@ -99,23 +99,35 @@ export default async function ({ page, step, key, frames, shot }) {
       return { destination: port.flight.destination, phase: port.phase, match: !!port.arena, station: !!port.station };
     });
     assert.deepEqual(trip, { destination: 'ds9', phase: 'orbit', match: false, station: true });
-    await frames(30);
-    await shot('deep-space-9');
-    await key('Enter');
-    assert.ok(await page.evaluate(() => world.spaceport.station.inside), 'docked on the Promenade');
+    await frames(4);
+    const hiker = () => page.evaluate(() => {
+      const s = world.spaceport.station, c = world.player.character;
+      return {
+        docked: s.inside && c.root.visible && c.root.parent === s.scene,
+        feet: c.root.position.toArray(), follow: c.root.position.distanceTo(s.camera.position),
+        stride: c.phase, walking: c.moveBlend,
+      };
+    });
+    const before = await hiker();
+    assert.ok(before.docked && before.follow > 2, 'arrive on foot with the camera behind the player character');
     await shot('promenade');
-    const before = await page.evaluate(() => world.spaceport.station.pos.toArray());
     await page.keyboard.down('KeyW');
     await frames(30);
+    const after = await hiker();
+    assert.ok(after.docked && after.stride > before.stride && after.walking > 0.3, 'the hiker walks in the station scene');
+    assert.ok(Math.hypot(after.feet[0] - before.feet[0], after.feet[2] - before.feet[2]) > 0.3, 'walked along the Promenade');
     await page.keyboard.up('KeyW');
-    const after = await page.evaluate(() => world.spaceport.station.pos.toArray());
-    assert.ok(Math.hypot(after[0] - before[0], after[2] - before[2]) > 0.3, 'walked along the Promenade');
+    const stopped = await hiker();
     await page.getByRole('button', { name: /View exterior/ }).click();
-    assert.equal(await page.evaluate(() => world.spaceport.station.inside), false, 'back outside');
+    assert.equal(await page.evaluate(() => world.spaceport.station.inside), false, 'looking at the exterior');
+    await shot('deep-space-9');
+    await key('Enter');
+    assert.deepEqual((await hiker()).feet, stopped.feet, 'return to your spot on the deck');
     await key('KeyT');
     assert.equal(await page.evaluate(() => world.spaceport.phase), 'home');
     await page.evaluate(() => world.spaceport.hurry());
     await frames(4);
-    assert.ok(await page.evaluate(() => !world.spaceport.station && !world.player.aboard && !world.game.covered && document.querySelector('#space .station').hidden), 'home from the station');
+    assert.ok(await page.evaluate(() => !world.spaceport.station && !world.player.aboard && !world.game.covered && document.querySelector('#space .station').hidden
+      && world.player.character.root.visible && world.player.character.root.parent === world.scene), 'the hiker is home from the station');
   });
 }

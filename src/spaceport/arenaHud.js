@@ -80,7 +80,7 @@ export class ArenaHud {
   stationDeck(inside) {
     this.station.querySelector('small').textContent = inside ? 'Deep Space 9' : 'Bajoran system';
     this.station.querySelector('strong').textContent = inside ? 'Promenade' : 'Deep Space 9';
-    this.deckButton.querySelector('span').textContent = inside ? 'View exterior' : 'Dock at Promenade';
+    this.deckButton.querySelector('span').textContent = inside ? 'View exterior' : 'Return to Promenade';
   }
 
   glare(v) {

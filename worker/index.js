@@ -15,10 +15,12 @@
 //   GET    /api/worlds/:id/voice             how to reach each other, to talk       │ only
 //   GET    /api/worlds/:id/history           the whole copies still kept            │
 //   GET    /api/worlds/:id/revisions/:gen    one of them, as a frame                ┘
+//   GET    /api/videostore/movies/:id        Rewind Video's film details
 //
 // Who is signed in is the world's business too (members.js); this only
 // says whether the site is on https, which decides how the cookie is set.
 
+import { movieDetails } from './movies.js';
 export { World } from './world.js';
 
 const ID_LENGTH = 10;
@@ -28,10 +30,12 @@ const ID_ALPHABET = '23456789bcdfghjkmnpqrstvwxyz';
 const ID_RE = /^[0-9a-z]{4,32}$/;
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return new Response('not found', { status: 404 });
     try {
+      const movie = url.pathname.match(/^\/api\/videostore\/movies\/(\d+)$/);
+      if (movie) return await movieDetails(request, env.TMDB_READ_ACCESS_TOKEN, ctx, movie[1]);
       return await route(request, env, url);
     } catch (err) {
       console.error('world api', err && err.stack ? err.stack : err);

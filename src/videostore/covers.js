@@ -357,9 +357,10 @@ export function paintCover(film, img, x0, y0, w, h, { letters = true } = {}) {
   const by = T.at === 'top' ? 0 : h - bh - Math.round(h * T.foot);
   for (let y = by; y < by + bh; y++) for (let x = 0; x < w; x++) p.dot(x, y, T.band);
   if (letters) writeTitle(p, film.title, by, bh, T.text);
-  // a strip along the foot: the studio, and the rating
+  // DVD cases have a blue band along the foot.
   const sy = h - Math.max(1, Math.round(h * 0.04));
-  for (let y = sy; y < h; y++) for (let x = 0; x < w; x++) p.dot(x, y, BLACK);
+  const trim = film.format === 'DVD' ? [80, 165, 224] : BLACK;
+  for (let y = sy; y < h; y++) for (let x = 0; x < w; x++) p.dot(x, y, trim);
   // black and white, for the old ones
   if (C.bw) {
     const d = img.data;
@@ -433,19 +434,22 @@ export class Atlas {
     this.width = ATLAS_COLS * COVER.w;
     this.height = rows * COVER.h;
     this.data = new Uint8Array(this.width * this.height * 4);
+    this.cells = new Map();
   }
 
   paint(films, from = 0, to = films.length) {
     const img = { width: this.width, data: this.data };
     for (let i = from; i < Math.min(to, films.length); i++) {
       const f = films[i];
-      paintCover(f, img, (f.id % ATLAS_COLS) * COVER.w, Math.floor(f.id / ATLAS_COLS) * COVER.h, COVER.w, COVER.h);
+      this.cells.set(f.id, i);
+      paintCover(f, img, (i % ATLAS_COLS) * COVER.w, Math.floor(i / ATLAS_COLS) * COVER.h, COVER.w, COVER.h);
     }
   }
 
   rect(id, out = {}) {
-    const x = (id % ATLAS_COLS) * COVER.w;
-    const y = Math.floor(id / ATLAS_COLS) * COVER.h;
+    const i = this.cells.get(id);
+    const x = (i % ATLAS_COLS) * COVER.w;
+    const y = Math.floor(i / ATLAS_COLS) * COVER.h;
     out.u0 = x / this.width;
     out.u1 = (x + COVER.w) / this.width;
     out.v0 = y / this.height;

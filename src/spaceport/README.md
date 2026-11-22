@@ -15,15 +15,15 @@ climbs away, until the sky goes white.
 
 ## Deep Space 9
 
-The rocket brings you past the station’s docking ring, six curved pylons and
-central Ops tower. The Bajoran wormhole glows beyond the hull. Move the mouse
-or press **A/D** to circle the station. **W/S** and the scroll wheel change
-your distance. Press **Enter** or click **Dock at Promenade** to go inside.
+The rocket docks and you step onto the Promenade near Quark’s. The camera
+follows your hiker. Walk with **W A S D**, hold **Shift** to run, turn the
+view with the mouse and use the scroll wheel to adjust the camera distance.
 
-Walk the Promenade with **W A S D** and look around with the mouse. Stop at
-Quark’s bar, the Replimat or the Bajoran shrine, or watch the docking ring
-through the observation windows. **Enter** takes you back to the exterior
-view. **T** flies you home from either view.
+Press **Enter** or click **View exterior** to see the docking ring, six curved
+pylons and central Ops tower against the Bajoran wormhole. Move the mouse or
+press **A/D** to circle the station. **W/S** and the scroll wheel change your
+distance. **Enter** returns you to the spot where you were walking.
+**T** flies you home from either view.
 
 ## The Orrery
 

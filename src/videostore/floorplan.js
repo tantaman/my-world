@@ -42,6 +42,7 @@ export const BACK = -9; // the inside of the back wall
 export const FRONT = 9; // the glass front
 export const CEILING = 4; // m from the floor to the ceiling tiles
 export const BOX = { w: 0.135, h: 0.24, d: 0.035 }; // a tape's box, a little bigger than life, to be read in pixels
+export const DVD_BOX = { w: 0.135, h: 0.19, d: 0.015 }; // standard DVD keep case, m
 export const SLOT = 0.17; // m along a shelf from one box to the next
 export const ROW = 0.36; // m up from one shelf to the next
 export const DOOR = { x0: -1.6, x1: 1.6 }; // the sliding doors in the glass front

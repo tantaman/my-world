@@ -39,7 +39,7 @@ import { FACES, FACE_BY_ID, DOOR, CLERK, QUEUE, RETURN_SLOT, BOX, ROW, aim, slot
 import { Catalog, STORE, STAFF } from './catalog.js';
 import { Atlas } from './covers.js';
 import { buildStore, makeHeldBox, DROP_BOX } from './store.js';
-import { Counter, HANDS, termsOf, money } from './browse.js';
+import { Counter, HANDS, termsOf, money, sameCopy } from './browse.js';
 import { Card, receiptHtml } from './card.js';
 import { shopSounds } from './sound.js';
 import { Body } from '../towns/people.js';
@@ -149,6 +149,7 @@ export function installVideostore(game) {
   // come near.
   let catalog = null;
   const films = () => catalog || (catalog = new Catalog(gen.seed));
+  const filmInSlot = (key) => films().slots.get(key);
   let atlas = null;
   let painted = 0;
   function paint() {
@@ -238,7 +239,7 @@ export function installVideostore(game) {
     let place = null;
     const asPlace = () => {
       if (place && place.visited === visited) return place;
-      place = { id: site.id, x: site.door.x, z: site.door.z, yaw: site.door.yaw, name: STORE.name, kind: 'video store', note: 'aisles and aisles of tapes: browse, and rent one for the night', glyph: GLYPH, visited, shape: [corners([-HALF_W - 0.25, BACK - 0.25, HALF_W + 0.25, FRONT])], ground: [corners(site.plan[0])] };
+      place = { id: site.id, x: site.door.x, z: site.door.z, yaw: site.door.yaw, name: STORE.name, kind: 'video store', note: 'browse the VHS and DVD shelves and rent a movie for the night', glyph: GLYPH, visited, shape: [corners([-HALF_W - 0.25, BACK - 0.25, HALF_W + 0.25, FRONT])], ground: [corners(site.plan[0])] };
       return place;
     };
     map.places.addSource({
@@ -250,7 +251,7 @@ export function installVideostore(game) {
 
   // ── Standing it up ────────────────────────────────────────────────────────
   function build() {
-    built = buildStore(site, ground, { catalog: films(), atlas, hidden: counter.taken(), out: soldOut(), materials });
+    built = buildStore(site, ground, { catalog: films(), atlas, hidden: counter.taken(filmInSlot), out: soldOut(), materials });
     built.clerk = makeClerk();
     built.object.add(built.clerk.body.mesh);
     built.object.add(marker);
@@ -419,7 +420,7 @@ export function installVideostore(game) {
     best.key = `${best.face.id}:${best.col}:${best.row}`;
     best.film = film;
     best.gone = soldOut().has(film.id);
-    best.taken = counter.taken().has(best.key);
+    best.taken = counter.taken(filmInSlot).has(best.key);
     return best;
   }
 
@@ -460,7 +461,8 @@ export function installVideostore(game) {
     soon(0.35 + n * 0.4, () => sound.sfx('till'));
     soon(0.5 + n * 0.4, () => card.receipt(receiptHtml(r, counter.card.number), 8000));
     const day = r.due && new Date(r.due).toLocaleDateString(undefined, { weekday: 'long' });
-    say(r.buy ? `That’s ${money(r.total)}. ${n === 1 ? 'It’s' : 'They’re'} yours to keep!` : `That’s ${money(r.total)}. Due back ${day} by midnight. Be kind, rewind!`);
+    const farewell = r.items.some((item) => item.format === 'VHS') ? 'Be kind, rewind!' : 'Enjoy the movie!';
+    say(r.buy ? `That’s ${money(r.total)}. ${n === 1 ? 'It’s' : 'They’re'} yours to keep!` : `That’s ${money(r.total)}. Due back ${day} by midnight. ${farewell}`);
     return true;
   }
   function giveBack(atCounter) {
@@ -468,7 +470,7 @@ export function installVideostore(game) {
     if (!r) return false;
     r.items.forEach((item, i) => {
       soon(i * 0.35, () => sound.sfx('tape-drop'));
-      if (built) built.boxes.show(item.key, true);
+      if (built && sameCopy(filmInSlot(item.key), item)) built.boxes.show(item.key, true);
     });
     const late = r.items.filter((i) => i.late > 0);
     if (late.length) {
@@ -477,7 +479,7 @@ export function installVideostore(game) {
       if (atCounter) say(line);
       else hud.flash(`dropped ${r.items.length} in the returns · ${money(r.fees)} in late fees waiting for you inside`, 3600);
     } else if (atCounter) say(pick(SAYS.thanks));
-    else hud.flash(`dropped ${r.items.length === 1 ? '1 tape' : `${r.items.length} tapes`} in the returns · thanks!`, 2600);
+    else hud.flash(`dropped ${r.items.length === 1 ? '1 movie' : `${r.items.length} movies`} in the returns · thanks!`, 2600);
     return true;
   }
 
@@ -498,8 +500,8 @@ export function installVideostore(game) {
   };
 
   builder.idleWhile(() => where.inside && shown);
-  commands.describe({ group: 'VIDEO STORE', help: 'click', pad: ['PadRT'], label: 'take a tape off the shelf (three at a time) · at the counter: rent them' });
-  commands.describe({ group: 'VIDEO STORE', help: 'right-click', pad: ['PadLT'], label: 'put the tape in your hand back' });
+  commands.describe({ group: 'VIDEO STORE', help: 'click', pad: ['PadRT'], label: 'take a case off the shelf (three at a time) · rent at the counter' });
+  commands.describe({ group: 'VIDEO STORE', help: 'right-click', pad: ['PadLT'], label: 'put the case in your hand back' });
 
   // Out of the shop, toDoor metres from its doors: the camera and the
   // forest's sounds as they were, and any tapes you haven't rented back on
@@ -516,7 +518,7 @@ export function installVideostore(game) {
     if (toDoor < 5) {
       sound.sfx('gate-alarm');
       soon(0.5, () => say(pick(SAYS.alarm)));
-      soon(0.9, () => hud.flash('the tapes go back on the shelf: rent them at the counter first', 3000));
+      soon(0.9, () => hud.flash('the movies go back on the shelf: rent them at the counter first', 3000));
     }
     putBackAll();
   }
@@ -566,7 +568,7 @@ export function installVideostore(game) {
       const toDoor = Math.hypot(where.x, where.z - FRONT);
       if (!arrived && toDoor < ARRIVE && !where.inside) {
         arrived = true;
-        hud.flash(`${STORE.name} · walk in and browse: take a tape off the shelf, rent it at the counter`, 4200);
+        hud.flash(`${STORE.name} · pick a VHS or DVD and rent it at the counter`, 4200);
         if (!visited) {
           visited = true;
           save.touch();
@@ -648,21 +650,21 @@ export function installVideostore(game) {
       a = aimed();
       mark(a && !a.taken ? a : null);
       if (a && !a.taken && !a.gone) {
-        cue = `<b>click</b> take down <i>${esc(a.film.title)}</i> (${a.film.year})${n ? ` · ${n + 1} of ${HANDS}` : ''}`;
+        cue = `<b>click</b> take down <i>${esc(a.film.title)}</i> (${a.film.year}) · ${a.film.format}${n ? ` · ${n + 1} of ${HANDS}` : ''}`;
         act = () => take(a);
       } else if (a && a.gone) {
-        cue = `every copy of <i>${esc(a.film.title)}</i> is out · try again tomorrow`;
+        cue = `every ${a.film.format} copy of <i>${esc(a.film.title)}</i> is out · try again tomorrow`;
       } else if (n && atCounter()) {
         const total = counter.hands.reduce((s, h) => s + termsOf(films().byId(h.id) || { section: h.section }).price, 0);
         cue = `<b>click</b> ${n === 1 ? 'rent it' : `rent all ${n}`} · ${money(total)}`;
         act = rent;
       } else if (returning) {
-        cue = `<b>click</b> return ${counter.out.length === 1 ? 'your tape' : `your ${counter.out.length} tapes`}`;
+        cue = `<b>click</b> return ${counter.out.length === 1 ? 'your movie' : `your ${counter.out.length} movies`}`;
         act = () => giveBack(true);
       } else if (n) cue = `<b>right-click</b> put <i>${esc(films().byId(counter.hands[n - 1].id).title)}</i> back · rent at the counter`;
     } else if (returning) {
       mark(null);
-      cue = `<b>click</b> drop ${counter.out.length === 1 ? 'your tape' : `your ${counter.out.length} tapes`} in the returns`;
+      cue = `<b>click</b> drop ${counter.out.length === 1 ? 'your movie' : `your ${counter.out.length} movies`} in the returns`;
       act = () => giveBack(false);
     }
     if (cue) {

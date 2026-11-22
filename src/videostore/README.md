@@ -11,10 +11,10 @@ and the HUD leads you to the doors on foot.
 The doors slide open as you walk up, the chime goes, and the clerk behind
 the counter looks up and says hello. Then it's the aisles:
 
-- **New releases**, all along the back wall: the same box six or eight times
-  over on a shelf, row on row, and a couple of the hot ones with every copy
-  out (a card in each slot; try again tomorrow: which ones are out changes
-  every day).
+- **New releases**, all along the back wall, with late-2004 stock like
+  *Spider-Man 2* and *Shrek 2* on VHS and DVD. Copies of an edition stand
+  side by side. The shop runs out of a couple of editions each day and puts
+  a card in their slots.
 - **A genre to each side of each aisle**, with a sign over it: action,
   thrillers, comedy, horror, sci-fi, drama, foreign films, romance, classics
   (some in black and white), westerns and cult films, and low shelves of
@@ -28,12 +28,11 @@ the counter looks up and says hello. Then it's the aisles:
   films by the door, a television over the till, and the rule on the wall
   behind it: *be kind, please rewind.*
 
-None of the films is real. There are a couple of thousand of them, grown
-from the world's seed like everything else (so everyone in a world browses
-the same shop), each with a title in its genre's way of naming things, a
-pixel-painted cover, and a back of the box: a tagline, what it's about,
-who's in it and who directed it, the year, the rating, how long it runs, a
-critic's stars and a quote. It's 1997 in there.
+It's late 2004 in there. The New Releases and Staff Picks shelves carry real
+movies in pixel-painted cases. Pick one up to read its TMDB synopsis, cast,
+director, runtime and U.S. rating where available. The genre aisles and sale
+endcaps carry a couple of thousand fictional VHS titles grown from the world's
+seed. Everyone in the same world sees the same shelves.
 
 | | |
 |---|---|
@@ -55,10 +54,11 @@ real calendar: the receipt says which day. Bring it back late and there's a
 late fee for every day ($1.50 a day for a new release, $1 otherwise), which
 the clerk lets slide this once (there's no money in the forest). Your
 membership card, what you have out and what you've bought are yours, saved;
-a tape you have out leaves a gap on the shelf until you bring it back.
+a movie you have out leaves a gap on the shelf until you bring it back.
+Renting a DVD leaves the VHS copies available.
 
-Walk out through the security gate with a tape you haven't rented, and it
-goes off; the tapes go back on the shelf.
+Walk out through the security gate with a movie you haven't rented and the
+alarm goes off. The movies go back on the shelf.
 
 **Where it is** is grown from the seed and the land, like the old places
 (`site.js`): the flattest dry ground in a ring round where you first arrive,
@@ -84,18 +84,36 @@ world.videostore.counter           // what's in your hands, what you have out
 world.videostore.allOut()          // the new releases with every copy out today
 ```
 
+## TMDB setup
+
+Get the API Read Access Token from your TMDB account settings. Set
+`TMDB_READ_ACCESS_TOKEN` in the project's ignored `.dev.vars` file and run
+`npm run api` with `npm run dev`, or run `npm run serve`. On a hosted Worker
+the same variable is a Worker secret. [TMDB API authentication](https://developer.themoviedb.org/docs/authentication-application)
+
+The Worker looks up only the films in `lineup.js` and caches successful results
+for a day. The store can still open and rent movies when only the titles,
+formats and years are available. VHS and DVD rentals use separate saved IDs
+derived from the TMDB movie ID. Older rentals stay on the member's account
+until returned.
+
+The TMDB logo in the game's Credits is the original artwork by Travis Bell,
+distributed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+[Original logo file and attribution](https://commons.wikimedia.org/wiki/File:Tmdb.new.logo.svg)
+
 ## Files
 
 ```
 index.js        plugs it in: the store stood up as you come near, browsing, the counter, the doors, on the map
 site.js         where the store is, grown from the seed and the land
 floorplan.js    what's where inside: the shelving and its slots, the counter, the signs, what's solid
-catalog.js      the films: titles, backs of boxes, covers' choices, grown from the seed; which slot each is in
+catalog.js      generated films, VHS and DVD editions, and which slots they fill
+lineup.js       the curated 2004 lineup and each film's TMDB ID
 covers.js       a cover painted in pixels, small for the shelves (all of them in one atlas) and big in hand
 font.js         letters made of little squares, for the signs and the titles on the covers
 store.js        what it looks like: the building, the car park, the sign, the shelving and its boxes, the counter
 browse.js       the rules: what's in your hands, renting, due dates, returning, late fees
-card.js         the box in your hands on the screen, front and back, and the till receipt
+card.js         the box in your hands, its TMDB details, and the till receipt
 sound.js        the music from the ceiling and the strip lights' hum, the chime, the till, the gate, carpet underfoot
 videostore.css  the card and the receipt
 ```

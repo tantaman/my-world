@@ -12,6 +12,13 @@
 import assert from 'node:assert/strict';
 
 export default async function ({ page, step, key, frames, shot }) {
+  let detailRequests = 0;
+  await page.route('**/api/videostore/movies/*', (route) => {
+    if (new URL(route.request().url()).pathname.endsWith('/558')) detailRequests++;
+    return route.fulfill({
+      json: { tagline: '', blurb: 'A movie synopsis from the catalog.', mins: 117, rating: 'PG-13', cast: ['Lead Actor'], director: 'Movie Director', homeYear: '2004' },
+    });
+  });
   const store = () =>
     page.evaluate(() => {
       const v = world.videostore;
@@ -35,6 +42,9 @@ export default async function ({ page, step, key, frames, shot }) {
   };
 
   await step('to the video store, from the map', async () => {
+    await key('KeyH');
+    await page.waitForFunction(() => document.querySelector('#help.open .attribution img')?.naturalWidth > 0);
+    await key('KeyH');
     const site = await page.evaluate(() => {
       const s = world.videostore.site;
       return s && { id: s.id, door: s.door };
@@ -79,6 +89,24 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.evaluate(() => T.tap('alt'));
     assert.deepEqual((await store()).hands, [], 'right-click puts it back');
     assert.equal(await page.evaluate(() => world.videostore.aimed().taken), false, 'on the shelf again');
+    const editions = await page.evaluate(() => {
+      const cat = world.videostore.catalog;
+      return cat.section('new')
+        .filter((f) => f.tmdbId === 558)
+        .map((f) => ({ format: f.format, slot: cat.slotsOf(f.id)[0] }));
+    });
+    assert.deepEqual(editions.map((f) => f.format).sort(), ['DVD', 'VHS']);
+    for (const { format, slot } of editions) {
+      await page.evaluate(({ face, col, row }) => world.videostore.look(face, col, row), slot);
+      await frames(6);
+      assert.match((await store()).prompt, new RegExp(`Spider-Man 2.*${format}`));
+      await page.evaluate(() => T.tap('use'));
+      await page.waitForFunction(() => document.querySelector('#vhs .back .credits')?.textContent.includes('Movie Director'));
+      assert.equal(await page.locator('#vhs .format').textContent(), format);
+      if (format === 'DVD') await shot('real DVD details');
+      await page.evaluate(() => T.tap('alt'));
+    }
+    assert.equal(detailRequests, 1, 'VHS and DVD share the movie details');
     // two to rent: one off the new release wall, one sci-fi
     const out = new Set(await page.evaluate(() => world.videostore.allOut()));
     let took = [];
@@ -120,7 +148,7 @@ export default async function ({ page, step, key, frames, shot }) {
 
   await step('drop them in the returns', async () => {
     await standAt(3.1, 10.9, Math.PI);
-    assert.match((await store()).prompt, /drop your 2 tapes in the returns/, 'by the drop box, a click would return them');
+    assert.match((await store()).prompt, /drop your 2 movies in the returns/, 'by the drop box, a click would return them');
     await page.evaluate(() => T.tap('use'));
     assert.deepEqual((await store()).out, [], 'returned');
   });

@@ -26,6 +26,7 @@ export class Hud {
     this.coords = document.getElementById('coords');
     this.hint = document.getElementById('hint');
     this.help = document.getElementById('help');
+    this.helpControls = document.getElementById('help-controls');
     this.toast = document.getElementById('toast');
     this.debug = document.getElementById('debug');
     this.track = document.getElementById('track');
@@ -114,13 +115,14 @@ export class Hud {
   // The help panel (H), written from the keys that are actually bound.
   // groups: [{ group, rows: [{ help, label, pad? }] }], see Commands.help().
   renderHelp(groups) {
-    if (!this.help) return;
-    this.help.textContent = '';
+    const controls = this.helpControls;
+    if (!controls) return;
+    controls.replaceChildren();
     groups.forEach((g, i) => {
-      if (i) this.help.appendChild(document.createElement('hr'));
+      if (i) controls.appendChild(document.createElement('hr'));
       const h = document.createElement('h2');
       h.textContent = g.group;
-      this.help.appendChild(h);
+      controls.appendChild(h);
       for (const r of g.rows) {
         const row = document.createElement('div');
         row.className = 'row';
@@ -131,7 +133,7 @@ export class Hud {
         const what = document.createElement('span');
         what.textContent = r.label;
         row.append(k, what);
-        this.help.appendChild(row);
+        controls.appendChild(row);
       }
     });
   }

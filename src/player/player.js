@@ -196,6 +196,8 @@ export class Player extends Emitter {
     // don't move you while it does (it may read them itself, as skis do,
     // before a jump is taken from you so you don't jump off): each frame it
     // says where you are, and the camera comes along and turns as it turns.
+    //   posesCharacter  true while the ride places and animates the hiker
+    //                   in a separate scene
     //   place(out, dt)  fills out.x, out.y, out.z (where your feet are),
     //                   out.yaw (which way you face), and if it likes:
     //     heading    which way you're going, for the camera to turn with,
@@ -717,10 +719,12 @@ export class Player extends Emitter {
     this.under = this.surface = this.prone = this.pitch = 0;
     this.submerged = false;
     this.character.swim(0);
-    const root = this.character.root;
-    root.position.copy(this.pos);
-    root.rotation.y = this.yaw;
-    this.character.update(dt, 0, this.grounded, this.vel.y, 0);
+    if (!this.aboard?.posesCharacter) {
+      const root = this.character.root;
+      root.position.copy(this.pos);
+      root.rotation.y = this.yaw;
+      this.character.update(dt, 0, this.grounded, this.vel.y, 0);
+    }
     this.updateCamera(dt, false);
   }
 

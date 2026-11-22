@@ -1,13 +1,16 @@
-// A flight past the station and a walk round its Promenade. The camera and
-// both decks live here so a visit can never move the forest's hiker or gun.
+// The rocket docks on the Promenade. The hiker walks in station coordinates
+// while the capsule keeps its place in the forest for the flight home.
 import * as THREE from 'three';
 import { makeStars } from './stars.js';
 import { NOISE_GLSL } from '../render/glsl.js';
 import { buildStationHull } from './stationHull.js';
 import { buildPromenade, WALK } from './promenade.js';
+import { wrapAngle } from '../core/geom.js';
 
 const SPEED = 3.9; // m/s walking
-const EYE = 1.65;
+const DECK_Y = 4.8;
+const FOLLOW = 3.4; // m behind the hiker
+const LOOK_HEIGHT = 1.25; // m above the soles
 const clamp = THREE.MathUtils.clamp;
 
 function wormhole() {
@@ -58,39 +61,60 @@ export class StationVisit {
     stars.material.size = 1.5;
     this.scene.add(stars, this.rift, this.hull.core, this.hull.rings);
     const sun = new THREE.DirectionalLight(0xffead6, 3.0);
-    sun.position.set(-1.1, 1.5, 1.2);
+    sun.position.set(-1.1, 1.5, 1.2).multiplyScalar(32);
+    // Cover the public deck so the boots cast a shadow as each foot lands.
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    Object.assign(sun.shadow.camera, { left: -23, right: 23, top: 23, bottom: -23, near: 25, far: 110 });
+    sun.shadow.camera.updateProjectionMatrix();
+    sun.shadow.normalBias = 0.018;
     const rim = new THREE.DirectionalLight(0xadceff, 2.0);
     rim.position.set(1, 0.5, -1.3);
     this.scene.add(sun, rim, new THREE.HemisphereLight(0xc8d1e0, 0x9791ac, 1.25));
+    this.promenade = buildPromenade();
+    this.promenade.object.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
+    this.promenade.object.position.y = DECK_Y;
+    this.scene.add(this.promenade.object);
     this.pos = new THREE.Vector3();
-    this.reset();
   }
 
-  reset() {
+  arrive(character, footstep) {
+    this.character = character;
+    this.home = { scene: character.root.parent, ground: character.groundAt, footstep: character.onFootstep, visible: character.root.visible };
+    this.scene.add(character.root);
+    character.groundAt = null; // the Promenade floor is level
+    character.onFootstep = footstep;
+    this.pos.set(0.7, DECK_Y, 18.1);
+    this.yaw = -1.03;
+    this.pitch = -0.18;
+    character.root.position.copy(this.pos);
+    character.root.rotation.y = this.yaw + Math.PI;
+    this.follow = FOLLOW;
     this.bearing = -0.32;
     this.elevation = 0.35;
     this.range = 298; // m from the core, easing in on arrival
     this.targetRange = 252;
     this.time = 0;
-    this.setDeck(false);
+    this.setDeck(true);
+  }
+
+  depart() {
+    const c = this.character;
+    this.home.scene.add(c.root);
+    c.groundAt = this.home.ground;
+    c.onFootstep = this.home.footstep;
+    c.root.visible = this.home.visible;
+    this.character = null;
+    this.home = null;
   }
 
   setDeck(inside) {
-    if (inside && !this.promenade) {
-      this.promenade = buildPromenade();
-      this.promenade.object.position.y = 4.8;
-      this.scene.add(this.promenade.object);
-    }
     this.inside = inside;
     this.hull.core.visible = !inside;
-    if (this.promenade) this.promenade.object.visible = inside;
+    this.promenade.object.visible = inside;
+    this.character.root.visible = inside;
     this.camera.fov = inside ? 68 : 43;
     this.camera.updateProjectionMatrix();
-    if (inside) {
-      this.pos.set(0.7, this.promenade.object.position.y + EYE, 19.4);
-      this.yaw = -0.76;
-      this.pitch = 0.05;
-    }
     this.placeCamera();
   }
 
@@ -100,7 +124,9 @@ export class StationVisit {
     const { turn, move } = controls;
     if (this.inside) {
       this.yaw += turn.yaw;
-      this.pitch = clamp(this.pitch + turn.pitch, -1.35, 1.35);
+      this.pitch = clamp(this.pitch + turn.pitch, -0.95, 0.32);
+      this.follow = clamp(this.follow + zoom * 0.35, 2, 4.5);
+      const wasX = this.pos.x, wasZ = this.pos.z;
       const distance = SPEED * (running ? 1.7 : 1) * dt / Math.max(1, Math.hypot(move.x, move.y));
       const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
       this.pos.x += (move.x * cos - move.y * sin) * distance;
@@ -110,6 +136,17 @@ export class StationVisit {
       const k = clamp(r, WALK.inner, WALK.outer) / r;
       this.pos.x *= k;
       this.pos.z *= k;
+      const dx = this.pos.x - wasX, dz = this.pos.z - wasZ;
+      const speed = dt > 0 ? Math.hypot(dx, dz) / dt : 0;
+      const c = this.character;
+      let turnRate = 0;
+      if (speed > 0.05) {
+        const turn = wrapAngle(Math.atan2(dx, dz) - c.root.rotation.y) * (1 - Math.exp(-12 * dt));
+        c.root.rotation.y += turn;
+        turnRate = turn / dt;
+      }
+      c.root.position.copy(this.pos);
+      c.update(dt, speed, true, 0, turnRate);
       this.promenade.update(dt, this.pos);
     } else {
       this.bearing += turn.yaw - (move.x * 0.8 + 0.025) * dt;
@@ -123,8 +160,22 @@ export class StationVisit {
   placeCamera() {
     const cam = this.camera;
     if (this.inside) {
-      cam.position.copy(this.pos);
-      cam.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
+      // Stop the camera before the first window or shopfront along its ray.
+      // Lift it over the shoulder when a wall is directly behind the hiker.
+      const x = Math.sin(this.yaw), z = Math.cos(this.yaw);
+      const along = this.pos.x * x + this.pos.z * z;
+      const r2 = this.pos.x ** 2 + this.pos.z ** 2;
+      const inner = WALK.inner - 0.16, outer = WALK.outer + 0.16;
+      const innerHit = along * along + inner * inner - r2;
+      const wall = along < 0 && innerHit >= 0
+        ? -along - Math.sqrt(innerHit)
+        : -along + Math.sqrt(along * along + outer * outer - r2);
+      const wanted = this.follow * Math.cos(this.pitch);
+      const back = Math.min(wanted, wall);
+      const height = Math.max(0.4, LOOK_HEIGHT - this.follow * Math.sin(this.pitch));
+      const lift = 1 - Math.min(1, back / 1.6);
+      cam.position.set(this.pos.x + x * back, DECK_Y + Math.min(4, height + lift * Math.max(0, 3.2 - height)), this.pos.z + z * back);
+      cam.lookAt(this.pos.x, DECK_Y + LOOK_HEIGHT, this.pos.z);
     } else {
       // Keep the two pylons at the sides in frame on a tall screen too.
       const r = this.range * Math.max(1, 1.35 / cam.aspect);

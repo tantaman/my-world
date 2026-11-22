@@ -124,6 +124,7 @@
       #toast.show { opacity: 1; }
       #help {
         position: absolute; right: calc(16px + var(--inset-r)); top: calc(16px + var(--inset-t)); width: min(300px, calc(100vw - 32px)); padding: 14px 16px; font-size: 11.5px;
+        max-height: calc(100dvh - 76px - var(--inset-t) - var(--inset-b)); overflow-y: auto;
         line-height: 1.75; background: var(--panel); border: 1px solid var(--line); opacity: 0; transform: translateY(-6px);
         transition: opacity 0.2s, transform 0.2s; pointer-events: none;
       }
@@ -136,6 +137,9 @@
       body.pad button:focus, body.pad input:focus, body.pad a:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
       #help span:last-child { color: var(--ink-dim); text-align: right; }
       #help hr { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
+      #help .attribution { display: flex; align-items: center; gap: 12px; }
+      #help .attribution img { display: block; width: 50px; height: auto; }
+      #help .attribution p { margin: 0; color: var(--ink-dim); }
       #corner {
         position: absolute; right: calc(16px + var(--inset-r)); bottom: calc(12px + var(--inset-b)); display: flex; gap: 8px; pointer-events: auto;
       }
@@ -225,8 +229,18 @@
         <button id="settings-btn" type="button" aria-label="Settings">settings</button>
         <button id="help-btn" type="button" aria-label="Show controls">?</button>
       </div>
-      <!-- written by the game from the keys that are bound (Hud.renderHelp) -->
-      <div id="help"></div>
+      <div id="help">
+        <!-- The game writes the controls from the keys that are bound. -->
+        <div id="help-controls"></div>
+        <hr>
+        <section aria-labelledby="help-credits-title">
+          <h2 id="help-credits-title">CREDITS</h2>
+          <div class="attribution">
+            <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer"><img src="./src/videostore/tmdb-logo.svg" alt="The Movie Database" width="50" height="36"></a>
+            <p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+          </div>
+        </section>
+      </div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

@@ -43,7 +43,7 @@
 import * as THREE from 'three';
 import { toWorld } from '../landmarks/sites.js';
 import { HALF_W, BACK, FRONT, SLAB, SKIRT } from './site.js';
-import { FACES, FACE_BY_ID, RACKS, BOX, ROW, SOLIDS, CEILING, COUNTER, CANDY, KIDS, STANDEES, GATE, DOOR, CLERK, RETURN_SLOT, slotAt, signs } from './floorplan.js';
+import { FACES, FACE_BY_ID, RACKS, BOX, DVD_BOX, ROW, SOLIDS, CEILING, COUNTER, CANDY, KIDS, STANDEES, GATE, DOOR, CLERK, RETURN_SLOT, slotAt, signs } from './floorplan.js';
 import { STAFF, STORE } from './catalog.js';
 import { layout } from './font.js';
 
@@ -467,6 +467,7 @@ function sign(kits) {
   // OPEN, in the window by the door, and the hours
   kits.neon.words('OPEN', DOOR.x1 + 1.6, 2.2, FRONT - 0.05, 0, 1, 0.07, col(0xff3a6a));
   kits.glow.words('OPEN 10 AM TO MIDNIGHT', DOOR.x0 - 1.7, 2.3, FRONT - 0.04, 0, 1, 0.02, PAL.white, { small: true });
+  kits.glow.words('VHS AND DVD', DOOR.x0 - 1.7, 2.04, FRONT - 0.04, 0, 1, 0.03, PAL.neon, { small: true });
 }
 
 // The drop box, the lamps over the car park, posters in the windows.
@@ -765,12 +766,13 @@ function shelfBoxes(catalog, atlas, hidden, out, materials) {
     const r = atlas.rect(b.film.id, _r);
     const ux = f.ux;
     const uz = f.uz;
-    const hw = BOX.w / 2;
+    const size = b.film.format === 'DVD' ? DVD_BOX : BOX;
+    const hw = size.w / 2;
     const y0 = s.y - BOX.h / 2;
-    const y1 = s.y + BOX.h / 2;
+    const y1 = y0 + size.h;
     const bx = s.x - f.nx * LEAN;
     const bz = s.z - f.nz * LEAN;
-    const d = BOX.d;
+    const d = size.d;
     const fl = [s.x - ux * hw, y0, s.z - uz * hw];
     const fr = [s.x + ux * hw, y0, s.z + uz * hw];
     const tr = [bx + ux * hw, y1, bz + uz * hw];
@@ -877,6 +879,9 @@ export function makeHeldBox(material) {
     mesh,
     show(film, atlas) {
       const r = atlas.rect(film.id, _r);
+      const size = film.format === 'DVD' ? DVD_BOX : BOX;
+      mesh.scale.set(size.w / BOX.w, size.h / BOX.h, size.d / BOX.d);
+      mesh.position.y = -size.h * 0.42;
       // the front (+z) and back (-z) faces are the whole cover; the other
       // four its edge. BoxGeometry's faces go +x -x +y -y +z -z, four corners each.
       for (let i = 0; i < uv.count; i++) {
