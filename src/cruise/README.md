@@ -9,8 +9,9 @@ along her sides under the promenade deck, her funnel raked aft in the line's
 blue with a gold sun on it, a slide tower on her top deck with two
 waterslides corkscrewing off it, one of them out over the sea. Her piers are
 on the map with a little ship on their badges, saying when she's in and
-when she sails; pick one and press **go here**, and you're set down on the
-pier at the foot of the gangway. Alongside, she sounds her horn at noon and
+when she sails, and listed in Routes under *cruise piers*; pick one and
+press **go here**, and you're set down on the pier at the foot of the
+gangway. Alongside, she sounds her horn at noon and
 at five.
 
 While she's alongside, walk up the gangway, through the door in her side,

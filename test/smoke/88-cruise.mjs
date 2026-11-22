@@ -54,6 +54,10 @@ export default async function ({ page, step, frames, shot }) {
     assert.equal(await page.evaluate(() => world.cruise.voyage.phase), 'docked');
     await page.keyboard.press('KeyM');
     await frames(3);
+    // listed in Routes, under her own chip
+    await page.click('[data-tab="routes"]');
+    await page.click('.route-lists button[data-list="cruise piers"]');
+    await page.locator(`button[data-destination="${site.id}"]`).waitFor();
     await page.evaluate((s) => {
       world.map.centerOn(s.door.x, s.door.z);
       world.map.selectPlace(s.id);
