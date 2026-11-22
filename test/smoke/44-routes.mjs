@@ -17,7 +17,8 @@ export default async function ({ page, step, key, frames, shot }) {
     await option('spaceport:').waitFor();
     await list('ski');
     await option('ski:').waitFor();
-    assert.ok(await option('hike:vallee-blanche:view').count());
+    await list('hikes');
+    await option('hike:vallee-blanche:view').waitFor();
     await list('video stores');
     await option('videostore:').click();
     const directions = page.locator('.route-detail ol');
@@ -28,7 +29,7 @@ export default async function ({ page, step, key, frames, shot }) {
     await key('KeyM');
     await page.click('[data-route="follow"]');
     await page.click('[data-route="back"]');
-    await list('ski');
+    await list('hikes');
     await option('hike:tignes:view').click();
     await page.waitForFunction(() => document.querySelector('.route-detail ol')?.textContent.includes('Fly to'), null, { timeout: 60000 });
     assert.match(await directions.textContent(), /Head .*Tignes/);

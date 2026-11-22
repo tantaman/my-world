@@ -27,9 +27,15 @@ walls a couple of hundred metres out, which hold you to the line. Water only
 ever runs downhill, so a trough does too, from its head to where the snow
 gives out — the best of them are 500 m of descent over a kilometre at 27°,
 about 90 km/h tucked, without a counter-slope in them. Drop into one at its
-head and let it take you down.
-Open **M → routes** for the High Country ski run when there is one in the
-forest around the starting region. Pick it for directions to the snow. See [the world](../world/README.md#the-world).
+head and let it take you down. See [the world](../world/README.md#the-world).
+
+**Finding the snow.** Open **M → routes → ski** for the runs, nearest first,
+for as far out as you scroll: the High Country ski run, the top with the
+most snow below it within 30 km of the start, and then one in every ten
+kilometres square of the forest where the high country holds snow enough
+(*Raven Bowl*, *Tarn Face*, *Granite Couloir*), with how many metres of snow
+lie below its top, and the snowy real places among them. Pick one for
+directions, or *go here* to stand on its top. They're on the map too.
 
 Or go to a snowy real place: the hikes tab beside the map, and *the view*,
 which stands you where the photo was taken. The longest of those is the Vallée
@@ -103,7 +109,8 @@ run.js                a run's tally: how far, how fast, how far down, points and
 pose.js               how you stand on skis or a board, lean into turns, tip with the snow and tumble
 gear.js               skis, poles and a snowboard
 spray.js              snow thrown up off your edges, landing and falling
-descent.js            the descent, on the adventures board: a run found, and timed
+descent.js            the descent, on the adventures board: a run found, and timed; what makes a top a run
+runs.js               the forest's ski runs, a square at a time, for the map and its routes
 sound.js              the snow and the wind as you go; bindings, landings, falls
 others.js             what other people here are on
 skiing.css            the readout

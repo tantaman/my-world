@@ -205,3 +205,40 @@ test('a run tallies its tricks into combos, banked on the snow or lost in a fall
 test('gravity is gentler than walking’s, so airs float a little', () => {
   assert.ok(GRAVITY > 9 && GRAVITY < 19);
 });
+
+// ── The forest's ski runs ───────────────────────────────────────────────────
+
+test('ski runs are wherever the high country holds snow, a square at a time, and pinned', async () => {
+  const { growWorld, LANDS } = await import('../src/world/lands.js');
+  const { HIKES } = await import('../src/world/hikes.js');
+  const { Landforms } = await import('../src/world/landforms.js');
+  const { findRunTop, runDrop } = await import('../src/skiing/descent.js');
+  const { SkiRuns, RUNS } = await import('../src/skiing/runs.js');
+  const { matchesGolden } = await import('./helpers/golden.js');
+  const SEED = 20261119;
+  const gen = growWorld(SEED, [], LANDS[0]);
+  const start = gen.findSpawn(0, 0);
+  const landforms = new Landforms(HIKES);
+  const home = findRunTop(gen, landforms, start, 30000, 750);
+  const runs = new SkiRuns(gen, landforms, { home });
+  const pinned = {};
+  const names = new Map();
+  for (let j = -5; j < 5; j++) {
+    for (let i = -5; i < 5; i++) {
+      const r = runs.cell(i, j);
+      if (!r) continue;
+      assert.ok(r.x >= i * RUNS.cell && r.x < (i + 1) * RUNS.cell && r.z >= j * RUNS.cell && r.z < (j + 1) * RUNS.cell, 'in its own square');
+      assert.equal(runDrop(gen, landforms, r.x, r.z), r.drop, 'snow enough below it, on the forest\'s own land');
+      assert.ok(!home || Math.hypot(r.x - home.x, r.z - home.z) >= RUNS.apart, 'apart from the High Country ski run');
+      assert.equal(runs.byId(r.id), r);
+      for (const [di, dj] of [[-1, 0], [0, -1], [-1, -1], [1, -1]]) assert.notEqual(names.get(`${i + di}:${j + dj}`), r.name, 'neighbours have other names');
+      names.set(`${i}:${j}`, r.name);
+      pinned[r.id] = { name: r.name, x: r.x, z: r.z, drop: Math.round(r.drop * 1000) / 1000 };
+    }
+  }
+  assert.ok(Object.keys(pinned).length >= 3, 'there are some');
+  assert.ok(Object.keys(pinned).length < 60, 'but the high country is rare');
+  assert.deepEqual(new SkiRuns(gen, landforms, { home }).cell(...Object.keys(pinned)[0].split(':').slice(2).map(Number)), runs.byId(Object.keys(pinned)[0]), 'the same every time');
+  // places people track are where they were
+  matchesGolden(`ski-runs-${SEED}`, pinned, { tolerance: 1e-6 });
+});
