@@ -241,7 +241,6 @@ function tower(kits, solid, rect, blockers) {
   k.box(px0, top + 3.2, pz0, px1, top + 3.35, pz1, col(0x2a6ad8));
   k.words('THE CORKSCREW', (gaps.aft[0] + gaps.aft[1]) / 2, top + 2.7, pz0 - 0.05, 0, -1, 0.06, col(0xf4f4f0));
   k.words('THE PLUNGE', px1 + 0.05, top + 2.7, (gaps.port[0] + gaps.port[1]) / 2, 1, 0, 0.06, col(0xf4f4f0));
-  void halfBeam;
 }
 
 // ── The slides ───────────────────────────────────────────────────────────────

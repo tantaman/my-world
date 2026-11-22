@@ -148,4 +148,3 @@ export class ShipKit extends Kit {
   }
 }
 
-export { Kit };

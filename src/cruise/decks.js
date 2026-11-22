@@ -31,7 +31,7 @@
 
 import * as THREE from 'three';
 import { ShipKit } from './kit.js';
-import { layout, walls, floorStrips, flights, subtract, intersect, rectOf, CORES, CORE, deckY, DECK_H, SLAB, WALL_T, HULL_T, POOLS, halfBeam, DECK_BY_N, LAST, isCabinDeck } from './plan.js';
+import { layout, walls, floorStrips, flights, subtract, intersect, rectOf, CORES, CORE, deckY, DECK_H, SLAB, WALL_T, HULL_T, LAST } from './plan.js';
 import { furnish } from './rooms.js';
 
 const col = (hex) => new THREE.Color(hex);
@@ -541,14 +541,12 @@ export function stairs(k, z, x, n, coreTop, solid, box, base = null, turns = 1) 
       solid(f.x0 + r, (f.z0 + f.z1) / 2, f.x1 - r, (f.z0 + f.z1) / 2, r, f.top - 0.35, f.top, { surface: 'carpet' });
     }
     // under each flight, a sloping soffit
-    const run = S.top - S.mid;
     for (const [xa, xb, za, zb, ya, yb2] of [
       [x + S.gap, x + S.half, z + S.top, z + S.mid, yb, yb + DECK_H / 2],
       [x - S.half, x - S.gap, z + S.mid, z + S.top, yb + DECK_H / 2, yb + DECK_H],
     ]) {
       const d = 0.25;
       k.face([xa, ya - d, za], [xb, ya - d, za], [xb, yb2 - d, zb], [xa, yb2 - d, zb], col(0xe0d8c8));
-      void run;
     }
     // the wall between the flights, and a brass rail along its top
     k.box(x - S.gap, yb - SLAB, z + S.mid, x + S.gap, yb + DECK_H - SLAB, z + S.top, col(0xe0d8c8));
@@ -668,4 +666,3 @@ function doorSolid(d, y) {
   return { ax: d.x - ux * h, az: d.z - uz * h, bx: d.x + ux * h, bz: d.z + uz * h, r: 0.12, bottom: y, topA: y + DOOR_H, topB: y + DOOR_H };
 }
 
-export { halfBeam, isCabinDeck, DECK_BY_N, POOLS };
