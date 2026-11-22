@@ -90,7 +90,7 @@ export function installAirports(game) {
   // Clear of real places, the old places, towns, the mouths of caves, the
   // railway and the launch site, all of which were there first.
   const clear = clearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines });
-  const pad = spaceport.site;
+  const pad = spaceport.sites.home;
   const keepOff = (x0, z0, x1, z1) => clear(x0, z0, x1, z1) || !!(pad && pad.box[0] <= x1 && pad.box[2] >= x0 && pad.box[1] <= z1 && pad.box[3] >= z0);
   const airports = new Airports(gen, { cards: landforms.cards, start: player.start, keepOff });
   const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset ? chunks.heightOffset(x, z) : 0);

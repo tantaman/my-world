@@ -59,7 +59,7 @@ const round = (v, f = 10) => Math.round(v * f) / f;
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'spaceport'];
 export function installJetpack(game) {
   const { scene, solids, player, input, builder, hud, commands, save, sound, peers, spaceport } = game;
-  const rack = rackAt(spaceport.site);
+  const rack = rackAt(spaceport.sites.home);
   const jets = new Jets();
   let time = 0; // s since the game began, by this feature's frames
   let toldAt = -Infinity; // when the others were last told how you are (tell())

@@ -16,6 +16,7 @@ import { HIKES } from '../src/world/hikes.js';
 import { Landforms } from '../src/world/landforms.js';
 import { findSite as findPad, clearOf as padClear } from '../src/spaceport/site.js';
 import { findSite as findStore, clearOf as storeClear } from '../src/videostore/site.js';
+import { Branches } from '../src/videostore/branches.js';
 import { findBuildings, overlaps } from '../src/abandoned/sites.js';
 import { Airports } from '../src/airports/airports.js';
 import { findSite, candidates, pickSite, clearOf, regionsInTheWay, mayReach, clubName, layout, PLAN, CLUB, EDGE, TREAD, RING } from '../src/huntclub/site.js';
@@ -50,13 +51,16 @@ function worldOf(land, seed = SEED) {
   const store = findStore(gen, start, reserved);
   const airports = new Airports(gen, { cards: CARDS, start, keepOff: (a, b, c, d) => reserved(a, b, c, d) });
   const abandoned = findBuildings(gen, start, (...box) => (store && overlaps(box, store.box)) || reserved(...box));
-  const keepOff = clearOf({ reserved, boxes: () => [store.box, ...abandoned.map((s) => s.box)], airfields: airports });
-  return { gen, start, keepOff, store, abandoned, airports };
+  // the store's branches, beside the villages, clear of the store and the airfields
+  const field = (box) => airports.regions.some((g) => mayReach(g, Math.hypot((box[0] + box[2]) / 2 - g.x, (box[1] + box[3]) / 2 - g.z), Math.hypot(box[2] - box[0], box[3] - box[1]) / 2) && airports.site(g.id) && overlaps(box, airports.site(g.id).box));
+  const branches = new Branches(gen, { towns, keepOff: reserved, also: (...box) => (store && overlaps(box, store.box)) || field(box) });
+  const keepOff = clearOf({ reserved: (...box) => reserved(...box) || branches.within(...box).length > 0, boxes: () => [store.box, ...abandoned.map((s) => s.box)], airfields: airports });
+  return { gen, start, keepOff, store, abandoned, airports, branches };
 }
 
 test('the hunt club is grown from the seed: the same every time, on flat dry ground, clear of what was there first', () => {
   for (const land of LANDS) {
-    const { gen, start, keepOff, store, abandoned, airports } = worldOf(land);
+    const { gen, start, keepOff, store, abandoned, airports, branches } = worldOf(land);
     const site = findSite(gen, start, keepOff);
     assert.ok(site, `land ${land} has a hunt club`);
     assert.deepEqual(findSite(gen, start, keepOff), site, 'and the same one again');
@@ -74,6 +78,7 @@ test('the hunt club is grown from the seed: the same every time, on flat dry gro
     assert.ok(!keepOff(b[0], b[1], b[2], b[3]), 'clear of everything it keeps clear of');
     assert.ok(!overlaps(b, store.box), 'the video store among them');
     for (const s of abandoned) assert.ok(!overlaps(b, s.box), `and ${s.name}`);
+    assert.equal(branches.within(...b).length, 0, 'and the video store\'s branches');
     // its clubhouse is towards the start, and you're set down facing it
     const fx = Math.sin(site.yaw);
     const fz = Math.cos(site.yaw);
