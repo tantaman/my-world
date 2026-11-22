@@ -11,8 +11,8 @@
 // something a *newer* game saved, which this one has never heard of, must
 // survive being walked past; and the second, signing in from another
 // browser, must come back as himself — where *he* left off. And they talk:
-// over the radio from anywhere, aloud only from close by; and each sees what
-// the other is riding.
+// over the radio from anywhere, aloud only from close by; each sees what
+// the other is riding; and one climbs into the other's raft as crew.
 
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
@@ -281,6 +281,49 @@ try {
       return p && !world.peers.get(p.id).character.seated;
     }, null, 'and back on her own two feet');
     assert.deepEqual(await ben.page.evaluate(() => world.mounts.list().filter((m) => m.tame).length), 0, 'ana’s mounts are hers, not ben’s');
+  });
+
+  await step('ben climbs into ana’s raft as crew, and his paddling drives it along', async () => {
+    // a rapid near the start, and the put-in above it
+    const r = await ana.page.evaluate(async () => {
+      const r = world.rafting.nearest(0, 0, 1500);
+      await world.teleport(r.putIn.x, r.putIn.z);
+      world.rafting.putInAt(r.putIn.x, r.putIn.z);
+      world.rafting.hold({ fwd: 0, turn: 0 });
+      return r;
+    });
+    assert.ok(await ana.page.evaluate(() => world.rafting.state()?.aboard), 'ana is in her raft');
+    await ben.page.evaluate(async (r) => {
+      await world.teleport(r.putIn.x, r.putIn.z);
+    }, r);
+    await ben.until(() => world.rafting.crew.rafts().some((x) => x.aboard), null, 'ben sees ana’s raft on the river');
+    // beside it, he climbs in from the pack
+    await ben.until(() => {
+      const raft = world.rafting.crew.rafts()[0];
+      const p = world.player.pos;
+      p.x = raft.x + 2.5;
+      p.z = raft.z;
+      return !!world.rafting.crew.joinable();
+    }, null, 'there is a seat free beside ben');
+    await ben.page.evaluate(() => world.pack.do('raft'));
+    await ben.until(() => !!world.rafting.crew.aboard && world.player.character.seated, null, 'ben sits in it');
+    await ana.until(() => {
+      const p = world.peers.list().find((q) => q.name === 'ben');
+      const peer = p && world.peers.get(p.id);
+      const s = world.rafting.state();
+      return peer && peer.character.seated && Math.hypot(peer.character.root.position.x - s.x, peer.character.root.position.z - s.z) < 2.5;
+    }, null, 'ana sees ben sitting in her raft');
+    const drift = await ana.page.evaluate(() => world.rafting.state().speed);
+    await ben.page.keyboard.down('KeyW');
+    await ana.until(() => world.rafting.crew.paddling() > 0, null, 'ana hears ben paddling');
+    await ana.until((d) => world.rafting.state().speed > d + 0.25, drift, 'and her raft goes faster for it');
+    await ben.page.keyboard.up('KeyW');
+    await ana.page.evaluate(() => {
+      world.rafting.hold(null);
+      world.rafting.out();
+      if (world.rafting.aboard) world.rafting.out();
+    });
+    await ben.until(() => !world.rafting.crew.aboard && !world.player.character.seated, null, 'when ana gets out, ben is out too');
   });
 
   await step('ana and ben talk: on the radio from anywhere, aloud only close by', async () => {
