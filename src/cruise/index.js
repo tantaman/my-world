@@ -1056,6 +1056,9 @@ export function installCruise(game) {
         }
         if (!yours) welcome();
         else hud.flash(`Welcome back aboard · stateroom ${yours}`, 3500);
+        // (and that's what's said: not the room's name over it)
+        lastRoom = where.room.id;
+        lastDeck = where.deck;
       }
       if (!where.onShip && where.near > ARRIVE * 4) arrived = false;
       if (!where.onShip && where.near < ARRIVE && !visited) {
