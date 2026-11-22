@@ -324,6 +324,7 @@ test('both slides go down, quickly but not too, clear of the decks, and end in t
     const end = p.pts[p.pts.length - 1];
     assert.ok(end[0] > pool.x0 && end[0] < pool.x1 && end[2] > pool.z0 && end[2] < pool.z1, `${sl.id} ends over the pool`);
     assert.ok(end[1] > level && end[1] < level + 1.2, `${sl.id} ends just over the water`);
+    assert.ok(level - (deckY(pool.deck) + poolBed(pool, end[0], end[2])) > SWIM_DEPTH, `${sl.id} ends over deep water, not the steps`);
     // clear of the decks it goes over, but where it comes down over the
     // pool's edge into it
     const M = 2.5;
