@@ -170,7 +170,9 @@ export function installFishing(game) {
   game.provide('fishing', {
     line,
     tool,
-    catches: () => Object.entries(best).map(([kind, c]) => ({ kind, name: nameOf(kind), biggest: describe({ ...c, name: nameOf(kind) }), caught: c.n })),
+    // (in the order of the table of fish, which is the order a save is read
+    // back in: the list is the same before a reload and after)
+    catches: () => CATCHABLE.filter((kind) => best[kind]).map((kind) => ({ kind, name: nameOf(kind), biggest: describe({ ...best[kind], name: nameOf(kind) }), caught: best[kind].n })),
     // a fish at the bait now, if the float is out and waiting
     hurry() {
       if (line.state !== 'waiting') return false;
