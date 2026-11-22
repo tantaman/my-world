@@ -22,27 +22,30 @@ const BOW_WAVE = { from: 136, to: 40, out: 5 }; // along her (m), and how far it
 
 export function buildWake() {
   const tex = foamTexture();
-  const material = new THREE.MeshBasicMaterial({ map: tex, color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+  const material = new THREE.MeshBasicMaterial({ map: tex, color: 0xffffff, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
   const pos = [];
   const uv = [];
-  // a ribbon through [x, z] pairs either side: [[xl, xr, z], ...], u across, v along (m / TILE)
+  const col = [];
+  // a ribbon through [x, z] pairs either side, each with how much of it
+  // there is (a, 0..1): [[xl, xr, z, a], ...]; u across, v along (m / TILE)
   const ribbon = (rows) => {
     for (let i = 0; i < rows.length - 1; i++) {
-      const [a0, a1, za] = rows[i];
-      const [b0, b1, zb] = rows[i + 1];
+      const [a0, a1, za, aa] = rows[i];
+      const [b0, b1, zb, ab] = rows[i + 1];
       const va = -za / TILE;
       const vb = -zb / TILE;
       const quad = [
-        [a0, za, 0, va],
-        [a1, za, 1, va],
-        [b1, zb, 1, vb],
-        [a0, za, 0, va],
-        [b1, zb, 1, vb],
-        [b0, zb, 0, vb],
+        [a0, za, 0, va, aa],
+        [a1, za, 1, va, aa],
+        [b1, zb, 1, vb, ab],
+        [a0, za, 0, va, aa],
+        [b1, zb, 1, vb, ab],
+        [b0, zb, 0, vb, ab],
       ];
-      for (const [x, z, u, v] of quad) {
+      for (const [x, z, u, v, a] of quad) {
         pos.push(x, Y, z);
         uv.push(u, v);
+        col.push(1, 1, 1, a);
       }
     }
   };
@@ -54,7 +57,9 @@ export function buildWake() {
       const flare = z > BOW_WAVE.to ? ((z - BOW_WAVE.to) / (BOW_WAVE.from - BOW_WAVE.to)) * BOW_WAVE.out : 0;
       const inner = s * (w + 0.2);
       const outer = s * (w + WASH + flare);
-      rows.push(s > 0 ? [inner, outer, z] : [outer, inner, z]);
+      // the bow wave curls up white; the wash along her side is less
+      const a = z > BOW_WAVE.to ? 0.9 : 0.45;
+      rows.push(s > 0 ? [inner, outer, z, a] : [outer, inner, z, a]);
     }
     ribbon(rows);
   }
@@ -62,12 +67,14 @@ export function buildWake() {
   const rows = [];
   for (let d = 0; d <= WAKE.length; d += 10) {
     const w = WAKE.near + (WAKE.far - WAKE.near) * Math.sqrt(d / WAKE.length);
-    rows.push([-w, w, STERN - d]);
+    // churned white close under her stern, thinning out to nothing behind
+    rows.push([-w, w, STERN - d, Math.pow(1 - d / WAKE.length, 1.6)]);
   }
   ribbon(rows);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
   g.computeBoundingSphere();
   const mesh = new THREE.Mesh(g, material);
   mesh.name = 'wake';
@@ -79,7 +86,7 @@ export function buildWake() {
     update(v, dt) {
       const k = Math.min(1, Math.max(0, v) / FULL);
       mesh.visible = k > 0.01;
-      material.opacity = 0.75 * k;
+      material.opacity = 0.6 * k;
       slide = (slide + (v * dt) / TILE) % 1;
       tex.offset.y = slide;
     },
@@ -99,7 +106,7 @@ function foamTexture() {
   const data = new Uint8Array(W * H * 4);
   const rnd = mulberry32(0xf0a3);
   const a = new Float32Array(W * H);
-  for (let k = 0; k < 520; k++) {
+  for (let k = 0; k < 320; k++) {
     const cx = rnd() * W;
     const cy = rnd() * H;
     const r = 1 + rnd() * 3.5;
@@ -111,7 +118,7 @@ function foamTexture() {
         const f = 1 - (dx * dx + dy * dy);
         if (f <= 0) continue;
         const i = ((y + H) % H) * W + ((x + W) % W);
-        a[i] = Math.min(1, a[i] + f * (0.4 + rnd() * 0.4));
+        a[i] = Math.min(1, a[i] + f * (0.3 + rnd() * 0.35));
       }
     }
   }
