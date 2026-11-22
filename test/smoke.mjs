@@ -3,6 +3,7 @@
 //
 //   npm run smoke                  build, then play through
 //   node test/smoke.mjs --report out.json --shots dir
+//   node test/smoke.mjs --failures dir     a picture of each part that failed, as it left the game
 //   node test/smoke.mjs build fires        only those parts
 //
 // It drives the game the way a visitor does — keys, the use/alt buttons, the
@@ -42,32 +43,34 @@
 //
 // Naming parts plays only those, still in order, from a fresh world. One that
 // builds on another's work wants that one named too: `build fires`.
+//
+// Every part is played, whatever happens to the ones before it, and the run
+// ends by listing the parts that failed; it exits 1 if any did.
 
 import { createRequire } from 'node:module';
 import { writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
-import assert from 'node:assert/strict';
 import { preview } from 'vite';
 
-// Playwright is not a dependency of the game. Where it isn't already on the
-// machine: npm i -D playwright && npx playwright install chromium
+// Playwright comes with `npm install`; its browser is a download of its own.
 let chromium;
 try {
   ({ chromium } = createRequire(import.meta.url)('playwright'));
 } catch {
-  console.error('the play-through needs Playwright: npm i -D playwright && npx playwright install chromium');
+  console.error('the play-through needs Playwright: npm install && npx playwright install chromium');
   process.exit(2);
 }
 
-const FLAGS = ['report', 'shots'];
+const FLAGS = ['report', 'shots', 'failures'];
 const arg = (name) => {
   const i = process.argv.indexOf(`--${name}`);
   return i < 0 ? null : process.argv[i + 1];
 };
 const reportFile = arg('report');
 const shotDir = arg('shots');
+const failDir = arg('failures') || shotDir;
 // Anything else on the command line is the name of a part to play.
 const asked = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !FLAGS.includes(all[i - 1]?.slice(2)));
-if (shotDir) mkdirSync(shotDir, { recursive: true });
+for (const dir of [shotDir, failDir]) if (dir) mkdirSync(dir, { recursive: true });
 if (!existsSync(new URL('../dist/index.html', import.meta.url))) {
   console.error('no dist/: run `npm run build` first (or `npm run smoke`)');
   process.exit(2);
@@ -226,6 +229,14 @@ const shot = async (name, numbered = true) => {
   await page.screenshot({ path: `${shotDir}/${numbered ? `${String(++shots).padStart(2, '0')}-` : ''}${name}.png` });
   await page.evaluate(() => T.picture(false));
 };
+// The game as a part that failed left it, where --failures (or --shots) says.
+const failureShot = async (part) => {
+  if (!failDir) return;
+  await page.evaluate(() => T.picture(true));
+  await frames(3);
+  await page.screenshot({ path: `${failDir}/failure-${part}.png` });
+  await page.evaluate(() => T.picture(false));
+};
 const step = async (name, fn) => {
   if (name in report.steps) throw new Error(`two steps are called "${name}"`);
   const t0 = Date.now();
@@ -248,21 +259,43 @@ const made = new Proxy(
     },
   },
 );
+// A part that fails doesn't end the play: the rest are played too, so one run
+// says everything that is broken, not just the first of it. The page is
+// opened again first, so the next part starts from a game that works, with
+// what was built and saved still there and whatever the failed part was in
+// the middle of gone. (A later part that needed what the failed one would
+// have left fails as well, and says so.)
+const failed = []; // [{ part, message }]
 try {
   await open('&reset&clearbuild');
   for (const part of parts) {
     console.log(part.name);
-    await part.play({ page, step, key, take, frames, open, shot, state, made });
+    const seen = problems.length;
+    try {
+      await part.play({ page, step, key, take, frames, open, shot, state, made });
+      if (problems.length > seen) throw new Error(`something went wrong in the page:\n${problems.slice(seen).join('\n')}`);
+    } catch (err) {
+      failed.push({ part: part.name, message: err.message });
+      console.error(`  FAILED: ${err.message}`);
+      await failureShot(part.name).catch(() => {});
+      if (part !== parts.at(-1)) await open();
+    }
   }
-  assert.deepEqual(problems, [], 'nothing went wrong in the page');
-  console.log(`\nplayed through${asked.length ? ` (${parts.map((p) => p.name).join(', ')})` : ''}: all good`);
+  const played = asked.length ? ` (${parts.map((p) => p.name).join(', ')})` : '';
+  if (!failed.length) console.log(`\nplayed through${played}: all good`);
+  else {
+    console.error(`\nFAILED: ${failed.length} of ${parts.length} parts${played}`);
+    for (const f of failed) console.error(`  ${f.part}: ${f.message.split('\n')[0]}`);
+    process.exitCode = 1;
+  }
 } catch (err) {
+  // the game wouldn't open at all, or wouldn't open again
   console.error(`\nFAILED: ${err.message}`);
   if (problems.length) console.error(problems.join('\n'));
-  await shot('failure', false);
   process.exitCode = 1;
 } finally {
   report.problems = problems;
+  report.failed = failed;
   if (reportFile) writeFileSync(reportFile, `${JSON.stringify(report, null, 1)}\n`);
   await browser.close();
   await new Promise((r) => server.httpServer.close(r));

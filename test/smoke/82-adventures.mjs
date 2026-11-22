@@ -157,24 +157,31 @@ export default async function ({ page, step, key, take, frames, open, shot }) {
       const g = run.guards.list.find((m) => m.role === 'post');
       const c = run.camp.fire;
       let prompt = '';
-      // he turns, once he's seen you: aim again until the crosshair is on him
-      for (let k = 0; k < 6 && !g.down; k++) {
-        const ux = g.x - c.x;
-        const uz = g.z - c.z;
-        const l = Math.hypot(ux, uz);
-        await T.standAndAim(g.x + (ux / l) * 22, g.z + (uz / l) * 22, g.x, g.y + 1.1, g.z);
+      const tries = []; // what each go at it saw, for when none of them works
+      // The camp is somewhere new each time, and a tree or a boulder outside
+      // it can stand in the line of fire (and stops a shot, as it should). So
+      // each go is from somewhere else out in front of the gate: nearer, and
+      // to one side. He turns, too, once he's seen you.
+      const FROM = [[22, 0], [14, 0], [9, 0], [14, 2.5], [14, -2.5], [9, 2], [9, -2], [6, 0]]; // m out from him, and to the side
+      for (let k = 0; k < FROM.length && !g.down; k++) {
+        const [out, side] = FROM[k];
+        const l = Math.hypot(g.x - c.x, g.z - c.z);
+        const ux = (g.x - c.x) / l;
+        const uz = (g.z - c.z) / l;
+        await T.standAndAim(g.x + ux * out - uz * side, g.z + uz * out + ux * side, g.x, g.y + 1.1, g.z);
         await T.idle();
         await T.frames(4);
         prompt = T.prompt();
+        tries.push({ out, side, prompt });
         if (!/^an outlaw/.test(prompt)) continue;
         await T.tap('use');
         await T.idle();
         await T.frames(3);
       }
-      return { prompt: prompt.replace(/\d+ m/, 'N m').replace(/\(\d rounds?\)/, '(N rounds)'), down: g.down, left: run.guards.left, toast: document.getElementById('toast').textContent, alerted: run.guards.alerted };
+      return { tries, prompt: prompt.replace(/\d+ m/, 'N m').replace(/\(\d rounds?\)/, '(N rounds)'), down: g.down, left: run.guards.left, toast: document.getElementById('toast').textContent, alerted: run.guards.alerted };
     });
-    assert.match(shot1.prompt, /^an outlaw · N m · click shoot/, 'the crosshair names him');
-    assert.ok(shot1.down, 'he is down');
+    assert.match(shot1.prompt, /^an outlaw · N m · click shoot/, `the crosshair names him (${JSON.stringify(shot1.tries)})`);
+    assert.ok(shot1.down, `he is down (${JSON.stringify(shot1.tries)})`);
     assert.equal(shot1.left, 7);
     assert.match(shot1.toast, /an outlaw is down · 7 left/);
     assert.ok(shot1.alerted, 'and the rest know you are there');
