@@ -91,6 +91,9 @@ function lathe(m, profile, segments, x, y, z, paint) {
 }
 
 export function buildLaunchSite(site, ground, materials) {
+  // its colours: Skyhook's own, or the livery it was given (site.js)
+  const tower = site.livery ? col(site.livery.tower) : PAL.red;
+  const band = site.livery ? col(site.livery.band) : PAL.band;
   const object = new THREE.Group();
   object.position.set(site.x, site.top, site.z);
   object.rotation.y = site.yaw;
@@ -171,13 +174,13 @@ export function buildLaunchSite(site, ground, materials) {
   const tx = TOWER_AT.x;
   const tz = TOWER_AT.z - 0.6;
   const posts = corners.map(([u, v]) => [tx + u * T.half, tz + v * T.half]);
-  for (const [x, z] of posts) box(m, 0.22, T.height, 0.22, x, 0, z, PAL.red);
+  for (const [x, z] of posts) box(m, 0.22, T.height, 0.22, x, 0, z, tower);
   for (let y = 0; y < T.height - 0.1; y += 2.5) {
     for (let i = 0; i < 4; i++) {
       const [ax, az] = posts[i];
       const [bx, bz] = posts[(i + 1) % 4];
-      strut(m, new THREE.Vector3(ax, y, az), new THREE.Vector3(bx, y + 2.5, bz), 0.1, PAL.red);
-      strut(m, new THREE.Vector3(ax, y + 2.5, az), new THREE.Vector3(bx, y + 2.5, bz), 0.12, PAL.red);
+      strut(m, new THREE.Vector3(ax, y, az), new THREE.Vector3(bx, y + 2.5, bz), 0.1, tower);
+      strut(m, new THREE.Vector3(ax, y + 2.5, az), new THREE.Vector3(bx, y + 2.5, bz), 0.12, tower);
     }
   }
   box(m, T.half * 2 + 0.6, 0.15, T.half * 2 + 0.6, tx, T.height, tz, PAL.metal);
@@ -237,7 +240,7 @@ export function buildLaunchSite(site, ground, materials) {
   // ── The rocket ──
   const rocket = new THREE.Group();
   rocket.position.set(ROCKET_AT.x, 0, ROCKET_AT.z);
-  rocket.add(makeRocketMesh(materials));
+  rocket.add(makeRocketMesh(materials, band));
   object.add(rocket);
   solids.push(capsule(site, ROCKET_AT.x, ROCKET_AT.z, ROCKET_AT.x, ROCKET_AT.z, ROCKET.radius + 0.25, 0, ROCKET.height, 0));
 
@@ -265,7 +268,7 @@ function sphereProfile(r, n) {
 }
 
 // The rocket itself, its engine bell's mouth at 0.
-function makeRocketMesh(materials) {
+function makeRocketMesh(materials, band = PAL.band) {
   const m = new Mesher();
   const R = ROCKET.radius;
   // the engine bell
@@ -297,14 +300,14 @@ function makeRocketMesh(materials) {
     0,
     0,
     0,
-    (y, p) => (y > 9.45 ? PAL.band : y > 6.6 && y < 7.4 ? PAL.band : y > 2 && y < 6 && Math.atan2(p.z, p.x) > 0 && Math.atan2(p.z, p.x) < Math.PI / 2 ? PAL.band : PAL.white),
+    (y, p) => (y > 9.45 ? band : y > 6.6 && y < 7.4 ? band : y > 2 && y < 6 && Math.atan2(p.z, p.x) > 0 && Math.atan2(p.z, p.x) < Math.PI / 2 ? band : PAL.white),
   );
   // four fins
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
     _q.setFromAxisAngle(_Y, -a);
     _m.compose(_p.set(Math.cos(a) * (R + 0.45), 2.2, Math.sin(a) * (R + 0.45)), _q, _s);
-    m.add(new THREE.BoxGeometry(0.95, 2.4, 0.1), _m, () => PAL.band);
+    m.add(new THREE.BoxGeometry(0.95, 2.4, 0.1), _m, () => band);
   }
   // the second stage, narrowing to the capsule
   lathe(

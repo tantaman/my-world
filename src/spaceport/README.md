@@ -5,7 +5,16 @@ a rocket stands ready on a concrete pad: two white stages and a capsule on
 top, a red lattice tower beside it with a walkway out to the hatch, a fuel
 tank, a blockhouse, floodlights that come on after dark and a beacon blinking
 on the tower. It's on the map as the *Skyhook launch site*, and **T** from
-anywhere says how far it is and which way.
+anywhere says how far the nearest launch site is and which way.
+
+**Other launch sites.** Skyhook isn't the only one, though the rest are few
+and far between: one in a stretch of thirty kilometres or so, if that, none
+within a dozen kilometres of where you start, and none near a real place.
+Each has a name of its own (*Meridian*, *Lodestar*, *Tern Point*) and its own
+colours, the tower and the bands on the rocket. They're all on the map, and
+under *launch sites* in its routes, nearest first, for as far out as you
+scroll; pick one and *go here*, or follow the route. Whichever you're nearest
+is the one that stands ready, and its rocket flies to the same places.
 
 Walk up onto the pad and press **T** beside the rocket. Pick **Deep Space 9**
 or **The Orrery** to board, or press **Esc** to stay on the pad.
@@ -78,12 +87,16 @@ is kept with the rest of what's yours.
 parachute onto the pad, where the next rocket is already standing. You step
 out beside it; it's taken away once you've walked off.
 
-**Where it is** is grown from the seed and the land, like the old places
-(`site.js`): the flattest dry ground in a ring round where you first arrive,
-between about 200 and 430 m out, a little nearer winning over a little
-flatter, clear of real places brought in from a photo, the old places, towns,
-the mouths of caves and the railway. Everyone in a world finds it in the same
-place. **Nothing about the land changes for it**: the pad is set on the
+**Where they are** is grown from the seed and the land, like the old places
+(`site.js`): for Skyhook, the flattest dry ground in a ring round where you
+first arrive, between about 200 and 430 m out, a little nearer winning over a
+little flatter; for the others, the world is cut into 30 km squares, a bit
+under half of them have a spot chosen from the seed, and the flattest dry
+ground within a kilometre and a half of it is where the pad goes. All of them
+keep clear of real places brought in from a photo, the old places, towns, the
+mouths of caves and the railway. Everyone in a world finds them in the same
+places, and the only thing saved is which you've been to. **Nothing about the
+land changes for them**: the pad is set on the
 ground as it is, its top a little over the highest corner and its sides
 sloping down to the lowest; the trees, bushes and stones in its way are
 hidden as it comes into view, and grass doesn't grow on it. Building goes
@@ -92,8 +105,9 @@ round it.
 From the console:
 
 ```js
-world.spaceport.site          // where it is
-await world.spaceport.go()    // stand beside the rocket
+world.spaceport.site          // the one you're at, or were last near
+world.spaceport.sites         // all of them: sites.cell(i, j), sites.byId(id), sites.home
+await world.spaceport.go(id?) // stand beside the rocket (there, or at the launch site with that id)
 world.spaceport.board('ds9')  // fly to Deep Space 9 (default: The Orrery)
 world.spaceport.hurry()       // skip on to the end of this part of the trip
 world.spaceport.arena         // the match, while you're up there
@@ -103,8 +117,8 @@ world.spaceport.leave()       // fly home now
 ## Files
 
 ```
-index.js        plugs it in: the site in the forest, T, the trip, the arena drawn in the forest's place
-site.js         where the launch site is, grown from the seed and the land
+index.js        plugs it in: the sites in the forest and on the map, the nearest stood up, T, the trip, the arena drawn in the forest's place
+site.js         where the launch sites are, grown from the seed and the land: Skyhook, and the rest on a grid
 launchSite.js   the pad, the tower, the rocket, the capsule and its parachute, the flame and the smoke
 flight.js       the trip: boarding, the countdown, the climb, the way home, over time
 flightPanel.js  the destination picker on the launch pad

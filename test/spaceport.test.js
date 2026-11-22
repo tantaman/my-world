@@ -13,7 +13,7 @@ import { Caves } from '../src/caves/caves.js';
 import { Lines, clearOfPlaces, clearOfCaves } from '../src/railway/lines.js';
 import { HIKES } from '../src/world/hikes.js';
 import { Landforms } from '../src/world/landforms.js';
-import { findSite, clearOf, PAD, SKIRT } from '../src/spaceport/site.js';
+import { findSite, clearOf, LaunchSites, farSpot, FAR, PAD, SKIRT } from '../src/spaceport/site.js';
 import { BOXES, PADS, NODES, LINKS, SPAWNS, FLOOR, floorAt, nodeAt, nodeById } from '../src/spaceport/orrery.js';
 import { MOVE, makeBody, moveBody, launch, rayBoxes } from '../src/spaceport/mover.js';
 import { Match } from '../src/spaceport/match.js';
@@ -38,7 +38,7 @@ function worldOf(land) {
   const caves = new Caves({ gen, keepOff: keepHike });
   const lines = new Lines(gen, { start, keepClear: [clearOfPlaces(sites), clearOfCaves((a, b, c, d) => caves.inBox(a, b, c, d))], keepOff: keepHike });
   const towns = new Towns(gen, { start, sites, keepOff: keepHike });
-  return { gen, start, keepOff: clearOf({ landforms, sites, towns, caves, lines }) };
+  return { gen, start, landforms, keepOff: clearOf({ landforms, sites, towns, caves, lines }) };
 }
 
 test('the launch site is grown from the seed: the same every time, on flat dry ground, clear of what was there first', () => {
@@ -57,6 +57,70 @@ test('the launch site is grown from the seed: the same every time, on flat dry g
     // the place on the map people track is where it was
     const round = (v) => Math.round(v * 1000) / 1000;
     matchesGolden(land > 1 ? `spaceport-${SEED}-land${land}` : `spaceport-${SEED}`, { id: site.id, x: round(site.x), z: round(site.z), yaw: round(site.yaw), top: round(site.top) }, { tolerance: 1e-6 });
+  }
+});
+
+test('the others are few and far between, grown from the seed, and pinned', () => {
+  const { gen, start, landforms, keepOff } = worldOf(LANDS[0]);
+  const away = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);
+  const launch = new LaunchSites(gen, { start, home: findSite(gen, start, keepOff), keepOff, away });
+  const pinned = {};
+  // the first three squares round the middle that have one
+  const near = [];
+  for (let j = -2; j <= 1; j++) for (let i = -2; i <= 1; i++) if (launch.spot(i, j)) near.push([i, j]);
+  for (const [i, j] of near.slice(0, 3)) {
+    const s = launch.cell(i, j);
+    if (!s) continue;
+    const d = Math.hypot(s.x - start.x, s.z - start.z);
+    assert.ok(d > FAR.start - FAR.ring[1] - 20, `well away from the start (${(d / 1000).toFixed(1)} km)`);
+    assert.ok(s.x >= i * FAR.cell && s.x < (i + 1) * FAR.cell && s.z >= j * FAR.cell && s.z < (j + 1) * FAR.cell, 'in its own square');
+    gen.height(s.x, s.z);
+    assert.ok(gen.water.edge >= PAD + SKIRT, 'out of the water');
+    assert.ok(s.top - s.low < 3.2, 'on flat enough ground');
+    const reach = PAD + SKIRT;
+    assert.ok(!keepOff(s.x - reach, s.z - reach, s.x + reach, s.z + reach), 'clear of what was there first');
+    assert.equal(launch.byId(s.id), s, 'found again by its id');
+    const round = (v) => Math.round(v * 1000) / 1000;
+    pinned[s.id] = { name: s.name, x: round(s.x), z: round(s.z), yaw: round(s.yaw), top: round(s.top) };
+  }
+  assert.ok(Object.keys(pinned).length >= 2, 'there are some');
+  // places people track are where they were
+  matchesGolden(`spaceport-far-${SEED}`, pinned, { tolerance: 1e-6 });
+  // and none round the start but Skyhook
+  assert.deepEqual(launch.within(start.x - 9000, start.z - 9000, start.x + 9000, start.z + 9000).map((s) => s.id), [launch.home.id]);
+});
+
+test('a far launch site is the same looked for a little at a time, waiting on the railway', () => {
+  const { gen, start, landforms, keepOff } = worldOf(LANDS[0]);
+  const away = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);
+  const outright = new LaunchSites(gen, { start, keepOff, away });
+  // the railway "still being surveyed" for a while
+  let asked = 0;
+  const slow = (...box) => keepOff(...box);
+  slow.ready = () => ++asked > 5;
+  const bit = new LaunchSites(gen, { start, keepOff: slow, away });
+  let at = null;
+  for (let k = 0; !at; k++) if (bit.spot(k, 0)) at = [k, 0];
+  assert.equal(bit.peek(...at), undefined, 'not known at first');
+  let rounds = 0;
+  while (bit.pump(1) > 0) rounds++;
+  assert.ok(rounds > 1 && asked > 5, 'it took a while');
+  assert.ok(bit.peek(...at), 'and found');
+  assert.deepEqual(bit.peek(...at), outright.cell(...at));
+  // a square with nothing in it isn't queued at all
+  const empty = [...Array(40).keys()].map((k) => [k, 3]).find(([i, j]) => !farSpot(gen.seed, i, j));
+  assert.equal(bit.peek(...empty), null);
+});
+
+test('neighbouring launch sites have different names', () => {
+  for (let j = -4; j <= 4; j++) {
+    for (let i = -4; i <= 4; i++) {
+      const a = farSpot(SEED, i, j);
+      for (const [di, dj] of [[1, 0], [0, 1], [1, 1], [1, -1], [2, 0], [0, 2]]) {
+        const b = farSpot(SEED, i + di, j + dj);
+        if (a && b) assert.notEqual(a.name, b.name, `(${i}, ${j}) and (${i + di}, ${j + dj})`);
+      }
+    }
   }
 });
 

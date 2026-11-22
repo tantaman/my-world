@@ -1,12 +1,15 @@
-// The launch site and its two flights. The Orrery hosts a railgun match,
-// and Deep Space 9 has an exterior flyby and a walkable Promenade.
-// Both flights share the launch and the capsule ride home.
+// The launch sites and their two flights: Skyhook, near the start, and the
+// others, few and far between (site.js). The one you're nearest is stood up
+// and flown from; the rest are on the map and in its routes. The Orrery
+// hosts a railgun match, and Deep Space 9 has an exterior flyby and a
+// walkable Promenade. Both flights share the launch and the capsule ride
+// home.
 //
 //   flightPanel.js  the launch manifest
 //   station.js      the approach, docking and walking on the station
 //   stationHull.js  the rings, core and pylons
 //   promenade.js    the shops, balcony and observation windows
-//   site.js        where the launch site is, grown from the seed and the land
+//   site.js        where the launch sites are, grown from the seed and the land
 //   launchSite.js  the pad, the tower, the rocket, the capsule, the exhaust
 //   flight.js      the trip: boarding, countdown, the climb, the way home
 //   orrery.js      the arena's layout: platforms, jump pads, ways in, the bots' paths
@@ -24,18 +27,22 @@
 // away (builder.idleWhile); and the arena reads the controls itself, first
 // thing each frame, so the forest never sees the mouse move.
 //
-// Nothing about the forest changes for the launch site: see site.js. Your
-// record there (matches, wins, your best) is yours, saved.
+// Nothing about the forest changes for a launch site: see site.js. Your
+// record (matches, wins, your best, which launch sites you've been to) is
+// yours, saved.
 //
 // From the console:
-//   world.spaceport.site          where it is
-//   await world.spaceport.go()    stand beside the rocket
+//   world.spaceport.site          the one you're at, or were last near
+//   world.spaceport.sites         all of them (sites.cell(i, j), sites.byId(id))
+//   await world.spaceport.go(id?) stand beside the rocket (there, or at the launch site with that id)
 //   world.spaceport.board('ds9')  board a flight (default: The Orrery)
 //   world.spaceport.hurry()       skip on to the end of this part of the trip
 //   world.spaceport.arena         the match, while you're up there
 
 import * as THREE from 'three';
-import { findSite, clearOf, PAD, ROCKET_AT, LANDING_AT } from './site.js';
+import { findSite, clearOf, LaunchSites, FAR, PAD, ROCKET_AT, LANDING_AT } from './site.js';
+import { GridNearest, ListNearest, MergeNearest } from '../core/nearest.js';
+import { formatDistance } from '../core/format.js';
 import { buildLaunchSite, makeCapsule, makeExhaust, ROCKET, SMOKE } from './launchSite.js';
 import { Flight, DESTINATIONS } from './flight.js';
 import { FlightPanel } from './flightPanel.js';
@@ -50,7 +57,10 @@ import { onPlan, planDiscs, toWorld } from '../landmarks/sites.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { DECK, UNDER, SKY } from '../render/uniforms.js';
 
-const SITE_NAME = 'Skyhook launch site';
+const BEEN_KEPT = 500; // launch sites you've been to, the most remembered
+const NEAREST_AFTER = 0.5; // s between looks for the nearest launch site, on the ground
+const PREFETCH = 5000; // m round you within which far launch sites are looked for ahead of time
+const PUMP_MS = [1.5, 6]; // ms a frame spent looking for them: about, and while the map is open
 const SHOW = 520; // m: the site is stood up this close...
 const HIDE = 680; // ...and taken down past this
 const ARRIVE = 16; // m from the middle of the pad that counts as there
@@ -81,67 +91,81 @@ export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map'
 export function installSpaceport(game) {
   const { scene, camera, pipeline, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway } = game;
 
-  // ── Where it is ───────────────────────────────────────────────────────────
+  // ── Where they are ────────────────────────────────────────────────────────
   // Clear of real places, the old places, towns, the mouths of caves and the
-  // railway, all of which were there first.
+  // railway, all of which were there first. Skyhook by the start, and the
+  // rest few and far between (site.js).
   const keepOff = clearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines });
-  const site = findSite(gen, player.start, keepOff);
+  const home = findSite(gen, player.start, keepOff);
+  const sites = new LaunchSites(gen, { start: player.start, home, keepOff, away: (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1) });
+  // The one you're at, or were last near: what's stood up, boarded and flown
+  // from. Another takes its place when you come near that, on the ground.
+  let site = home;
   const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset ? chunks.heightOffset(x, z) : 0);
   const atSite = (lx, lz, out = {}) => toWorld(site, lx, lz, out);
   const materials = { body: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide }) };
 
   // ── Your record ───────────────────────────────────────────────────────────
-  const record = { visited: false, matches: 0, wins: 0, best: 0 };
+  // visited: Skyhook; been: the others you've been to, by id
+  const record = { visited: false, been: [], matches: 0, wins: 0, best: 0 };
   const count = (v) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
   save.register({
     id: 'spaceport',
     scope: 'yours',
     local: 'marks',
-    collect: () => ({ ...record }),
+    collect: () => ({ ...record, been: [...record.been] }),
     validate: (raw) => {
       const r = raw && typeof raw === 'object' ? raw : {};
-      return { visited: r.visited === true, matches: count(r.matches), wins: count(r.wins), best: count(r.best) };
+      const been = Array.isArray(r.been) ? r.been.filter((id) => typeof id === 'string').slice(0, BEEN_KEPT) : [];
+      return { visited: r.visited === true, been, matches: count(r.matches), wins: count(r.wins), best: count(r.best) };
     },
-    restore: (r) => Object.assign(record, r),
+    restore: (r) => Object.assign(record, r, { been: [...r.been] }),
   });
+  const beenTo = (s) => (s === home ? record.visited : record.been.includes(s.id));
 
   const flight = new Flight();
   const ui = new ArenaHud();
   const heard = { thrust: 0, near: 0, orbit: false };
   sound.addLayer(tripSounds(heard));
 
-  if (site) {
-    // ── The forest round it ─────────────────────────────────────────────────
-    chunks.on('vegetation', (ch) => {
-      const S = chunks.size;
-      const x0 = ch.cx * S;
-      const z0 = ch.cz * S;
-      const b = site.box;
-      if (b[0] > x0 + S + 3 || b[2] < x0 - 3 || b[1] > z0 + S + 3 || b[3] < z0 - 3) return;
+  // ── The forest round them ─────────────────────────────────────────────────
+  chunks.on('vegetation', (ch) => {
+    const S = chunks.size;
+    const x0 = ch.cx * S;
+    const z0 = ch.cz * S;
+    for (const s of sites.within(x0 - 3, z0 - 3, x0 + S + 3, z0 + S + 3)) {
       for (const kind in ch.vegLists) {
         const list = ch.vegLists[kind];
         for (let o = 0, k = 0; o < list.length; o += VEG_STRIDE, k++) {
           const scale = list[o + 4];
           if (scale <= 0) continue;
           const back = (KEEP_BACK[kind] ?? 0.6) * (SCALED[kind] ? scale : 1);
-          if (onPlan(site, list[o], list[o + 2], back, site.cleared)) chunks.hideInstance(ch, kind, k);
+          if (onPlan(s, list[o], list[o + 2], back, s.cleared)) chunks.hideInstance(ch, kind, k);
         }
       }
-    });
-    grass.addClearing((x0, z0, x1, z1) => {
-      const b = site.box;
-      if (b[0] > x1 || b[2] < x0 || b[1] > z1 || b[3] < z0) return null;
-      return (x, z) => onPlan(site, x, z, 0.1, site.cleared);
-    });
-    // ── Building goes round it ──────────────────────────────────────────────
-    const discs = planDiscs({ ...site, plan: site.cleared }, 2);
-    builder.obstacles.addSource((x, z, R, out) => {
-      for (const d of discs) {
+    }
+  });
+  grass.addClearing((x0, z0, x1, z1) => {
+    const here = sites.within(x0, z0, x1, z1);
+    return here.length ? (x, z) => here.some((s) => onPlan(s, x, z, 0.1, s.cleared)) : null;
+  });
+  // ── Building goes round them ──────────────────────────────────────────────
+  const discs = new Map(); // site id -> discs over its pad and sides
+  builder.obstacles.addSource((x, z, R, out) => {
+    for (const s of sites.within(x - R - 1, z - R - 1, x + R + 1, z + R + 1)) {
+      if (!discs.has(s.id)) discs.set(s.id, planDiscs({ ...s, plan: s.cleared }, 2));
+      for (const d of discs.get(s.id)) {
         if (Math.hypot(d.x - x, d.z - z) > R + d.r + 1) continue;
         out.push({ x: d.x, z: d.z, what: 'the launch pad', dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
       }
-    });
-    // ── On the map ──────────────────────────────────────────────────────────
+    }
+  });
+  // ── On the map ────────────────────────────────────────────────────────────
+  // (made once each, and again when you've been there)
+  const places = new Map();
+  function asPlace(s) {
+    let p = places.get(s.id);
+    if (p && p.visited === beenTo(s)) return p;
     const corners = (rect) =>
       [
         [rect[0], rect[1]],
@@ -149,21 +173,34 @@ export function installSpaceport(game) {
         [rect[2], rect[3]],
         [rect[0], rect[3]],
       ].map(([u, v]) => {
-        const p = atSite(u, v);
-        return [p.x, p.z];
+        const w = toWorld(s, u, v);
+        return [w.x, w.z];
       });
-    let place = null;
-    const asPlace = () => {
-      if (place && place.visited === record.visited) return place;
-      place = { id: site.id, x: site.x, z: site.z, name: SITE_NAME, kind: 'launch site', note: 'rocket flights to Deep Space 9 and The Orrery', glyph: GLYPH, visited: record.visited, shape: [corners(site.plan[0])], ground: [corners(site.cleared[0])] };
-      return place;
-    };
-    map.places.addSource({
-      destinations: () => [asPlace()],
-      within: (x0, z0, x1, z1) => (site.x >= x0 && site.x <= x1 && site.z >= z0 && site.z <= z1 ? [asPlace()] : []),
-      get: (id) => (id === site.id ? asPlace() : null),
-    });
+    p = { id: s.id, x: s.x, z: s.z, name: s.name, kind: 'launch site', note: 'rocket flights to Deep Space 9 and The Orrery', glyph: GLYPH, visited: beenTo(s), shape: [corners(s.plan[0])], ground: [corners(s.cleared[0])] };
+    places.set(s.id, p);
+    return p;
   }
+  map.places.addSource({
+    within: (x0, z0, x1, z1) => sites.within(x0, z0, x1, z1, false).filter((s) => s.x >= x0 && s.x <= x1 && s.z >= z0 && s.z <= z1).map(asPlace),
+    get(id) {
+      if (!String(id).startsWith('spaceport:')) return null;
+      const s = sites.byId(id);
+      return s ? asPlace(s) : null;
+    },
+    // Skyhook, then a square at a time outward (a site keeps inside its own)
+    list: 'launch sites',
+    nearest: (x, z) =>
+      new MergeNearest([
+        new ListNearest(x, z, home ? [asPlace(home)] : []),
+        new GridNearest(x, z, {
+          size: FAR.cell,
+          at(i, j) {
+            const s = sites.peek(i, j);
+            return s === undefined ? undefined : s ? [asPlace(s)] : [];
+          },
+        }),
+      ]),
+  });
 
   // ── Standing it up ────────────────────────────────────────────────────────
   let built = null; // { object, rocket, beacons, lampMat, solids, exhaust, puffs }
@@ -196,6 +233,22 @@ export function installSpaceport(game) {
     scene.remove(capsule.object);
     solids.clear(capsule);
     capsule = null;
+  }
+  // Another launch site takes this one's place: this one is taken down (and
+  // built again if you come back).
+  function moveTo(s) {
+    show(false);
+    dropCapsule();
+    if (built) {
+      built.object.traverse((o) => {
+        if (!o.isMesh) return;
+        o.geometry.dispose();
+        if (o.material !== materials.body) o.material.dispose();
+      });
+      built = null;
+    }
+    site = s;
+    arrived = false;
   }
 
   // ── The trip ──────────────────────────────────────────────────────────────
@@ -332,7 +385,7 @@ export function installSpaceport(game) {
     }
     const out = atSite(LANDING_AT.x - 2.2, LANDING_AT.z + 1.2);
     player.spawn(out.x, out.z, site.yaw + Math.PI, site.yaw);
-    hud.flash(`back down at the ${SITE_NAME.toLowerCase()}`, 2600);
+    hud.flash(`back down at ${site.name}`, 2600);
   }
 
   function capsuleSolid() {
@@ -458,13 +511,13 @@ export function installSpaceport(game) {
     run() {
       if (flight.phase === 'orbit') return leave();
       if (flight.phase !== 'ground') return;
-      if (!site) return hud.flash('there’s no launch site in this world', 2400);
       if (nearRocket()) return chooseFlight();
       const p = player.pos;
-      const d = Math.hypot(site.x - p.x, site.z - p.z);
-      if (d < ARRIVE + 6) return hud.flash('walk up to the rocket, then T', 2200);
-      const a = Math.atan2(site.x - p.x, -(site.z - p.z));
-      hud.flash(`the launch site is ${Math.round(d)} m ${WAYS[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8]} · it’s on the map`, 3200);
+      const n = nearest(p);
+      if (!n) return hud.flash('there’s no launch site anywhere near · look under launch sites in the map’s routes', 2800);
+      if (n.d < ARRIVE + 6) return hud.flash('walk up to the rocket, then T', 2200);
+      const a = Math.atan2(n.site.x - p.x, -(n.site.z - p.z));
+      hud.flash(`the nearest launch site is ${formatDistance(n.d)} ${WAYS[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8]} · it’s on the map`, 3200);
     },
   });
   commands.add({
@@ -526,12 +579,34 @@ export function installSpaceport(game) {
 
   let arrived = false;
   let cued = false;
+  let lookIn = 0;
+  // The nearest launch site found so far, and how far: Skyhook, or one of
+  // the others looked over round about.
+  function nearest(p) {
+    let best = home;
+    let bd = home ? Math.hypot(home.x - p.x, home.z - p.z) : Infinity;
+    for (const s of sites.cells.values()) {
+      const d = s ? Math.hypot(s.x - p.x, s.z - p.z) : Infinity;
+      if (d < bd) [best, bd] = [s, d];
+    }
+    return best && { site: best, d: bd };
+  }
   game.addSystem({
     name: 'spaceport',
     phase: 'world',
     update({ dt, time }) {
-      if (!site) return;
       const p = game.focus;
+      // the far ones round about looked for ahead of time, and, on the
+      // ground, the nearest stood up in place of the last
+      if (sites.queue.size) sites.pump(map.isOpen ? PUMP_MS[1] : PUMP_MS[0]);
+      lookIn -= dt;
+      if (lookIn <= 0) {
+        lookIn = NEAREST_AFTER;
+        sites.prefetch(p.x, p.z, PREFETCH);
+        const n = flight.phase === 'ground' && nearest(p);
+        if (n && n.site !== site && (!site || n.d < Math.hypot(site.x - p.x, site.z - p.z))) moveTo(n.site);
+      }
+      if (!site) return;
       const d = Math.hypot(site.x - p.x, site.z - p.z);
       if (flight.phase === 'ground') {
         if (d < SHOW) show(true);
@@ -540,9 +615,10 @@ export function installSpaceport(game) {
       if (capsule && flight.phase === 'ground' && d > CAPSULE_KEPT) dropCapsule();
       if (!arrived && d < ARRIVE && flight.phase === 'ground') {
         arrived = true;
-        hud.flash(`${SITE_NAME} · walk up to the rocket and press T to choose a destination`, 3600);
-        if (!record.visited) {
-          record.visited = true;
+        hud.flash(`${site.name} · walk up to the rocket and press T to choose a destination`, 3600);
+        if (!beenTo(site)) {
+          if (site === home) record.visited = true;
+          else record.been = [site.id, ...record.been].slice(0, BEEN_KEPT);
           save.touch();
         }
       }
@@ -684,7 +760,11 @@ export function installSpaceport(game) {
 
   // ── From the console ──────────────────────────────────────────────────────
   game.provide('spaceport', {
-    site,
+    // the launch site you're at or were last near, and all of them
+    get site() {
+      return site;
+    },
+    sites,
     flight,
     record,
     get phase() {
@@ -699,9 +779,12 @@ export function installSpaceport(game) {
     get look() {
       return look;
     },
-    // stand on the pad beside the rocket, facing it
-    async go() {
-      if (!site) return null;
+    // stand on the pad beside the rocket, facing it: this one, or the
+    // launch site with that id
+    async go(id) {
+      const to = id ? sites.byId(id) : site;
+      if (!to || (to !== site && flight.phase !== 'ground')) return null;
+      if (to !== site) moveTo(to);
       const p = atSite(ROCKET_AT.x, ROCKET_AT.z + 3.5);
       await game.api.teleport(p.x, p.z, site.yaw + Math.PI);
       return { x: p.x, z: p.z };

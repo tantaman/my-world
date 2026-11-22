@@ -1,8 +1,8 @@
 # Abandoned buildings
 
-Open **M → Routes**, select a building and choose **Show on map**. **Go here** takes you to its steps. You can also track it and walk. **K** operates the headlamp. Sound can be switched on in settings.
+Open **M → routes → abandoned buildings**, nearest first and as far out as you scroll, select a building and choose **Show on map**. **Go here** takes you to its steps. You can also track it and walk. **K** operates the headlamp. Sound can be switched on in settings.
 
-Alder Vale Asylum and the Dead Letter Depot are in the woods near the start. Farther out, Mercy Mineral Baths has seven bays of raised plunge tanks and showers. Blackwater Furnace Works has an 86-metre hall lined with boiler grilles and ash passages. Beyond the regional sites, the forest can grow other named institutions on dry ground. They appear on the map as you approach their district.
+Alder Vale Asylum and the Dead Letter Depot are in the woods near the start. Farther out, Mercy Mineral Baths has seven bays of raised plunge tanks and showers. Blackwater Furnace Works has an 86-metre hall lined with boiler grilles and ash passages. Beyond the regional sites, the forest can grow other named institutions on dry ground. They appear on the map as you approach their district, and in the list from anywhere.
 
 The tread that starts on the front steps turns into a side room. Watch where it ends. Switch off the lamp and listen for the other set of footsteps. Things previous visitors left can be examined up close. A place remembers that you went inside.
 

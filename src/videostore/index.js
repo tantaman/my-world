@@ -92,7 +92,7 @@ export function installVideostore(game) {
   const { scene, camera, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, sky, landmarks, towns, caves, railway, spaceport } = game;
 
   // ── Where it is ───────────────────────────────────────────────────────────
-  const keepOff = clearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, spaceport: spaceport.site });
+  const keepOff = clearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, spaceport: spaceport.sites });
   const site = findSite(gen, player.start, keepOff);
   const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset ? chunks.heightOffset(x, z) : 0);
   const local = (x, z, out = _l) => toLocal(site, x, z, out);
@@ -243,6 +243,7 @@ export function installVideostore(game) {
       return place;
     };
     map.places.addSource({
+      list: 'video stores',
       destinations: () => [asPlace()],
       within: (x0, z0, x1, z1) => (site.door.x >= x0 && site.door.x <= x1 && site.door.z >= z0 && site.door.z <= z1 ? [asPlace()] : []),
       get: (id) => (id === site.id ? asPlace() : null),

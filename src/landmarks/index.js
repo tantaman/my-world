@@ -28,6 +28,7 @@ import { buildSite } from './models.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { rayBox } from '../core/geom.js';
 import { createBuildingMaterial } from '../build/surfaces.js';
+import { GridNearest } from '../core/nearest.js';
 
 const SHOW = 330; // m: sites this close are stood up in the world...
 const HIDE = 420; // ...and taken down again past this
@@ -194,6 +195,16 @@ export function installLandmarks(game) {
       const s = sites.byId(id);
       return s && stands(s) ? asPlace(s) : null;
     },
+    list: 'old places',
+    nearest: (x, z) =>
+      new GridNearest(x, z, {
+        size: sites.size,
+        spill: sites.spill,
+        at(i, j) {
+          const s = sites.peek(i, j);
+          return s === undefined ? undefined : s && stands(s) ? [asPlace(s)] : [];
+        },
+      }),
   });
 
   // ── Each frame ────────────────────────────────────────────────────────────

@@ -6,11 +6,21 @@
 //   map.places.addSource({                       // from src/landmarks/index.js
 //     within(x0, z0, x1, z1) -> [place],          // what's in that part of the world
 //     get(id) -> place | null,
-//     destinations() -> [place],                  // optional: offer these in Routes from anywhere
+//     list: 'old places',                         // optional: listed in Routes, under this,
+//     nearest(x, z) -> stream,                    // ...nearest first and without end (core/nearest.js)
+//     destinations() -> [place],                  // ...or, for a few places, all of them
 //   });
 //
 // `within` may answer with only what it knows so far, and know more next
 // frame: the map is drawn every frame it's open, so places fill in.
+//
+// A source can be only a list, without `within` or `get`, of places another
+// source puts on the map (the hikes' views, under 'hikes').
+//
+// Routes lists, for each `list` name, what's in it nearest first, as far as
+// it's scrolled. Sources may share a name (the forest's ski runs and the real
+// ski resorts are both 'ski'). A stream needn't stop: it's only pulled as far
+// as somebody scrolls.
 //
 // A place:
 //   id       a string with a ':' in it, so it can't be taken for a mark's
@@ -24,6 +34,8 @@
 //            drawn under its shapes at every zoom
 //   yaw      optional: which way to face when `go here` sets you down at
 //            x, z (the way in, say); otherwise the way you were facing
+
+import { ListNearest, MergeNearest } from '../core/nearest.js';
 
 export const PLACE_COLOR = '#e9dfc0';
 
@@ -40,19 +52,28 @@ export class Places {
 
   within(x0, z0, x1, z1) {
     const out = [];
-    for (const s of this.sources) for (const p of s.within(x0, z0, x1, z1)) out.push(dress(p));
+    for (const s of this.sources) if (s.within) for (const p of s.within(x0, z0, x1, z1)) out.push(dress(p));
     return out;
   }
 
-  // Sources with named destinations can list them without scanning a region.
-  destinations() {
-    return this.sources.flatMap((s) => s.destinations ? s.destinations().map(dress) : []);
+  // The names of the lists in Routes, in the order they're shown.
+  lists() {
+    return [...new Set(this.sources.filter((s) => s.list).map((s) => s.list))].sort();
+  }
+
+  // What's in a list (or in every list, without one), nearest to (x, z)
+  // first: a stream (core/nearest.js).
+  around(x, z, list = null) {
+    const streams = this.sources
+      .filter((s) => s.list && (!list || s.list === list))
+      .map((s) => (s.nearest ? s.nearest(x, z) : new ListNearest(x, z, s.destinations ? s.destinations() : [])));
+    return new MergeNearest(streams);
   }
 
   get(id) {
     if (typeof id !== 'string' || !id.includes(':')) return null;
     for (const s of this.sources) {
-      const p = s.get(id);
+      const p = s.get && s.get(id);
       if (p) return dress(p);
     }
     return null;

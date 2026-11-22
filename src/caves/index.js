@@ -20,12 +20,14 @@
 // src/hikes/): what is there is what is really there.
 
 import { Caves } from './caves.js';
+import { CAVE } from './sites.js';
 import { caveKit, ROCK } from './look.js';
 import { Headlamp } from './lamp.js';
 import { caveSounds } from './sound.js';
 import { setCuts } from '../world/cuts.js';
 import { VEG_KINDS } from '../world/chunkGen.js';
 import { segDist } from '../core/geom.js';
+import { GridNearest } from '../core/nearest.js';
 
 // A cave's badge on the map: a dark mouth under an arch of rock.
 const GLYPH = ['..###..', '.#####.', '###.###', '##...##', '##...##', '#.....#', '#######'];
@@ -136,6 +138,16 @@ export function installCaves(game) {
       const c = m && caves.site(Number(m[1]), Number(m[2]));
       return c ? asPlace(c) : null;
     },
+    // (a mouth is well inside its own square)
+    list: 'caves',
+    nearest: (x, z) =>
+      new GridNearest(x, z, {
+        size: CAVE.cell,
+        at(i, j) {
+          const c = caves.site(i, j);
+          return c ? [asPlace(c)] : [];
+        },
+      }),
   });
 
   // ── Every frame ───────────────────────────────────────────────────────────

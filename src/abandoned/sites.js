@@ -107,8 +107,8 @@ function survey(gen, start, keepOff, type, seed, others, tries = 420) {
 
 // A district's survey stays inside its own square. Its centre and search
 // radius are cheap to query from streaming hooks, even on a long flight.
-const DISTRICT = 2400,
-  REACH = 610;
+export const DISTRICT = 2400; // m, the side of a district, from the start
+const REACH = 610;
 const PREFIX = ['Fen', 'Carrion', 'Silt', 'Bracken', 'Sable', 'Grey', 'Wick', 'Alder'];
 const SUFFIX = ['mere', 'cross', 'combe', 'water', 'wick', 'ford', 'beck', 'fell'];
 export class OutlyingBuildings {

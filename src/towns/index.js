@@ -34,6 +34,7 @@ import { onPlan, planDiscs, toWorld } from '../landmarks/sites.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { SKY, SHARED } from '../render/uniforms.js';
 import { rayBox } from '../core/geom.js';
+import { GridNearest } from '../core/nearest.js';
 import './sound.js';
 import { createBuildingMaterial } from '../build/surfaces.js';
 
@@ -258,6 +259,16 @@ export function installTowns(game) {
       const t = towns.byId(id);
       return t ? asPlace(t) : null;
     },
+    list: 'towns',
+    nearest: (x, z) =>
+      new GridNearest(x, z, {
+        size: towns.size,
+        spill: towns.spill,
+        at(i, j) {
+          const t = towns.peek(i, j);
+          return t === undefined ? undefined : t ? [asPlace(t)] : [];
+        },
+      }),
   });
 
   // ── What you can see ──────────────────────────────────────────────────────

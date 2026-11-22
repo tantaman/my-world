@@ -79,10 +79,12 @@ export function installHikes(game) {
   // map (map/places.js): named, and there to be tracked like a mark.
   const spots = [];
   map.places.addSource({
-    destinations: () => spots.filter((p) => p.id.endsWith(':view')),
     within: (x0, z0, x1, z1) => spots.filter((p) => p.x >= x0 && p.x <= x1 && p.z >= z0 && p.z <= z1),
     get: (id) => spots.find((p) => p.id === id) || null,
   });
+  // In Routes: where each photo was taken, and the snowy ones with the ski runs.
+  map.places.addSource({ list: 'hikes', destinations: () => spots.filter((p) => p.kind === 'view') });
+  map.places.addSource({ list: 'ski', destinations: () => spots.filter((p) => p.kind === 'ski peak') });
 
   // ── What stands there ────────────────────────────────────────────────────
   const waymarks = [];

@@ -33,7 +33,7 @@
 //   world.railway.soon(id, 5)   (for trying it out) the next train there in 5 s
 
 import * as THREE from 'three';
-import { Lines, clearOfPlaces, clearOfCaves, pointAt, nearest, samplesNear, ahead, PLATFORM, PLATFORM_EDGE, PLATFORM_W } from './lines.js';
+import { Lines, CELL, clearOfPlaces, clearOfCaves, pointAt, nearest, samplesNear, ahead, PLATFORM, PLATFORM_EDGE, PLATFORM_W } from './lines.js';
 import { Timetable, TRAIN_LEN } from './timetable.js';
 import { buildPiece, buildStation, pieceCount, pieceRange, footprint, PIECE } from './track.js';
 import { Train, Smoke, COACHES, SEATS, CAR_BOX } from './trains.js';
@@ -46,6 +46,7 @@ import { SEAT_HIPS } from '../player/character.js';
 import { SHARED } from '../render/uniforms.js';
 import { formatDistance } from '../core/format.js';
 import { createBuildingMaterial } from '../build/surfaces.js';
+import { GridNearest } from '../core/nearest.js';
 
 const SHOW = 300; // m: track and stations this close are stood up...
 const HIDE = 370; // ...and taken down again past this
@@ -575,6 +576,16 @@ export function installRailway(game) {
       const line = st && lineOf(st);
       return line && stands(line) ? asPlace(line, st) : null;
     },
+    // (a line keeps inside its own square)
+    list: 'stations',
+    nearest: (x, z) =>
+      new GridNearest(x, z, {
+        size: CELL,
+        at(i, j) {
+          const line = lines.peek(i, j);
+          return line === undefined ? undefined : line && stands(line) ? line.stations.map((st) => asPlace(line, st)) : [];
+        },
+      }),
   });
   map.addLayer(
     railLayer(() => {

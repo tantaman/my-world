@@ -195,6 +195,7 @@ place in that order, not at the end:
 | `map/mapView.js` | a list of somewhere to go, beside the map | `game.map.addTab({ id, label, el, shown })`, `map.open(id)` |
 | `map/mapView.js` | an option under those lists (a button) | `game.map.addAction({ id, label, title, run, enabled })` |
 | `map/places.js` | a place on the map, to look up and track | `game.map.places.addSource({ within, get })` |
+| `map/places.js` | a kind of place in Routes, listed nearest first without end | `addSource({ list, nearest(x, z) })` with a `GridNearest` (`core/nearest.js`), or `destinations()` for a few |
 | `player/character.js` | something the hiker holds up to the face | `character.addRaised(name, object, { stowed })`, `raise(name)` |
 | `player/character.js` | sitting astride what carries you, or in it with your arms over the sides | `character.seat({ spread, hang, lean, rest, stroke })` |
 | `player/character.js` | standing on something that slides (skis, a board) | `character.stance({ feet, crouch, lean, arms, shod, board, … })` |

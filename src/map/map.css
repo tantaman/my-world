@@ -196,7 +196,10 @@
 
 #map .route-panel { padding: 12px 14px; }
 #map .route-panel h3 { margin: 2px 0 12px; text-transform: uppercase; }
+#map .route-lists { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 10px; }
+#map .route-lists button { padding: 2px 7px; }
 #map .route-options { display: grid; gap: 3px; }
+#map .route-more { margin: 8px 6px; min-height: 1em; color: var(--ink-dim); }
 #map .route-options button {
   display: flex; align-items: center; gap: 12px; text-align: left;
   border-color: transparent; padding: 6px; color: var(--ink);
