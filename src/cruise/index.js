@@ -127,8 +127,12 @@ export function installCruise(game) {
   const mauiWays = mauiRegion ? regionsInTheWay(fields.regions, mauiRegion, true) : [];
   const known = (list) => list.every((g) => fields.site(g.id, false) !== undefined);
   const common = { landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, airfields: fields };
-  const others = () => [spaceport.site && spaceport.site.box, videostore.site && videostore.site.box, huntclub.site && huntclub.site.box, ...abandoned.sites.map((b) => b.box)];
-  const keepOff = [clearOf({ ...common, boxes: others }), clearOf(common)];
+  const others = () => [spaceport.site && spaceport.site.box, videostore.site && videostore.site.box, ...abandoned.sites.map((b) => b.box)];
+  // (every hunt club, the first and the far ones: not just the one you're nearest)
+  const clubs = (...box) => huntclub.within(...box).length > 0;
+  const nearStart = clearOf({ ...common, boxes: others });
+  const atMaui = clearOf(common);
+  const keepOff = [(...box) => nearStart(...box) || clubs(...box), (...box) => atMaui(...box) || clubs(...box)];
   const from = [player.start, mauiRegion];
   const berths = [null, null]; // each port's, once found (null if there's none)
   const searches = [null, null]; // { steps } while one's being looked for; 'done' after

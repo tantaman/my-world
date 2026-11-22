@@ -96,8 +96,8 @@ enough under her and round her, a short pier out to it, and a lane straight
 out from it to the open sea, deep all the way, with room to swing her round
 and no land in sight at its end; clear of the old places, the towns, the
 caves, the railway, the launch site, the video store, the abandoned
-buildings, the hunt club and the airfield. At Maui the same, looking all
-the way round the hikes there, off their land (theirs is real; the coast
+buildings, the hunt clubs and the airfield. At Maui the same (clear of the
+hunt clubs too), looking all the way round the hikes there, off their land (theirs is real; the coast
 round it is the seed's). Everyone in a world finds them in the same place.
 The home pier is found once the airfields in its way have been (a moment
 after the world opens), and Maui's a little after that. **Nothing about the
