@@ -46,13 +46,22 @@ const SKULL_ROUND = 0.016;
 const EYE_X = 0.032; // half the distance between the pupils
 const SOCKET = 0.0075; // how deep the eye sits under the brow
 const BROW_Y = 0.024; // the brow ridge, above eye level
-// The nose: from the bridge between the eyes (NASION) down the straight
-// back of the nose to the tip, then under it to where it meets the lip.
-// [height, how far forward, half-width of its back] at each end.
-const NASION = [0.014, 0.0915, 0.0058];
-const SUPRATIP = [-0.029, 0.1185, 0.0082];
-const TIP = { y: -0.0365, z: 0.1222, r: 0.0092 }; // the round of the tip
-const ALA = { x: 0.0099, y: -0.0412, z: 0.1, r: 0.0063 }; // the wings either side
+// The nose: from the bridge between the eyes (NASION) straight down its back
+// to the tip, round the tip and back under it to the lip (SUBNASALE). Across,
+// it is a ridge, rounded on top, whose sides slope down and out to the
+// cheeks; fuller and rounder toward the tip. Its wings are swellings either
+// side of its base. All smooth, so it is a long, strong nose and not a
+// pinched one.
+const NASION = { y: 0.014, z: 0.0912 };
+const NOSE_SLOPE = 0.62; // how far forward its back comes for each metre down
+const HUMP = 0.0007; // m, a hint of one partway down
+const TIP = { y: -0.0362, round: 0.006 }; // where the tip is, and how round (m)
+const UNDER = { z: 0.096, slope: 1.8 }; // under the tip: how far forward at the lip, and how steeply it rises
+const BRIDGE_ROUND = 0.0042; // m, how round the top of the ridge is at the bridge
+const TIP_ROUND = 0.0078; // ...and at the tip
+const NOSE_STEEP = [1.45, 2.3]; // how steeply its sides fall, at the bridge and at the tip
+const NOSE_SIDE_CURVE = 30; // 1/m: how the sides curve over, to turn into the cheek
+const ALA = { x: 0.0115, y: -0.0412, rx: 0.0062, ry: 0.0056, lift: 0.0085 }; // the wings: where, how big, how far they stand out (m)
 const SUBNASALE = -0.0498; // where the nose meets the upper lip
 const MOUTH_Y = -0.0695; // the line between the lips, in the middle
 const MOUTH_W = 0.0235; // half its width
@@ -138,34 +147,22 @@ function rayToEgg(n, [c, r]) {
   return Math.max(0, (-b + Math.sqrt(disc)) / (2 * a));
 }
 
-// The front of an egg shape at (x, y), seen along z; or -1 off it.
-function front(x, y, cx, cy, cz, rx, ry, rz) {
-  const d = 1 - ((x - cx) / rx) ** 2 - ((y - cy) / ry) ** 2;
-  return d > 0 ? cz + rz * Math.sqrt(d) : -1;
-}
+// The smaller of a and b, rounded where they're within k of each other.
+const smin = (a, b, k) => -smax(-a, -b, k);
 
 // The nose seen from the front: how far forward it comes at (x, y), or -1
-// off it. The back of the nose is a rounded ridge swept from the bridge to
-// above the tip, widening and standing further out as it goes; the tip and
-// the wings either side of it are eggs.
+// off it (the wings are in relief()).
 function nose(x, y) {
-  if (y > NASION[0] + 0.01 || y < SUBNASALE - 0.004 || Math.abs(x) > 0.03) return -1;
-  // the back of the nose, swept from the bridge to above the tip, with
-  // rounded ends
-  const run = NASION[0] - SUPRATIP[0];
-  const t0 = (NASION[0] - y) / run;
-  const t = clamp(t0, 0, 1);
-  const past = (t0 - t) * run; // m beyond either end
-  const bz = lerp(NASION[1], SUPRATIP[1], t) + 0.0008 * Math.sin(Math.PI * t); // a hint of a hump
-  const bw = lerp(NASION[2], SUPRATIP[2], t);
-  const depth = lerp(0.008, 0.03, t);
-  const d = 1 - (x / bw) ** 2 - (past / 0.0075) ** 2;
-  let z = d > 0 ? bz - depth + depth * Math.sqrt(d) : -1;
-  z = smax(z, front(x, y, 0, TIP.y, TIP.z - 0.03, TIP.r, TIP.r, 0.03), 0.004);
-  // the columella, under the tip to the lip
-  z = smax(z, front(x, y, 0, SUBNASALE + 0.0045, 0.104 - 0.02, 0.0056, 0.0062, 0.02), 0.003);
-  for (const s of [-1, 1]) z = smax(z, front(x, y, s * ALA.x, ALA.y, ALA.z - 0.016, ALA.r, ALA.r * 0.92, 0.016), 0.003);
-  return z;
+  if (y > NASION.y + 0.012 || y < SUBNASALE - 0.006) return -1;
+  const t = clamp((NASION.y - y) / (NASION.y - TIP.y), 0, 1); // 0 at the bridge, 1 at the tip
+  // down the middle: its straight back, and the underside rising from the
+  // lip, rounded into each other at the tip
+  const back = NASION.z + (NASION.y - y) * NOSE_SLOPE + HUMP * Math.sin(Math.PI * t) - 2.5 * Math.max(0, y - NASION.y);
+  const under = UNDER.z + (y - SUBNASALE) * UNDER.slope;
+  const mid = smin(back, under, TIP.round);
+  const round = lerp(BRIDGE_ROUND, TIP_ROUND, t * t);
+  const steep = lerp(NOSE_STEEP[0], NOSE_STEEP[1], t);
+  return mid - steep * (Math.hypot(x, round) - round) - NOSE_SIDE_CURVE * x * x;
 }
 
 // The line between the lips at x: up at the corners in a smile.
@@ -178,16 +175,17 @@ function relief(x, y, z0) {
   let z = z0;
   z -= SOCKET * gauss((ax - EYE_X) / 0.0165, (y - 0.001) / 0.0135); // eye sockets
   z += 0.0035 * gauss((ax - 0.03) / 0.024, (y - BROW_Y) / 0.0075); // brow ridge
-  z -= 0.0022 * gauss(ax / 0.008, (y - 0.012) / 0.008); // the dip at the top of the nose
+  z -= 0.0012 * gauss(ax / 0.01, (y - 0.012) / 0.008); // the dip at the top of the nose
   z += 0.0042 * gauss((ax - 0.047) / 0.016, (y + 0.021) / 0.013); // cheekbones
-  z -= 0.0025 * gauss((ax - 0.05) / 0.012, (y + 0.05) / 0.016); // hollow under them
+  z += 0.0035 * gauss((ax - 0.035) / 0.016, (y + 0.026) / 0.013); // the round of the cheeks, lifted by the smile
   z += 0.0055 * gauss(ax / 0.028, (y - MOUTH_Y) / 0.019); // the teeth behind the lips
   z += 0.0022 * gauss(ax / 0.02, (y - my - 0.0035) / 0.0034) * smoothstep(MOUTH_W, MOUTH_W - 0.008, ax); // upper lip
   z += 0.0024 * gauss(ax / 0.018, (y - my + PARTED + 0.0035) / 0.0042) * smoothstep(MOUTH_W, MOUTH_W - 0.009, ax); // lower lip
   z -= 0.0034 * gauss(ax / MOUTH_W, (y - my + PARTED / 2) / (0.0012 + PARTED / 2)); // between them
   z -= 0.0018 * gauss(ax / 0.016, (y - MOUTH_Y + 0.017) / 0.005); // under the lower lip
   z += 0.0028 * gauss(ax / 0.016, (y + 0.1) / 0.01); // point of the chin
-  z -= 0.0012 * gauss((ax - ALA.x - 0.0075) / 0.0028, (y - ALA.y) / 0.0075); // crease round the wings of the nose
+  z += ALA.lift * gauss((ax - ALA.x) / ALA.rx, (y - ALA.y) / ALA.ry); // the wings of the nose
+  z -= 0.0008 * gauss((ax - ALA.x - ALA.rx * 1.2) / 0.0028, (y - ALA.y) / 0.007); // the crease round them
   return smax(z, nose(x, y), 0.005);
 }
 
@@ -345,10 +343,10 @@ function skinColor(p, nrm, hair, base, out) {
   // sun-browned forehead, a little lighter
   out.lerp(cBrow, 0.12 * smoothstep(0.02, 0.05, p.y));
   // colour in the nose, the cheeks above the beard and the ears
-  const flush = 0.45 * gauss(p.x / 0.014, (p.y - TIP.y) / 0.014) + 0.3 * gauss((ax - 0.045) / 0.018, (p.y + 0.022) / 0.014);
+  const flush = 0.28 * gauss(p.x / 0.014, (p.y - TIP.y - 0.004) / 0.014) + 0.3 * gauss((ax - 0.045) / 0.018, (p.y + 0.022) / 0.014);
   out.lerp(cRosy, Math.min(0.5, flush) * smoothstep(0.03, 0.07, p.z));
   // the sockets, in the glasses' shade
-  out.lerp(cSocket, 0.4 * gauss((ax - EYE_X) / 0.014, (p.y - 0.001) / 0.011) * smoothstep(0.04, 0.07, p.z));
+  out.lerp(cSocket, 0.3 * gauss((ax - EYE_X) / 0.014, (p.y - 0.004) / 0.008) * smoothstep(0.04, 0.07, p.z));
   // lips
   const my = mouthY(p.x);
   const lip = (p.x / (MOUTH_W - 0.002)) ** 2 + ((p.y - my + PARTED / 2) / (0.0072 + PARTED / 2)) ** 2;
@@ -359,8 +357,8 @@ function skinColor(p, nrm, hair, base, out) {
   const teeth = smoothstep(-PARTED * 0.75, -PARTED * 0.35, p.y - my);
   out.lerp(_c2.copy(cMouth).lerp(cTeeth, teeth * smoothstep(MOUTH_W - 0.004, MOUTH_W - 0.012, Math.abs(p.x))), inGap * gap);
   // nostrils, under the tip either side
-  const nostril = gauss((ax - 0.0068) / 0.0034, (p.y - SUBNASALE - 0.0035) / 0.0028) * smoothstep(-0.2, -0.6, nrm.y);
-  out.lerp(cNostril, 0.85 * nostril);
+  const nostril = gauss((ax - 0.0066) / 0.0028, (p.y - SUBNASALE - 0.0032) / 0.0022) * smoothstep(-0.3, -0.7, nrm.y);
+  out.lerp(cNostril, 0.75 * nostril);
   // faintly blotchy, as skin is
   out.multiplyScalar(0.97 + 0.06 * phash(p.x * 900, p.y * 900, p.z * 900));
   // dark under hair, so the gaps between strands don't show bare skin
