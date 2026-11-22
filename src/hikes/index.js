@@ -9,7 +9,8 @@
 //     to one's trailhead, or straight to the spot its photo was taken from,
 //     facing the way it looked, at the hour it was taken.
 //   - On a hike, the HUD points the way to that spot (unless you're
-//     following a mark of your own).
+//     following a mark of your own), and on past it to where the walk ends,
+//     if it goes on.
 //   - A signpost stands at the trailhead and a cairn at the view, and the
 //     map names them.
 //   - From up there you can see the whole of it (the far view, src/far/).
@@ -35,6 +36,7 @@ const CAIRN_ASIDE = 1.4; // m to the left of where the photo was taken
 const SIGN_ASIDE = 1.6; // m to the side of the trail where it starts
 const WAYMARKS_NEAR = 400; // m: waymarks nearer than this are kept on the ground
 const GUIDE_COLOR = '#eadfb4';
+const REACHED = 12; // m: this near where the photo was taken, you've been there
 // What the map draws for where a photo was taken, and for a trailhead (7×7).
 const PEAK = ['.......', '...#...', '..###..', '..###..', '.#####.', '.#####.', '#######'];
 const SIGN = ['.......', '.####..', '.#####.', '.####..', '...#...', '...#...', '...#...'];
@@ -49,8 +51,13 @@ export function installHikes(game) {
   const outer = (c) => c.radius + c.fade;
 
   // ── Where things are ─────────────────────────────────────────────────────
-  // { x, z, yaw, camYaw } for 'trailhead' or 'view'
+  // { x, z, yaw, camYaw } for 'trailhead', 'view', or 'end' (where a walk
+  // that goes on past the view ends: facing back the way it came)
   function spot(c, at) {
+    if (at === 'end' && c.end) {
+      const t = c.trailhead;
+      return { x: c.at[0] + c.end.x, z: c.at[1] + c.end.z, yaw: Math.atan2(t.x - c.end.x, t.z - c.end.z) };
+    }
     if (at === 'view') {
       const v = c.view;
       const b = v.bearing === null || v.bearing === undefined ? null : deg(v.bearing);
@@ -95,7 +102,12 @@ export function installHikes(game) {
     const trail = c.trail && c.trail.name;
     const ski = c.country === 'snowy mountains';
     spots.push({ id: `hike:${c.id}:view`, x: v.x, z: v.z, name: c.name, kind: ski ? 'ski peak' : 'view', note: ski ? 'Follow the snow downhill to start skiing.' : 'where the photo was taken', glyph: PEAK });
-    spots.push({ id: `hike:${c.id}:trailhead`, x: t.x, z: t.z, name: trail || `${c.name} trailhead`, kind: 'trailhead', note: `where the walk up ${c.name} begins`, glyph: SIGN });
+    const down = c.trail && c.trail.climb < 0;
+    spots.push({ id: `hike:${c.id}:trailhead`, x: t.x, z: t.z, name: trail || `${c.name} trailhead`, kind: 'trailhead', note: `where the walk ${down ? 'down to' : 'up'} ${c.name} begins`, glyph: SIGN });
+    if (c.end) {
+      const e = spot(c, 'end');
+      spots.push({ id: `hike:${c.id}:end`, x: e.x, z: e.z, name: `${c.name}: the end of the trail`, kind: 'trail end', note: `where the walk past ${c.name} ends`, glyph: SIGN });
+    }
   }
 
   // ── Going there ──────────────────────────────────────────────────────────
@@ -124,7 +136,8 @@ export function installHikes(game) {
       player.camPitch = VIEW_PITCH;
       if (Number.isFinite(c.view.hour)) sky.hours = c.view.hour;
       hud.flash(`${c.name} · where the photo was taken`);
-    } else {
+    } else if (at === 'end') hud.flash(`${c.name} · the end of the trail`);
+    else {
       const t = c.trail;
       hud.flash(t ? `${c.name} · ${t.name || 'the trail'}: ${real(c, t.length)}, ${real(c, Math.abs(t.climb))} ${t.climb < 0 ? 'down' : 'up'}` : c.name);
     }
@@ -132,8 +145,8 @@ export function installHikes(game) {
   }
 
   // ── The list ─────────────────────────────────────────────────────────────
-  // The water on a hike, by name: its lakes, the sea, its streams.
-  const waterOn = (c) => [...new Set([...(c.lakes || []), ...(c.streams || [])].map((w) => w.name))].filter(Boolean);
+  // The water on a hike, by name: its lakes, the sea, its streams, its falls.
+  const waterOn = (c) => [...new Set([...(c.lakes || []), ...(c.streams || []), ...(c.falls || [])].map((w) => w.name))].filter(Boolean);
   // In the real world's metres, the way you'd describe the hike.
   const panel = new HikesPanel({
     hikes: cards.map((c) => ({
@@ -143,6 +156,7 @@ export function installHikes(game) {
       length: c.trail ? c.trail.length / c.scale : 0,
       climb: c.trail ? c.trail.climb / c.scale : 0,
       lakes: waterOn(c),
+      end: !!c.end,
     })),
     onGo(id, at) {
       map.close();
@@ -156,11 +170,18 @@ export function installHikes(game) {
   game.provide('hikes', panel);
   if (cards.length) map.addTab({ id: 'hikes', label: 'hikes', el: panel.el, shown: () => panel.shown() });
 
-  // On a hike, the HUD points to where the photo was taken.
+  // On a hike, the HUD points to where the photo was taken; on one whose walk
+  // goes on past it, once you've been there, on to where the walk ends.
+  const reached = new Set(); // the hikes whose view you've stood at, this visit
   hud.guide(() => {
     const c = onHike(player.pos.x, player.pos.z);
     if (!c) return null;
     const v = spot(c, 'view');
+    if (Math.hypot(player.pos.x - v.x, player.pos.z - v.z) < REACHED) reached.add(c.id);
+    if (c.end && reached.has(c.id)) {
+      const e = spot(c, 'end');
+      return { id: `hike:${c.id}:end`, label: `${c.name}: the end of the trail`, color: GUIDE_COLOR, x: e.x, z: e.z };
+    }
     return { id: `hike:${c.id}`, label: c.name, color: GUIDE_COLOR, x: v.x, z: v.z };
   });
 
@@ -225,6 +246,7 @@ export function installHikes(game) {
           name: c.name,
           trailhead: spot(c, 'trailhead'),
           view: spot(c, 'view'),
+          end: c.end ? spot(c, 'end') : null,
           trail: c.trail,
           water: waterOn(c),
           land: landforms.has(c.id),

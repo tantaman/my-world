@@ -17,10 +17,15 @@
 //   radius, fade    real land out to radius, gone by radius + fade
 //   ground          { n, cell, heights, fine? }: an n × n grid of heights
 //                   `cell` apart, centred on `at`, packed by packHeights().
-//                   fine: { x, z, w, h, cell, heights }, a finer w × h grid
-//                   over part of it (the walk), from (x, z) relative to `at`:
-//                   where it is, it is the ground, giving way to the coarse
-//                   grid over FINE_EDGE at its edge
+//                   fine: a finer grid over part of it (the walk): where it
+//                   is, it is the ground, giving way to the coarse grid over
+//                   FINE_EDGE at its edge. Either one box of it,
+//                   { x, z, w, h, cell, heights }, w × h from (x, z) relative
+//                   to `at`; or, for a walk too long for one box to be small,
+//                   tiles of it, { cell, size, tiles: [[ti, tj, heights], ...] }:
+//                   tile (ti, tj) holds the size × size points from
+//                   (ti·size, tj·size) cells from `at`, and only the tiles
+//                   near the walk are kept
 //   lakes           [{ name, level, box: [i0, j0, w, h], shore, sea? }]: the
 //                   water level, and the signed distance to the shore
 //                   (negative in the water) over part of the same grid, packed
@@ -43,12 +48,17 @@
 //                   packed by packCover(). Where it says nothing, or there is
 //                   no cover, the land is wooded by `trees` and steep ground
 //                   is rock
+//   falls           [{ name, x, z, height? }]: waterfalls, each a point on
+//                   its stream (relative to `at`), with its real height (m)
+//                   where the map says. The ground and the stream make the
+//                   drop; the falls feature puts the falling water on it
 //   view            { x, z, bearing, hour }: where the photo was taken from
 //                   (relative to `at`: the middle of the land, unless it was
 //                   centred somewhere else to take in the whole of a long
 //                   trail), which way it looked (degrees clockwise from
 //                   north) and when
 //   trailhead       { x, z, yaw }: where the walk to the view begins
+//   end             { x, z }: where the walk ends, if it goes on past the view
 //   trees           { cover, species }: how thickly it is wooded (0..1; at 0
 //                   nothing stands on it at all, as above the tree line) and
 //                   with what (-1 broadleaf .. 1 conifers), before slope and
@@ -342,6 +352,105 @@ function gridAt(H, w, h, fx, fz) {
   return cr(row(j - 1), row(j), row(j + 1), row(j + 2), v);
 }
 
+// The finer grid as one box (see `ground.fine`). edge() says how far in from
+// its edge (lx, lz) is, measured from the land's middle (0 or less: outside
+// it); height() is the ground there, once edge() has said it's inside.
+class FineBox {
+  constructor(f) {
+    Object.assign(this, { x: f.x, z: f.z, w: f.w, h: f.h, cell: f.cell, H: unpackHeights(f.heights, f.w, f.h) });
+    this._fx = 0;
+    this._fz = 0;
+  }
+
+  edge(lx, lz) {
+    this._fx = (lx - this.x) / this.cell;
+    this._fz = (lz - this.z) / this.cell;
+    return Math.min(this._fx, this._fz, this.w - 1 - this._fx, this.h - 1 - this._fz) * this.cell;
+  }
+
+  height() {
+    return gridAt(this.H, this.w, this.h, this._fx, this._fz);
+  }
+}
+
+// The finer grid as tiles along the walk (see `ground.fine`), with the same
+// edge() and height() as a box. The edge of what is kept is wherever a tile
+// has no neighbour, across a side or a corner; a tile is bigger than the
+// FINE_EDGE over which the grid gives way to the coarse one, so only its
+// own neighbours ever need asking about.
+const tileKey = (ti, tj) => (ti + 32768) * 65536 + tj + 32768;
+// (which neighbours a tile has, as bits of its mask)
+const SIDES = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+class FineTiles {
+  constructor(f) {
+    this.cell = f.cell;
+    this.size = f.size;
+    this.tiles = new Map();
+    for (const [ti, tj, heights] of f.tiles) this.tiles.set(tileKey(ti, tj), { ti, tj, H: unpackHeights(heights, f.size, f.size), mask: 0 });
+    for (const t of this.tiles.values()) SIDES.forEach(([a, b], k) => (t.mask |= this.tiles.has(tileKey(t.ti + a, t.tj + b)) ? 1 << k : 0));
+    this._t = null;
+    this._u = 0;
+    this._v = 0;
+  }
+
+  edge(lx, lz) {
+    const S = this.size;
+    const fi = lx / this.cell;
+    const fj = lz / this.cell;
+    const ti = Math.floor(fi / S);
+    const tj = Math.floor(fj / S);
+    const t = this.tiles.get(tileKey(ti, tj));
+    this._t = t;
+    if (!t) return 0;
+    // in the tile's own points: 0 at its first, S − 1 at its last
+    const u = fi - ti * S;
+    const v = fj - tj * S;
+    this._u = u;
+    this._v = v;
+    const [ur, vb] = [S - 1 - u, S - 1 - v];
+    const m = t.mask;
+    let d = Infinity;
+    if (!(m & 1)) d = Math.min(d, u);
+    if (!(m & 2)) d = Math.min(d, ur);
+    if (!(m & 4)) d = Math.min(d, v);
+    if (!(m & 8)) d = Math.min(d, vb);
+    if (!(m & 16)) d = Math.min(d, Math.hypot(u, v));
+    if (!(m & 32)) d = Math.min(d, Math.hypot(Math.max(0, ur), v));
+    if (!(m & 64)) d = Math.min(d, Math.hypot(u, Math.max(0, vb)));
+    if (!(m & 128)) d = Math.min(d, Math.hypot(Math.max(0, ur), Math.max(0, vb)));
+    return d * this.cell;
+  }
+
+  height() {
+    const S = this.size;
+    const t = this._t;
+    const [u, v] = [this._u, this._v];
+    // well inside the tile, its own heights are all that's asked
+    if (u >= 1 && v >= 1 && u < S - 2 && v < S - 2) return gridAt(t.H, S, S, u, v);
+    // across its edge, a neighbour's
+    const [I, J] = [t.ti * S + Math.floor(u), t.tj * S + Math.floor(v)];
+    const [fu, fv] = [u - Math.floor(u), v - Math.floor(v)];
+    const row = (jj) => cr(this._at(I - 1, jj), this._at(I, jj), this._at(I + 1, jj), this._at(I + 2, jj), fu);
+    return cr(row(J - 1), row(J), row(J + 1), row(J + 2), fv);
+  }
+
+  // The height at point (I, J) of the whole grid; where no tile has it, the
+  // nearest of the current tile's own (moved across, or down, or both).
+  _at(I, J) {
+    const S = this.size;
+    const t = this._t;
+    let o = this.tiles.get(tileKey(Math.floor(I / S), Math.floor(J / S)));
+    if (!o) {
+      const Ic = Math.min(t.ti * S + S - 1, Math.max(t.ti * S, I));
+      const Jc = Math.min(t.tj * S + S - 1, Math.max(t.tj * S, J));
+      if ((o = this.tiles.get(tileKey(Math.floor(Ic / S), Math.floor(J / S))))) I = Ic;
+      else if ((o = this.tiles.get(tileKey(Math.floor(I / S), Math.floor(Jc / S))))) J = Jc;
+      else [o, I, J] = [t, Ic, Jc];
+    }
+    return o.H[(J - o.tj * S) * S + I - o.ti * S];
+  }
+}
+
 export class Landform {
   constructor(def) {
     this.def = def;
@@ -358,7 +467,7 @@ export class Landform {
     this.half = ((g.n - 1) / 2) * g.cell;
     this.h = unpackHeights(g.heights, g.n);
     const f = g.fine;
-    this.fine = f ? { x: f.x, z: f.z, w: f.w, h: f.h, cell: f.cell, H: unpackHeights(f.heights, f.w, f.h) } : null;
+    this.fine = f ? (f.tiles ? new FineTiles(f) : new FineBox(f)) : null;
     this.lakes = (def.lakes || []).map((l) => ({ ...l, sea: !!l.sea, d: unpackShore(l.shore) }));
     this.beaches = (def.beaches || []).map((b) => ({ ...b, d: unpackShore(b.shore) }));
     this.view = def.view;
@@ -425,12 +534,10 @@ export class Landform {
   raw(x, z) {
     const f = this.fine;
     if (f) {
-      const fx = (x - this.cx - f.x) / f.cell;
-      const fz = (z - this.cz - f.z) / f.cell;
       // metres in from its edge
-      const m = Math.min(fx, fz, f.w - 1 - fx, f.h - 1 - fz) * f.cell;
+      const m = f.edge(x - this.cx, z - this.cz);
       if (m > 0) {
-        const g = gridAt(f.H, f.w, f.h, fx, fz);
+        const g = f.height();
         if (m >= FINE_EDGE) return g;
         const h = this._coarse(x, z);
         return h + (g - h) * smoothstep(0, FINE_EDGE, m);
@@ -446,10 +553,7 @@ export class Landform {
   // The spacing of the heights at (x, z).
   cellAt(x, z) {
     const f = this.fine;
-    if (!f) return this.cell;
-    const fx = (x - this.cx - f.x) / f.cell;
-    const fz = (z - this.cz - f.z) / f.cell;
-    return fx > 0 && fz > 0 && fx < f.w - 1 && fz < f.h - 1 ? f.cell : this.cell;
+    return f && f.edge(x - this.cx, z - this.cz) > 0 ? f.cell : this.cell;
   }
 
   // Rise over run of the real ground.

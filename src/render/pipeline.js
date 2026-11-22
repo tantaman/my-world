@@ -189,6 +189,7 @@ uniform vec3 uCamPos;
 uniform float uOutline;
 uniform float uFogDensity;
 uniform float uFogHeight;
+uniform float uFogFloor;
 uniform float uFogFar;
 uniform float uFogTint;
 uniform float uDeck;
@@ -311,7 +312,7 @@ void main() {
     // Height fog with sun in-scattering, coloured by the sky behind it.
     float b = uFogHeight;
     float ry = abs(rd.y) < 1e-3 ? 1e-3 : rd.y;
-    float fogAmt = uFogDensity * exp(-uCamPos.y * b) * (1.0 - exp(-dist * ry * b)) / (ry * b);
+    float fogAmt = uFogDensity * exp(-(uCamPos.y - uFogFloor) * b) * (1.0 - exp(-dist * ry * b)) / (ry * b);
     float fog = 1.0 - exp(-max(fogAmt, 0.0));
     fog = max(fog, smoothstep(uFogFar * 0.55, uFogFar, dist));
     vec3 frd = normalize(vec3(rd.x, clamp(rd.y, 0.0, 0.08), rd.z));
@@ -532,6 +533,11 @@ export class Pipeline {
     this.fogFar = 0;
     // How thick the air is, 1 being the forest's: a country may say (world/country.js).
     this.haze = 1;
+    // The height (m) the haze thins out up from: the forest's floor, or the
+    // bottom of a real place that goes down below it (a canyon cut into a
+    // plateau), set by the country feature. Thick air is a thing of the
+    // valley floor, wherever the floor is.
+    this.fogFloor = 0;
 
     this.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
@@ -568,6 +574,7 @@ export class Pipeline {
         uOutline: { value: 0 },
         uFogDensity: { value: FOG_DENSITY },
         uFogHeight: { value: 0.03 },
+        uFogFloor: { value: 0 },
         uFogFar: { value: 250 },
         uFogTint: { value: FOG_TINT },
       },
@@ -759,6 +766,7 @@ export class Pipeline {
     u.uOutline.value = pixel ? this.outline : 0;
     u.uFogFar.value = this.fogFar || (CONFIG.viewRadius - 0.15) * CONFIG.chunkSize;
     u.uFogDensity.value = FOG_DENSITY * this.haze;
+    u.uFogFloor.value = this.fogFloor;
     this.draw(this.composite, this.rtHDR);
 
     // the ever smaller copies, which the bloom and the eye both work from

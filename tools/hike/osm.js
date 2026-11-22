@@ -1,7 +1,8 @@
 // Trails and water out of OpenStreetMap's XML (the /api/0.6/map answer for a
 // bounding box). Pure: hand it the text.
 //
-// Trails are ways tagged as footpaths. Water is closed ways and multipolygon
+// Trails are ways tagged as footpaths. Waterfalls are the points on streams
+// the map marks as falls. Water is closed ways and multipolygon
 // relations tagged natural=water (lakes, ponds, reservoirs); an outer ring
 // made of several ways is joined end to end. The coast is ways tagged
 // natural=coastline, which OpenStreetMap always draws with the land on their
@@ -73,15 +74,19 @@ export function incompleteWaters(osm) {
 const FOOT = new Set(['path', 'footway', 'track', 'steps', 'bridleway']);
 const coords = (osm, refs) => refs.map((r) => osm.nodes.get(r)).filter(Boolean);
 
-// [{ name, points: [[lat, lon], ...], rope? }]: rope where the path has
-// chains or a fixed rope to hold on to
+// [{ name, points: [[lat, lon], ...], rope?, closed? }]: rope where the path
+// has chains or a fixed rope to hold on to; closed where it isn't open to
+// walkers (private, or no entry), so the walk keeps off it, though it's
+// there on the ground
+const CLOSED = new Set(['no', 'private']);
 export function trails(osm) {
   const out = [];
   for (const w of osm.ways.values()) {
     if (!FOOT.has(w.tags.highway)) continue;
     const points = coords(osm, w.refs);
     const rope = w.tags.safety_rope === 'yes';
-    if (points.length > 1) out.push({ name: w.tags.name || '', points, ...(rope ? { rope } : {}) });
+    const closed = CLOSED.has(w.tags.access) || CLOSED.has(w.tags.foot);
+    if (points.length > 1) out.push({ name: w.tags.name || '', points, ...(rope ? { rope } : {}), ...(closed ? { closed } : {}) });
   }
   return out;
 }
@@ -129,6 +134,19 @@ export function streams(osm) {
     if ((t.waterway !== 'stream' && t.waterway !== 'river') || t.intermittent === 'yes') continue;
     const points = coords(osm, w.refs);
     if (points.length > 1) out.push({ name: t.name || '', river: t.waterway === 'river', points });
+  }
+  return out;
+}
+
+// Waterfalls: [{ name, lat, lon, height? }], each a point on its stream
+// (waterway=waterfall), with its real height (m) where the map says.
+export function falls(osm) {
+  const out = [];
+  for (const [id, t] of osm.tagged) {
+    if (t.waterway !== 'waterfall') continue;
+    const [lat, lon] = osm.nodes.get(id);
+    const height = Number.parseFloat(t.height);
+    out.push({ name: t.name || '', lat, lon, ...(height > 0 ? { height } : {}) });
   }
   return out;
 }

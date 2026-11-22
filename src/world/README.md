@@ -201,7 +201,8 @@ of one grows until its land has come.
 
 What a real place looks like is its **country**: one entry in one table
 (`country.js`) that says what its ground is made of, what grows and lives
-there, what its sky is doing and what its trees are called. The forest is
+there, what its sky is doing, what colour its water is and what its trees
+are called. The forest is
 one country among them, and looks the way it always has. Where the map says
 what covers a real place's land (woods, willow scrub, scree, bare rock,
 tundra, ice), that is where each is: a scree is strewn with boulders, a

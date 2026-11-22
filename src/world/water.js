@@ -79,6 +79,11 @@ const STEP = 0.45;
 // make it, over stretches about WIDTH_WAVE m long: pools and narrows.
 const WIDTH_VARY = 0.22;
 const WIDTH_WAVE = 14;
+// A real place's stream (landform.js) steeper than this, rise over run, is
+// falling rather than running: white all over between the two, as a
+// waterfall is (falls/ draws the falling water on it). The forest's own never
+// is that steep.
+const FALLING = [0.7, 1.5];
 // White water churned up in the pool at the foot of a cascade dies away over
 // about this many metres.
 const PLUNGE = 1.6;
@@ -118,7 +123,7 @@ const mix = (a, b, t) => a + (b - a) * t;
 
 // One channel near the point being shaped (see _hit()).
 function makeHit() {
-  return { d: 0, cw: 0, g: 0, W: 0, Wq: 0, above: 0, slope: 0, tx: 0, tz: 0, size: 0, river: false, depth: 0, ramp: 0, v0: 0, v1: 0, v2: 0, region: 0 };
+  return { d: 0, cw: 0, g: 0, W: 0, Wq: 0, above: 0, slope: 0, tx: 0, tz: 0, size: 0, river: false, real: false, depth: 0, ramp: 0, v0: 0, v1: 0, v2: 0, region: 0 };
 }
 const MAX_HITS = 12;
 
@@ -219,6 +224,7 @@ export class Water {
     hit.d = d;
     hit.cw = cw;
     hit.frozen = !!s.frozen;
+    hit.real = !!s.real;
     // Up above the snow line it is ice, not water: the channel is filled to
     // its level and snowed over, and its valley becomes a trough. The snow
     // line is read at the point being shaped, not on the centreline, because
@@ -471,6 +477,8 @@ export class Water {
         fx = L.tx * speed;
         fz = L.tz * speed;
         foam = Math.max(smoothstep(0.1, 0.45, surf), 0.6 * plunge) * L.g;
+        // a real stream going over a cliff is white all the way down
+        if (L.real) foam = Math.max(foam, smoothstep(FALLING[0], FALLING[1], L.slope) * L.g);
       }
       this._offer(L.Wq, region, edge, kind, fx, fz, foam, mix(SMALL.open, BIG.open, L.size));
     }

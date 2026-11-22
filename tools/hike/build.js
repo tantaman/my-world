@@ -19,6 +19,10 @@ export const DEFAULTS = {
   fine: null,
   fineMargin: 400, // real metres, when only the cell is said
 };
+// Points along each side of a tile of the finer grid: 32 at 5 real metres
+// apart is 32 m in the game, more than the FINE_EDGE over which it gives way
+// to the coarse grid (landform.js), so a tile need only ask its neighbours.
+const FINE_TILE = 32;
 
 // How near (game m) the photo has to be to a trail for that trail to be the
 // walk to it.
@@ -31,6 +35,12 @@ const AT_ROAD = 4;
 const SUMMIT = 40;
 // Points of two paths nearer than this (game m) are the same point.
 const SAME = 0.05;
+// A walk said to start or end somewhere (from, to) crosses where the map's
+// paths stop short of one another by up to this much (game m): a scramble it
+// didn't draw, as down the cliff beside a fall. A crossing steeper than
+// STEEP (rise over run) has chains to hold on to.
+const GAP = 12;
+const STEEP = 0.5;
 // Lakes stop this far (game m) inside the real land, so they never reach
 // the forest's edge.
 const LAKE_INSET = 25;
@@ -42,6 +52,10 @@ const SEA_LEVEL = 0;
 const SEA_NAME = 'the sea';
 // real m: how far over the water a lake's, or the sea's, banks are kept
 const BANK = 0.5;
+// game m: the spacing of a pool's own grid (a lake too small for the
+// ground's), and how far round it that reaches
+const POOL_CELL = 0.5;
+const POOL_MARGIN = 6;
 // game m: the spacing of a beach's own grid, and how far round it that reaches
 const BEACH_CELL = 1.5;
 const BEACH_MARGIN = 6;
@@ -57,7 +71,7 @@ const SEA_CELL = 3;
 
 //   photo      { lat, lon, bearing, hour } (readPhoto())
 //   elevation  (lat, lon) -> metres above sea level
-//   trails     [{ name, points: [[lat, lon], ...], rope? }]   (osm.js)
+//   trails     [{ name, points: [[lat, lon], ...], rope?, closed? }]   (osm.js)
 //   waters     [{ name, rings: [[[lat, lon], ...]] }]
 //   coast      [[[lat, lon], ...], ...]: the shoreline of the sea, the land
 //              on the left of each line as you go along it (osm.js)
@@ -68,14 +82,19 @@ const SEA_CELL = 3;
 //              each the way it flows
 //   covers     [{ kind, rings: [[[lat, lon], ...], ...] }]: what covers the
 //              land, one of COVER (landform.js), holes and all (osm.js)
+//   falls      [{ name, lat, lon, height? }]: waterfalls, each a point on its
+//              stream, with its real height where the map says
 //   middle     { lat, lon } to centre the land on, if not the photo: to take
 //              in the whole of a long trail, the photo part way along it
+//   from, to   { lat, lon }: where the walk starts, if not at the nearest
+//              road, and where it ends, if it goes on past the photo (each
+//              the point of a path nearest it)
 //   datum      the heights to stand on, shared with a hike this one overlaps
 //              (place.js), or null to set its own
 //   fineElevation  (lat, lon) -> metres, for the finer grid along the walk
 //              (opt.fine), where finer heights are to be had; elevation if not
 // → { def, preview: { width, height, rgb }, walk: [[x, z], ...] or null }
-export function buildHike({ id, name, photo, elevation, fineElevation = elevation, trails = [], waters = [], coast = [], roads = [], beaches = [], streams = [], covers = [], middle = null, at = [0, 0], datum = null, ...opt }) {
+export function buildHike({ id, name, photo, elevation, fineElevation = elevation, trails = [], waters = [], coast = [], roads = [], beaches = [], streams = [], covers = [], falls = [], middle = null, from = null, to = null, at = [0, 0], datum = null, ...opt }) {
   const o = { ...DEFAULTS, ...opt, trees: { ...DEFAULTS.trees, ...opt.trees } };
   const s = o.scale;
   const mid = middle || photo;
@@ -103,6 +122,20 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
 
   const R = o.radius * s;
   const inside = (x, z, inset) => Math.hypot(x, z) < R - inset;
+  // a line's stretches on the land, kept `inset` in from its edge
+  const within = (pts, inset) => {
+    const out = [];
+    let cur = [];
+    for (const p of pts) {
+      if (inside(p[0], p[1], inset)) cur.push(p);
+      else {
+        if (cur.length > 1) out.push(cur);
+        cur = [];
+      }
+    }
+    if (cur.length > 1) out.push(cur);
+    return out;
+  };
 
   // ── Lakes ──────────────────────────────────────────────────────────────────
   const lakes = [];
@@ -143,7 +176,17 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
         if (v < 0) wet.push((j0 + j) * n + i0 + i);
       }
     }
-    if (wet.length < 4) continue;
+    if (wet.length < 4) {
+      // A pool too small for the ground's grid (the one at the foot of a
+      // fall): its shore on a grid of its own, and its level from the finer
+      // heights where there are any.
+      const pool = poolOf(rings, [x0, z0, x1, z1], Rl, (x, z) => {
+        const e = fineElevation(...fromGame(x, z));
+        return Number.isFinite(e) ? e : elevation(...fromGame(x, z));
+      });
+      if (pool) lakes.push({ name: w.name, ...pool });
+      continue;
+    }
     // Elevation data lays a lake out flat at its surface: the level is the
     // height most of it agrees on.
     const levels = wet.map((k) => E[k]).sort((a, b) => a - b);
@@ -310,8 +353,8 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
     let cur = [];
     const flush = () => {
       if (cur.length > 1) {
-        lines.push({ name: t.name, pts: simplify(cur, SIMPLIFY), rope: !!t.rope });
-        whole.push({ name: t.name, pts: cur });
+        lines.push({ name: t.name, pts: simplify(cur, SIMPLIFY), rope: !!t.rope, closed: !!t.closed });
+        whole.push({ name: t.name, pts: cur, closed: !!t.closed });
       }
       cur = [];
     };
@@ -340,37 +383,66 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
     flush();
   }
 
+  // ── Waterfalls ─────────────────────────────────────────────────────────────
+  // Where each is, by name: the ground and the stream make the drop (it is
+  // the ground's to be a cliff), and the game puts the falling water on it.
+  const drops = [];
+  for (const f of falls) {
+    const [x, z] = toGame([f.lat, f.lon]);
+    if (inside(x, z, LAKE_INSET)) drops.push({ name: f.name, x: round(x, 10), z: round(z, 10), ...(f.height ? { height: f.height } : {}) });
+  }
+
   // The walk: from where you'd leave the car, by whatever paths lead to where
-  // the photo was taken. Failing a road, up the trail it was taken on.
+  // the photo was taken. Failing a road, up the trail it was taken on. Or
+  // from where it's said to start (`from`), and on past the photo to where
+  // it's said to end (`to`), by the paths between.
   const [vx, vz] = toGame([photo.lat, photo.lon]).map((v) => round(v, 10));
   const view = { x: vx, z: vz, bearing: round(photo.bearing, 10), hour: round(photo.hour, 100) };
-  const fromRoad = walkFromRoad(whole, roads.map((r) => r.map(toGame)), [vx, vz]);
-  const route = fromRoad ? { ...fromRoad, pts: simplify(fromRoad.pts, SIMPLIFY) } : walkTo(lines, heightAt, [vx, vz]);
+  const drive = roads.map((r) => r.map(toGame));
+  const walkable = { roads: drive.flatMap((r) => within(r, TRAIL_INSET)), gap: GAP };
+  let found = from ? walkBetween(whole, [toGame([from.lat, from.lon]), [vx, vz]], walkable) : walkFromRoad(whole, drive, [vx, vz]);
+  if (found && to) found = walkBetween(whole, [found.pts[0], [vx, vz], toGame([to.lat, to.lon])], walkable);
+  if (!found && (from || to)) throw new Error(`no paths lead ${from ? 'from where the walk is to start ' : ''}to the photo${to ? ' and on to where it is to end' : ''}`);
+  // The stretches of it off the map's paths (along a village's lanes, across
+  // a gap the map left) are paths on the ground too; a steep gap, with
+  // chains to hold on to.
+  for (const a of (found && found.added) || []) {
+    const steep = a.gap && a.pts.some((p, k) => k > 0 && Math.abs(fineElevation(...fromGame(...p)) - fineElevation(...fromGame(...a.pts[k - 1]))) > (STEEP * dist(p, a.pts[k - 1])) / s);
+    lines.push({ name: '', pts: simplify(a.pts, SIMPLIFY), rope: steep, closed: false });
+  }
+  const route = found ? { ...found, pts: simplify(found.pts, SIMPLIFY) } : walkTo(lines, heightAt, [vx, vz]);
   const trailhead = route ? { x: route.pts[0][0], z: route.pts[0][1], yaw: route.yaw } : { x: vx, z: vz, yaw: Math.PI - ((photo.bearing || 0) * Math.PI) / 180 };
+  // where it ends, if that's past the photo
+  const last = route && route.pts[route.pts.length - 1];
+  const end = to && last ? { x: round(last[0], 10), z: round(last[1], 10) } : null;
 
   // ── A finer grid along the walk ────────────────────────────────────────────
   // The ground's grid is coarse for land kilometres across, and seen close a
   // narrow ridge on it is a broad hump. Where the walk goes, a finer grid
   // keeps it narrow: heights `fine.cell` real metres apart, as far round the
-  // walk as `fine.margin`, with the lakes and the sea as the coarse grid has
-  // them. It gives way to the coarse grid at its edge (landform.js).
+  // walk (and the falls) as `fine.margin`, with the lakes and the sea as the
+  // coarse grid has them. It is kept as tiles, only those near the walk, so
+  // a walk of many kilometres costs what its own strip of land does. It
+  // gives way to the coarse grid at its edge (landform.js).
   const fo = o.fine && { margin: o.fineMargin, ...o.fine };
   if (fo) {
-    const [x0, z0, x1, z1] = fineBox(route ? route.pts : null, fo, s, R, [vx, vz]);
     const fc = fo.cell * s;
-    const w = Math.round((x1 - x0) / fc) + 1;
-    const h = Math.round((z1 - z0) / fc) + 1;
-    const F = new Float32Array(w * h);
-    for (let j = 0; j < h; j++) {
-      for (let i = 0; i < w; i++) {
-        const x = x0 + i * fc;
-        const z = z0 + j * fc;
-        let sum = 0;
-        for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) sum += fineElevation(...fromGame(x + (a * fc) / 3, z + (b * fc) / 3));
-        F[j * w + i] = (watered(lakes, gx(0), cell, x, z, sum / 9) - base) * s;
+    const S = FINE_TILE;
+    const tiles = new Map();
+    for (const [ti, tj] of fineTiles(route ? route.pts : null, fo, s, R, [[vx, vz], ...drops.map((f) => [f.x, f.z])])) {
+      const F = new Float32Array(S * S);
+      for (let j = 0; j < S; j++) {
+        for (let i = 0; i < S; i++) {
+          const x = (ti * S + i) * fc;
+          const z = (tj * S + j) * fc;
+          let sum = 0;
+          for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) sum += fineElevation(...fromGame(x + (a * fc) / 3, z + (b * fc) / 3));
+          F[j * S + i] = (watered(lakes, gx(0), cell, x, z, sum / 9) - base) * s;
+        }
       }
+      tiles.set(`${ti},${tj}`, { ti, tj, H: F });
     }
-    fine = { x: round(x0, 100), z: round(z0, 100), w, h, cell: fc, H: F };
+    fine = { cell: fc, size: S, tiles };
   }
 
   const def = {
@@ -388,7 +460,9 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
     datum,
     view,
     trailhead: { x: round(trailhead.x, 10), z: round(trailhead.z, 10), yaw: round(trailhead.yaw, 1000) },
-    trail: route ? { name: route.name, length: Math.round(route.length), climb: Math.round(heightAt(vx, vz) - heightAt(trailhead.x, trailhead.z)) } : null,
+    // where the walk ends, when it goes on past the photo
+    ...(end ? { end } : {}),
+    trail: route ? { name: route.name, length: Math.round(route.length), climb: Math.round(heightAt(...(end ? [end.x, end.z] : [vx, vz])) - heightAt(trailhead.x, trailhead.z)) } : null,
     trees: o.trees,
     // what kind of country it is (src/world/country.js); unsaid, forest
     ...(o.country ? { country: o.country } : {}),
@@ -397,10 +471,12 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
     lakes: lakes.map((l) => ({ name: l.name, ...(l.sea ? { sea: true } : {}), level: round((l.levelReal - base) * s, 100), ...(l.own || { box: l.box }), shore: packShore(l.d) })),
     ...(strands.length ? { beaches: strands } : {}),
     ...(runs.length ? { streams: runs } : {}),
+    // waterfalls, by name: where each is (relative to `at`), and its real height if the map says
+    ...(drops.length ? { falls: drops } : {}),
     paths: lines.map((l) => l.pts.flatMap(([x, z]) => [round(x, 10), round(z, 10)])),
     // the stretches of them with chains to hold on to
     ...(lines.some((l) => l.rope) ? { ropes: lines.filter((l) => l.rope).map((l) => l.pts.flatMap(([x, z]) => [round(x, 10), round(z, 10)])) } : {}),
-    ground: { n, cell, heights: packHeights(H, n), ...(fine ? { fine: { x: fine.x, z: fine.z, w: fine.w, h: fine.h, cell: fine.cell, heights: packHeights(fine.H, fine.w, fine.h) } } : {}) },
+    ground: { n, cell, heights: packHeights(H, n), ...(fine ? { fine: { cell: fine.cell, size: fine.size, tiles: [...fine.tiles.values()].map((t) => [t.ti, t.tj, packHeights(t.H, fine.size, fine.size)]) } } : {}) },
     ...(areas.length ? { cover: { kinds: COVER, cells: packCover(cover) } } : {}),
   };
   // First in its part of the world: its own trailhead sets the heights, at
@@ -422,35 +498,91 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
   return { def, preview: preview(H, n, cell, lakeCells, lines, route, runs, fine, cover, [vx, vz]), walk: route ? route.pts : null };
 }
 
-// The box (game metres round the land's middle, [x0, z0, x1, z1]) the finer
-// grid covers: the walk, or failing one the spot the photo was taken from
-// (view), and `margin` real metres round it, on multiples of its cell, kept
-// inside the real land (radius R).
-export function fineBox(walk, { cell, margin }, scale, R, view = [0, 0]) {
-  const pts = walk && walk.length ? walk : [view];
-  const m = margin * scale;
+// Which tiles of the finer grid to keep: those that come within `margin`
+// real metres of the walk, or of any of `also` (the spot the photo was taken
+// from, the falls), and reach onto the real land (radius R, game m). Tile
+// (ti, tj) holds the FINE_TILE × FINE_TILE points from (ti, tj) · FINE_TILE
+// cells of `cell` real metres from the land's middle.
+// → [[ti, tj], ...], row by row
+export function fineTiles(walk, { cell, margin }, scale, R, also = []) {
   const c = cell * scale;
-  let [x0, z0, x1, z1] = [Infinity, Infinity, -Infinity, -Infinity];
-  for (const [x, z] of [...pts, view]) {
-    x0 = Math.min(x0, x - m);
-    z0 = Math.min(z0, z - m);
-    x1 = Math.max(x1, x + m);
-    z1 = Math.max(z1, z + m);
+  const T = c * FINE_TILE;
+  const m = margin * scale;
+  const keep = new Map();
+  // the tiles within m of (x, z): measured to the tile's own points, the
+  // first to the last
+  const near = (x, z) => {
+    for (let tj = Math.floor((z - m) / T); tj <= Math.floor((z + m) / T); tj++) {
+      for (let ti = Math.floor((x - m) / T); ti <= Math.floor((x + m) / T); ti++) {
+        const dx = Math.max(ti * T - x, 0, x - (ti * T + T - c));
+        const dz = Math.max(tj * T - z, 0, z - (tj * T + T - c));
+        const r = Math.hypot(Math.max(Math.abs(ti * T + T / 2) - T / 2, 0), Math.max(Math.abs(tj * T + T / 2) - T / 2, 0));
+        if (dx * dx + dz * dz <= m * m && r < R) keep.set(`${ti},${tj}`, [ti, tj]);
+      }
+    }
+  };
+  // along the walk, every cell of it
+  const pts = walk && walk.length ? walk : [];
+  for (let k = 0; k < pts.length; k++) {
+    if (k === 0) near(...pts[0]);
+    else {
+      const [ax, az] = pts[k - 1];
+      const [bx, bz] = pts[k];
+      const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / c));
+      for (let i = 1; i <= steps; i++) near(ax + ((bx - ax) * i) / steps, az + ((bz - az) * i) / steps);
+    }
   }
-  const clip = (v) => Math.max(-R, Math.min(R, v));
-  return [Math.floor(clip(x0) / c) * c, Math.floor(clip(z0) / c) * c, Math.ceil(clip(x1) / c) * c, Math.ceil(clip(z1) / c) * c];
+  for (const p of also) near(...p);
+  return [...keep.values()].sort((a, b) => a[1] - b[1] || a[0] - b[0]);
 }
 
-// The finer grid's height at (x, z), bilinear, or null outside it.
+// A pool too small for the ground's grid: the signed distance to its shore
+// on a grid of its own, POOL_CELL apart, kept inside the disc of radius Rl;
+// and its level, the height most of it agrees on (elevation data lays water
+// out flat at its surface), from height(x, z) in real metres.
+// → { levelReal, own: { x, z, w, h, cell }, d }, or null if it's nothing
+function poolOf(rings, [x0, z0, x1, z1], Rl, height) {
+  const m = POOL_MARGIN;
+  const w = Math.ceil((x1 - x0 + 2 * m) / POOL_CELL) + 1;
+  const h = Math.ceil((z1 - z0 + 2 * m) / POOL_CELL) + 1;
+  if (w * h > 40000) return null;
+  const d = new Float32Array(w * h);
+  const wet = [];
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      const x = x0 - m + i * POOL_CELL;
+      const z = z0 - m + j * POOL_CELL;
+      const v = Math.max(signedDistance(rings, x, z), Math.hypot(x, z) - Rl);
+      d[j * w + i] = v;
+      if (v < 0) wet.push(height(x, z));
+    }
+  }
+  if (wet.length < 4) return null;
+  wet.sort((a, b) => a - b);
+  return { levelReal: wet[Math.floor(wet.length * 0.3)], own: { x: round(x0 - m, 100), z: round(z0 - m, 100), w, h, cell: POOL_CELL }, d };
+}
+
+// The box round some tiles of the finer grid, [x0, z0, x1, z1] game metres
+// from the land's middle: what the heights for them are fetched over.
+export function tileBox([ti, tj], { cell }, scale) {
+  const c = cell * scale;
+  return [ti * FINE_TILE * c, tj * FINE_TILE * c, (ti * FINE_TILE + FINE_TILE - 1) * c, (tj * FINE_TILE + FINE_TILE - 1) * c];
+}
+
+// The finer grid's height at (x, z), bilinear, or null where it has none.
 function fineAt(f, x, z) {
-  const fi = (x - f.x) / f.cell;
-  const fj = (z - f.z) / f.cell;
-  if (fi < 0 || fj < 0 || fi > f.w - 1 || fj > f.h - 1) return null;
-  const i = Math.min(f.w - 2, Math.floor(fi));
-  const j = Math.min(f.h - 2, Math.floor(fj));
-  const [u, v] = [fi - i, fj - j];
-  const k = j * f.w + i;
-  return (f.H[k] * (1 - u) + f.H[k + 1] * u) * (1 - v) + (f.H[k + f.w] * (1 - u) + f.H[k + f.w + 1] * u) * v;
+  const S = f.size;
+  const fi = x / f.cell;
+  const fj = z / f.cell;
+  const [I, J] = [Math.floor(fi), Math.floor(fj)];
+  const at = (i, j) => {
+    const t = f.tiles.get(`${Math.floor(i / S)},${Math.floor(j / S)}`);
+    return t ? t.H[(j - t.tj * S) * S + i - t.ti * S] : null;
+  };
+  const [a, b, c, d] = [at(I, J), at(I + 1, J), at(I, J + 1), at(I + 1, J + 1)];
+  if (a === null || b === null || c === null || d === null) return null;
+  const [u, v] = [fi - I, fj - J];
+  return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
 }
 
 // What the lakes and the sea make of real height e at (x, z), as they made of
@@ -680,18 +812,13 @@ export function walkTo(lines, heightAt, to = [0, 0]) {
   return { name: near.name, pts, length: lengthOf(pts), yaw };
 }
 
-// The walk from the nearest road or car park to the point of a path nearest
-// the photo, by the shortest way along the paths: a walk begins where the car
-// is left, whether that is below (a mountain) or above (a cove).
-//   lines  [{ name, pts }] with every point kept, so paths that meet share one
-//   roads  [[[x, z], ...], ...]
-// → { name, pts, length, yaw }, or null if the photo wasn't taken on a path,
-//   or no path from it comes to a road.
-export function walkFromRoad(lines, roads, to = [0, 0]) {
-  // the points of the paths, and which lead to which
+// The paths as a graph: their points, joined where paths meet, and which
+// lead to which ([[other, metres, line], ...] for each point). Paths closed
+// to walkers are left out of it.
+function pathGraph(lines) {
   const ids = new Map();
   const pts = [];
-  const next = []; // [[other, metres, line], ...] for each point
+  const next = [];
   const idOf = (p) => {
     const key = `${Math.round(p[0] / SAME)},${Math.round(p[1] / SAME)}`;
     if (!ids.has(key)) {
@@ -702,6 +829,7 @@ export function walkFromRoad(lines, roads, to = [0, 0]) {
     return ids.get(key);
   };
   lines.forEach((l, li) => {
+    if (l.closed) return;
     for (let k = 1; k < l.pts.length; k++) {
       const [a, b] = [idOf(l.pts[k - 1]), idOf(l.pts[k])];
       if (a === b) continue;
@@ -710,21 +838,29 @@ export function walkFromRoad(lines, roads, to = [0, 0]) {
       next[b].push([a, d, li]);
     }
   });
-  let end = -1;
-  let endD = ON_TRAIL;
-  pts.forEach((p, k) => {
-    const d = dist(p, to);
-    if (d < endD) [end, endD] = [k, d];
-  });
-  if (end < 0) return null;
+  return { pts, next };
+}
 
-  // how far along the paths every point is from there (Dijkstra; there are
-  // few enough points to look for the nearest each time)
+// The point of the graph nearest p, if one is within ON_TRAIL; else -1.
+function nearestPoint({ pts }, p) {
+  let best = -1;
+  let bestD = ON_TRAIL;
+  pts.forEach((q, k) => {
+    const d = dist(q, p);
+    if (d < bestD) [best, bestD] = [k, d];
+  });
+  return best;
+}
+
+// How far along the paths every point is from point `from` (Dijkstra; there
+// are few enough points to look for the nearest each time), and the way back:
+// the point before each, and the line it came by.
+function shortestFrom({ pts, next }, from) {
   const far = new Float64Array(pts.length).fill(Infinity);
   const back = new Int32Array(pts.length).fill(-1);
   const via = new Int32Array(pts.length).fill(-1);
   const done = new Uint8Array(pts.length);
-  far[end] = 0;
+  far[from] = 0;
   for (;;) {
     let k = -1;
     for (let i = 0; i < pts.length; i++) if (!done[i] && far[i] < Infinity && (k < 0 || far[i] < far[k])) k = i;
@@ -738,27 +874,125 @@ export function walkFromRoad(lines, roads, to = [0, 0]) {
       }
     }
   }
+  return { far, back, via };
+}
+
+// A walk as the game keeps it, from its points and the metres of it on each
+// named path: called after the named path most of it is on, and setting off
+// the way its first few metres go.
+function walkOf(pts, names) {
+  const name = [...names].filter(([n]) => n).sort((a, b) => b[1] - a[1])[0];
+  let k = 1;
+  while (k < pts.length - 1 && dist(pts[k], pts[0]) < 4) k++;
+  const yaw = Math.atan2(pts[k][0] - pts[0][0], pts[k][1] - pts[0][1]);
+  return { name: name ? name[0] : '', pts, length: lengthOf(pts), yaw };
+}
+
+// The way from point `start` to the point the search was made from, with the
+// metres of it on each path's name added to `names`, and the line each step
+// of it is on pushed to `steps` (-1 for a way across a gap: bridge()).
+function wayBack({ pts }, lines, { back, via }, start, names, steps = []) {
+  const out = [];
+  for (let k = start; k >= 0; k = back[k]) {
+    out.push(pts[k]);
+    if (back[k] >= 0) {
+      const name = via[k] >= 0 ? lines[via[k]].name : '';
+      names.set(name, (names.get(name) || 0) + dist(pts[k], pts[back[k]]));
+      steps.push(via[k]);
+    }
+  }
+  return out;
+}
+
+// Where a path stops within `gap` of a path it doesn't join, a way across:
+// from its end to the nearest point of the other, as a step on no line (-1).
+// Roads are joined to, but a road that stops short is just a road that stops.
+function bridge(graph, lines, gap) {
+  const { pts, next } = graph;
+  // which points the paths already join up, as they are
+  const group = new Int32Array(pts.length).fill(-1);
+  for (let k = 0; k < pts.length; k++) {
+    if (group[k] >= 0) continue;
+    const todo = [k];
+    group[k] = k;
+    while (todo.length) for (const [o] of next[todo.pop()]) if (group[o] < 0) todo.push(o), (group[o] = k);
+  }
+  for (let k = 0; k < pts.length; k++) {
+    if (next[k].length !== 1 || lines[next[k][0][2]].road) continue;
+    let best = -1;
+    let bestD = gap;
+    for (let o = 0; o < pts.length; o++) {
+      if (group[o] === group[k]) continue;
+      const d = dist(pts[k], pts[o]);
+      if (d < bestD) [best, bestD] = [o, d];
+    }
+    if (best >= 0) {
+      next[k].push([best, bestD, -1]);
+      next[best].push([k, bestD, -1]);
+    }
+  }
+}
+
+// The walk from the nearest road or car park to the point of a path nearest
+// the photo, by the shortest way along the paths: a walk begins where the car
+// is left, whether that is below (a mountain) or above (a cove).
+//   lines  [{ name, pts, closed? }] with every point kept, so paths that meet
+//          share one
+//   roads  [[[x, z], ...], ...]
+// → { name, pts, length, yaw }, or null if the photo wasn't taken on a path,
+//   or no path from it comes to a road.
+export function walkFromRoad(lines, roads, to = [0, 0]) {
+  const graph = pathGraph(lines);
+  const end = nearestPoint(graph, to);
+  if (end < 0) return null;
+  const search = shortestFrom(graph, end);
   // the nearest point, along the paths, that is at a road
   const atRoad = (p) => roads.some((r) => r.some((q, k) => k > 0 && segDist(p, r[k - 1], q) < AT_ROAD));
   let start = -1;
-  for (let k = 0; k < pts.length; k++) if (far[k] < Infinity && (start < 0 || far[k] < far[start]) && atRoad(pts[k])) start = k;
+  for (let k = 0; k < graph.pts.length; k++) if (search.far[k] < Infinity && (start < 0 || search.far[k] < search.far[start]) && atRoad(graph.pts[k])) start = k;
   if (start < 0 || start === end) return null;
-
-  const walk = [];
   const names = new Map(); // name -> metres of the walk on a path of that name
-  for (let k = start; k >= 0; k = back[k]) {
-    walk.push(pts[k]);
-    if (back[k] >= 0) {
-      const name = lines[via[k]].name;
-      names.set(name, (names.get(name) || 0) + dist(pts[k], pts[back[k]]));
-    }
+  return walkOf(wayBack(graph, lines, search, start, names), names);
+}
+
+// The walk by way of each of `stops` in turn ([[x, z], ...]: where it starts,
+// the photo, where it ends), each the point of a path nearest it, by the
+// shortest way between one and the next: for a walk that begins somewhere
+// other than the nearest road, or goes on past the photo. A walk like that
+// goes where it has to: along `roads` too (a village's lanes), and across
+// gaps of up to `gap` where the map's paths stop short of one another.
+// → { name, pts, length, yaw, added }, added being the stretches of it that
+//   aren't on the map's paths ([{ pts, gap }], gap for a way across a gap);
+//   or null if a stop isn't on a path, or nothing leads from one to the next.
+export function walkBetween(lines, stops, { roads = [], gap = 0 } = {}) {
+  const all = [...lines, ...roads.map((pts) => ({ name: '', pts, road: true }))];
+  const graph = pathGraph(all);
+  if (gap > 0) bridge(graph, all, gap);
+  const at = stops.map((p) => nearestPoint(graph, p));
+  if (at.some((k) => k < 0)) return null;
+  const names = new Map();
+  let pts = [];
+  const steps = [];
+  for (let s = 1; s < at.length; s++) {
+    if (at[s] === at[s - 1]) continue;
+    // searched from the far end of the leg, so the way back runs forward
+    const search = shortestFrom(graph, at[s]);
+    if (search.far[at[s - 1]] === Infinity) return null;
+    const leg = wayBack(graph, all, search, at[s - 1], names, steps);
+    pts = pts.length ? pts.concat(leg.slice(1)) : leg;
   }
-  // called after the named path most of it is on
-  const name = [...names].filter(([n]) => n).sort((a, b) => b[1] - a[1])[0];
-  let k = 1;
-  while (k < walk.length - 1 && dist(walk[k], walk[0]) < 4) k++;
-  const yaw = Math.atan2(walk[k][0] - walk[0][0], walk[k][1] - walk[0][1]);
-  return { name: name ? name[0] : '', pts: walk, length: lengthOf(walk), yaw };
+  if (pts.length < 2) return null;
+  // the stretches off the paths: along a road, or across a gap
+  const added = [];
+  steps.forEach((li, k) => {
+    const off = li < 0 ? 'gap' : all[li].road ? 'road' : null;
+    const last = added[added.length - 1];
+    if (!off) return;
+    if (last && last.end === k && last.kind === off) last.pts.push(pts[k + 1]);
+    else added.push({ kind: off, pts: [pts[k], pts[k + 1]] });
+    added[added.length - 1].end = k + 1;
+  });
+  return { ...walkOf(pts, names), added: added.map((a) => ({ pts: a.pts, gap: a.kind === 'gap' })) };
 }
 
 // Metres from p to the segment a→b.
@@ -814,9 +1048,18 @@ function preview(H, n, cellM, lakeCells, lines, route, runs = [], fine = null, c
   for (const l of lines) plot(l.pts, [235, 225, 170]);
   if (route) plot(route.pts, [230, 50, 40]);
   if (fine) {
-    const [x0, z0, x1, z1] = [fine.x, fine.z, fine.x + (fine.w - 1) * fine.cell, fine.z + (fine.h - 1) * fine.cell];
-    plot([[x0, z0], [x1, z0], [x1, z1], [x0, z1], [x0, z0]], [255, 255, 255]);
+    // the outline of the tiles kept
+    const T = fine.size * fine.cell;
+    const has = (ti, tj) => fine.tiles.has(`${ti},${tj}`);
+    for (const { ti, tj } of fine.tiles.values()) {
+      const [x0, z0, x1, z1] = [ti * T, tj * T, ti * T + T, tj * T + T];
+      if (!has(ti, tj - 1)) plot([[x0, z0], [x1, z0]], [255, 255, 255]);
+      if (!has(ti, tj + 1)) plot([[x0, z1], [x1, z1]], [255, 255, 255]);
+      if (!has(ti - 1, tj)) plot([[x0, z0], [x0, z1]], [255, 255, 255]);
+      if (!has(ti + 1, tj)) plot([[x1, z0], [x1, z1]], [255, 255, 255]);
+    }
   }
+
   const [vi, vj] = [Math.round(view[0] / cellM + half), Math.round(view[1] / cellM + half)];
   for (let b = -2; b <= 2; b++) for (let a = -2; a <= 2; a++) if (vi + a >= 0 && vj + b >= 0 && vi + a < n && vj + b < n) rgb.set([255, 255, 255], ((vj + b) * n + vi + a) * 3);
   return { width: n, height: n, rgb };

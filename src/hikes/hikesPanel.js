@@ -6,10 +6,11 @@
 // so it knows nothing about the world, the player or the map. It makes its
 // list (el), and the map shows it.
 //
-//   hikes   [{ id, name, trail, length, climb, lakes }]: length and climb in
-//           real metres (a climb below zero is a walk down), lakes a list of
-//           names of the water on it
-//   onGo    (id, 'trailhead' | 'view') => void
+//   hikes   [{ id, name, trail, length, climb, lakes, end }]: length and
+//           climb in real metres (a climb below zero is a walk down), lakes a
+//           list of names of the water on it (its falls too), end whether
+//           the walk goes on past the view to an end of its own
+//   onGo    (id, 'trailhead' | 'view' | 'end') => void
 //   here    () => the id of the hike you're on, or null
 
 import './hikes.css';
@@ -28,7 +29,7 @@ export class HikesPanel {
     el.innerHTML = `
       <ol class="hikes-list">${hikes.map((h) => this._row(h)).join('')}</ol>
       <p class="hikes-note">${
-        hikes.length ? 'Real hikes, grown from photos taken on them. The walk ends where the photo was taken.' : 'No hikes yet.'
+        hikes.length ? 'Real hikes, grown from photos taken on them. The walk ends where the photo was taken, or goes on past it to an end of its own.' : 'No hikes yet.'
       } Add one with <code>npm run hike -- photo.heic</code>.</p>`;
     el.addEventListener('click', (e) => this._onClick(e));
     this.el = el;
@@ -45,7 +46,7 @@ export class HikesPanel {
         <div class="hikes-facts">${facts.map(esc).join(' · ')}</div>
         <div class="hikes-go">
           <button type="button" data-act="trailhead">trailhead</button>
-          <button type="button" data-act="view">the view</button>
+          <button type="button" data-act="view">the view</button>${h.end ? '\n          <button type="button" data-act="end">the end</button>' : ''}
         </div>
       </li>`;
   }

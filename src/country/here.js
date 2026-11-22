@@ -35,12 +35,16 @@ export function seaLevel(land) {
 // The weather at (x, z) with your eye at height y, by the land you're
 // nearest: { cover: how much cloud its layer has here (it thins out past the
 // land's edge), haze: how thick the air is (1: the forest's), overcast: how
-// much of the sun that cloud takes, which is none if you're over it }.
+// much of the sun that cloud takes, which is none if you're over it, floor:
+// the height the haze thins out up from (render/pipeline.js), which is the
+// forest's (0), or the land's lowest ground where that is below it: down in a
+// canyon cut into a plateau the air is as clear as on the forest floor, not
+// as thick as it would be that far below it }.
 export function weatherAt(land, x, z, y) {
-  if (!land) return { cover: 0, haze: 1, overcast: 0 };
+  if (!land) return { cover: 0, haze: 1, overcast: 0, floor: 0 };
   const c = land.country;
   const on = 1 - smoothstep(0, CLEARS_IN, land.clearance(x, z));
   const deck = deckHeight(land);
   const cover = Number.isNaN(deck) ? 0 : c.clouds.cover * on;
-  return { cover, haze: 1 + (c.haze - 1) * on, overcast: cover > 0 && y < deck ? c.clouds.shade * cover : 0 };
+  return { cover, haze: 1 + (c.haze - 1) * on, overcast: cover > 0 && y < deck ? c.clouds.shade * cover : 0, floor: Math.min(0, land.offset) * on + 0 }; // (+ 0: no -0)
 }

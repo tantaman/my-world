@@ -21,7 +21,7 @@
 //
 // From the console: world.country.name, world.country.here
 
-import { LAND, DECK, MAX_COUNTRIES } from '../render/uniforms.js';
+import { LAND, WATERS, DECK, MAX_COUNTRIES } from '../render/uniforms.js';
 import { COUNTRY, COUNTRIES } from '../world/country.js';
 import { nearestLandform, deckHeight, seaLevel, weatherAt } from './here.js';
 import { surf } from './surf.js';
@@ -55,6 +55,12 @@ export function installCountry(game) {
       LAND.uLayers.value[c.id].set(L.at, L.bed, L.varnish, 1);
     }
     LAND.uRubble.value[c.id] = g.rubble;
+    // and the colour of its water, where it isn't the forest's
+    if (c.water) {
+      WATERS.uWaterShallow.value[c.id].setRGB(...c.water.shallow);
+      WATERS.uWaterDeep.value[c.id].setRGB(...c.water.deep);
+      WATERS.uWaterMilk.value[c.id] = c.water.milk;
+    }
   }
 
   game.addSystem({
@@ -86,6 +92,8 @@ export function installCountry(game) {
         state.land = undefined; // so the real place's is set again when this goes
       } else DECK.uDeckCover.value += (w.cover - DECK.uDeckCover.value) * k;
       pipeline.haze += (w.haze - pipeline.haze) * k;
+      // (the floor at once, when it's a long way off: you arrived by the map)
+      pipeline.fogFloor += (w.floor - pipeline.fogFloor) * (Math.abs(w.floor - pipeline.fogFloor) > 20 ? 1 : k);
       sky.overcast += (w.overcast - sky.overcast) * k;
     },
   });
