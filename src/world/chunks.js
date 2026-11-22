@@ -56,10 +56,10 @@ class Chunk {
     this.water = null; // water surface mesh
     this.step = 1;
     this.n = 0;
-    this.veg = []; // { kind, mesh }
+    this.veg = []; // { kind, form (the model it's drawn with), mesh }
     this.vegLists = null; // raw placement lists by kind (see VEG_STRIDE)
-    this.vegMesh = {}; // kind -> InstancedMesh
-    this.moss = []; // { kind, mesh, of: tree instance -> its moss's, or -1 }
+    this.vegAt = {}; // kind -> [[{ mesh }, i], ...]: which mesh plant k is drawn in, and where in it
+    this.moss = []; // { kind, form, mesh, of: tree instance -> its moss's, or -1 }
     this.colliders = null; // Float32Array [x, z, r, ...]
     this.pos = null; // terrain vertex buffers, kept for live edits
     this.nor = null;
@@ -655,69 +655,90 @@ export class ChunkManager extends Emitter {
   }
 
   // ── Vegetation ───────────────────────────────────────────────────────────
+  // A mesh of instances for each kind of plant in the chunk; and on a real
+  // place, where its country draws a kind as something else (a bald cypress
+  // for a conifer: country.js, `forms`), one for those too, and one of the
+  // Spanish moss on its trees where it has that. ch.vegAt[kind][k] says
+  // which mesh plant k is in, and where in it.
   applyVegetation(ch, veg) {
     ch.colliders = veg.colliders;
     ch.vegLists = veg.lists;
+    // (only a chunk on a real place can be anything but the forest's own)
+    const real = this.gen.landformClearance(ch.x0 + this.size / 2, ch.z0 + this.size / 2) < this.size;
     for (const kind of VEG_KINDS) {
       const list = veg.lists[kind];
       if (!list || !list.length) continue;
-      const model = this.models[kind];
       const count = list.length / VEG_STRIDE;
-      const mesh = new THREE.InstancedMesh(model.lod0, this.materials.vegetation, count);
       const tree = FLORA[kind].tree;
-      // (only a chunk on a real place can be anything but the forest's colours)
-      const tints = this.gen.landformClearance(ch.x0 + this.size / 2, ch.z0 + this.size / 2) < this.size;
-      // the trees that have Spanish moss hanging from them, in a country
-      // that has it: which, and where (their own matrices)
-      const mossy = tree && tints && model.moss ? [] : null;
+      // what each is drawn as, and in what country
+      const where = new Array(count).fill(null);
+      const groups = new Map(); // what it's drawn as -> [k, ...]
       for (let k = 0; k < count; k++) {
         const o = k * VEG_STRIDE;
-        const s = list[o + 4];
-        const tint = list[o + 5];
-        _p.set(list[o] - ch.x0, list[o + 1], list[o + 2] - ch.z0);
-        _q.setFromAxisAngle(UP, list[o + 3]);
-        if (kind === 'rock') {
-          const e = list[o + 6];
-          _s.set(s * (0.8 + e * 0.6), s * (0.7 + tint * 0.5), s * (1.3 - e * 0.5));
-        } else if (tree) {
-          // (a tree's extra is how much slimmer it grows here: chunkGen.js)
-          const w = s * (1 - list[o + 6]);
-          _s.set(w, s, w);
-        } else {
-          _s.set(s, s, s);
-        }
-        _m.compose(_p, _q, _s);
-        mesh.setMatrixAt(k, _m);
-        tintFor(kind, tint, _c);
-        // the colour it is in a real place's own country
-        const c = tints && this.gen.countryAt(list[o], list[o + 2]);
-        if (c && c.tints[kind]) _c.multiply(_t.setRGB(...c.tints[kind]));
-        mesh.setColorAt(k, _c);
-        // (each tree its own share of it: some bare, some hung all over)
-        if (mossy && c && tint < (c.moss[kind] || 0)) mossy.push(k, ..._m.elements);
+        const c = real ? this.gen.countryAt(list[o], list[o + 2]) : null;
+        where[k] = c;
+        const form = (c && c.forms[kind]) || kind;
+        let g = groups.get(form);
+        if (!g) groups.set(form, (g = []));
+        g.push(k);
       }
-      if (mossy && mossy.length) this.hangMoss(ch, kind, mossy, count);
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-      mesh.computeBoundingSphere();
-      mesh.castShadow = FLORA[kind].shadow;
-      mesh.receiveShadow = true;
-      // its shadow has the gaps between its leaves in it
-      if (this.materials.vegetationShadow) mesh.customDepthMaterial = this.materials.vegetationShadow;
-      mesh.position.set(ch.x0, 0, ch.z0);
-      mesh.matrixAutoUpdate = false;
-      mesh.updateMatrix();
-      this.scene.add(mesh);
-      ch.veg.push({ kind, mesh });
-      ch.vegMesh[kind] = mesh;
+      ch.vegAt[kind] = new Array(count);
+      for (const [form, ks] of groups) {
+        const model = this.models[form];
+        const mesh = new THREE.InstancedMesh(model.lod0, this.materials.vegetation, ks.length);
+        const entry = { kind, form, mesh };
+        // the trees that have Spanish moss hanging from them, in a country
+        // that has it: which, and where (their own matrices)
+        const mossy = tree && real && model.moss ? [] : null;
+        ks.forEach((k, i) => {
+          const o = k * VEG_STRIDE;
+          const s = list[o + 4];
+          const tint = list[o + 5];
+          _p.set(list[o] - ch.x0, list[o + 1], list[o + 2] - ch.z0);
+          _q.setFromAxisAngle(UP, list[o + 3]);
+          if (kind === 'rock') {
+            const e = list[o + 6];
+            _s.set(s * (0.8 + e * 0.6), s * (0.7 + tint * 0.5), s * (1.3 - e * 0.5));
+          } else if (tree) {
+            // (a tree's extra is how much slimmer it grows here: chunkGen.js)
+            const w = s * (1 - list[o + 6]);
+            _s.set(w, s, w);
+          } else {
+            _s.set(s, s, s);
+          }
+          _m.compose(_p, _q, _s);
+          mesh.setMatrixAt(i, _m);
+          tintFor(kind, tint, _c);
+          // the colour it is in a real place's own country
+          const c = where[k];
+          if (c && c.tints[kind]) _c.multiply(_t.setRGB(...c.tints[kind]));
+          mesh.setColorAt(i, _c);
+          ch.vegAt[kind][k] = [entry, i];
+          // (each tree its own share of it: some bare, some hung all over)
+          if (mossy && c && tint < (c.moss[kind] || 0)) mossy.push(k, ..._m.elements);
+        });
+        if (mossy && mossy.length) this.hangMoss(ch, kind, form, mossy, count);
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        mesh.computeBoundingSphere();
+        mesh.castShadow = FLORA[kind].shadow;
+        mesh.receiveShadow = true;
+        // its shadow has the gaps between its leaves in it
+        if (this.materials.vegetationShadow) mesh.customDepthMaterial = this.materials.vegetationShadow;
+        mesh.position.set(ch.x0, 0, ch.z0);
+        mesh.matrixAutoUpdate = false;
+        mesh.updateMatrix();
+        this.scene.add(mesh);
+        ch.veg.push(entry);
+      }
     }
     this.emit('vegetation', ch);
   }
 
-  // The Spanish moss on a chunk's trees of one kind: mossy is [k, ...its
-  // matrix's 16 numbers] for each tree that has it, of `count`.
-  hangMoss(ch, kind, mossy, count) {
-    const model = this.models[kind];
+  // The Spanish moss on a chunk's trees of one kind, drawn as `form`: mossy
+  // is [k, ...its matrix's 16 numbers] for each tree that has it, of `count`.
+  hangMoss(ch, kind, form, mossy, count) {
+    const model = this.models[form];
     const n = mossy.length / 17;
     const mesh = new THREE.InstancedMesh(model.moss.lod0, this.materials.vegetation, n);
     const of = new Int32Array(count).fill(-1);
@@ -738,15 +759,15 @@ export class ChunkManager extends Emitter {
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
     this.scene.add(mesh);
-    ch.moss.push({ kind, mesh, of });
+    ch.moss.push({ kind, form, mesh, of });
   }
 
   // Hide one plant instance (felled, picked up or cleared) and drop its collider.
   hideInstance(ch, kind, k) {
-    const mesh = ch.vegMesh[kind];
-    if (mesh) {
-      mesh.setMatrixAt(k, _zero);
-      mesh.instanceMatrix.needsUpdate = true;
+    const at = ch.vegAt[kind] && ch.vegAt[kind][k];
+    if (at) {
+      at[0].mesh.setMatrixAt(at[1], _zero);
+      at[0].mesh.instanceMatrix.needsUpdate = true;
     }
     // (and the moss that hung from it)
     for (const m of ch.moss) {
@@ -789,15 +810,16 @@ export class ChunkManager extends Emitter {
   }
 
   applyVegLod(ch) {
-    for (const { kind, mesh } of ch.veg) {
-      const model = this.models[kind];
+    for (const { kind, form, mesh } of ch.veg) {
+      const model = this.models[form];
       mesh.geometry = ch.lod === 0 ? model.lod0 : ch.lod === 1 ? model.lod1 : model.lod2;
       mesh.visible = ch.lod <= FLORA[kind].maxLod;
       if (FLORA[kind].tree) mesh.castShadow = ch.lod <= 1;
     }
     // moss, near enough to make out
-    for (const { kind, mesh } of ch.moss) {
-      mesh.geometry = ch.lod === 0 ? this.models[kind].moss.lod0 : this.models[kind].moss.lod1;
+    for (const { form, mesh } of ch.moss) {
+      const moss = this.models[form].moss;
+      mesh.geometry = ch.lod === 0 ? moss.lod0 : moss.lod1;
       mesh.visible = ch.lod <= 1;
     }
   }

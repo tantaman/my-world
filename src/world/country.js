@@ -77,6 +77,10 @@
 //            the gentle ground, in drifts at first; or null for none. A hike
 //            can say otherwise for itself, on its card (a photo taken in
 //            winter: landform.js)
+//   forms    what a kind of tree is drawn as here, where it isn't the
+//            forest's own model: { pine: 'cypress' } (a model of that name:
+//            world/index.js). Only how it looks: where it grows, how big,
+//            and what it's called are the kind's
 //   moss     how much Spanish moss hangs from a kind of tree here, 0..1:
 //            { broad: 0.9 }. Each tree of that kind has its own share of it,
 //            from a few beards to curtains from every limb (models.js)
@@ -122,6 +126,7 @@ const FOREST = {
   shallows: { reeds: 1, lilies: 1 },
   water: null,
   frozen: false,
+  forms: {},
   moss: {},
   tidal: false,
 };
@@ -340,10 +345,11 @@ export const COUNTRY = {
     haze: 2.6,
     animals: ['alligator', 'deer', 'bobcat', 'fox', 'rabbit', 'squirrel', 'mouse', 'snake', 'flock', 'flit', 'crows', 'hawk', 'owl', 'butterflies'],
     names: { pine: ['bald cypress', 'a bald cypress'], broad: ['live oak', 'a live oak'] },
-    slim: { pine: -0.35 },
-    tints: { pine: [1.12, 1.18, 0.72], broad: [0.9, 1.02, 0.8], fern: [0.62, 0.9, 0.82], bush: [0.85, 1.02, 0.72] },
+    sizes: { pine: 1.15 },
+    tints: { pine: [1.05, 1.1, 0.85], broad: [0.9, 1.02, 0.8], fern: [0.62, 0.9, 0.82], bush: [0.85, 1.02, 0.72] },
     shallows: { reeds: 1, lilies: 1 },
     water: { shallow: [0.06, 0.052, 0.03], deep: [0.025, 0.026, 0.016], milk: 0.92 },
+    forms: { pine: 'cypress' },
     moss: { broad: 0.9, pine: 0.75 },
     tidal: true,
   }),

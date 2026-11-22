@@ -40,6 +40,10 @@ tip the guide), and you step out onto the dock. To go back sooner,
 (the map, **R**) ends the tour too. How many tours you've been on, how many
 gators you've seen and the biggest are kept.
 
+**With other people.** Your tour is your own: your boat, your guide, your
+gators. In a shared world everyone here sees you go by in your airboat, sat
+in its front row with the guide up behind you, and you see them in theirs.
+
 | | |
 |---|---|
 | **click** by the boat | take the tour |
@@ -55,6 +59,7 @@ world.swamptour.ride              // how it's going: where, how fast, the gators
 world.swamptour.skip(200)         // (for trying it out) 200 m on along the way
 world.swamptour.leave()           // back to the landing
 world.swamptour.record            // tours taken, gators seen, the biggest (m)
+world.swamptour.said              // what the guide said last
 ```
 
 **How it works.** A tour is a landing and the places its boat goes by, by
@@ -80,4 +85,5 @@ airboat.js      the airboat: hull, seats, the guide's high seat, engine, propell
 landing.js      the dock, the ticket shack, the pen with a young gator in it
 guide.js        the guide: how they look, how they sit at the stick, what they say
 sound.js        the engine and the propeller; the starter; ear defenders going on
+others.js       other people here out on the tour, in theirs
 ```

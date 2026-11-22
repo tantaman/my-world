@@ -12,14 +12,16 @@
 //   landing.js    the dock, the ticket shack, the pen with a young gator in it
 //   guide.js      the guide: how they look and sit, and what they say
 //   sound.js      the engine and the propeller, the starter, the ear defenders
+//   others.js     other people here out on it, in theirs
 //
 // Nothing about the land changes for it: the landing stands on the bank as
 // it is, the plants in the way are hidden as their chunk grows, and the way
 // round is found on the water the real place already has, once its land has
 // come. The gators on the way are ordinary alligators (wildlife/gators.js),
 // put where the guide is going to point them out, and used to the boats.
-// Your tour is yours alone; how many you've been on, how many gators you've
-// seen and the biggest are kept.
+// Your tour is yours alone, though anyone in the world with you sees you go by
+// in your airboat (others.js); how many you've been on, how many gators
+// you've seen and the biggest are kept.
 //
 // From the console:
 //   world.swamptour.list()            the tours, and whether each is ready
@@ -27,6 +29,7 @@
 //   world.swamptour.board()           into the boat, and off
 //   world.swamptour.ride              how it's going: where, how fast, which gator next
 //   world.swamptour.skip(m)           (for trying it out) on along the way, m metres
+//   world.swamptour.said              what the guide said last
 //   world.swamptour.leave()           back to the landing, now
 
 import * as THREE from 'three';
@@ -36,6 +39,7 @@ import { buildAirboat, HULL, PROP } from './airboat.js';
 import { buildLanding } from './landing.js';
 import { airboatSound } from './sound.js';
 import { makeGuide, sitDriving, SAYS, gatorLine } from './guide.js';
+import { Riders } from './others.js';
 import { SPECIES } from '../wildlife/species.js';
 import { SEAT_HIPS } from '../player/character.js';
 import { VEG_STRIDE } from '../world/flora.js';
@@ -56,6 +60,11 @@ const CREEP = 0.5; // m/s the boat noses up to a stop at, at the least
 const EASE = { up: 1.4, down: 2.2 }; // m/s² it gathers and sheds speed at, driving
 const EARMUFFS = 0.42; // how much everything is muffled with the ear defenders on (sound.muffle)
 const LINE_MS = 6500; // how long a line of the guide's stays up
+const MOVED = 20; // m: moved further than this in a frame, by something else, and you're off the boat
+const LOOK_ROUND = 1.2; // 1/s: how quickly the camera comes round to a gator being pointed out, and back
+// 1/s: how firmly the camera swings round behind you to look the way the
+// boat goes, and the way the guide points (player.js: aboard.behind)
+const SWING = { going: 0.35, gator: 1.4 };
 // sitting in the front row: knees together, feet on the deck, hands in the lap
 const PASSENGER = { spread: 0.15, hang: 0.42, fwd: 0.36, lean: 0.04, reins: 0.15, rest: 0 };
 const FRONT = 1; // which seat is yours: the middle of the front row (airboat.js)
@@ -74,7 +83,7 @@ const pick = (list) => list[Math.floor(Math.random() * list.length)];
 // wildlife for the gators.
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'towns', 'wildlife', 'hikes'];
 export function installSwamptour(game) {
-  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, save, sound, wildlife } = game;
+  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, wildlife, peers } = game;
 
   // ── The tours, on their real places ───────────────────────────────────────
   const tours = [];
@@ -146,7 +155,10 @@ export function installSwamptour(game) {
     const yaw = Math.atan2(-ux, -uz); // the frame looks out to the water
     const at = { x: bank.x + ux * 5.5, z: bank.z + uz * 5.5, yaw };
     at.y = gen.height(at.x, at.z);
-    t.lay = { at, dock: { a: bank, b: end, top: level + 0.55 }, level, moor: b0 };
+    // tied up side on to the dock, whichever way round is nearer the way out
+    const side = Math.atan2(ux, uz) + Math.PI / 2;
+    const moorYaw = Math.abs(wrapAngle(side - b0.yaw)) < Math.PI / 2 ? side : side + Math.PI;
+    t.lay = { at, dock: { a: bank, b: end, top: level + 0.55 }, level, moor: b0, moorYaw };
     hideIn(t);
   }
 
@@ -301,12 +313,17 @@ export function installSwamptour(game) {
   sound.addLayer(airboatSound(heard));
 
   // ── The ride ──────────────────────────────────────────────────────────────
+  commands.describe({ group: 'SWAMP TOUR', help: 'click', label: 'by the airboat at the landing in Jean Lafitte: take the tour' });
+  commands.describe({ group: 'SWAMP TOUR', help: 'right-click', label: 'on the tour: back to the landing' });
   let ride = null; // { t, s, v, phase, timer, halt, said, gators: [], pointed, seen, biggest }
   builder.idleWhile(() => ride !== null || nearBoat() !== null);
   const mover = {
     place(out, dt) {
       const t = ride && ride.t;
-      if (!t || !t.built) {
+      // moved by something else (R, the map): that's the end of it
+      const was = ride && ride.last;
+      if (!t || !t.built || (was && Math.hypot(player.pos.x - was.x, player.pos.z - was.z) > MOVED)) {
+        if (ride) ride.moved = true;
         out.x = player.pos.x;
         out.y = player.pos.y;
         out.z = player.pos.z;
@@ -321,13 +338,24 @@ export function installSwamptour(game) {
       out.y = _v.y - SEAT_HIPS;
       out.z = _v.z;
       out.yaw = b.object.rotation.y;
-      out.heading = b.object.rotation.y;
+      // the camera turns with the boat; and at a stop, round to the gator
+      // being pointed out (unless you're looking about for yourself)
+      const g = ride.pointed >= 0 ? ride.gators[ride.pointed] : null;
+      const want = g ? Math.atan2(g.x - out.x, g.z - out.z) : out.yaw;
+      ride.look = ride.look === undefined ? out.yaw : ride.look + wrapAngle(want - ride.look) * (1 - Math.exp(-dt * LOOK_ROUND));
+      out.heading = ride.look;
+      ride.last = { x: out.x, z: out.z };
+      // and swings round to look that way, when you aren't looking about:
+      // gently while it's going, more firmly when there's a gator to see
+      out.behind = g ? SWING.gator : ride.v > 1 ? SWING.going : 0;
       out.back = 1.5;
     },
   };
 
+  let said = null; // what the guide said last, for the console
   function say(t, line) {
-    hud.flash(`${t.def.guide.name}: “${line}”`, LINE_MS);
+    said = `${t.def.guide.name}: “${line}”`;
+    hud.flash(said, LINE_MS);
     const b = t.built && t.built.boat.object;
     if (b) sound.call('hello', b.position.x, b.position.y + 2.6, b.position.z, { pitch: t.def.guide.her ? 1.2 : 0.82 });
   }
@@ -354,18 +382,19 @@ export function installSwamptour(game) {
     sound.muffle(EARMUFFS, 0.4);
     say(t, SAYS.board);
     sound.sfx('airboat-start');
+    tell();
     return true;
   }
 
-  // Off at the landing: onto the dock beside the boat. Counted if you went
-  // the whole way round.
-  function getOff(whole) {
+  // Off at the landing: onto the dock beside the boat (unless you've been
+  // taken somewhere else, `moved`). Counted if you went the whole way round.
+  function getOff(whole, moved = false) {
     const r = ride;
     if (!r) return;
     ride = null;
     const t = r.t;
-    if (player.aboard === mover) {
-      player.aboard = null;
+    if (player.aboard === mover) player.aboard = null;
+    if (!moved) {
       const d = t.lay.dock;
       const yaw = t.lay.at.yaw + Math.PI;
       const x = lerp(d.a.x, d.b.x, 0.7);
@@ -381,8 +410,7 @@ export function installSwamptour(game) {
     if (whole || r.seen) save.touch();
     // the gators stay where they are, and go about their business
     for (const g of r.gators) if (g) g.calm = false;
-    // the boat back at its mooring
-    t.moored = true;
+    tell();
     if (whole) setTimeout(() => hud.flash(`${t.def.name} · ${r.seen ? `${r.seen} gator${r.seen > 1 ? 's' : ''}, the biggest about ${Math.round(r.biggest / 0.3048)} ft` : 'no gators this time'}${taken > 1 ? ` · ${taken} tours` : ''}`, 5000), LINE_MS + 200);
   }
 
@@ -393,8 +421,8 @@ export function installSwamptour(game) {
     const t = r.t;
     const C = t.course;
     // taken somewhere else all at once (back to the start, say): out of the
-    // boat, and it goes back to its mooring
-    if (player.aboard !== mover) return void getOff(false);
+    // boat where you are, and it goes back to its mooring
+    if (player.aboard !== mover || r.moved) return void getOff(false, true);
     // a gator put where it'll be pointed out, well before you get there
     for (let i = r.halt; i < t.halts.length; i++) {
       const h = t.halts[i];
@@ -431,7 +459,8 @@ export function installSwamptour(game) {
           say(t, r.seen ? SAYS.done : `${SAYS.none} ${SAYS.done}`);
         }
         // the guide's words along the way, when not pointing out a gator
-        for (const a of SAYS.along) {
+        // nor saying goodbye
+        if (r.phase === 'go') for (const a of SAYS.along) {
           if (r.said.has(a) || r.s < a.at * C.length) continue;
           r.said.add(a);
           say(t, a.line);
@@ -533,7 +562,15 @@ export function installSwamptour(game) {
     const C = t.course;
     const p = C.at(r ? r.s : 0, _at);
     const was = o.rotation.y;
-    const yaw = r ? p.yaw : C.at(0, {}).yaw;
+    // tied up side on to the dock; spun round to set off, and back again
+    // when it comes in
+    const moor = t.lay.moorYaw;
+    let yaw = moor;
+    if (r) {
+      const out = r.phase === 'start' ? clamp((START - r.timer - 1.2) / 2, 0, 1) : r.phase === 'done' ? clamp(r.timer / 2.5, 0, 1) : 1;
+      const k = out * out * (3 - 2 * out);
+      yaw = moor + wrapAngle(p.yaw - moor) * k;
+    }
     const level = waterLevel(p.x, p.z, t.land);
     B.bob += dt;
     const v = r ? r.v : 0;
@@ -566,6 +603,20 @@ export function installSwamptour(game) {
     sitDriving(B.guide, dt, { lookAt, point });
   }
 
+  // ── Everyone else here ────────────────────────────────────────────────────
+  // They're told whether you're on the tour, and see you in your airboat.
+  function tell() {
+    save.say('airboat', ride ? { tour: ride.t.def.id } : null);
+  }
+  if (peers) {
+    const guides = (id) => (byId(id) || tours[0]).def.guide;
+    const riders = new Riders({ scene, peers, materials, seat: PASSENGER, front: FRONT, guides });
+    save.on('message', (msg) => msg.ch === 'airboat' && riders.hear(msg.from, msg.body));
+    // someone new: tell them you're out on it
+    peers.on('change', () => ride && tell());
+    game.addSystem({ name: 'airboat riders', phase: 'world', update: ({ dt }) => riders.update(dt) });
+  }
+
   // ── From the console ──────────────────────────────────────────────────────
   game.provide('swamptour', {
     list: () => tours.map((t) => ({ id: t.def.id, name: t.def.name, hike: t.card.id, x: Math.round(t.x), z: Math.round(t.z), ready: !!t.course, length: t.course ? Math.round(t.course.length) : null, gators: t.halts.length })),
@@ -580,6 +631,10 @@ export function installSwamptour(game) {
     },
     get record() {
       return { taken, seen, biggest };
+    },
+    // what the guide said last
+    get said() {
+      return said;
     },
     // to the foot of the dock, facing the boat, once the way round is known
     async go(id = tours[0] && tours[0].def.id) {
@@ -598,6 +653,10 @@ export function installSwamptour(game) {
       if (!ride) return null;
       ride.s = Math.min(ride.t.course.length, ride.s + m);
       if (ride.phase === 'start') ride.phase = 'go';
+      // (the stops skipped past are left out, and what the guide would have said)
+      const H = ride.t.halts;
+      while (H[ride.halt] && H[ride.halt].s < ride.s - 0.5) ride.halt++;
+      for (const a of SAYS.along) if (a.at * ride.t.course.length < ride.s - 1) ride.said.add(a);
       return ride.s;
     },
     leave: () => (ride ? (getOff(false), true) : false),

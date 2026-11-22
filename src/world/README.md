@@ -208,7 +208,10 @@ What a real place looks like is its **country**: one entry in one table
 (`country.js`) that says what its ground is made of, what grows and lives
 there, what its sky is doing, what colour its water is and what its trees
 are called. The forest is
-one country among them, and looks the way it always has. Where the map says
+one country among them, and looks the way it always has. A country can draw
+a kind of tree as something else (a bald cypress, in a swamp, for the
+forest's conifer: where it grows is the conifer's, only how it looks
+changes), and hang Spanish moss from its trees. Where the map says
 what covers a real place's land (woods, willow scrub, scree, bare rock,
 tundra, ice), that is where each is: a scree is strewn with boulders, a
 thicket is thick with shrubs, and a country with a treeline and a snow line
@@ -249,8 +252,8 @@ solids.js             built things you bump into and stand on
 spaces.js             places under the ground you can be in (caves): floor, walls, roof
 basins.js             water held up in something built (a pool, a tub), to swim in
 cuts.js               holes in the ground, where something else stands in for it
-models.js             procedural trees, bushes, ferns, rocks, logs: trunks, branches, and cards on them
-modelsIsland.js       and other countries': palm, ironwood, tree fern, silversword
+models.js             procedural trees, bushes, ferns, rocks, logs: trunks, branches, and cards on them; Spanish moss
+modelsIsland.js       and other countries': palm, ironwood, tree fern, silversword, bald cypress
 foliage.js            what a plant's surfaces are: needles and leaves cut from cards, bark (shader)
 grass.js              grass blades, wildflowers, reeds and lilies near the player
 materials.js          terrain / vegetation / grass shader hooks; plants' shadows, with their gaps

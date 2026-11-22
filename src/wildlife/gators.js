@@ -19,7 +19,8 @@
 //
 // A gator is put somewhere by the spot it's handed: as the forest hands any
 // animal a spot (out of sight, on dry ground), it looks round that for water
-// and goes to its edge, to bask on the bank above it or lie out in it; or
+// and goes to its edge, to bask on the bank above it or lie out in it (with
+// none near, it lies where it was put, and walks off when it goes); or
 // the spot says exactly where and how, { x, z, yaw, pose: 'bask' | 'float',
 // length, calm }, which is how a swamp tour has one waiting where it's
 // going to be pointed out.
@@ -31,6 +32,7 @@ import { clamp, lerp } from '../noise.js';
 import { rand, wrapAngle as wrap } from '../core/geom.js';
 
 const ss = THREE.MathUtils.smoothstep;
+const mix = (a, b, t) => new THREE.Color().copy(a).lerp(b, t);
 
 // How long one grows (m, snout to tail): the least, and the most.
 export const GATOR_LENGTH = [1.2, 3.9];
@@ -201,7 +203,7 @@ export function buildGator(seed, L) {
     for (const side of [1, -1]) {
       const hip = r.bone(spine[i], side * w * 0.8, -0.01 * L, z + i * seg, 'leg');
       const thigh = (front ? 0.017 : 0.024) * L;
-      r.part(hip, ellipsoid(up * 0.6, thigh, thigh * 1.1, 7, 5), { matrix: at(side * up * 0.5, -0.004 * L, 0), color: (p, n) => (n.y < -0.3 ? belly : dark) });
+      r.part(hip, ellipsoid(up * 0.6, thigh, thigh * 1.1, 7, 5), { matrix: at(side * up * 0.5, -0.004 * L, 0), color: (p, n) => (n.y < -0.5 ? mix(dark, belly, 0.35) : dark) });
       const knee = [side * up, -0.012 * L, front ? 0 : -0.01 * L];
       const foot = [side * (up + 0.01 * L), -down, front ? 0.012 * L : -0.004 * L];
       r.part(hip, ellipsoid(thigh * 0.7, down * 0.55, thigh * 0.75, 6, 4), { matrix: at((knee[0] + foot[0]) / 2, (knee[1] + foot[1]) / 2, (knee[2] + foot[2]) / 2), color: dark });
@@ -298,11 +300,12 @@ export class Gator {
       // round where it was put, the water: on the bank, or out in it
       const w = waterNear(ctx, spot.x, spot.z);
       if (!w) {
+        // no water near: out on dry ground between one pond and the next,
+        // lying where it was put
         this.x = spot.x;
         this.z = spot.z;
-        this.yaw = 0;
-        this.done = true;
-        this.set('gone');
+        this.yaw = toward + rand(-1, 1);
+        this.set('bask');
       } else if (Math.random() < 0.55) {
         // on the bank, head to the water, its snout just short of it
         this.yaw = w.yaw;
@@ -372,7 +375,14 @@ export class Gator {
         wave = 1;
         lift = 0;
         if (wet) this.set('swim', rand(1.5, 3));
-        else if (this.t > 6) this.set('sink');
+        else if (this.t > 4) this.set('away');
+        break;
+      case 'away':
+        // no water to go to: off on foot, high on its legs, and gone
+        want = SPEED.swim;
+        wave = 0.5;
+        this.leaving = true;
+        if (wet) this.set('sink');
         break;
       case 'float':
         want = SPEED.drift;

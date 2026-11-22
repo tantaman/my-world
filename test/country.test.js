@@ -33,6 +33,9 @@ test('every country says everything, in words the rest of the game knows', () =>
     if (L) assert.ok(L.upper.length === 3 && L.upper.every((v) => v >= 0 && v < 2) && L.at > 0 && L.bed > 0 && L.varnish >= 0 && L.varnish <= 1, `${name}: its layers`);
     for (const [kind, k] of Object.entries(c.slim)) assert.ok(TIMBER[kind] && k > -2 && k < 1, `${name}: ${kind} grows slimmer, or broader`);
     for (const [kind, k] of Object.entries(c.sizes)) assert.ok(TIMBER[kind] && k > 0 && k < 2, `${name}: how big a ${kind} grows`);
+    for (const [kind, form] of Object.entries(c.forms)) assert.ok(TREE_KINDS.includes(kind) && typeof form === 'string' && !FLORA[form], `${name}: a ${kind} is drawn as a ${form}, a model of its own and not another plant`);
+    for (const [kind, k] of Object.entries(c.moss)) assert.ok(TREE_KINDS.includes(kind) && k >= 0 && k <= 1, `${name}: how much moss hangs from a ${kind}`);
+    assert.equal(typeof c.tidal, 'boolean', `${name}: whether the tide sets its water's level`);
     assert.ok(c.shallows.reeds >= 0 && c.shallows.reeds <= 1 && c.shallows.lilies >= 0 && c.shallows.lilies <= 1, `${name}: what grows in its shallows`);
     const R = c.riparian;
     if (R) assert.ok(R.reach > 0 && R.dry >= 0 && R.dry <= 1 && R.trees.every(([kind, share]) => TREE_KINDS.includes(kind) && TIMBER[kind] && share > 0 && share <= 1), `${name}: what grows by its water`);
