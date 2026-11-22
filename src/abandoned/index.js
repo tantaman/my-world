@@ -21,7 +21,7 @@ export function installAbandoned(game) {
   const { gen, player, landforms, landmarks, towns, caves, railway, spaceport, videostore, airports, builder, chunks, grass, spaces, scene, camera, sky, solids, map, sound, save, hud } = game;
   const reserved = clearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, spaceport: spaceport.sites });
   function keepOff(...box) {
-    if ((videostore.site && overlaps(box, videostore.site.box)) || reserved(...box)) return true;
+    if (videostore.stores(...box).length || reserved(...box)) return true;
     const x = (box[0] + box[2]) / 2,
       z = (box[1] + box[3]) / 2;
     const fields = airports.airports;

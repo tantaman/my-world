@@ -8,6 +8,14 @@ map with a little cassette on its badge; pick it and press **go here**, and
 you're set down on the pavement outside its doors, facing them. Track it,
 and the HUD leads you to the doors on foot.
 
+**Branches.** Rewind Video is a chain. Most of the villages people live in
+have a branch just past their last houses, facing the street (*Rewind Video,
+Meadowfield*), every one the same shop: the same shelves, the same staff,
+the same card. A tape rented at one goes back in the returns at any of them.
+They're all on the map, and under *video stores* in its routes, nearest
+first, for as far out as you scroll. Whichever you're nearest is the one
+with its lights on.
+
 The doors slide open as you walk up, the chime goes, and the clerk behind
 the counter looks up and says hello. Then it's the aisles:
 
@@ -60,12 +68,16 @@ Renting a DVD leaves the VHS copies available.
 Walk out through the security gate with a movie you haven't rented and the
 alarm goes off. The movies go back on the shelf.
 
-**Where it is** is grown from the seed and the land, like the old places
-(`site.js`): the flattest dry ground in a ring round where you first arrive,
-between about 260 and 640 m out, a little nearer winning over a little
-flatter, clear of real places brought in from a photo, the old places,
-towns, the mouths of caves, the railway and the launch site. Everyone in a
-world finds it in the same place. **Nothing about the land changes for it**:
+**Where they are** is grown from the seed and the land, like the old places
+(`site.js`): for the first, the flattest dry ground in a ring round where you
+first arrive, between about 260 and 640 m out, a little nearer winning over a
+little flatter; for a branch, the same in a ring round its village, just
+past its houses and inside the village's own square (`branches.js` says which
+villages have one). All of them keep clear of real places brought in from a
+photo, the old places, towns, the mouths of caves, the railway and the
+launch sites, and the branches of the airfields too. Everyone in a world
+finds them in the same places, and the only thing saved is which you've
+been to. **Nothing about the land changes for them**:
 the shop and its car park stand on one slab of tarmac set on the ground as
 it is, its top a little over the highest corner and its sides sloping down
 to the lowest; the trees, bushes and stones in its way are hidden as it
@@ -74,8 +86,9 @@ comes into view, and grass doesn't grow on it. Building goes round it.
 From the console:
 
 ```js
-world.videostore.site              // where it is
-await world.videostore.go()        // stand outside the doors
+world.videostore.site              // the store you're at, or were last near
+world.videostore.branches          // the branches: forTown(town), byId(id)
+await world.videostore.go(id?)     // stand outside the doors (there, or at the store with that id)
 await world.videostore.enter()     // ...or just inside them
 world.videostore.look('new', 30, 2) // stand at a slot and aim at its box (face, column, row)
 world.videostore.toCounter()       // stand at the counter
@@ -105,7 +118,8 @@ distributed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/
 
 ```
 index.js        plugs it in: the store stood up as you come near, browsing, the counter, the doors, on the map
-site.js         where the store is, grown from the seed and the land
+site.js         where the stores are, grown from the seed and the land
+branches.js     which villages have a branch, and finding where, a little at a time
 floorplan.js    what's where inside: the shelving and its slots, the counter, the signs, what's solid
 catalog.js      generated films, VHS and DVD editions, and which slots they fill
 lineup.js       the curated 2004 lineup and each film's TMDB ID
