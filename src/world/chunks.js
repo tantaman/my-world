@@ -15,6 +15,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { generateTerrain, generateSurface, generateVegetation, VEG_KINDS, VEG_STRIDE, WATER_STRIDE as WS, SURFACE_STRIDE as SS } from './chunkGen.js';
 import { buildWaterGeometry } from './waterSurface.js';
+import { OVER } from '../render/pipeline.js';
 import { NO_WATER } from './water.js';
 import { FLORA } from './flora.js';
 import { Emitter } from '../core/events.js';
@@ -623,6 +624,9 @@ export class ChunkManager extends Emitter {
     }
     if (!ch.water) {
       ch.water = new THREE.Mesh(geo, this.materials.water);
+      // drawn over the rest, so it can show what is under it and mirror
+      // what stands over it (render/pipeline.js)
+      ch.water.layers.set(OVER);
       ch.water.position.set(ch.x0, 0, ch.z0);
       ch.water.receiveShadow = true;
       ch.water.matrixAutoUpdate = false;

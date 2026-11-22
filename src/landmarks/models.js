@@ -2,7 +2,10 @@
 // vertex-coloured primitives merged into one mesh per site (and one more for
 // a boat, so it can ride the water). The cabins use the same logs, piers and
 // shake roofs as the ones you build (build/geometry.js), and are then
-// weathered: greyed by the sun, and mossy where the rain sits.
+// weathered: greyed by the sun, and mossy where the rain sits. Each piece
+// says what it is made of (build/surfaces.js): mostly by its colour, since
+// the palette's planks are wood, its iron is iron and its canvas cloth
+// (MADE_OF), and otherwise as it's added.
 //
 // Nothing is levelled for them (see sites.js), so each stands on the ground
 // as it is: a cabin on piers that are taller on the downhill side, a tent
@@ -18,6 +21,7 @@
 
 import * as THREE from 'three';
 import { Mesher, WOOD, alongMatrix, addRoundLog, addRoof } from '../build/geometry.js';
+import { SURF } from '../build/surfaces.js';
 import { mulberry32, phash } from '../noise.js';
 import { toWorld } from './sites.js';
 
@@ -40,6 +44,33 @@ export const PAL = {
   moss: lin(0x4d5a26),
 };
 
+// What the palette's colours are made of (build/surfaces.js). A piece given
+// one of them is that; given another, it's whatever its mesher says (m.surf).
+// The towns add their own palette's (towns/buildings.js).
+export const MADE_OF = new Map([
+  [PAL.plank, SURF.wood],
+  [PAL.plankGrey, SURF.wood],
+  [PAL.trim, SURF.paint],
+  [PAL.rope, SURF.cloth],
+  [PAL.iron, SURF.iron],
+  [PAL.rust, SURF.iron],
+  [PAL.tin, SURF.tin],
+  [PAL.blanket, SURF.cloth],
+  [PAL.char, SURF.bark],
+  [WOOD.bark, SURF.bark],
+  [WOOD.barkDark, SURF.bark],
+  [WOOD.stone, SURF.stone],
+  [WOOD.stoneDark, SURF.stone],
+  [WOOD.board, SURF.wood],
+  [WOOD.hewn, SURF.wood],
+  ...PAL.canvas.map((c) => [c, SURF.cloth]),
+  ...PAL.paint.map((c) => [c, SURF.paint]),
+]);
+// What a piece coloured `color` (a colour, or a function from tone()) is made
+// of, on mesher m.
+export const madeOf = (color, m) => MADE_OF.get(color && color.base ? color.base : color) ?? m.surf;
+const OLD = 0.6; // how worn the old places are (build/surfaces.js)
+
 const C = 0.32; // a course of round logs, as built by hand (build/constants.js)
 const R = 0.17; // a log's radius
 const OH = 0.3; // how far log ends run past a corner
@@ -58,6 +89,7 @@ export function buildSite(site, ground, material) {
     return ground(_w.x, _w.z) - y0;
   };
   const b = new Builder(site, g, mulberry32(site.seed), y0);
+  b.m.wear = OLD;
   BUILD[site.kind](b, site);
 
   const object = new THREE.Group();
@@ -109,6 +141,8 @@ export class Builder {
   // A separate mesh (a boat), at a point of the frame.
   part(at, yaw = 0, bob = false) {
     const m = new Mesher();
+    m.surf = this.m.surf;
+    m.wear = this.m.wear;
     this.parts.push({ m, at, yaw, bob });
     return m;
   }
@@ -134,24 +168,28 @@ export class Builder {
   }
 }
 
-// One colour for a whole piece, a little different from the next.
+// One colour for a whole piece, a little different from the next. (It
+// remembers which, for what it's made of: madeOf.)
 export const tone = (color, rnd, spread = 0.2) => {
   const k = 1 - spread / 2 + rnd() * spread;
-  return (p, n, out) => out.copy(color).multiplyScalar(k);
+  const fn = (p, n, out) => out.copy(color).multiplyScalar(k);
+  fn.base = color;
+  return fn;
 };
 
-export function box(m, x, y, z, sx, sy, sz, color, rx = 0, ry = 0, rz = 0) {
+// A box. What it's made of goes by its colour (madeOf), unless said (surf).
+export function box(m, x, y, z, sx, sy, sz, color, rx = 0, ry = 0, rz = 0, surf = madeOf(color, m)) {
   const mat = new THREE.Matrix4().compose(_v.set(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(1, 1, 1));
-  m.add(new THREE.BoxGeometry(sx, sy, sz), mat, typeof color === 'function' ? color : (p, n, out) => out.copy(color));
+  m.add(new THREE.BoxGeometry(sx, sy, sz), mat, typeof color === 'function' ? color : (p, n, out) => out.copy(color), null, surf);
 }
 
 // A round rod from a to b (arrays [x, y, z]).
-export function rod(m, a, b, r, color, sides = 5) {
+export function rod(m, a, b, r, color, sides = 5, surf = madeOf(color, m)) {
   const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
   const len = d.length();
   if (len < 1e-4) return;
   const mat = alongMatrix(d.normalize(), (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
-  m.add(new THREE.CylinderGeometry(r, r, len, sides, 1), mat, typeof color === 'function' ? color : (p, n, out) => out.copy(color));
+  m.add(new THREE.CylinderGeometry(r, r, len, sides, 1), mat, typeof color === 'function' ? color : (p, n, out) => out.copy(color), null, surf);
 }
 
 // A rough stone, about `s` across, its middle at (x, y, z).
@@ -161,8 +199,12 @@ export function stone(m, x, y, z, s, seed, flat = 0.6) {
     new THREE.Quaternion().setFromEuler(new THREE.Euler(phash(seed, 1, 2) * 0.4, phash(seed, 2, 3) * 6.28, phash(seed, 3, 4) * 0.4)),
     new THREE.Vector3(s * (0.9 + phash(seed, 4, 5) * 0.3), s * flat, s * (0.8 + phash(seed, 5, 6) * 0.3)),
   );
-  m.add(new THREE.IcosahedronGeometry(0.5, 0), mat, (p, n, out) =>
-    out.copy(WOOD.stoneDark).lerp(WOOD.stone, 0.35 + Math.max(0, n.y) * 0.35 + phash(p.x * 13 + seed, p.y * 13, p.z * 13) * 0.3),
+  m.add(
+    new THREE.IcosahedronGeometry(0.5, 0),
+    mat,
+    (p, n, out) => out.copy(WOOD.stoneDark).lerp(WOOD.stone, 0.35 + Math.max(0, n.y) * 0.35 + phash(p.x * 13 + seed, p.y * 13, p.z * 13) * 0.3),
+    null,
+    SURF.stone,
   );
 }
 
@@ -176,7 +218,7 @@ export function pier(m, x, z, g, top, seed, w = 0.42) {
     y += sh;
     i++;
   }
-  box(m, x, (y + top) / 2, z, w, Math.max(0.04, top - y), w, (p, n, out) => out.copy(WOOD.stone).multiplyScalar(0.8 + phash(seed, x, z) * 0.25));
+  box(m, x, (y + top) / 2, z, w, Math.max(0.04, top - y), w, (p, n, out) => out.copy(WOOD.stone).multiplyScalar(0.8 + phash(seed, x, z) * 0.25), 0, 0, 0, SURF.stone);
 }
 
 // Greys whatever was added to m since `from`, as wood goes in the weather,
@@ -260,8 +302,8 @@ export function floor(b, x0, z0, x1, z1, top, bottom, color) {
     const len = (along ? x1 - x0 : z1 - z0) - inset * 2;
     const k = 0.85 + b.rnd() * 0.25;
     const col = (p, nn, out) => out.copy(color).multiplyScalar(k);
-    if (along) box(b.m, (x0 + x1) / 2, top - 0.03, c, len, 0.06, pw - 0.015, col);
-    else box(b.m, c, top - 0.03, (z0 + z1) / 2, pw - 0.015, 0.06, len, col);
+    if (along) box(b.m, (x0 + x1) / 2, top - 0.03, c, len, 0.06, pw - 0.015, col, 0, 0, 0, SURF.wood);
+    else box(b.m, c, top - 0.03, (z0 + z1) / 2, pw - 0.015, 0.06, len, col, 0, 0, 0, SURF.wood);
   }
   // capsules along the long side, overlapping so there's no gap to fall through
   const rows = Math.max(1, Math.round((cross[1] - cross[0]) / 0.9));
@@ -281,7 +323,7 @@ function door(m, x, z, y, w, h, swing, color, rnd) {
     const k = 0.85 + rnd() * 0.25;
     const cx = x + Math.cos(swing) * u;
     const cz = z + Math.sin(swing) * u * -1;
-    box(m, cx, y + h / 2, cz, w / boards - 0.01, h, 0.05, (p, n, out) => out.copy(color).multiplyScalar(k), 0, swing, 0);
+    box(m, cx, y + h / 2, cz, w / boards - 0.01, h, 0.05, (p, n, out) => out.copy(color).multiplyScalar(k), 0, swing, 0, madeOf(color, m));
   }
 }
 
@@ -333,7 +375,7 @@ function chimney(b, at, base, top, seed) {
       if (Math.abs(z) > wd / 2) continue;
       stone(m, x0 + dp / 2, y + sh / 2, z, Math.min(0.42, wd / per + 0.1), seed + row * 23 + i, sh / 0.42);
     }
-    box(m, x0 + dp / 2, y + sh / 2, 0, dp - 0.08, sh, wd - 0.12, (p, n, out) => out.copy(WOOD.stoneDark).multiplyScalar(0.9 + phash(seed, row, 2) * 0.2));
+    box(m, x0 + dp / 2, y + sh / 2, 0, dp - 0.08, sh, wd - 0.12, (p, n, out) => out.copy(WOOD.stoneDark).multiplyScalar(0.9 + phash(seed, row, 2) * 0.2), 0, 0, 0, SURF.stone);
     y += sh;
     row++;
   }
@@ -481,7 +523,7 @@ export const BUILD = {
         const col = (p, nn, out) => out.copy(PAL.plank).multiplyScalar(k * (1 - Math.abs(p.x) * 1.5));
         for (const [a, c] of spans) {
           const along = Math.abs(x1 - x0) > Math.abs(z1 - z0);
-          box(b.m, x, top + (a + c) / 2, z, along ? boardW - 0.01 : 0.04, c - a, along ? 0.04 : boardW - 0.01, col);
+          box(b.m, x, top + (a + c) / 2, z, along ? boardW - 0.01 : 0.04, c - a, along ? 0.04 : boardW - 0.01, col, 0, 0, 0, SURF.wood);
         }
       }
     };
@@ -512,7 +554,7 @@ export const BUILD = {
         out.copy(PAL.tin).lerp(PAL.rust, r > 0.55 ? 0.4 + r * 0.6 : r * 0.3);
         return out.multiplyScalar(i % 2 ? 0.9 : 1.05);
       };
-      b.m.tris([A, Cc, B, A, Dd, Cc], rust);
+      b.m.tris([A, Cc, B, A, Dd, Cc], rust, SURF.tin);
     }
     weather(b.m, tin, 0.1, 0.25);
     // antlers over the door
@@ -588,6 +630,7 @@ export const BUILD = {
     const P = (x, y, z) => new THREE.Vector3(x, plane(x, z) + y, z);
     const stain = (p, n, out) => out.copy(canvas).multiplyScalar(0.82 + phash(Math.round(p.x * 3), Math.round(p.y * 4), Math.round(p.z * 3) + b.seed) * 0.2);
     const from = b.m.n;
+    b.m.surf = SURF.cloth;
     b.m.tris([P(-hw, 0, z0), P(0, H, z0), P(0, H, z1), P(-hw, 0, z0), P(0, H, z1), P(-hw, 0, z1)], stain);
     b.m.tris([P(hw, 0, z0), P(0, H, z1), P(0, H, z0), P(hw, 0, z0), P(hw, 0, z1), P(0, H, z1)], stain);
     b.m.tris([P(-hw, 0, z0), P(hw, 0, z0), P(0, H, z0)], stain);
@@ -596,6 +639,7 @@ export const BUILD = {
     b.m.tris([P(0, H, z1), P(hw * 0.55, 0.25, z1 + 0.32), P(hw, 0, z1)], stain);
     b.m.tris([P(-hw + 0.05, 0.01, z0 + 0.05), P(hw - 0.05, 0.01, z1 - 0.05), P(hw - 0.05, 0.01, z0 + 0.05), P(-hw + 0.05, 0.01, z0 + 0.05), P(-hw + 0.05, 0.01, z1 - 0.05), P(hw - 0.05, 0.01, z1 - 0.05)], (p, n, out) => out.copy(PAL.canvas[2]).multiplyScalar(0.45));
     weather(b.m, from, 0.25, 0);
+    b.m.surf = SURF.plain;
     const kit = b.m.n;
     // a bedroll inside
     const bed = P(-0.35, 0.08, tz - 0.1);
@@ -678,11 +722,11 @@ export const BUILD = {
     }
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2;
-      box(b.m, Math.cos(a) * 0.72, rim - 0.04, Math.sin(a) * 0.72, 0.26, 0.09, 0.46, (p, n, out) => out.copy(WOOD.stone).multiplyScalar(0.85 + phash(i, b.seed, 4) * 0.25), 0, -a, 0);
+      box(b.m, Math.cos(a) * 0.72, rim - 0.04, Math.sin(a) * 0.72, 0.26, 0.09, 0.46, (p, n, out) => out.copy(WOOD.stone).multiplyScalar(0.85 + phash(i, b.seed, 4) * 0.25), 0, -a, 0, SURF.stone);
     }
     // the shaft: dark, and darker the further down you look
     const shaft = new THREE.CylinderGeometry(0.56, 0.56, rim - lo + 0.1, 12, 3, true);
-    b.m.add(shaft, new THREE.Matrix4().makeTranslation(0, (rim + lo) / 2 - 0.1, 0), (p, n, out) => out.copy(WOOD.stoneDark).multiplyScalar(Math.max(0.05, 0.5 + p.y * 0.5)));
+    b.m.add(shaft, new THREE.Matrix4().makeTranslation(0, (rim + lo) / 2 - 0.1, 0), (p, n, out) => out.copy(WOOD.stoneDark).multiplyScalar(Math.max(0.05, 0.5 + p.y * 0.5)), null, SURF.stone);
     const disc = new THREE.CircleGeometry(0.56, 12);
     b.m.add(disc, new THREE.Matrix4().makeRotationX(-Math.PI / 2).setPosition(0, lo + 0.04, 0), () => PAL.dark.clone());
     // posts, a windlass with a crank, rope wound on it, and a little roof
@@ -692,7 +736,7 @@ export const BUILD = {
       box(b.m, s * 0.95, (g - 0.2 + rim + 1.4) / 2, 0, 0.13, rim + 1.6 - g, 0.13, tone(PAL.plank, b.rnd));
     }
     addRoundLog(b.m, alongMatrix('x', 0, rim + 0.62, 0), 1.95, b.seed + 2, 0.08, 0.01);
-    b.m.add(new THREE.CylinderGeometry(0.115, 0.115, 0.5, 9, 1), alongMatrix('x', -0.15, rim + 0.62, 0), (p, n, out) => out.copy(PAL.rope).multiplyScalar(0.8 + phash(Math.round(p.y * 30), 1, 2) * 0.3));
+    b.m.add(new THREE.CylinderGeometry(0.115, 0.115, 0.5, 9, 1), alongMatrix('x', -0.15, rim + 0.62, 0), (p, n, out) => out.copy(PAL.rope).multiplyScalar(0.8 + phash(Math.round(p.y * 30), 1, 2) * 0.3), null, SURF.cloth);
     rod(b.m, [1.02, rim + 0.62, 0], [1.2, rim + 0.62, 0], 0.03, PAL.iron);
     rod(b.m, [1.2, rim + 0.62, 0], [1.2, rim + 0.3, 0.1], 0.025, PAL.iron);
     rod(b.m, [1.2, rim + 0.3, 0.1], [1.32, rim + 0.3, 0.1], 0.03, PAL.plank);
@@ -721,7 +765,7 @@ export const BUILD = {
       const z = z0 + (i + 0.5) * ((L - z0) / n);
       if (b.rnd() < 0.03 && i > 3 && i < n - 2) continue; // one gone
       const k = 0.75 + b.rnd() * 0.35;
-      box(b.m, (b.rnd() - 0.5) * 0.04, deck - 0.025, z, 1.6, 0.05, 0.2, (p, nn, out) => out.copy(PAL.plankGrey).lerp(PAL.plank, 0.4).multiplyScalar(k), 0, (b.rnd() - 0.5) * 0.03, 0);
+      box(b.m, (b.rnd() - 0.5) * 0.04, deck - 0.025, z, 1.6, 0.05, 0.2, (p, nn, out) => out.copy(PAL.plankGrey).lerp(PAL.plank, 0.4).multiplyScalar(k), 0, (b.rnd() - 0.5) * 0.03, 0, SURF.wood);
     }
     for (const x of [-0.6, 0.6]) box(b.m, x, deck - 0.12, (z0 + L) / 2, 0.1, 0.14, L - z0, tone(PAL.plank, b.rnd));
     for (let z = z0 + 0.2; z <= L + 0.01; z += 2) {
@@ -825,14 +869,20 @@ function hull(m, matrix, { len, beam, depth, rise, transom, paint, seed }) {
     g.computeVertexNormals();
     return g;
   };
-  m.add(surface(0), matrix, (p, n, out) => {
-    const top = sheer((p.z * 2) / len);
-    if (p.y > top - 0.06) return out.copy(PAL.trim);
-    out.copy(paint).multiplyScalar(0.85 + phash(Math.round(p.z * 4), Math.round(p.y * 8), seed) * 0.2);
-    if (p.y < 0.08) out.multiplyScalar(0.55);
-    return out;
-  });
-  m.add(surface(0.035), matrix, (p, n, out) => out.copy(PAL.plank).multiplyScalar(0.8 + phash(Math.round(p.z * 5), 1, seed) * 0.25));
+  m.add(
+    surface(0),
+    matrix,
+    (p, n, out) => {
+      const top = sheer((p.z * 2) / len);
+      if (p.y > top - 0.06) return out.copy(PAL.trim);
+      out.copy(paint).multiplyScalar(0.85 + phash(Math.round(p.z * 4), Math.round(p.y * 8), seed) * 0.2);
+      if (p.y < 0.08) out.multiplyScalar(0.55);
+      return out;
+    },
+    null,
+    SURF.paint,
+  );
+  m.add(surface(0.035), matrix, (p, n, out) => out.copy(PAL.plank).multiplyScalar(0.8 + phash(Math.round(p.z * 5), 1, seed) * 0.25), null, SURF.wood);
   // a square stern
   if (transom) {
     const s = -1;
@@ -845,6 +895,6 @@ function hull(m, matrix, { len, beam, depth, rise, transom, paint, seed }) {
     const c = new THREE.Vector3(0, (keel(s) + sheer(s)) / 2, -len / 2).applyMatrix4(matrix);
     const tri = [];
     for (let j = 0; j < NC; j++) tri.push(c, pts[j + 1], pts[j]);
-    m.tris(tri, (p, n, out) => out.copy(paint).multiplyScalar(0.8));
+    m.tris(tri, (p, n, out) => out.copy(paint).multiplyScalar(0.8), SURF.paint);
   }
 }

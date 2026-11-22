@@ -76,6 +76,16 @@ export const DECK = {
   uDeckMid: { value: new THREE.Vector2() },
 };
 
+// What lies behind whatever is drawn on the OVER layer (render/pipeline.js):
+// the scene as drawn before it, which the water shows through itself and
+// mirrors. Set by the pipeline each frame.
+export const BEHIND = {
+  tBehind: { value: null }, // rgb: its colour (HDR); a: how far off it is (view depth, m)
+  uBehindRes: { value: new THREE.Vector2(1, 1) }, // its size in pixels, as drawn
+  uProj: { value: new THREE.Matrix4() }, // the camera's projection, to find a point on it
+  uAirFog: { value: 0.002 }, // how thick the air is (per m), for what is seen far off in it
+};
+
 // The water around the player's legs: how much it's stirred up (0..1), and
 // how fast it's going past them (m/s, x and z: the current less your own
 // way through it), which sets the wake.

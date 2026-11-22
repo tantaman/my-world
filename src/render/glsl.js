@@ -319,13 +319,19 @@ vec3 groundColor(vec2 wp, float y, float pathM, float forestM, float slope, vec3
 }
 `;
 
-// The water you are under: what it does to light. k is 0 in fresh water and 1
-// in the sea, which is clearer, and bluer. (Needs SKY_UNIFORMS_GLSL.)
-export const UNDER_GLSL = /* glsl */ `
+// What water does to light that comes through it. k is 0 in fresh water and
+// 1 in the sea, which is clearer, and bluer.
+export const ABSORB_GLSL = /* glsl */ `
 // how much of the light it takes per metre, reds first
 vec3 waterAbsorb(float k) { return mix(vec3(0.42, 0.11, 0.09), vec3(0.33, 0.08, 0.04), k); }
 // how thick it is to see through (per metre)
 float waterFog(float k) { return mix(0.085, 0.034, k); }
+`;
+
+// The water you are under: what it does to light, and the light it glows
+// with. (Needs SKY_UNIFORMS_GLSL.)
+export const UNDER_GLSL = /* glsl */ `
+${ABSORB_GLSL}
 // the light scattered back out of it toward you, from the daylight over it,
 // dimmer the deeper you are (depth: m under the surface)
 vec3 waterGlow(float k, float depth) {

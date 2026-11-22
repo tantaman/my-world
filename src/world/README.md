@@ -102,15 +102,25 @@
     down.
   - **The water itself** is meshed per chunk on the main thread from the
     heights and the water grids the workers produce, so it follows your
-    digging. It's see-through, writes depth (so the fog and outlines treat it
-    as a surface), reflects the sky with a dark band where the trees across the
-    water would be (narrow water sees its banks, a stream in the woods sees
-    leaves), glints in the sun and ruffles in the wind. Running water is drawn
-    out into streaks along the current and carries flecks of foam and bubbles
-    down with it, so you can see which way it goes and how fast. It froths on
-    cascades, along the shore and round your legs, and opens into a wake
-    behind you. Below it the bed turns to silt, pebbles and cobbles under a
-    moving net of light, darkening, reds first, with depth.
+    digging. It's drawn after everything else, over a copy of what lies
+    behind it (render/pipeline.js), so it is a window and a mirror at once,
+    more of a mirror the more slanting the look. Through it you see the bed,
+    bent by the ripples and dimmed by the length of water the light comes
+    through, reds first: the shallows show their stones and the deep goes
+    green and dark. It mirrors what stands over it, the banks, the trees
+    across the lake, a cabin on the shore, you; where the mirrored ray leaves
+    the picture it sees the sky, and low down the dark of the trees round the
+    water (narrow water sees its banks, a stream in the woods sees leaves).
+    It writes depth, so the fog and outlines treat it as a surface, and
+    glints in the sun. The wind runs short waves across still water, in
+    gusts that drift over a lake with glassy calm between them, and as they
+    get finer than a pixel or two they're let go, so far off it lies smooth
+    and mirrors the far shore. Running water is drawn out into streaks along
+    the current and carries flecks of foam and bubbles down with it, so you
+    can see which way it goes and how fast. It froths on cascades, along the
+    shore and round your legs, and opens into a wake behind you. Below it the
+    bed turns to silt, pebbles and cobbles under a moving net of light,
+    darkening, reds first, as the daylight comes down to it.
   - **By the water** trees and logs keep back from the bank, ferns come right
     down to it, boulders stand in streams, and the grass gives way to a damp,
     sandy edge. Reeds and bulrushes grow in the shallows of still water, and
@@ -227,7 +237,7 @@ country.js            the kinds of country, in one table: ground, plants, sky, a
 chunkGen.js           pure chunk generation (terrain buffers, vegetation lists)
 chunkWorker.js        Web Worker wrapper around chunkGen
 chunks.js             streaming, LOD, meshes, collision + height + water queries
-waterSurface.js       the water's mesh and shader, from above and from under it
+waterSurface.js       the water's mesh and shader: a window and a mirror, from above; from under it
 solids.js             built things you bump into and stand on
 spaces.js             places under the ground you can be in (caves): floor, walls, roof
 cuts.js               holes in the ground, where something else stands in for it

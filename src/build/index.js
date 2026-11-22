@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { growRect } from '../core/geom.js';
 import { createVegetationMaterial, createVegetationDepthMaterial } from '../world/materials.js';
+import { createBuildingMaterial } from './surfaces.js';
 import { TREE_KINDS } from '../world/flora.js';
 import { Builder } from './builder.js';
 import { TerrainEdits, terrainSave } from './terrainEdits.js';
@@ -36,7 +37,7 @@ export const after = ['render', 'ui', 'world', 'player', 'audio'];
 export function installBuild(game) {
   const { scene, camera, gen, chunks, grass, solids, player, input, hud, sound, commands, save } = game;
 
-  const wood = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
+  const wood = createBuildingMaterial(); // what each piece is made of, drawn (surfaces.js)
   const materials = { wood, still: createVegetationMaterial({ sway: false }), stillShadow: createVegetationDepthMaterial({ sway: false }) };
 
   // ── What has been changed about the world ─────────────────────────────────

@@ -3,7 +3,14 @@
 // 1. The scene is drawn into an HDR target with a depth texture: at the
 //    screen's own resolution (up to a cap, past which it's drawn smaller and
 //    blown up smoothly), multisampled so edges are smooth, or, with pixel
-//    art on, a few hundred lines tall and hard-edged.
+//    art on, a few hundred lines tall and hard-edged. It's drawn in two
+//    goes. First everything but what is on the OVER layer; then a copy is
+//    kept of that (BEHIND in uniforms.js: its colour, and how far off each
+//    pixel is), and what is on OVER is drawn over it. That is the water, so
+//    it can show what lies under it, bent by the ripples and dimmed by how
+//    much water the light comes through, and mirror what stands over it
+//    (world/waterSurface.js); and with it whatever is seen in front of the
+//    water (splashes, motes), so they aren't taken for what lies under it.
 // 2. Ambient occlusion, from the depth alone, at half that resolution: how
 //    much of the open sky each spot can't see past what's right next to it.
 //    It's what sets a trunk in the ground, a rock in the grass and the hiker
@@ -33,11 +40,18 @@
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import { SKY, DECK, UNDER, SHARED } from './uniforms.js';
+import { SKY, DECK, UNDER, SHARED, BEHIND } from './uniforms.js';
 import { NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, UNDER_GLSL } from './glsl.js';
+
+// The layer that is drawn second, over a copy of everything else (see 1.,
+// above): `mesh.layers.set(OVER)`. Lights that should fall on it are on it
+// too (`light.layers.enableAll()`), since three.js only lights a thing with
+// the lights the camera can see.
+export const OVER = 1;
 
 const FOG_DENSITY = 0.0021; // per metre at the height of the eye, in the forest's air
 const FOG_TINT = 0.82; // the fog's colour: the sky's behind it, a little dimmed
+const FAR_Z = 6.0e4; // m: how far off the sky is said to be in the copy (as far as half a float holds)
 
 const AO_RADIUS = 0.9; // m: how far round a spot the occlusion looks
 const AO_SAMPLES = 10; // per pixel (times the 16 turns of the pattern)
@@ -134,6 +148,22 @@ void main() {
   }
   float open = 1.0 - occ * 2.0 / ${AO_SAMPLES}.0;
   gl_FragColor = vec4(clamp(open, 0.0, 1.0), z, 0.0, 1.0);
+}`;
+
+// ── What lies behind the water ─────────────────────────────────────────────
+// A copy of the scene drawn so far, for what is drawn over it to read: its
+// colour, and in alpha how far off it is (view depth, m; the sky FAR_Z).
+const BEHIND_FRAG = /* glsl */ `
+#include <packing>
+uniform sampler2D tColor;
+uniform sampler2D tDepth;
+uniform float uNear;
+uniform float uFar;
+varying vec2 vUv;
+void main() {
+  float d = texture2D(tDepth, vUv).x;
+  float z = d >= 0.99999 ? ${FAR_Z.toFixed(1)} : min(-perspectiveDepthToViewZ(d, uNear, uFar), ${FAR_Z.toFixed(1)});
+  gl_FragColor = vec4(texture2D(tColor, vUv).rgb, z);
 }`;
 
 // ── Composite (HDR in, HDR out) ────────────────────────────────────────────
@@ -543,6 +573,7 @@ export class Pipeline {
       },
       COMPOSITE_FRAG,
     );
+    this.behind = pass({ tColor: { value: null }, tDepth: { value: null }, uNear: { value: 0.1 }, uFar: { value: 1000 } }, BEHIND_FRAG);
     this.bloomDown = pass({ tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uFirst: { value: 0 } }, BLOOM_DOWN_FRAG);
     this.bloomUp = pass({ tSrc: { value: null }, uTexel: { value: new THREE.Vector2() } }, BLOOM_UP_FRAG, { blending: THREE.AdditiveBlending });
     this.final = pass(
@@ -592,7 +623,7 @@ export class Pipeline {
     if (lw === this.lowW && lh === this.lowH) return;
     this.lowW = lw;
     this.lowH = lh;
-    for (const rt of [this.rtScene, this.rtAO, this.rtHDR, this.rtLow, ...this.bloomChain]) {
+    for (const rt of [this.rtScene, this.rtBehind, this.rtAO, this.rtHDR, this.rtLow, ...this.bloomChain]) {
       if (!rt) continue;
       rt.depthTexture?.dispose();
       rt.dispose();
@@ -609,6 +640,10 @@ export class Pipeline {
     // a leaf's cutout: where there are samples, how much of the pixel it
     // covers is how many of them it takes; where there aren't, all or none
     SHARED.uAlphaCut.value = samples > 0 ? 0.02 : 0.5;
+    // the copy of it that what's on OVER is drawn over
+    this.rtBehind = hdrTarget(lw, lh);
+    BEHIND.tBehind.value = this.rtBehind.texture;
+    BEHIND.uBehindRes.value.set(lw, lh);
     // the occlusion at half size, once there are pixels enough to spare
     const aoDiv = lh > 400 ? 2 : 1;
     this.rtAO = hdrTarget(Math.ceil(lw / aoDiv), Math.ceil(lh / aoDiv), THREE.NearestFilter);
@@ -667,9 +702,40 @@ export class Pipeline {
     const r = this.renderer;
     const pixel = this.enabled;
 
+    // Everything but what is on OVER...
+    const layers = camera.layers.mask;
     r.setRenderTarget(this.rtScene);
     r.clear();
+    camera.layers.mask = layers & ~(1 << OVER);
     r.render(scene, camera);
+    // ...a copy of it, for the water to see what lies under it and what
+    // stands over it...
+    const b = this.behind.uniforms;
+    b.tColor.value = this.rtScene.texture;
+    b.tDepth.value = this.rtScene.depthTexture;
+    b.uNear.value = camera.near;
+    b.uFar.value = camera.far;
+    this.draw(this.behind, this.rtBehind);
+    BEHIND.uProj.value.copy(camera.projectionMatrix);
+    BEHIND.uAirFog.value = FOG_DENSITY * this.haze;
+    // ...and what is on OVER, over it: the same shadows, not drawn again,
+    // and the same background, not cleared again
+    const shadows = r.shadowMap.autoUpdate;
+    const background = scene.background;
+    const clears = r.autoClear;
+    r.shadowMap.autoUpdate = false;
+    scene.background = null;
+    r.autoClear = false;
+    camera.layers.mask = 1 << OVER;
+    try {
+      r.setRenderTarget(this.rtScene);
+      r.render(scene, camera);
+    } finally {
+      camera.layers.mask = layers;
+      r.autoClear = clears;
+      scene.background = background;
+      r.shadowMap.autoUpdate = shadows;
+    }
 
     if (this.ao > 0) {
       const o = this.occlusion.uniforms;

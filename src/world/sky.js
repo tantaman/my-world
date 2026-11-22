@@ -150,10 +150,13 @@ export class Sky {
     this.sun.shadow.normalBias = 0.06;
     // a little soft at the edge, as the sun's own width makes a real one
     this.sun.shadow.radius = SHADOW_SOFT;
+    // (and on what is drawn over the rest, the water: render/pipeline.js)
+    this.sun.layers.enableAll();
     scene.add(this.sun);
     scene.add(this.sun.target);
 
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x222211, 1);
+    this.hemi.layers.enableAll();
     scene.add(this.hemi);
   }
 

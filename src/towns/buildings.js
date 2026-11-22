@@ -19,6 +19,12 @@
 // Windows that are lit at night go into a mesh of their own, drawn with a
 // material whose brightness follows the dark (see index.js).
 //
+// Each piece says what it is made of (build/surfaces.js): the palette's paint
+// is paint, its boards wood, its glass glass (MADE_OF, in
+// landmarks/models.js), and walls and roofs say as they're put up: clapboard,
+// upright boards or stone; shingles, slates, tin or planks. How worn it all is
+// goes by the town, and by how far gone the lot is.
+//
 //   buildLot(town, lot, ground, materials) -> {
 //     object    a THREE.Group, placed and turned where the lot is
 //     solids    capsules for the world's Solids: walls, floors, porches, steps
@@ -36,7 +42,8 @@ import * as THREE from 'three';
 import { Mesher, WOOD, addRoundLog } from '../build/geometry.js';
 import { mulberry32, phash } from '../noise.js';
 import { toWorld } from '../landmarks/sites.js';
-import { Builder, PAL as OLD, BUILD as OLD_PLACES, box, rod, stone, weather, stepsUp, floor, tone } from '../landmarks/models.js';
+import { Builder, PAL as OLD, BUILD as OLD_PLACES, MADE_OF, madeOf, box, rod, stone, weather, stepsUp, floor, tone } from '../landmarks/models.js';
+import { SURF, UPRIGHT } from '../build/surfaces.js';
 import { bodyOf } from './towns.js';
 
 const lin = (hex) => new THREE.Color(hex);
@@ -82,6 +89,13 @@ const LEAF = lin(0x3c5a26);
 const DEAD = lin(0x3a3430);
 const GOODS = [0xa0522d, 0x6b8e23, 0xd2b48c, 0x8b4513, 0x4682b4, 0xb22222, 0xdaa520].map(lin);
 
+// What this palette is made of (build/surfaces.js; see MADE_OF).
+for (const set of [PAINT, TRIM, DOOR, SHUTTER]) for (const style in set) for (const c of set[style]) MADE_OF.set(c, SURF.paint);
+for (const [c, surf] of [[BOARD, SURF.wood], [PLASTER, SURF.clay], [GLASS, SURF.glass], [DEAD, SURF.bark], ...CANVAS.map((c) => [c, SURF.cloth])]) MADE_OF.set(c, surf);
+// How worn a town's paint and boards are, before what its lot has been through.
+const WEAR = { western: 0.3, village: 0.06, creepy: 0.45 };
+const COVER = { tin: SURF.tin, slate: SURF.slate, shingle: SURF.shingle, board: SURF.wood | UPRIGHT };
+
 const STOREY = 3.0; // m from one floor to the next
 const POST_SPACING = 3; // m, the most between a porch's posts
 const _q = new THREE.Quaternion();
@@ -105,6 +119,7 @@ export function buildLot(town, lot, ground, materials) {
   // in a dark town, one house in three has a candle burning in a window
   b.candle = town.style === 'creepy' && lot.type !== 'church' && lot.seed % 3 === 0;
   b.look = lookOf(town, lot, b.rnd);
+  b.m.wear = (WEAR[town.style] ?? 0.2) + lot.decay * 0.5;
   const from = b.m.n;
   BUILD[lot.type](b, lot);
   // what was put on it and round it weathers too
@@ -168,8 +183,8 @@ function lookOf(town, lot, rnd) {
 // ── The kit ──────────────────────────────────────────────────────────────────
 // Everything works in the lot's own frame, y up from the ground at its middle.
 
-function quad(m, a, b, c, d, color) {
-  m.tris([a, b, c, a, c, d], color);
+function quad(m, a, b, c, d, color, surf = m.surf) {
+  m.tris([a, b, c, a, c, d], color, surf);
 }
 
 // [[a, b], ...] less the stretch [c, d]
@@ -251,7 +266,7 @@ function wall(b, { a, e, y0, top, siding, color, holes = [], decay = 0, lining =
       for (const h of H) if (tm > h.t0 && tm < h.t1) spans = cutOut(spans, h.y0, h.y1);
       const k = 0.8 + rnd() * 0.28;
       const col = (p, nn, out) => out.copy(color).multiplyScalar(k * (0.93 + 0.07 * Math.sin(p.y * 3.1 + i)));
-      for (const [ya, yb] of spans) quad(m, F.at(t0, ya), F.at(t1, ya), F.at(t1, yb), F.at(t0, yb), col);
+      for (const [ya, yb] of spans) quad(m, F.at(t0, ya), F.at(t1, ya), F.at(t1, yb), F.at(t0, yb), col, madeOf(color, m) | UPRIGHT);
     }
   } else {
     const course = siding === 'clap' ? 0.2 : 0.3;
@@ -268,7 +283,7 @@ function wall(b, { a, e, y0, top, siding, color, holes = [], decay = 0, lining =
           const shade = 0.9 + rnd() * 0.13;
           const mid = (y + yt) / 2;
           const col = (p, nn, out) => out.copy(color).multiplyScalar(shade * (p.y > mid ? 1 : 0.8));
-          quad(m, F.at(t0, y, 0.035), F.at(t1, y, 0.035), F.at(t1, yt, 0), F.at(t0, yt, 0), col);
+          quad(m, F.at(t0, y, 0.035), F.at(t1, y, 0.035), F.at(t1, yt, 0), F.at(t0, yt, 0), col, madeOf(color, m));
         } else {
           // dressed stone, in courses, each block a little different
           let t = t0 - (k % 2 ? 0.32 : 0);
@@ -281,7 +296,7 @@ function wall(b, { a, e, y0, top, siding, color, holes = [], decay = 0, lining =
             if (decay && rnd() < decay * 0.08) continue;
             const shade = 0.78 + rnd() * 0.32;
             const col = (p, nn, out) => out.copy(color).multiplyScalar(shade * (p.y > y + 0.04 ? 1 : 0.62));
-            quad(m, F.at(ta + 0.01, y, 0.02), F.at(tb - 0.01, y, 0.02), F.at(tb - 0.01, yt - 0.01, 0.02), F.at(ta + 0.01, yt - 0.01, 0.02), col);
+            quad(m, F.at(ta + 0.01, y, 0.02), F.at(tb - 0.01, y, 0.02), F.at(tb - 0.01, yt - 0.01, 0.02), F.at(ta + 0.01, yt - 0.01, 0.02), col, SURF.stone);
           }
         }
       }
@@ -301,7 +316,7 @@ function wall(b, { a, e, y0, top, siding, color, holes = [], decay = 0, lining =
       const tm = (ta + tb) / 2;
       let spans = [[y0, Math.min(topAt(ta), topAt(tb))]];
       for (const h of H) if (tm > h.t0 && tm < h.t1) spans = cutOut(spans, h.y0, h.y1);
-      for (const [ya, yb] of spans) quad(m, F.at(ta, ya, -0.09), F.at(tb, ya, -0.09), F.at(tb, yb, -0.09), F.at(ta, yb, -0.09), col);
+      for (const [ya, yb] of spans) quad(m, F.at(ta, ya, -0.09), F.at(tb, ya, -0.09), F.at(tb, yb, -0.09), F.at(ta, yb, -0.09), col, madeOf(lining, m));
     }
   }
   F.holes = H;
@@ -329,11 +344,11 @@ function dress(b, F, trim) {
       const lit = candle || (!broken && b.rnd() < (h.lit ?? look.lit));
       if (broken) {
         // a shard or two left in the corner of the frame
-        if (b.rnd() < 0.5) b.m.tris([F.at(h.t0, h.y0, -0.03), F.at(h.t0 + w * 0.5, h.y0, -0.03), F.at(h.t0, h.y0 + ht * 0.6, -0.03)], (p, n, out) => out.copy(GLASS));
+        if (b.rnd() < 0.5) b.m.tris([F.at(h.t0, h.y0, -0.03), F.at(h.t0 + w * 0.5, h.y0, -0.03), F.at(h.t0, h.y0 + ht * 0.6, -0.03)], (p, n, out) => out.copy(GLASS), SURF.glass);
       } else {
         const pane = lit ? b.glow : b.m;
         const col = lit ? (p, n, out) => out.copy(LIT) : (p, n, out) => out.copy(GLASS).multiplyScalar(0.8 + Math.max(0, p.y - h.y0) / ht * 0.6);
-        quad(pane, F.at(h.t0, h.y0, -0.04), F.at(h.t1, h.y0, -0.04), F.at(h.t1, h.y1, -0.04), F.at(h.t0, h.y1, -0.04), col);
+        quad(pane, F.at(h.t0, h.y0, -0.04), F.at(h.t1, h.y0, -0.04), F.at(h.t1, h.y1, -0.04), F.at(h.t0, h.y1, -0.04), col, SURF.glass);
         if (!h.plain) {
           // glazing bars
           wbox(b.m, F, tm, (h.y0 + h.y1) / 2, -0.02, 0.05, ht, 0.04, trim);
@@ -409,7 +424,7 @@ function skirt(b, x0, z0, x1, z1, top, kind) {
       const k = 0.75 + b.rnd() * 0.3;
       const color = kind === 'stone' ? WOOD.stone : kind === 'brick' ? lin(0x8a4a38) : BOARD;
       const col = (p, nn, out) => out.copy(color).multiplyScalar(k * (kind === 'boards' ? 0.7 : 0.9));
-      quad(b.m, F.at(ta, Math.min(ga, top), 0.02), F.at(tb, Math.min(gb, top), 0.02), F.at(tb, top, 0.02), F.at(ta, top, 0.02), col);
+      quad(b.m, F.at(ta, Math.min(ga, top), 0.02), F.at(tb, Math.min(gb, top), 0.02), F.at(tb, top, 0.02), F.at(ta, top, 0.02), col, kind === 'boards' ? SURF.wood | UPRIGHT : SURF.stone);
     }
   }
 }
@@ -431,6 +446,7 @@ function roof(b, { x0, z0, x1, z1, eave, pitch, axis = 'x', over = 0.4, cover = 
   const yEdge = eave - over * tan;
   const rnd = b.rnd;
   const rusty = cover === 'tin' ? 0.15 + decay * 0.8 : 0;
+  const surf = COVER[cover] ?? SURF.shingle;
   for (const s of [-1, 1]) {
     const at = (u, f, lift = 0) => W(u, yEdge + (ridge - yEdge) * f + lift, vc + s * vEdge * (1 - f));
     if (cover === 'tin' || cover === 'board') {
@@ -456,7 +472,7 @@ function roof(b, { x0, z0, x1, z1, eave, pitch, axis = 'x', over = 0.4, cover = 
           if (rusty) out.lerp(OLD.rust, Math.min(1, rusty * phash(Math.round(p.x * 3), Math.round(p.y * 4), Math.round(p.z * 3) + b.seed) * 1.6));
           return out.multiplyScalar((0.82 + r * 0.25) * (lift ? 0.9 : 1.05));
         };
-        quad(m, at(ua, f0, lift + 0.1), at(ub, f0, lift + 0.1), at(ub, Math.min(1, f1), lift + 0.1), at(ua, Math.min(1, f1), lift + 0.1), col);
+        quad(m, at(ua, f0, lift + 0.1), at(ub, f0, lift + 0.1), at(ub, Math.min(1, f1), lift + 0.1), at(ua, Math.min(1, f1), lift + 0.1), col, surf);
       }
     } else {
       // courses of shingles or slates, each laid over the one below
@@ -473,20 +489,20 @@ function roof(b, { x0, z0, x1, z1, eave, pitch, axis = 'x', over = 0.4, cover = 
           const j = phash(r, c, b.seed);
           const k = 0.75 + j * 0.4;
           const col = (p, nn, out) => out.copy(color).multiplyScalar(k);
-          quad(m, at(ua, fa, 0.1 - 0.03), at(ub, fa, 0.1 - 0.03), at(ub, fb, 0.1), at(ua, fb, 0.1), col);
+          quad(m, at(ua, fa, 0.1 - 0.03), at(ub, fa, 0.1 - 0.03), at(ub, fb, 0.1), at(ua, fb, 0.1), col, surf);
           const dark = (p, nn, out) => out.copy(color).multiplyScalar(k * 0.5);
-          quad(m, at(ua, fa, 0.04), at(ub, fa, 0.04), at(ub, fa, 0.075), at(ua, fa, 0.075), dark);
+          quad(m, at(ua, fa, 0.04), at(ub, fa, 0.04), at(ub, fa, 0.075), at(ua, fa, 0.075), dark, surf);
         }
       }
     }
     // the underside
     const und = (p, nn, out) => out.copy(BOARD).multiplyScalar(0.45);
-    quad(m, at(u0, 0, 0.02), at(u1, 0, 0.02), at(u1, 1, 0.02), at(u0, 1, 0.02), und);
+    quad(m, at(u0, 0, 0.02), at(u1, 0, 0.02), at(u1, 1, 0.02), at(u0, 1, 0.02), und, SURF.wood | UPRIGHT);
   }
   // a cap along the ridge
   const rc = W((u0 + u1) / 2, ridge + 0.13, vc);
   const cap = (p, nn, out) => out.copy(color).multiplyScalar(0.7);
-  box(m, rc.x, rc.y, rc.z, along ? u1 - u0 : 0.22, 0.1, along ? 0.22 : u1 - u0, cap);
+  box(m, rc.x, rc.y, rc.z, along ? u1 - u0 : 0.22, 0.1, along ? 0.22 : u1 - u0, cap, 0, 0, 0, surf === SURF.tin ? SURF.tin : surf === SURF.slate ? SURF.slate : SURF.wood);
   if (blockers) {
     const slope = vEdge / Math.cos(pitch) / 2;
     const y = (yEdge + ridge) / 2 + 0.08;
@@ -515,7 +531,7 @@ function shed(b, { x0, x1, z0, z1, y0, y1, cover = 'board', color, decay = 0, m 
       if (cover === 'tin') out.lerp(OLD.rust, 0.15 + decay * 0.6 * phash(Math.round(p.x * 3), Math.round(p.z * 3), b.seed));
       return out;
     };
-    quad(m, V(xa, y0, z0), V(xb, y0, z0), V(xb, y1, z1), V(xa, y1, z1), col);
+    quad(m, V(xa, y0, z0), V(xb, y0, z0), V(xb, y1, z1), V(xa, y1, z1), col, stripes ? SURF.cloth | UPRIGHT : COVER[cover] ?? SURF.wood | UPRIGHT);
   }
 }
 
@@ -529,7 +545,7 @@ function porch(b, { x0, x1, z0, z1, deck, roofY = 0, cover = 'board', color, rai
     if (decay && b.rnd() < decay * 0.18) continue;
     const k = 0.75 + b.rnd() * 0.3;
     const sag = decay ? (b.rnd() - 0.5) * decay * 0.06 : 0;
-    box(m, x0 + (i + 0.5) * pw, deck - 0.03 + sag, (z0 + z1) / 2, pw - 0.02, 0.05, z1 - z0, (p, nn, out) => out.copy(BOARD).lerp(lin(0x7f786c), 0.4).multiplyScalar(k));
+    box(m, x0 + (i + 0.5) * pw, deck - 0.03 + sag, (z0 + z1) / 2, pw - 0.02, 0.05, z1 - z0, (p, nn, out) => out.copy(BOARD).lerp(lin(0x7f786c), 0.4).multiplyScalar(k), 0, 0, 0, SURF.wood);
   }
   // its edge, and posts down to the ground
   box(m, (x0 + x1) / 2, deck - 0.16, z1 - 0.03, x1 - x0, 0.22, 0.05, tone(BOARD, b.rnd, 0.1));
@@ -633,7 +649,7 @@ function body(b, o) {
   // a ceiling between the floors, and a band round the outside where it is
   for (let s = 1; s < storeys; s++) {
     const y = fl + s * storey;
-    quad(b.m, V(x0, y, z0), V(x1, y, z0), V(x1, y, z1), V(x0, y, z1), (p, nn, out) => out.copy(BOARD).multiplyScalar(0.6));
+    quad(b.m, V(x0, y, z0), V(x1, y, z0), V(x1, y, z1), V(x0, y, z1), (p, nn, out) => out.copy(BOARD).multiplyScalar(0.6), SURF.wood);
     for (const side in walls) wbox(b.m, walls[side], walls[side].len / 2, y, 0.06, walls[side].len + 0.1, 0.14, 0.06, trim);
   }
   if (storeys > 1) b.blocker((x0 + x1) / 2, fl + storey + 0.05, (z0 + z1) / 2, (x1 - x0) / 2, 0.05, (z1 - z0) / 2);
@@ -653,7 +669,7 @@ function body(b, o) {
     // a flat roof inside its parapet
     const y = eave + 0.02;
     quad(b.m, V(x0, y, z0), V(x1, y, z0), V(x1, y, z1), V(x0, y, z1), (p, nn, out) => out.copy(lin(0x3a3632)));
-    quad(b.m, V(x0, y - 0.05, z0), V(x1, y - 0.05, z0), V(x1, y - 0.05, z1), V(x0, y - 0.05, z1), (p, nn, out) => out.copy(BOARD).multiplyScalar(0.5));
+    quad(b.m, V(x0, y - 0.05, z0), V(x1, y - 0.05, z0), V(x1, y - 0.05, z1), V(x0, y - 0.05, z1), (p, nn, out) => out.copy(BOARD).multiplyScalar(0.5), SURF.wood);
     b.blocker((x0 + x1) / 2, y, (z0 + z1) / 2, (x1 - x0) / 2, 0.06, (z1 - z0) / 2);
   }
   // the walls, for the camera
@@ -689,15 +705,20 @@ function lean(m, start, k, from) {
 function barrel(b, x, z, y = null, r = 0.28, h = 0.8) {
   const gy = y ?? b.g(x, z);
   const k = 0.8 + b.rnd() * 0.3;
-  b.m.add(new THREE.CylinderGeometry(r, r, h, 9, 1), new THREE.Matrix4().makeTranslation(x, gy + h / 2, z), (p, n, out) =>
-    Math.abs(p.y) > h * 0.3 && Math.abs(p.y) < h * 0.38 ? out.copy(OLD.iron) : out.copy(BOARD).multiplyScalar(k * (0.85 + 0.15 * Math.sin(Math.atan2(p.z, p.x) * 9))),
+  const hoop = (p) => Math.abs(p.y) > h * 0.3 && Math.abs(p.y) < h * 0.38;
+  b.m.add(
+    new THREE.CylinderGeometry(r, r, h, 9, 1),
+    new THREE.Matrix4().makeTranslation(x, gy + h / 2, z),
+    (p, n, out) => (hoop(p) ? out.copy(OLD.iron) : out.copy(BOARD).multiplyScalar(k * (0.85 + 0.15 * Math.sin(Math.atan2(p.z, p.x) * 9)))),
+    null,
+    SURF.wood,
   );
   b.solid(x, z, x, z, r + 0.02, gy - 0.2, gy + h, { step: h + 0.1 });
 }
 
 function crate(b, x, z, y = null, s = 0.6) {
   const gy = y ?? b.g(x, z);
-  box(b.m, x, gy + s / 2, z, s, s, s, tone(lin(0x9a7a50), b.rnd, 0.25), 0, b.rnd() * 0.6, 0);
+  box(b.m, x, gy + s / 2, z, s, s, s, tone(lin(0x9a7a50), b.rnd, 0.25), 0, b.rnd() * 0.6, 0, SURF.wood);
   b.solid(x, z, x, z, s * 0.55, gy - 0.2, gy + s, { step: s + 0.1 });
 }
 
@@ -745,8 +766,8 @@ function wagon(b, x, z, yaw, broken) {
   const m = b.part(V(x, gy, z), yaw);
   const tilt = broken ? 0.22 : 0;
   const bed = (p, n, out) => out.copy(BOARD).multiplyScalar(0.8 + phash(Math.round(p.x * 5), 1, b.seed) * 0.3);
-  box(m, 0, 0.95 - tilt, 0, 1.3, 0.08, 3.0, bed, 0, 0, broken ? 0.18 : 0);
-  for (const s of [-1, 1]) box(m, s * 0.63, 1.15 - tilt * (s > 0 ? 1.6 : 0.4), 0, 0.06, 0.38, 3.0, bed, 0, 0, broken ? 0.18 : 0);
+  box(m, 0, 0.95 - tilt, 0, 1.3, 0.08, 3.0, bed, 0, 0, broken ? 0.18 : 0, SURF.wood);
+  for (const s of [-1, 1]) box(m, s * 0.63, 1.15 - tilt * (s > 0 ? 1.6 : 0.4), 0, 0.06, 0.38, 3.0, bed, 0, 0, broken ? 0.18 : 0, SURF.wood);
   for (const [wx, wz, r] of [[-0.78, 1.05, 0.5], [0.78, 1.05, 0.5], [-0.78, -1.05, 0.62], [0.78, -1.05, 0.62]]) {
     if (broken && wx > 0 && wz > 0) {
       // ...and its wheel lying in the dirt beside it
@@ -855,9 +876,9 @@ function sign(b, x, y, z, w, h, color, ink, yaw = 0) {
 function chimney(b, x, z, from, top, color = lin(0x8a4a38)) {
   for (let y = from; y < top; y += 0.25) {
     const k = 0.8 + b.rnd() * 0.3;
-    box(b.m, x, y + 0.125, z, 0.6, 0.24, 0.6, (p, n, out) => out.copy(color).multiplyScalar(k));
+    box(b.m, x, y + 0.125, z, 0.6, 0.24, 0.6, (p, n, out) => out.copy(color).multiplyScalar(k), 0, 0, 0, SURF.stone);
   }
-  box(b.m, x, top + 0.05, z, 0.72, 0.1, 0.72, (p, n, out) => out.copy(color).multiplyScalar(0.7));
+  box(b.m, x, top + 0.05, z, 0.72, 0.1, 0.72, (p, n, out) => out.copy(color).multiplyScalar(0.7), 0, 0, 0, SURF.stone);
 }
 
 function stovepipe(b, x, z, from, top) {
@@ -1670,7 +1691,7 @@ function falseFront(b, h, x0, x1, z) {
   const ink = b.look.paint.getHSL({}).l > 0.45 ? lin(0x2a2420) : lin(0xe8dfc8);
   sign(b, (x0 + x1) / 2, h.eave + 0.25, z + 0.05, W * 0.78, 0.6, b.look.raw ? lin(0x3a3028) : b.look.trim.clone().lerp(b.look.paint, 0.3), ink);
   // the back of it, from the roof
-  quad(b.m, V(x0, h.eave, z - 0.08), V(x1, h.eave, z - 0.08), V(x1, top, z - 0.08), V(x0, top, z - 0.08), (p, n, out) => out.copy(BOARD).multiplyScalar(0.6));
+  quad(b.m, V(x0, h.eave, z - 0.08), V(x1, h.eave, z - 0.08), V(x1, top, z - 0.08), V(x0, top, z - 0.08), (p, n, out) => out.copy(BOARD).multiplyScalar(0.6), SURF.wood | UPRIGHT);
 }
 
 // ── The street ───────────────────────────────────────────────────────────────
