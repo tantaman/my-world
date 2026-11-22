@@ -62,7 +62,7 @@ import { readPhoto } from './hike/exif.js';
 import { decodePng, encodePng } from './hike/png.js';
 import { localFrame, tileXY, terrarium, metresPerDegree } from './hike/geo.js';
 import { blockOf, blockTiles, missing } from './hike/usgs.js';
-import { parseOsm, mergeOsm, trails, waters, coastlines, roads, beaches, streams, riverbanks, covers, peaks, falls, incompleteWaters } from './hike/osm.js';
+import { parseOsm, mergeOsm, trails, waters, coastlines, roads, beaches, streams, riverbanks, canals, waterAreas, covers, peaks, falls, incompleteWaters } from './hike/osm.js';
 import { buildHike, splitHike, fineTiles, tileBox, DEFAULTS } from './hike/build.js';
 import { placeHike } from './hike/place.js';
 import { winterSnow, snowlineFrom } from './hike/snow.js';
@@ -352,7 +352,7 @@ else {
 }
 
 // ── Build it ─────────────────────────────────────────────────────────────────
-const parts = { id, name, photo, middle, from, to, elevation, trails: ts, waters: ws, coast, roads: roads(osm), beaches: beaches(osm), streams: streams(osm), riverbanks: riverbanks(osm), covers: cover, falls: [...falls(osm), ...extraFalls], photos, at, datum, ...opt };
+const parts = { id, name, photo, middle, from, to, elevation, trails: ts, waters: ws, coast, roads: roads(osm), beaches: beaches(osm), streams: streams(osm), riverbanks: riverbanks(osm), canals: canals(osm), waterAreas: waterAreas(osm), covers: cover, falls: [...falls(osm), ...extraFalls], photos, at, datum, ...opt };
 let built;
 try {
   built = buildHike({ ...parts, fine: null });

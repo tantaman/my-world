@@ -159,6 +159,43 @@ export function riverbanks(osm) {
   return out;
 }
 
+// Canals: [{ name, points, width? }], the lines the map draws down them, with
+// their width where it says. Not running water anywhere the slope sets the
+// level; in a delta, where the tide does, water like the rest (country.js,
+// `tidal`).
+export function canals(osm) {
+  const out = [];
+  for (const w of osm.ways.values()) {
+    if (w.tags.waterway !== 'canal') continue;
+    const points = coords(osm, w.refs);
+    const width = Number.parseFloat(w.tags.width);
+    if (points.length > 1) out.push({ name: w.tags.name || '', points, ...(width > 0 ? { width } : {}) });
+  }
+  return out;
+}
+
+// Every area the map draws water over, of any kind (a lake, a river, a canal,
+// a bayou), holes and all: [{ name, rings: [[[lat, lon], ...], ...] }], every
+// ring of each, outer and inner, so that filled even-odd its islands are
+// islands. (In a delta the land between two bayous is a hole in the water,
+// and the elevation data, which has the water's bed, won't stand it out.)
+const isWaterArea = (t) => t.natural === 'water' || t.waterway === 'riverbank';
+export function waterAreas(osm) {
+  const out = [];
+  for (const w of osm.ways.values()) {
+    if (!isWaterArea(w.tags) || w.refs.length < 4 || w.refs[0] !== w.refs[w.refs.length - 1]) continue;
+    out.push({ name: w.tags.name || '', rings: [coords(osm, w.refs)] });
+  }
+  for (const r of osm.relations) {
+    if (r.tags.type !== 'multipolygon' || !isWaterArea(r.tags)) continue;
+    const parts = r.members.filter((m) => m.type === 'way').map((m) => osm.ways.get(m.ref));
+    if (parts.some((p) => !p)) continue; // part of it is outside what we were sent
+    const rings = joinRings(parts.map((p) => p.refs)).map((refs) => coords(osm, refs));
+    if (rings.length) out.push({ name: r.tags.name || '', rings });
+  }
+  return out;
+}
+
 // Waterfalls: [{ name, lat, lon, height? }], each a point on its stream
 // (waterway=waterfall), with its real height (m) where the map says. A point
 // the map names as a fall (Little Navajo Falls) but tags as something else (a

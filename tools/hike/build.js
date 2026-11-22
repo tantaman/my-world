@@ -7,6 +7,7 @@
 
 import { localFrame } from './geo.js';
 import { Landform, packHeights2, packShore, packCover, COVER } from '../../src/world/landform.js';
+import { countryOf } from '../../src/world/country.js';
 
 export const DEFAULTS = {
   scale: 0.2, // game metres per real metre
@@ -52,6 +53,22 @@ const SEA_LEVEL = 0;
 const SEA_NAME = 'the sea';
 // real m: how far over the water a lake's, or the sea's, banks are kept
 const BANK = 0.5;
+// In a country where the tide sets the level (country.js, `tidal`: a delta's
+// bayous and canals), the water is all one, still, at the level of the sea,
+// whatever the map says runs: the areas it draws water over, lakes, rivers and
+// canals alike, and its rivers and canals as wide as they are. Its shore is
+// kept on a grid of its own this fine (game m), so that a canal a few metres
+// across is one.
+const TIDE_CELL = 2;
+// real m: a channel the map doesn't draw, but whose bed the elevation data
+// has deeper than this under the sea (it has the beds of the bayous), is
+// water too where it joins water the map does draw
+const TIDE_DEEP = -0.4;
+// real m: the least the land stands over the water. (The marsh is at its
+// level, and wet; the game's ground is either land or water.)
+const TIDE_LAND = 0.2;
+// game m: the narrowest a river or a canal line is kept, either side of it
+const TIDE_HALF = 1.5;
 // real m: how wide a stream, and a river, is where the map doesn't say and
 // draws no banks (Havasu Creek: a creek you could throw a stone across)
 const STREAM_WIDTH = 3;
@@ -105,8 +122,10 @@ const SEA_CELL = 3;
 //   fineElevation  (lat, lon) -> metres, for the finer grid along the walk
 //              (opt.fine), where finer heights are to be had; elevation if not
 // → { def, preview: { width, height, rgb }, walk: [[x, z], ...] or null }
-export function buildHike({ id, name, photo, elevation, fineElevation = elevation, trails = [], waters = [], coast = [], roads = [], beaches = [], streams = [], riverbanks = [], covers = [], falls = [], photos = [], middle = null, from = null, to = null, at = [0, 0], datum = null, ...opt }) {
+export function buildHike({ id, name, photo, elevation, fineElevation = elevation, trails = [], waters = [], coast = [], roads = [], beaches = [], streams = [], riverbanks = [], canals = [], waterAreas = [], covers = [], falls = [], photos = [], middle = null, from = null, to = null, at = [0, 0], datum = null, ...opt }) {
   const o = { ...DEFAULTS, ...opt, trees: { ...DEFAULTS.trees, ...opt.trees } };
+  // (where the tide sets the level, all the water is one: see TIDE_CELL)
+  const tidal = countryOf(o.country).tidal;
   const s = o.scale;
   const mid = middle || photo;
   const frame = localFrame(mid.lat, mid.lon);
@@ -151,7 +170,17 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
   // ── Lakes ──────────────────────────────────────────────────────────────────
   const lakes = [];
   const lakeCells = new Int8Array(n * n);
-  for (const w of waters) {
+  if (tidal) {
+    const t = tidalWater({ areas: waterAreas, canals, streams, toGame, fromGame, elevation, R: o.radius * s, s, near: toGame([photo.lat, photo.lon]) });
+    if (t) {
+      lakes.push(t);
+      // the land just over it, wherever it is land: the water is carved
+      // out of it by its shore (landform.js)
+      for (let k = 0; k < n * n; k++) E[k] = Math.max(E[k], t.levelReal + TIDE_LAND);
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) if (shoreOf(t, gx(i), gx(j)) < 0) lakeCells[j * n + i] = 1;
+    }
+  }
+  for (const w of tidal ? [] : waters) {
     const rings = w.rings.map((r) => r.map(toGame));
     let [x0, z0, x1, z1] = [Infinity, Infinity, -Infinity, -Infinity];
     for (const r of rings) {
@@ -385,7 +414,7 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
   // river usually is.
   const banks = riverbanks.map((r) => r.map(toGame));
   const runs = [];
-  for (const st of streams) {
+  for (const st of tidal ? [] : streams) {
     let cur = [];
     const flush = () => {
       if (cur.length > 1) {
@@ -642,6 +671,140 @@ function watered(lakes, first, cell, x, z, e) {
     if (l.sea || d < 3) e = Math.max(e, l.levelReal + BANK);
   }
   return e;
+}
+
+// The signed distance to a lake's shore at (x, z), from a grid of its own
+// (`own`); Infinity off it.
+function shoreOf(l, x, z) {
+  const f = l.own;
+  const fi = (x - f.x) / f.cell;
+  const fj = (z - f.z) / f.cell;
+  if (fi < 0 || fj < 0 || fi > f.w - 1 || fj > f.h - 1) return Infinity;
+  const i = Math.min(f.w - 2, Math.floor(fi));
+  const j = Math.min(f.h - 2, Math.floor(fj));
+  const [u, v] = [fi - i, fj - j];
+  const k = j * f.w + i;
+  return (l.d[k] * (1 - u) + l.d[k + 1] * u) * (1 - v) + (l.d[k + f.w] * (1 - u) + l.d[k + f.w + 1] * u) * v;
+}
+
+// The water of a tidal country, as one lake at the level of the sea, on a
+// grid of its own TIDE_CELL apart over the land (see TIDE_CELL): wherever the
+// map draws water (lakes, river and canal areas, their islands left out:
+// osm.js, waterAreas), along every river, stream
+// and canal it draws as a line, as wide as that is, and down the channels the
+// elevation data has under the sea that join those. Named for the named water
+// nearest `near` ([x, z]: where the photo was taken), the water you're by.
+// → { name, levelReal, own: { x, z, w, h, cell }, d } or null if there's none
+export function tidalWater({ areas, canals, streams, toGame, fromGame, elevation, R, s, near = [0, 0] }) {
+  const Rl = R - LAKE_INSET;
+  const c = TIDE_CELL;
+  const half = Math.ceil(Rl / c) + 1;
+  const n = half * 2 + 1;
+  const g = (i) => (i - half) * c;
+  const wet = new Uint8Array(n * n);
+  let named = { d: Infinity, name: '' }; // the named water nearest `near`
+  const mark = (k, name) => {
+    if (name) {
+      const d = Math.hypot(g(k % n) - near[0], g(Math.floor(k / n)) - near[1]);
+      if (d < named.d) named = { d, name };
+    }
+    wet[k] = 1;
+  };
+  const on = (i, j) => Math.hypot(g(i), g(j)) < Rl;
+  // the areas, each on its own, holes and all (a river's area over a lake's
+  // is water still)
+  for (const a of areas) fillRings(a.rings.map((r) => r.map(toGame)), (i, j) => on(i, j) && mark(j * n + i, a.name), n, c, half);
+  // the lines, as wide as each is
+  const lines = [...streams.map((st) => ({ ...st, width: st.width || (st.river ? RIVER_WIDTH : STREAM_WIDTH) })), ...canals.map((l) => ({ ...l, width: l.width || RIVER_WIDTH }))];
+  for (const l of lines) {
+    const r = Math.max(TIDE_HALF, (l.width * s) / 2);
+    const pts = l.points.map(toGame);
+    for (let k = 1; k < pts.length; k++) {
+      const [ax, az] = pts[k - 1];
+      const [bx, bz] = pts[k];
+      const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - r) / c) + half);
+      const i1 = Math.min(n - 1, Math.ceil((Math.max(ax, bx) + r) / c) + half);
+      const j0 = Math.max(0, Math.floor((Math.min(az, bz) - r) / c) + half);
+      const j1 = Math.min(n - 1, Math.ceil((Math.max(az, bz) + r) / c) + half);
+      const dx = bx - ax;
+      const dz = bz - az;
+      const l2 = dx * dx + dz * dz;
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+          const [x, z] = [g(i), g(j)];
+          const t = l2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0;
+          if (Math.hypot(x - ax - dx * t, z - az - dz * t) <= r && on(i, j)) mark(j * n + i, l.name);
+        }
+      }
+    }
+  }
+  // the channels under the sea that join them
+  const queue = [];
+  for (let k = 0; k < n * n; k++) if (wet[k]) queue.push(k);
+  if (!queue.length) return null;
+  const deep = new Int8Array(n * n); // 0 not asked yet, 1 deep, -1 not
+  const isDeep = (k) => {
+    if (!deep[k]) {
+      const [i, j] = [k % n, Math.floor(k / n)];
+      deep[k] = on(i, j) && elevation(...fromGame(g(i), g(j))) < TIDE_DEEP ? 1 : -1;
+    }
+    return deep[k] > 0;
+  };
+  while (queue.length) {
+    const k = queue.pop();
+    const [i, j] = [k % n, Math.floor(k / n)];
+    for (const [a, b] of [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]]) {
+      if (a < 0 || b < 0 || a >= n || b >= n) continue;
+      const q = b * n + a;
+      if (wet[q] || !isDeep(q)) continue;
+      wet[q] = 1;
+      queue.push(q);
+    }
+  }
+  // the signed distance to the shore, negative in the water
+  const out = distanceTransform(wet, n, 0);
+  const inn = distanceTransform(wet, n, 1);
+  const d = new Float32Array(n * n);
+  for (let k = 0; k < n * n; k++) d[k] = wet[k] ? -(Math.sqrt(inn[k]) - 0.5) * c : (Math.sqrt(out[k]) - 0.5) * c;
+  return { name: named.name, levelReal: SEA_LEVEL, own: { x: round(g(0), 100), z: round(g(0), 100), w: n, h: n, cell: c }, d };
+}
+
+// For each point of an n × n grid, the squared distance (in points) to the
+// nearest one that isn't `from` (Felzenszwalb and Huttenlocher's exact
+// transform, a row and then a column at a time).
+function distanceTransform(grid, n, from) {
+  const BIG = 1e12;
+  const D = new Float64Array(n * n);
+  for (let k = 0; k < n * n; k++) D[k] = grid[k] === from ? BIG : 0;
+  const f = new Float64Array(n);
+  const v = new Int32Array(n);
+  const zz = new Float64Array(n + 1);
+  const line = (get, set) => {
+    for (let q = 0; q < n; q++) f[q] = get(q);
+    let k = 0;
+    v[0] = 0;
+    zz[0] = -Infinity;
+    zz[1] = Infinity;
+    for (let q = 1; q < n; q++) {
+      let sx = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+      while (sx <= zz[k]) {
+        k--;
+        sx = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+      }
+      k++;
+      v[k] = q;
+      zz[k] = sx;
+      zz[k + 1] = Infinity;
+    }
+    k = 0;
+    for (let q = 0; q < n; q++) {
+      while (zz[k + 1] < q) k++;
+      set(q, (q - v[k]) ** 2 + f[v[k]]);
+    }
+  };
+  for (let j = 0; j < n; j++) line((q) => D[j * n + q], (q, val) => (D[j * n + q] = val));
+  for (let i = 0; i < n; i++) line((q) => D[q * n + i], (q, val) => (D[q * n + i] = val));
+  return D;
 }
 
 // A hike as it's kept (see src/world/landforms.js): its card, small, listed in

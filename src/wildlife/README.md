@@ -3,6 +3,7 @@
 You're not alone out there: deer, elk, moose, black bears, wolves, mountain
 lions, bobcats, foxes, rabbits, squirrels, chipmunks, mice, snakes,
 salamanders, songbirds, crows, hawks, owls, bees and butterflies come and go.
+And in a Louisiana bayou, alligators.
 
 Every so often something arrives — always out of sight, somewhere that suits
 it, at an hour it keeps — goes about its business, notices you, and in time
@@ -38,6 +39,14 @@ lion.
   then bolt for the nearest trunk and spiral up into the canopy. Chipmunks
   dive under the nearest rock or log. Mice vanish into the leaf litter.
 - Snakes lift their heads on guard (a rattlesnake rattles), then slide off.
+- An alligator keeps to the water's edge: basking on the bank with its mouth
+  open, or lying in the water with only its eyes, its nose and the ridges of
+  its back showing, drifting. It lifts its head and watches you; come too
+  close and it slides off the bank into the water, or sinks out of sight if
+  it's in it already. Corner one on land and it hisses. A young one is black
+  with bright yellow bands; a big old bull is nearly black, and in the spring
+  he bellows, a deep rumble that carries a long way over the water. Only
+  where a country has them (`only` in `species.js`): never in the forest.
 - Songbirds and crows drop onto clearings and paths to hop and peck, and burst
   up into the trees when you come too close. A red-tailed hawk circles high
   over the meadows; an owl ghosts across a clearing at night.
@@ -67,7 +76,8 @@ world.wildlife.species.deer.notice = 60            // tune a temperament
 ```
 
 Species: `deer elk moose bear wolf cougar bobcat fox rabbit squirrel
-chipmunk mouse snake salamander flock flit crows hawk owl bees butterflies`.
+chipmunk mouse snake salamander alligator flock flit crows hawk owl bees
+butterflies`.
 
 ## Files
 
@@ -82,5 +92,6 @@ beasts.js             how mammals behave (graze, alert, flee, climb, howl...)
 birds.js              bird bodies and wings, flapping and folding
 flyers.js             flocks, passing birds, a soaring hawk, owls
 crawlers.js           snakes and salamanders
+gators.js             alligators: the body, and basking, lying in the water, sliding in, sinking
 insects.js            bee swarms and butterflies
 ```

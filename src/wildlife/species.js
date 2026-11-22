@@ -12,6 +12,9 @@
 //
 // `abundance` is relative within a category (big, small, herp, bird, insect)
 // and is what makes a mountain lion a once-in-a-long-while thing.
+//
+// `only`: lives only where a real place's country names it among its animals
+// (world/country.js): an alligator in a bayou, and never in the forest.
 
 import { MAMMALS } from './mammals.js';
 import { smoothstep as ss } from '../noise.js';
@@ -175,6 +178,18 @@ export const SPECIES = {
     name: 'spotted salamander', cat: 'herp', cls: 'crawler', active: 'nocturnal', abundance: 1, max: 2,
     habitat: (e) => e.moist * e.moist * (0.3 + e.forest) * 2,
     sight: 5,
+  },
+  // At the water's edge, basking on the bank or lying in the water with only
+  // its eyes and the ridges of its back showing (gators.js). Big enough to
+  // count among the big animals, and seen from as far off. `only`: it lives
+  // only where a country names it among its animals (world/country.js), never
+  // in the forest.
+  alligator: {
+    name: 'American alligator', cat: 'big', cls: 'gator', active: 'always', abundance: 1.4, max: 2, only: true,
+    habitat: (e) => 0.5 + e.moist * 0.8 + e.meadow * 0.3,
+    // notice: it lifts its head and watches; flee: off the bank and into the
+    // water, or under it if it's already in (m)
+    notice: 14, flee: 6, sight: 45, rest: 25,
   },
 
   // ── Birds ──────────────────────────────────────────────────────────────

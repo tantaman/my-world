@@ -77,6 +77,14 @@
 //            the gentle ground, in drifts at first; or null for none. A hike
 //            can say otherwise for itself, on its card (a photo taken in
 //            winter: landform.js)
+//   moss     how much Spanish moss hangs from a kind of tree here, 0..1:
+//            { broad: 0.9 }. Each tree of that kind has its own share of it,
+//            from a few beards to curtains from every limb (models.js)
+//   tidal    whether its water lies at the level of the sea, however the
+//            land runs (a delta's bayous and canals, where the tide and not
+//            the slope sets the level): an area the map draws a river over
+//            is still water from bank to bank, as a lake is, and so is a
+//            canal's. The importer reads it (tools/hike/build.js)
 //
 // Each also gets an id, its place in the table: the ground carries it vertex
 // by vertex, so the shaders, which are handed every country's colours, know
@@ -114,6 +122,8 @@ const FOREST = {
   shallows: { reeds: 1, lilies: 1 },
   water: null,
   frozen: false,
+  moss: {},
+  tidal: false,
 };
 
 const kind = (over) => ({ ...FOREST, ...over, ground: { ...FOREST.ground, ...over.ground }, clouds: { ...FOREST.clouds, ...over.clouds } });
@@ -306,6 +316,36 @@ export const COUNTRY = {
     names: { broad: ['cottonwood', 'a cottonwood'], pine: ['juniper', 'a juniper'] },
     tints: { bush: [0.85, 0.95, 0.62], pine: [0.72, 0.85, 0.78] },
     water: { shallow: [0.1, 0.42, 0.4], deep: [0.025, 0.25, 0.3], milk: 0.75 },
+  }),
+
+  // The swamps and marshes of a river delta on the Gulf of Mexico (Barataria,
+  // in Louisiana): bald cypress and live oak hung with Spanish moss along the
+  // bayous, palmettos under them, reeds and floating weed in the still
+  // brown water, which mirrors everything. The land is a metre or two over
+  // the water at most, black mud where it's bare. A grey morning sky, low
+  // and close, and mist on the water. Alligators.
+  bayou: kind({
+    ground: {
+      tint: [0.88, 1.1, 0.68],
+      dirt: [0.085, 0.07, 0.05],
+      rock: [0.11, 0.1, 0.085],
+      bare: [[0.075, 0.062, 0.045], [0.05, 0.043, 0.032]],
+      sand: [0.1, 0.085, 0.062],
+    },
+    trees: [['broad', 0.55], ['pine', 0.45]],
+    // (a palmetto is a fern here: low fans of fronds under the trees)
+    under: { fern: [['fern', 0.75], ['bush', 0.15]], bush: [['bush', 0.9]] },
+    rocks: 0.02,
+    clouds: { deck: 320, cover: 0.97, shade: 0.7 },
+    haze: 2.6,
+    animals: ['alligator', 'deer', 'bobcat', 'fox', 'rabbit', 'squirrel', 'mouse', 'snake', 'flock', 'flit', 'crows', 'hawk', 'owl', 'butterflies'],
+    names: { pine: ['bald cypress', 'a bald cypress'], broad: ['live oak', 'a live oak'] },
+    slim: { pine: -0.35 },
+    tints: { pine: [1.12, 1.18, 0.72], broad: [0.9, 1.02, 0.8], fern: [0.62, 0.9, 0.82], bush: [0.85, 1.02, 0.72] },
+    shallows: { reeds: 1, lilies: 1 },
+    water: { shallow: [0.06, 0.052, 0.03], deep: [0.025, 0.026, 0.016], milk: 0.92 },
+    moss: { broad: 0.9, pine: 0.75 },
+    tidal: true,
   }),
 };
 
