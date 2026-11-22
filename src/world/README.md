@@ -100,6 +100,17 @@
     Most lakes are deep tarns: a shelf a metre or two deep
     out from the shore, then a steep drop to a floor 15 to 30-odd metres
     down.
+  - **Rapids.** Where a channel big enough to float a raft (about four
+    metres across) falls steeply from one node to the next, most of that
+    fall is gathered into one stretch: a still pool above, the water sliding
+    away over the lip, a run of fast white water 15 to 100-odd metres long
+    falling 2 to 9 in a hundred, and out into a pool below where it calms
+    again. The current there runs at 2 to 6 m/s (nowhere does any water run
+    faster than 6.5). Only on the main stem of a river, never where it runs
+    into the sea or up in the snow, and never where the land falls away
+    faster than the rapid would. The segment still starts and ends at the
+    same levels, so the rest of the river is as it was (`RAPID` in
+    `water.js`).
   - **The water itself** is meshed per chunk on the main thread from the
     heights and the water grids the workers produce, so it follows your
     digging. It's drawn after everything else, over a copy of what lies
