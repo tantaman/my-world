@@ -32,6 +32,8 @@ import { Spray } from './spray.js';
 import { skiSounds } from './sound.js';
 import { Skiers } from './others.js';
 import { descent, findRunTop } from './descent.js';
+import { SkiRuns, RUNS } from './runs.js';
+import { GridNearest, ListNearest, MergeNearest } from '../core/nearest.js';
 import './skiing.css';
 import { segDist, waterSample } from '../core/geom.js';
 import { clamp, smoothstep } from '../noise.js';
@@ -314,22 +316,47 @@ export function installSkiing(game) {
     hud.flash(`on your ${NAMES[kind]} now`);
   }
   // Survey once from the world's starting point so the forest run has the
-  // same pin when someone reloads or looks for it from overseas.
+  // same pin when someone reloads or looks for it from overseas; the rest are
+  // a square at a time, wherever the high country holds snow (runs.js).
+  const GLYPH = ['.......', '...#...', '..#.#..', '..###..', '.#####.', '.#####.', '#######'];
   const top = findRunTop(gen, landforms, player.start, SURVEY.reach, SURVEY.step);
-  if (top && snowAt(top.x, top.z) >= CLIP_IN.snow) {
-    const peak = {
-      id: `ski:${Math.round(top.x)}:${Math.round(top.z)}`,
-      x: top.x, z: top.z, kind: 'ski peak', name: 'High Country ski run',
-      note: 'A snowy run in the forest. Head downhill to clip in.',
-      glyph: ['.......', '...#...', '..#.#..', '..###..', '.#####.', '.#####.', '#######'],
-    };
-    map.places.addSource({
-      list: 'ski',
-      destinations: () => [peak],
-      get: (id) => id === peak.id ? peak : null,
-      within: (x0, z0, x1, z1) => peak.x >= x0 && peak.x <= x1 && peak.z >= z0 && peak.z <= z1 ? [peak] : [],
-    });
+  const peak = top && snowAt(top.x, top.z) >= CLIP_IN.snow
+    ? { id: `ski:${Math.round(top.x)}:${Math.round(top.z)}`, x: top.x, z: top.z, kind: 'ski peak', name: 'High Country ski run', note: 'A snowy run in the forest. Head downhill to clip in.', glyph: GLYPH }
+    : null;
+  const runs = new SkiRuns(gen, landforms, { home: top });
+  const places = new Map(); // run id -> its place, or null if there's no snow lying on its top after all
+  function asPlace(r) {
+    if (!places.has(r.id)) {
+      places.set(r.id, snowAt(r.x, r.z) >= CLIP_IN.snow ? { id: r.id, x: r.x, z: r.z, kind: 'ski peak', name: r.name, note: `${Math.round(r.drop / 10) * 10} m of snow below the top. Head downhill to clip in.`, glyph: GLYPH } : null);
+    }
+    return places.get(r.id);
   }
+  const placed = (list) => list.map(asPlace).filter(Boolean);
+  map.places.addSource({
+    within(x0, z0, x1, z1) {
+      const out = placed(runs.within(x0, z0, x1, z1));
+      if (peak && peak.x >= x0 && peak.x <= x1 && peak.z >= z0 && peak.z <= z1) out.push(peak);
+      return out;
+    },
+    get(id) {
+      if (peak && id === peak.id) return peak;
+      const r = runs.byId(id);
+      return r ? asPlace(r) : null;
+    },
+    // the one from the start, then a square at a time outward
+    list: 'ski',
+    nearest: (x, z) =>
+      new MergeNearest([
+        new ListNearest(x, z, peak ? [peak] : []),
+        new GridNearest(x, z, {
+          size: RUNS.cell,
+          at(i, j) {
+            const r = runs.cell(i, j);
+            return r ? placed([r]) : [];
+          },
+        }),
+      ]),
+  });
 
   // On the adventures board: sent to the top of a run, and timed down it.
   adventures.define(descent(() => active));
@@ -510,6 +537,8 @@ export function installSkiing(game) {
     },
     skier,
     run,
+    // the forest's ski runs, away from the start: runs.cell(i, j), runs.byId(id)
+    runs,
     snowAt,
     on(k = kind) {
       if (active) stepOut();

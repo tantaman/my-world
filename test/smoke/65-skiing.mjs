@@ -1,7 +1,8 @@
 // Skiing: walk down a steep snowy slope and find your skis on, ski on down,
 // brake, turn, jump, hear it, swap them for a snowboard, fall into a boulder,
 // and take them off again. Then the descent, on the adventures board: sent to
-// the top of a run in the high country, and timed down it.
+// the top of a run in the high country, and timed down it. And the forest's
+// other runs, out in the high country, are on the map, snow on their tops.
 //
 // Leaves: you on foot, on the mountain.
 
@@ -310,5 +311,25 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.evaluate(async (w) => void (await world.teleport(w.x, w.z, w.yaw)), was);
     await page.evaluate(() => T.frames(10));
     return { foot, ...won };
+  });
+
+  await step('the forest\'s other runs', async () => {
+    const found = await page.evaluate(() => {
+      const runs = world.skiing.runs;
+      for (let r = 0; r < 6; r++) {
+        for (let j = -r; j <= r; j++) {
+          for (let i = -r; i <= r; i++) {
+            const run = Math.max(Math.abs(i), Math.abs(j)) === r && runs.cell(i, j);
+            const place = run && world.map.places.get(run.id);
+            if (place) return { id: run.id, name: place.name, kind: place.kind, drop: Math.round(run.drop), snow: world.skiing.snowAt(run.x, run.z) };
+          }
+        }
+      }
+      return null;
+    });
+    assert.ok(found, 'there is a run out in the high country');
+    assert.equal(found.kind, 'ski peak');
+    assert.ok(found.drop >= 220 && found.snow >= 0.6, `snow on its top, and plenty below (${JSON.stringify(found)})`);
+    return found;
   });
 }

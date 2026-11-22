@@ -36,6 +36,17 @@ const FOOT_OVER = 15;
 const SLACK = 25;
 const PACE = 6; // m of descent a second
 
+// How much snow there is to ski down from (x, z), in m, if it's the top of
+// a run on the forest's own terrain (high country, enough snow under it, no
+// real place near); 0 if it isn't.
+export function runDrop(gen, landforms, x, z) {
+  if (gen.country(x, z).alp < ALPINE) return 0;
+  // the broad height and the snow line, which are cheap: no water
+  const drop = gen.broadHeight(x, z, 0) - gen.snowline(x, z);
+  if (drop < DROP_LEAST) return 0;
+  return landforms.reaches(x - OFF, z - OFF, x + OFF, z + OFF) ? 0 : drop;
+}
+
 // Find a snowy start on the forest's own terrain, for the race or the map.
 export function findRunTop(gen, landforms, from, reach = REACH, step = STEP) {
   let best = null;
@@ -45,12 +56,8 @@ export function findRunTop(gen, landforms, from, reach = REACH, step = STEP) {
       const a = (i / n) * Math.PI * 2;
       const x = from.x + Math.cos(a) * r;
       const z = from.z + Math.sin(a) * r;
-      if (gen.country(x, z).alp < ALPINE) continue;
-      // the broad height and the snow line, which are cheap: no water
-      const drop = gen.broadHeight(x, z, 0) - gen.snowline(x, z);
-      if (drop < DROP_LEAST) continue;
-      if (landforms.reaches(x - OFF, z - OFF, x + OFF, z + OFF)) continue;
-      if (!best || drop > best.drop) best = { x, z, drop };
+      const drop = runDrop(gen, landforms, x, z);
+      if (drop && (!best || drop > best.drop)) best = { x, z, drop };
     }
   }
   return best;
