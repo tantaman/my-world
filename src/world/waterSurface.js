@@ -56,6 +56,9 @@ import { WATER_STRIDE as WS, SURFACE_STRIDE as SS } from './chunkGen.js';
 
 
 const UNSET = NO_WATER * 0.5;
+// rise over run past which a real place's water across a cell is falling (see
+// buildWaterGeometry): steeper than a cascade's steps, as steep as a fall
+const FALL = 1.5;
 
 // The wind's ripples on still water are two layers of noise, each on a grid
 // turned (by ROT1 and ROT2 in the shader: a 3-4-5 and a 7-24-25 triangle) so
@@ -161,6 +164,22 @@ export function buildWaterGeometry(ch) {
   if (!ch.hasWater) return null;
   const N = n + 1;
   const wet = (k) => D[k * WS] > 0.5 && H[k] < L[k] - 0.002;
+  // A real place's water doesn't stand up a cliff: where its level drops
+  // across a cell more steeply than FALL (rise over run), it is falling, and
+  // the falling water is the falls feature's (falls/), not a sheet of glass.
+  const surface = ch.surface;
+  const falling = (a) => {
+    let lo = Infinity;
+    let hi = -Infinity;
+    let real = 0;
+    for (const k of [a, a + 1, a + N, a + N + 1]) {
+      if (L[k] <= UNSET) continue;
+      lo = Math.min(lo, L[k]);
+      hi = Math.max(hi, L[k]);
+      real = Math.max(real, surface[k * SS + 2]);
+    }
+    return real > 0.5 && hi - lo > FALL * step;
+  };
   const map = new Int32Array(N * N).fill(-1);
   const cells = [];
   let count = 0;
@@ -168,6 +187,7 @@ export function buildWaterGeometry(ch) {
     for (let i = 0; i < n; i++) {
       const a = j * N + i;
       if (!(wet(a) || wet(a + 1) || wet(a + N) || wet(a + N + 1))) continue;
+      if (surface && falling(a)) continue;
       cells.push(a);
       for (const k of [a, a + 1, a + N, a + N + 1]) if (map[k] < 0) map[k] = count++;
     }
@@ -182,7 +202,6 @@ export function buildWaterGeometry(ch) {
   const sky = new Float32Array(count * 2); // leaves overhead, how open it is
   // how far it is a real place's own water, and which country's (country.js)
   const land = new Float32Array(count * 2);
-  const surface = ch.surface;
   // A corner with no water level of its own (rare: a coarse cell straddling
   // the edge of a stream's valley) borrows the highest one around it.
   const level = (i, j) => {
