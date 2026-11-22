@@ -35,7 +35,8 @@
 //     flecks of foam and bubbles with it, more below a cascade, so you can
 //     see which way it goes and how fast. It turns white on cascades, along
 //     the shore and around your legs, and where it runs past you it opens
-//     into a wake.
+//     into a wake. Down a rapid it stands up in waves that keep their place
+//     while the water pours through them, white at the tops.
 //
 // A real place whose country has water of its own colour (country.js: the
 // milky blue-green of a creek that lays down travertine) has it, as far as
@@ -133,6 +134,20 @@ const REFRACT = 0.25; // how far the ripples bend what's under them, for each me
 // per m: how cloudy it is to see through; milky, a creek that lays down
 // travertine (country.js `water.milk`)
 const MURK = { still: 0.38, running: 0.22, sea: 0.14, milky: 3 };
+// A rapid's standing waves (world/water.js RAPID): crests across the current
+// that hold their place while the water pours through them. They're laid
+// out by the water's own level, which falls steadily down a rapid and is
+// flat from bank to bank, so they run straight across it round the bends,
+// a fixed fall of the surface apart: closer together where it's steeper.
+//   drop     m the surface falls from one crest to the next
+//   fast     m/s: [how fast it runs where they begin, and are at their biggest]
+//   fall     [how steep (rise per m) the surface is where they begin, and are
+//            at their biggest]
+//   slope    how steep their sides are, at their biggest
+//   bend     how much of a wave a crest wanders forward and back across the river
+//   cells    cells to the metre of the noise that bends them and sizes them
+//   pulse    rad/s: they swell and settle, as standing waves do
+const RAPID_WAVES = { drop: 0.14, fast: [1.3, 3.2], fall: [0.012, 0.035], slope: 0.34, bend: 0.75, cells: 0.4, pulse: 1.7 };
 const FAR_SKY = 5.0e4; // m: past this, the copy behind is the sky (render/pipeline.js)
 
 // The sea's swell: a few long, low waves running in from different ways
@@ -517,7 +532,32 @@ export function createWaterMaterial() {
         // most churned, in clots and streaks; elsewhere bubbles and a paler,
         // cloudier water)
         float churn = vnoise(run0 * vec2(1.6, 3.4)) * wt0 + vnoise(run1 * vec2(1.6, 3.4) + 3.1) * (1.0 - wt0);
-        float foam = smoothstep(0.5, 0.9, vFoam * (0.4 + 0.9 * churn));
+        // A rapid's standing waves (RAPID_WAVES): the water pours through
+        // them and they stay where they are, breaking white at their tops,
+        // with green water in the troughs between.
+        float fallV = length(vec2(dFdx(vWPos.y), dFdy(vWPos.y))) / fw;
+        float rapid = smoothstep(${RAPID_WAVES.fast[0].toFixed(2)}, ${RAPID_WAVES.fast[1].toFixed(2)}, speed)
+                    * smoothstep(${RAPID_WAVES.fall[0].toFixed(3)}, ${RAPID_WAVES.fall[1].toFixed(3)}, fallV)
+                    * (1.0 - smoothstep(0.25, 0.6, fw)) * (1.0 - vSea);
+        float crest = 0.0;
+        float trough = 0.0;
+        if (rapid > 0.001) {
+          float ph = vWPos.y / ${RAPID_WAVES.drop.toFixed(3)}
+                   + ${RAPID_WAVES.bend.toFixed(2)} * (wnoise(wp, ${RAPID_WAVES.cells.toFixed(2)}) + 0.5 * wnoise(wp, ${(RAPID_WAVES.cells * 2.3).toFixed(2)}, vec2(1.9, 4.2)));
+          float size = mix(0.3, 1.0, wnoise(wp, ${(RAPID_WAVES.cells * 1.7).toFixed(2)}, vec2(3.7, 1.3)));
+          size *= 0.82 + 0.18 * sin(uTime * ${RAPID_WAVES.pulse.toFixed(2)} + ph * 1.9);
+          float a = rapid * size;
+          g += fdir * sin(ph * 6.2831853) * a * ${RAPID_WAVES.slope.toFixed(3)};
+          float c = cos(ph * 6.2831853);
+          // broken along its length: here a wave breaking right across,
+          // there only a white tongue of one, and the water pouring through
+          float broken = wnoise(wp, ${(RAPID_WAVES.cells * 2.0).toFixed(2)}, vec2(7.3, 2.1));
+          crest = a * smoothstep(0.35, 0.85, c * 0.6 + churn * 0.45 + broken * 0.35) * smoothstep(0.2, 0.6, vFoam);
+          trough = a * (1.0 - smoothstep(-0.7, 0.1, c));
+        }
+        // (in a rapid the white is on the waves, not all over)
+        float foam = smoothstep(0.5, 0.9, vFoam * (0.4 + 0.9 * churn)) * (1.0 - 0.8 * rapid) * (1.0 - trough);
+        foam = max(foam, crest);
         float lace = wnoise(wp, 3.1, vec2(uTime * 0.3, 0.0));
         foam = max(foam, (1.0 - smoothstep(0.0, 0.07 + 0.05 * lace, depthV)) * smoothstep(0.4, 0.7, lace) * 0.8);
         foam = max(foam, (1.0 - smoothstep(0.3, 0.75, rMe)) * smoothstep(0.35, 0.65, churn) * uWade * 0.9);
@@ -526,7 +566,7 @@ export function createWaterMaterial() {
         // cascade, so you can see which way and how fast it runs
         float flecks = fleck(run0 * vec2(1.2, 2.6), 0.08 + 0.5 * vFoam) * wt0
                      + fleck(run1 * vec2(1.2, 2.6), 0.08 + 0.5 * vFoam) * (1.0 - wt0);
-        foam = max(foam, flecks * smoothstep(0.25, 0.8, speed) * 0.85);
+        foam = max(foam, flecks * smoothstep(0.25, 0.8, speed) * 0.85 * (1.0 - 0.75 * rapid));
         float cloud = vFoam * (1.0 - foam) * 0.3;
 
         // How much water the light from what's under it comes up through to
