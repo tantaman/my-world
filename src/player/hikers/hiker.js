@@ -18,7 +18,7 @@ export const HIKER = {
   size: 1,
   // Dressed onto the body's bones (see Character.dress).
   dress(body) {
-    const skin = M(0xc68c6c, 0.7);
+    const skin = M(0xc8957a, 0.7); // fair, sun-browned
     const shell = M(0xc85a26, 0.63, { vertexColors: true, ...textile('ripstop') });
     const trim = M(0x793c24, 0.72);
     const hood = M(0x787b74, 0.84, textile('ripstop'));
