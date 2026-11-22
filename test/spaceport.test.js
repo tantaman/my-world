@@ -112,13 +112,15 @@ test('a far launch site is the same looked for a little at a time, waiting on th
   assert.equal(bit.peek(...empty), null);
 });
 
-test('neighbouring launch sites have different names', () => {
+test('no two launch sites within four squares of each other share a name', () => {
   for (let j = -4; j <= 4; j++) {
     for (let i = -4; i <= 4; i++) {
       const a = farSpot(SEED, i, j);
-      for (const [di, dj] of [[1, 0], [0, 1], [1, 1], [1, -1], [2, 0], [0, 2]]) {
-        const b = farSpot(SEED, i + di, j + dj);
-        if (a && b) assert.notEqual(a.name, b.name, `(${i}, ${j}) and (${i + di}, ${j + dj})`);
+      for (let dj = -4; dj <= 4; dj++) {
+        for (let di = -4; di <= 4; di++) {
+          const b = (di || dj) && farSpot(SEED, i + di, j + dj);
+          if (a && b) assert.notEqual(a.name, b.name, `(${i}, ${j}) and (${i + di}, ${j + dj})`);
+        }
       }
     }
   }

@@ -231,7 +231,7 @@ test('ski runs are wherever the high country holds snow, a square at a time, and
       assert.equal(runDrop(gen, landforms, r.x, r.z), r.drop, 'snow enough below it, on the forest\'s own land');
       assert.ok(!home || Math.hypot(r.x - home.x, r.z - home.z) >= RUNS.apart, 'apart from the High Country ski run');
       assert.equal(runs.byId(r.id), r);
-      for (const [di, dj] of [[-1, 0], [0, -1], [-1, -1], [1, -1]]) assert.notEqual(names.get(`${i + di}:${j + dj}`), r.name, 'neighbours have other names');
+      for (let dj = -3; dj <= 0; dj++) for (let di = -3; di <= 3; di++) if (dj < 0 || di < 0) assert.notEqual(names.get(`${i + di}:${j + dj}`)?.split(' ')[0], r.name.split(' ')[0], 'no two within three squares share a mountain');
       names.set(`${i}:${j}`, r.name);
       pinned[r.id] = { name: r.name, x: r.x, z: r.z, drop: Math.round(r.drop * 1000) / 1000 };
     }

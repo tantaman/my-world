@@ -25,9 +25,13 @@
 //   at(i, j) -> the places in square (i, j): [] for none, or undefined if its
 //            owner hasn't looked yet and has been asked to (it'll be asked
 //            again)
+//   box(i, j) -> optional, and cheap: [x0, z0, x1, z1] its places all lie in,
+//            null if it can't have any, undefined if it can't say (the square
+//            and its spill). A square that is dear to look in (a launch
+//            site's) then holds up the list only as far as its places can be.
 //   far      m: nothing further than this
 export class GridNearest {
-  constructor(x, z, { size, spill = 0, origin = null, at, far = Infinity }) {
+  constructor(x, z, { size, spill = 0, origin = null, at, box = null, far = Infinity }) {
     this.x = x;
     this.z = z;
     this.size = size;
@@ -35,29 +39,37 @@ export class GridNearest {
     this.ox = origin ? origin.x : 0;
     this.oz = origin ? origin.z : 0;
     this.at = at;
+    this.box = box;
     this.far = far;
-    this.seen = new Set(); // squares put in line to be looked at: "i,j"
-    this.line = []; // ...and not yet: { i, j, low }, a heap on low
+    this.seen = new Set(); // squares put in line to be gone over: "i,j"
+    this.line = []; // ...and not yet: { i, j, low }, a heap on how near the square comes
+    this.looks = []; // squares gone over and still to look in: a heap on how near their places can be
     this.waiting = []; // those whose owners are still looking
     this.found = []; // { place, d } found and not yet taken, nearest first
     this._queue(Math.floor((x - this.ox) / size), Math.floor((z - this.oz) / size));
   }
 
-  // The nearest anything in square (i, j) could be, and in line it goes.
+  // How near a box comes to where we are.
+  _near(x0, z0, x1, z1) {
+    const dx = Math.max(0, x0 - this.x, this.x - x1);
+    const dz = Math.max(0, z0 - this.z, this.z - z1);
+    return Math.hypot(dx, dz);
+  }
+
+  // Square (i, j) in line to be gone over, by how near it comes.
   _queue(i, j) {
     const k = `${i},${j}`;
     if (this.seen.has(k)) return;
     this.seen.add(k);
     const x0 = this.ox + i * this.size;
     const z0 = this.oz + j * this.size;
-    const dx = Math.max(0, x0 - this.x, this.x - x0 - this.size);
-    const dz = Math.max(0, z0 - this.z, this.z - z0 - this.size);
-    heapPush(this.line, { i, j, low: Math.max(0, Math.hypot(dx, dz) - this.spill) });
+    heapPush(this.line, { i, j, low: Math.max(0, this._near(x0, z0, x0 + this.size, z0 + this.size) - this.spill) });
   }
 
-  // The nearest a place in a square still to be looked at could be.
+  // The nearest a place in a square still to be looked in could be.
   get _bound() {
     let b = this.line.length ? this.line[0].low : Infinity;
+    if (this.looks.length && this.looks[0].low < b) b = this.looks[0].low;
     for (const c of this.waiting) if (c.low < b) b = c.low;
     return b > this.far ? Infinity : b;
   }
@@ -78,15 +90,30 @@ export class GridNearest {
   work() {
     const bound = this._bound;
     if (bound === Infinity) return 'done';
-    // The nearest square is one an owner is still looking over: ask again.
-    if (this.waiting.length && !(this.line.length && this.line[0].low < bound)) {
+    const lineLow = this.line.length ? this.line[0].low : Infinity;
+    const lookLow = this.looks.length ? this.looks[0].low : Infinity;
+    // The nearest is a square an owner is still looking over: ask again.
+    if (this.waiting.length && bound < Math.min(lineLow, lookLow)) {
       const asked = this.waiting;
       this.waiting = [];
       for (const c of asked) this._look(c);
       return this.waiting.length < asked.length ? 'more' : 'wait';
     }
-    this._look(heapPop(this.line));
+    if (lookLow <= lineLow) this._look(heapPop(this.looks));
+    else this._visit(heapPop(this.line));
     return 'more';
+  }
+
+  // Go over a square: in line to be looked in, by how near its places can
+  // be; and its neighbours in line to be gone over (any square further out
+  // is no nearer than one of these).
+  _visit(c) {
+    const b = this.box ? this.box(c.i, c.j) : undefined;
+    if (b !== null) heapPush(this.looks, { i: c.i, j: c.j, low: b ? Math.max(c.low, this._near(...b)) : c.low });
+    this._queue(c.i - 1, c.j);
+    this._queue(c.i + 1, c.j);
+    this._queue(c.i, c.j - 1);
+    this._queue(c.i, c.j + 1);
   }
 
   _look(c) {
@@ -99,11 +126,6 @@ export class GridNearest {
       const d = Math.hypot(place.x - this.x, place.z - this.z);
       if (d <= this.far) insert(this.found, { place, d });
     }
-    // (any square further out is no nearer than one of these)
-    this._queue(c.i - 1, c.j);
-    this._queue(c.i + 1, c.j);
-    this._queue(c.i, c.j - 1);
-    this._queue(c.i, c.j + 1);
   }
 }
 

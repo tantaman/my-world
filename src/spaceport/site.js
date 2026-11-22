@@ -207,7 +207,7 @@ export const FAR = {
 // The furthest a far site's pad reaches from its spot.
 export const FAR_REACH = FAR.ring[1] + (PAD + SKIRT) * Math.SQRT2;
 const FAR_SALT = 0x5ca1e;
-export const FAR_NAMES = ['Farpoint', 'Halcyon', 'Meridian', 'Kestrel', 'Polaris', 'Vantage', 'Lodestar', 'Zenith', 'Aurora', 'Perigee', 'Gannet', 'Cirrus', 'Equinox', 'Corona', 'Tern Point', 'Bellwether'];
+export const FAR_NAMES = ['Farpoint', 'Halcyon', 'Meridian', 'Kestrel', 'Polaris', 'Vantage', 'Lodestar', 'Zenith', 'Aurora', 'Perigee', 'Gannet', 'Cirrus', 'Equinox', 'Corona', 'Tern Point', 'Bellwether', 'Apogee', 'Solstice', 'Nimbus', 'Osprey', 'Sextant', 'Skylark', 'Curlew', 'Beacon Hill', 'Longreach'];
 const LIVERIES = [
   { tower: 0x2f6db5, band: 0x1f3d6b }, // blue
   { tower: 0xe0a72e, band: 0x3a3836 }, // yellow
@@ -225,9 +225,10 @@ export function farSpot(seed, i, j) {
   const rng = mulberry32(hash2i(i + 7919, j + 104729, (seed ^ FAR_SALT) >>> 0));
   if (rng() > FAR.chance) return null;
   // drawn first, so that what the search finds can't change them; the name
-  // goes round on a lattice, so the squares round about all have others
+  // goes round on a lattice (i + 5j, of 25), so no two squares within four
+  // of each other either way share one
   const n = FAR_NAMES.length;
-  const name = `${FAR_NAMES[(((i * 7 + j * 11 + (seed % n)) % n) + n) % n]} launch site`;
+  const name = `${FAR_NAMES[(((i + j * 5 + (seed % n)) % n) + n) % n]} launch site`;
   const livery = LIVERIES[Math.floor(rng() * LIVERIES.length)];
   const yaw = rng() * Math.PI * 2;
   const mine = Math.floor(rng() * 1e9);
