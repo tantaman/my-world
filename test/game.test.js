@@ -3,7 +3,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, PHASES } from '../src/game/game.js';
+import { Game, PHASES } from '../src/game/game.ts';
 import { Commands } from '../src/game/commands.js';
 import { Settings } from '../src/game/settings.js';
 import { Emitter } from '../src/core/events.js';

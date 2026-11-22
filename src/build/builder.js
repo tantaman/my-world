@@ -106,6 +106,7 @@ export class Builder extends Emitter {
     this.terrain = terrain;
     this.forest = forest;
     this.buildings = buildings;
+    /** @type {import('./obstacles.js').Obstacles} */
     this.obstacles = obstacles;
     this.stake = stake;
     this.previews = previews;

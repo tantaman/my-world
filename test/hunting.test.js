@@ -135,9 +135,13 @@ test('an animal can be shot: the first along the ray, if it is game, and is then
   // the mouse is nearer, but isn't game; and nothing is hit past `far`
   const game = (a) => a.kind === 'deer';
   const a = wl.aimed(o, d, 100, 0, game);
-  assert.ok(a && a.who === doe && a.e === deer, 'the deer');
-  assert.ok(a.t > 28 && a.t < 30.5, `about where it stands (${a.t})`);
-  assert.equal(wl.aimed(o, d, 20, 0, game), null);
+  // (The herd stands where it likes, so now and then another of it is in
+  // the line of fire, nearer than the one aimed at: then that is the one.)
+  assert.ok(a && a.e === deer && deer.members.includes(a.who), 'a deer of the herd');
+  const hit = a.who;
+  const away = Math.hypot(hit.x, hit.z);
+  assert.ok(Math.abs(a.t - away) < 1.5, `about where it stands (${a.t} of ${away})`);
+  assert.equal(wl.aimed(o, d, a.t - 0.01, 0, game), null);
   assert.equal(wl.aimed(o, v(0, 0, -1), 100), null, 'and nothing behind you');
   assert.ok(mice.members.length > 0);
 
@@ -145,11 +149,11 @@ test('an animal can be shot: the first along the ray, if it is game, and is then
   const body = wl.kill(a);
   assert.equal(body.kind, 'deer');
   assert.match(body.label, /^a white-tailed/);
-  assert.equal(body.mesh, doe.mesh);
+  assert.equal(body.mesh, hit.mesh);
   assert.equal(body.mesh.parent, null, 'out of the scene, for whoever shot it');
-  assert.deepEqual(body.torso, doe.torso);
+  assert.deepEqual(body.torso, hit.torso);
   assert.equal(deer.members.length, n - 1, 'and out of its herd');
-  assert.ok(!deer.meshes.includes(doe.mesh));
+  assert.ok(!deer.meshes.includes(hit.mesh));
   assert.equal(wl.entities.includes(deer), n > 1, 'which goes when the last of it does');
   assert.equal(wl.kill(a), null, 'it can only be killed once');
   body.dispose();

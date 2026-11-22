@@ -61,20 +61,27 @@ test('a folder is a feature if its index.js exports an install function', () => 
 });
 
 // ── The real ones ───────────────────────────────────────────────────────────
-// Read as text: a feature's index.js needs a browser to run. This leans on how
-// they are all written: `export const after = [...]` on one line, and what
-// install takes from the game on its first line, `const { a, b } = game;`.
+// Read as text: a feature's index.js (or index.ts) needs a browser to run.
+// This leans on how they are all written: `export const after = [...]` on
+// one line, and what install takes from the game on its first line,
+// `const { a, b } = game;`.
 
 const SRC = new URL('../src/', import.meta.url);
+const indexOf = (name) => ['index.js', 'index.ts'].map((f) => new URL(`${name}/${f}`, SRC)).find((u) => existsSync(u));
 const real = readdirSync(SRC, { withFileTypes: true })
-  .filter((d) => d.isDirectory() && existsSync(new URL(`${d.name}/index.js`, SRC)))
-  .map((d) => ({ name: d.name, text: readFileSync(new URL(`${d.name}/index.js`, SRC), 'utf8') }))
-  .filter((f) => /^export function install[A-Z]\w*\(game\)/m.test(f.text))
+  .filter((d) => d.isDirectory() && indexOf(d.name))
+  .map((d) => ({ name: d.name, file: indexOf(d.name).pathname.split('/').at(-1), text: readFileSync(indexOf(d.name), 'utf8') }))
+  .filter((f) => /^export function install[A-Z]\w*\(game(: Game)?\)/m.test(f.text))
   .map((f) => ({
     ...f,
     after: (f.text.match(/^export const after = \[(.*)\];$/m)?.[1] ?? '').split(',').map((s) => s.trim().replace(/^'|'$/g, '')).filter(Boolean),
     takes: (f.text.match(/^ {2}const \{ (.*) \} = game;$/m)?.[1] ?? '').split(',').map((s) => s.trim()).filter(Boolean),
     provides: [...f.text.matchAll(/game\.provide\('(\w+)'/g)].map((m) => m[1]),
+    // what it says it provides, for the type check: beside its install
+    // function if it is TypeScript, in a services.d.ts if it isn't yet
+    declares: [f.text, existsSync(new URL(`${f.name}/services.d.ts`, SRC)) ? readFileSync(new URL(`${f.name}/services.d.ts`, SRC), 'utf8') : '']
+      .flatMap((text) => [...text.matchAll(/interface Services \{([^}]*)\}/g)])
+      .flatMap((m) => [...m[1].matchAll(/^\s*(\w+)\??:/gm)].map((n) => n[1])),
   }));
 
 test('the features in src/ can be put in order', () => {
@@ -104,6 +111,16 @@ test('each comes after the features whose things it takes from the game', () => 
       // (what no feature provides is the game's own: save, settings, commands)
       if (from && from !== f.name) assert.ok(before.has(from), `src/${f.name}/index.js takes game.${thing}, which ${from} provides: add '${from}' to its \`after\``);
     }
+  }
+});
+
+test('what a feature says it provides, it provides', () => {
+  // The type of game.<name> is said by the feature that provides it (see the
+  // top of src/game/game.ts). In a .ts feature the compiler holds the two
+  // together; a services.d.ts beside a .js one is only as true as this.
+  for (const f of real) {
+    for (const name of f.declares) assert.ok(f.provides.includes(name), `src/${f.name} says it provides game.${name}, and doesn't`);
+    if (f.file === 'index.ts') for (const name of f.provides) assert.ok(f.declares.includes(name), `src/${f.name}/index.ts provides game.${name} without saying what it is: add it to its \`interface Services\``);
   }
 });
 

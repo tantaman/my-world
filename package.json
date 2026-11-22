@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "description": "An open-world forest you can walk around in, drawn to look real with three.js.",
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "dev": "vite",
     "api": "mkdir -p dist && wrangler dev --port 8787",
@@ -11,15 +14,17 @@
     "preview": "vite preview",
     "serve": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
-    "test": "node --test \"test/*.test.js\"",
+    "test": "tsc --noEmit && node --test \"test/*.test.js\" \"test/*.test.ts\"",
     "smoke": "npm run build && node test/smoke.mjs",
     "together": "node test/together.mjs",
-    "hike": "node tools/hike.mjs"
+    "hike": "node tools/hike.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.5",
     "@types/three": "^0.187.0",
     "playwright": "1.63.0",
     "typescript": "^7.0.2",

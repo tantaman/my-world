@@ -43,6 +43,23 @@
 
 import { own } from './regions.js';
 
+// The same, for the type check: what a .ts feature's domain is held to. A
+// domain's data is plain JSON, whatever shape its owner gives it.
+/**
+ * @typedef {object} SaveDomain
+ * @property {string} id                       its name in a save, for good
+ * @property {'world' | 'yours'} [scope]       'world' unless it says otherwise
+ * @property {() => any} collect               -> plain JSON
+ * @property {(data: any) => void} restore
+ * @property {string[]} [kinds]                the element kinds it owns ('world' domains)
+ * @property {(data: any, put: (region: string, key: string, value: any) => void) => void} [encode]
+ * @property {() => { take(region: string, kind: string, rest: string, value: any): void, done(): any }} [decode]
+ * @property {(raw: any) => any} [validate]
+ * @property {(data: any, ops?: any[]) => void} [adopt]
+ * @property {(ops: any[]) => void} [adoptOps]
+ * @property {string} [local]                  which of this browser's copies keeps it
+ */
+
 export class SaveDomains {
   constructor() {
     this.list = [];
@@ -50,6 +67,7 @@ export class SaveDomains {
     this.byKind = new Map();
   }
 
+  /** @param {SaveDomain} domain */
   register(domain) {
     const d = { scope: 'world', local: 'build', kinds: [], ...domain };
     if (!d.id) throw new Error('a save domain needs an id');

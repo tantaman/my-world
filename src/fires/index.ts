@@ -8,9 +8,17 @@
 //   geometry.js   the stone ring, the teepee of firewood, the ash
 //   sound.js      the crackle, and the strike, catch and hiss
 
+import type { Game } from '../game/game.ts';
 import { Fires, FIRE, firesSave } from './fires.js';
 import { campfireTool } from './tool.js';
 import { crackle } from './sound.js';
+
+// What this provides: game.fires, for the features that come after it.
+declare module '../game/game.ts' {
+  interface Services {
+    fires: Fires;
+  }
+}
 
 // How much room a fire ring needs from other work, past its centre (m).
 const ROOM = {
@@ -22,7 +30,7 @@ const ROOM = {
 
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'world', 'audio', 'build'];
-export function installFires(game) {
+export function installFires(game: Game) {
   const { scene, camera, solids, sky, lights, builder, sound, save } = game;
 
   const fires = new Fires({ scene, solids, sky, lights });

@@ -1,0 +1,27 @@
+{
+  // The type check (npm run typecheck, and the first half of npm test).
+  //
+  // What is written in TypeScript is checked strictly. What is still
+  // JavaScript is read for the types it implies, so a .ts file that calls
+  // into it is checked against what is really there, but is not itself
+  // checked. Node and Vite run the .ts files as they are, by dropping the
+  // types: so only syntax that can be dropped (no enums, no namespaces, no
+  // parameter properties), and imports of types say `import type`.
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "types": ["vite/client", "node"],
+    "strict": true,
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "noUncheckedIndexedAccess": false,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

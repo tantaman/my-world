@@ -84,6 +84,7 @@ export class Fires extends Emitter {
   // lights: the game's (render/lights.js), to give light by; without them
   //   (in a test) none is given
   // clock: () => ms since the epoch; the wall clock unless a test says otherwise
+  /** @param {{ scene: THREE.Scene, solids: import('../world/solids.js').Solids, sky?: import('../world/sky.js').Sky | null, lights?: import('../render/lights.js').Lights | null, clock?: () => number }} options */
   constructor({ scene, solids, sky = null, lights = null, clock = Date.now }) {
     super();
     this.scene = scene;
@@ -382,7 +383,7 @@ export class Fires extends Emitter {
 // This is the spelling the campfires were first saved with; keep it.
 export const firesSave = {
   id: 'fires',
-  scope: 'world',
+  scope: /** @type {const} */ ('world'),
   kinds: ['c'],
   encode(data, put) {
     for (const [x, z, y, wood, lit, ash] of Array.isArray(data) ? data : []) put(regionOf(x, z), `c:${x}:${z}`, [y, wood, lit, ash]);
