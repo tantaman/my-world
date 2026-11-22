@@ -250,9 +250,9 @@ export function regionsInTheWay(regions, start) {
 // What the club keeps clear of, all of it there first:
 //   reserved   what the video store keeps clear of (videostore/site.js clearOf:
 //              real places, old places, towns, caves' mouths, the railway,
-//              the launch site)
+//              the launch sites), and the store's branches
 //   boxes      () -> [[x0, z0, x1, z1]]: other places' boxes in the world (the
-//              video store, the abandoned buildings)
+//              first video store, the abandoned buildings)
 //   airfields  the Airports (airports/airports.js: regions, site(id)), or null:
 //              the airfields of regionsInTheWay are asked about, and found
 //              then and there if they haven't been

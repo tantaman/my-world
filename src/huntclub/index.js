@@ -98,9 +98,12 @@ export function installHuntclub(game) {
   // for by its id (it's being tracked, say), it's found there and then.
   const fields = airports.airports;
   const inTheWay = regionsInTheWay(fields.regions, player.start);
+  // (every launch site and video store, not the ones nearest you: where the
+  // club is mustn't depend on where you were when it was decided)
+  const reserved = storeClearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, spaceport: spaceport.sites });
   const keepOff = clearOf({
-    reserved: storeClearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, spaceport: spaceport.site }),
-    boxes: () => [videostore.site && videostore.site.box, ...abandoned.sites.map((s) => s.box)].filter(Boolean),
+    reserved: (x0, z0, x1, z1) => reserved(x0, z0, x1, z1) || videostore.branches.within(x0, z0, x1, z1).length > 0,
+    boxes: () => [videostore.home && videostore.home.box, ...abandoned.sites.map((s) => s.box)].filter(Boolean),
     airfields: fields,
   });
   const spots = candidates(gen, player.start);
@@ -234,6 +237,7 @@ export function installHuntclub(game) {
   // it lead
   let place = null;
   map.places.addSource({
+    list: 'hunt clubs',
     destinations: () => (site ? [asPlace()] : []),
     within: (x0, z0, x1, z1) => (site && site.door.x >= x0 && site.door.x <= x1 && site.door.z >= z0 && site.door.z <= z1 ? [asPlace()] : []),
     get: (id) => (typeof id === 'string' && id.startsWith('huntclub:') && decide() && id === site.id ? asPlace() : null),
