@@ -168,9 +168,13 @@ test('an alligator finds the water, and lies by it or in it', () => {
     if (g.state === 'bask') assert.ok(g.x < 10, 'basking on the bank');
     else assert.ok(g.state === 'float' && g.x > 10, 'or lying in the water');
   }
-  // with no water near, it doesn't stay
-  const dry = { ...ctx, water: () => null };
-  assert.ok(new Gator(SPECIES.alligator, { x: 0, z: 0 }, dry, 0).done);
+  // with no water near, it lies where it was put, and walks off when it goes
+  const dry = { ...ctx, water: () => null, ground: () => 0 };
+  const lost = new Gator(SPECIES.alligator, { x: 0, z: 0 }, dry, 0);
+  assert.ok(!lost.done && lost.state === 'bask' && lost.x === 0 && lost.z === 0, 'out on dry ground');
+  dry.nearest = () => ({ d: 2, x: -2, z: 0 });
+  for (let t = 0; t < 6; t += dry.dt) lost.update(dry);
+  assert.ok(lost.state === 'away' && lost.leaving && lost.x > 2, `it goes off on foot (${lost.state}, ${lost.x.toFixed(1)})`);
 });
 
 test('come too close and it slides into the water, or sinks out of sight; one used to the boats lets you closer', () => {
@@ -206,4 +210,46 @@ test('a gator is one skinned mesh, young ones banded', () => {
   const box = new THREE.Box3().setFromBufferAttribute(old.mesh.geometry.attributes.position);
   assert.ok(box.max.z - box.min.z > 3.3 && box.max.z - box.min.z < 4, `as long as it is (${(box.max.z - box.min.z).toFixed(2)} m)`);
   assert.ok(box.max.y - box.min.y < 0.7, 'and low to the ground');
+});
+
+test('someone else on the tour is seen in their airboat, sat in its front row', async () => {
+  const { Riders } = await import('../src/swamptour/others.js');
+  const scene = new THREE.Scene();
+  const seated = [];
+  const peer = {
+    pos: new THREE.Vector3(100, 2, -50),
+    yaw: 0.8,
+    flag: new THREE.Object3D(),
+    character: { seated: null, root: new THREE.Object3D(), seat(s) { this.seated = s; seated.push(s); } },
+  };
+  const peers = new Map([['amy', peer]]);
+  const SEAT = { spread: 0.15 };
+  const r = new Riders({ scene, peers, materials: {}, seat: SEAT, front: 1, guides: () => ({ name: 'Remy', her: false }) });
+  r.hear('amy', { tour: 'lafitte' });
+  assert.equal(r.all.size, 1, 'their boat is drawn');
+  r.update(0.1);
+  assert.equal(peer.character.seated, SEAT, 'and they sit in it');
+  const b = r.all.get('amy').boat;
+  const s = b.seats[1];
+  const at = new THREE.Vector3(s.x, s.y, s.z).applyMatrix4(b.object.matrixWorld);
+  assert.ok(Math.hypot(at.x - peer.pos.x, at.z - peer.pos.z) < 1e-6, 'its front row where they are');
+  assert.ok(Math.abs(b.object.rotation.y - peer.yaw) < 1e-9, 'pointing their way');
+  r.hear('amy', null);
+  assert.equal(r.all.size, 0, 'off it, the boat goes');
+  assert.equal(peer.character.seated, null, 'and they stand');
+  r.hear('ben', { tour: 'lafitte' });
+  assert.equal(r.all.size, 0, 'nobody who isn’t here');
+});
+
+test('a bald cypress for the swamp: its own model, with knees, and moss to hang from it', async () => {
+  const { makeCypress } = await import('../src/world/modelsIsland.js');
+  const m = makeCypress(89);
+  for (const k of ['lod0', 'lod1', 'lod2']) assert.ok(m[k].attributes.position.count > 100, k);
+  assert.ok(m.lod0.attributes.position.count > m.lod1.attributes.position.count, 'finer close to');
+  assert.ok(m.moss.lod0.attributes.position.count > 0 && m.moss.lod1.attributes.position.count > 0, 'moss to hang from its limbs');
+  m.lod0.computeBoundingBox();
+  const b = m.lod0.boundingBox;
+  assert.ok(b.max.y > 15 && b.max.y < 20, `tall (${b.max.y.toFixed(1)} m)`);
+  assert.ok(b.max.x - b.min.x > 4, 'with a broad crown');
+  assert.equal(COUNTRY.bayou.forms.pine, 'cypress', "the swamp's conifers are cypress");
 });

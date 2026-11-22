@@ -18,7 +18,7 @@ import { SHARED, UNDER, BREAKERS } from '../render/uniforms.js';
 import { Breakers } from './breakers.js';
 import { createWaterMaterial } from './waterSurface.js';
 import { makePine, makeBroadleaf, makeBirch, makeBush, makeFern, makeRock, makeLog } from './models.js';
-import { makePalm, makeIronwood, makeTreeFern, makeSilversword } from './modelsIsland.js';
+import { makePalm, makeIronwood, makeTreeFern, makeSilversword, makeCypress } from './modelsIsland.js';
 import { STRUCTURES } from '../structures/index.js';
 import { placeStructures } from '../structures/loader.js';
 import { HIKES } from './hikes.js';
@@ -59,6 +59,8 @@ export function installWorld(game) {
     ironwood: makeIronwood(83),
     treefern: makeTreeFern(85),
     silversword: makeSilversword(87),
+    // what other countries draw a kind of tree as (country.js, forms)
+    cypress: makeCypress(89),
   };
   const chunks = new ChunkManager(scene, gen, materials, models, STRUCTURES, { ready: (x0, z0, x1, z1) => landforms.ready(x0, z0, x1, z1) });
   landforms.on('land', (def) => {

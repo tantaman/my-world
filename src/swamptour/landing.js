@@ -223,17 +223,44 @@ export function buildLanding({ at, dock, ground, name, materials }) {
     const dx = (x1 - x0) / len2;
     const dz = (z1 - z0) / len2;
     k.box(Math.min(x0, x1) - 0.02, slab + wallH + fenceH - 0.03, Math.min(z0, z1) - 0.02, Math.max(x0, x1) + 0.02, slab + wallH + fenceH, Math.max(z0, z1) + 0.02, PAL.fence);
-    for (let s = 0; s < len2; s += 0.12) {
-      // diagonal wires, both ways, as a chain-link's diamonds run
+    // the wire: diamonds of it, as thin strips running up both ways at 45°,
+    // so you see through it
+    const nx = dz;
+    const nz = -dx;
+    const y0 = slab + wallH;
+    const strip = (s0, ya, s1, yb) => {
+      const t = 0.006;
+      const a = [x0 + dx * s0, ya, z0 + dz * s0];
+      const b = [x0 + dx * s1, yb, z0 + dz * s1];
+      // across the strip, in the fence's plane, square to its run
+      const ux = (s1 - s0) * dx;
+      const uz = (s1 - s0) * dz;
+      const uy = yb - ya;
+      const L = Math.hypot(ux, uy, uz);
+      if (!(L > 1e-4)) return;
+      const cx = (-uy * dx) / L;
+      const cz = (-uy * dz) / L;
+      const cy = Math.hypot(ux, uz) / L;
+      k.quad([a[0] - cx * t, a[1] - cy * t, a[2] - cz * t], [b[0] - cx * t, b[1] - cy * t, b[2] - cz * t], [b[0] + cx * t, b[1] + cy * t, b[2] + cz * t], [a[0] + cx * t, a[1] + cy * t, a[2] + cz * t], [nx, 0, nz], PAL.fence);
+    };
+    const MESH = 0.1; // m between wires
+    for (let s = -fenceH; s < len2; s += MESH) {
+      // each wire from the bottom up at 45°, and the other way, cut at the ends
       for (const dir of [1, -1]) {
-        const s1 = Math.min(len2, s + 0.12);
-        const yA = slab + wallH + (dir > 0 ? 0 : fenceH);
-        const yB = slab + wallH + (dir > 0 ? fenceH : 0);
-        const ax = x0 + dx * s;
-        const az = z0 + dz * s;
-        const bx = x0 + dx * s1;
-        const bz = z0 + dz * s1;
-        k.quad([ax, yA, az], [bx, yA, bz], [bx, yB, bz], [ax, yB, az], [dz, 0, -dx], PAL.fence.clone().multiplyScalar(0.6));
+        let sa = dir > 0 ? s : s + fenceH;
+        let ya = y0;
+        let sb = dir > 0 ? s + fenceH : s;
+        let yb = y0 + fenceH;
+        const clip = (sv, yv, so, yo) => {
+          if (so === sv) return [sv, yv];
+          if (sv < 0) return [0, yv + ((yo - yv) * (0 - sv)) / (so - sv)];
+          if (sv > len2) return [len2, yv + ((yo - yv) * (len2 - sv)) / (so - sv)];
+          return [sv, yv];
+        };
+        if ((sa < 0 && sb < 0) || (sa > len2 && sb > len2)) continue;
+        [sa, ya] = clip(sa, ya, sb, yb);
+        [sb, yb] = clip(sb, yb, sa, ya);
+        strip(sa, ya, sb, yb);
       }
     }
   }

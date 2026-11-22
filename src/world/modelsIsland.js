@@ -1,12 +1,13 @@
 // The plants of other countries than the forest (country.js): a coconut
 // palm and an ironwood for a tropical shore, a tree fern for the wet woods
-// above it, a silversword for the cinder at the top of the mountain. Built
+// above it, a silversword for the cinder at the top of the mountain, a bald
+// cypress for a Louisiana swamp. Built
 // the way the forest's own are (models.js): from primitives, with baked
 // vertex colours and a sway weight for the wind, each as { lod0, lod1, lod2 }.
 
 import * as THREE from 'three';
 import { mulberry32, phash } from '../noise.js';
-import { GeoBuilder, mat, jitter, barkColor, lin } from './models.js';
+import { GeoBuilder, mat, jitter, barkColor, barkCard, hangMoss, lin } from './models.js';
 import { CARD } from './foliage.js';
 
 const _c = new THREE.Color();
@@ -178,6 +179,134 @@ export function makeIronwood(seed = 83) {
     return b.build();
   };
   return { lod0: build(0), lod1: build(1), lod2: build(2), height: H, trunkRadius: 0.26 };
+}
+
+// ── Bald cypress ───────────────────────────────────────────────────────────
+// What a conifer is drawn as in a swamp (country.js, `forms`): a tall
+// straight trunk swelling at the foot into fluted buttresses, its knees
+// standing up out of the mud round it; no branches for the first half of
+// its height, then long, level, crooked limbs, a crown broad and flat on
+// top rather than a spire, and feathery sprays of pale soft needles, thin
+// enough to see the sky through. Moss hangs from its limbs where the country
+// has it, as from any tree's (hangMoss).
+export function makeCypress(seed = 89) {
+  const H = 17;
+  const R = 0.34;
+  const hangs = [[], [], []];
+  const build = (lod) => {
+    const rng = mulberry32(seed);
+    const b = new GeoBuilder();
+    const barkA = lin(0x7a6656);
+    const barkD = lin(0x4a3c32);
+    const dark = lin(0x34452a);
+    const mid = lin(0x56693a);
+    const tip = lin(0x7f8f4e);
+    const trunkH = H * 0.94;
+    const trunkSway = (p) => Math.pow(Math.max(0, p.y) / H, 2) * 0.3;
+    const crownSway = (p) => Math.pow(p.y / H, 2) * 0.9 + Math.hypot(p.x, p.z) * 0.05;
+    const flare = (y) => (y < 2.2 ? Math.pow(1 - y / 2.2, 2.2) : 0);
+    const trunk = new THREE.CylinderGeometry(0.06, R, trunkH, lod === 2 ? 5 : lod ? 8 : 14, lod ? 3 : 8, true);
+    trunk.translate(0, trunkH / 2 - 0.4, 0);
+    b.add(trunk, {
+      // the foot swollen out into buttresses, fluted between them
+      deform: (p) => {
+        const f = flare(p.y);
+        if (f > 0) {
+          const a = Math.atan2(p.z, p.x);
+          const k = 1 + f * (1.6 + 0.55 * Math.cos(a * 6 + 0.7));
+          p.x *= k;
+          p.z *= k;
+        }
+      },
+      color: (p) => barkColor(barkA, barkD, p, 3),
+      sway: trunkSway,
+      card: barkCard(CARD.BARK, 22),
+    });
+    // knees: rounded cones up out of the mud round it
+    if (lod < 2) {
+      for (let k = 0; k < 6; k++) {
+        const a = rng() * Math.PI * 2;
+        const d = 1.1 + rng() * 1.6;
+        const h = 0.25 + rng() * 0.45;
+        const knee = new THREE.ConeGeometry(0.11 + rng() * 0.06, h, 6, 1, true);
+        knee.translate(0, h / 2 - 0.12, 0);
+        b.add(knee, { matrix: mat(Math.cos(a) * d, 0, Math.sin(a) * d, (rng() - 0.5) * 0.3, 0, (rng() - 0.5) * 0.3), color: () => _c.copy(barkA).multiplyScalar(0.9), sway: () => 0 });
+      }
+    }
+    const crownFrom = H * 0.5;
+    const top = H - 0.6;
+    const reachAt = (t) => (3.3 - 1.4 * t * t * t) * (lod === 2 ? 1.1 : 1);
+    if (lod === 2) {
+      // far off: a broad, flat-topped mass of it, ragged
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + rng();
+        const c = new THREE.Vector3(Math.cos(a) * 1.6, crownFrom + 2.5 + rng() * 4, Math.sin(a) * 1.6);
+        b.add(new THREE.IcosahedronGeometry(2.4, 0), {
+          matrix: mat(c.x, c.y, c.z, 0, rng() * 6, 0, 1, 0.55, 1),
+          color: (p) => jitter(_c.copy(mid).lerp(dark, 0.5), p, 0.2),
+          sway: crownSway,
+          leaf: true,
+          card: [0, 0, 0, CARD.FILL],
+        });
+      }
+      return b.build();
+    }
+    // the limbs: level and crooked, in no order, longest low in the crown,
+    // and on each, sprays of soft needles hanging from its length
+    const limbs = lod ? 9 : 16;
+    for (let i = 0; i < limbs; i++) {
+      const t = (i + rng() * 0.6) / limbs;
+      const y = crownFrom + (top - crownFrom) * t;
+      const a = i * 2.39 + rng() * 0.9;
+      const reach = reachAt(t) * (0.7 + rng() * 0.45);
+      const out = new THREE.Vector3(Math.cos(a), 0.05 + rng() * 0.25 - t * 0.1, Math.sin(a)).normalize();
+      const from = new THREE.Vector3(0, y, 0);
+      const kink = new THREE.Vector3((rng() - 0.5) * 0.5, (rng() - 0.3) * 0.4, (rng() - 0.5) * 0.5);
+      const mid1 = from.clone().addScaledVector(out, reach * 0.55).add(kink);
+      const end = from.clone().addScaledVector(out, reach).add(kink.clone().multiplyScalar(1.6)).add(new THREE.Vector3(0, -0.15 * reach * (1 - t), 0));
+      const bark = (p) => barkColor(barkA, barkD, p, 3);
+      for (const [p0, p1, r0, r1] of [[from, mid1, 0.13 - 0.06 * t, 0.07], [mid1, end, 0.07, 0.025]]) {
+        const d = p1.clone().sub(p0);
+        const len = d.length();
+        const geo = new THREE.CylinderGeometry(r1, r0, len, lod ? 4 : 5, 1, true);
+        geo.translate(0, len / 2, 0);
+        const q = new THREE.Quaternion().setFromUnitVectors(UP, d.normalize());
+        b.add(geo, { matrix: new THREE.Matrix4().compose(p0, q, new THREE.Vector3(1, 1, 1)), color: bark, sway: (p) => trunkSway(p) + crownSway(p) * 0.3, card: barkCard(CARD.BARK, 6) });
+      }
+      for (const s of [0.35, 0.65, 0.95]) {
+        const at = s < 0.55 ? from.clone().lerp(mid1, s / 0.55) : mid1.clone().lerp(end, (s - 0.55) / 0.45);
+        hangs[lod].push({ at, sway: trunkSway(at) + crownSway(at) * 0.3 });
+      }
+      // the sprays: flat, drooping, pale, along the limb and round its end
+      const sprays = lod ? 3 : 7;
+      for (let k = 0; k < sprays; k++) {
+        const s = 0.3 + (0.7 * (k + rng() * 0.5)) / sprays;
+        const base = s < 0.55 ? from.clone().lerp(mid1, s / 0.55) : mid1.clone().lerp(end, (s - 0.55) / 0.45);
+        const dir = out.clone().add(new THREE.Vector3((rng() - 0.5) * 1.2, -0.25 - rng() * 0.35, (rng() - 0.5) * 1.2)).normalize();
+        const side = new THREE.Vector3(-dir.z, 0, dir.x).normalize().applyAxisAngle(dir, (rng() - 0.5) * 0.8);
+        const len = (lod ? 1.6 : 1.1) * (0.8 + rng() * 0.4);
+        const tone = 0.85 + rng() * 0.3;
+        b.card({
+          spine: (u, o) => o.copy(base).addScaledVector(dir, len * u).addScaledVector(UP, -0.18 * len * u * u),
+          side,
+          len,
+          halfW: len * 0.36,
+          segs: lod ? 1 : 2,
+          sort: CARD.SPRAY,
+          normal: (p, o) => o.set(p.x, 0.9, p.z).normalize(),
+          color: (u) => _c.copy(dark).lerp(mid, Math.min(1, u * 1.5)).lerp(tip, Math.max(0, u - 0.5)).multiplyScalar(tone).clone(),
+          sway: crownSway,
+        });
+      }
+    }
+    // a little dark thick of it at the top, so the crown has a body
+    const core = new THREE.IcosahedronGeometry(1.5, lod ? 0 : 1);
+    b.add(core, { matrix: mat(0, top - 1.2, 0, 0, rng() * 6, 0, 1.4, 0.5, 1.4), color: (p) => jitter(_c.copy(dark).multiplyScalar(0.8), p, 0.2), sway: crownSway, leaf: true, card: [0, 0, 0, CARD.FILL] });
+    return b.build();
+  };
+  const model = { lod0: build(0), lod1: build(1), lod2: build(2), height: H, trunkRadius: R };
+  model.moss = { lod0: hangMoss(hangs[0], seed + 101, 0), lod1: hangMoss(hangs[1], seed + 101, 1) };
+  return model;
 }
 
 // ── Tree fern (hāpuʻu) ─────────────────────────────────────────────────────
