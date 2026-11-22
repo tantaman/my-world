@@ -138,6 +138,20 @@ export function installCruise(game) {
     if (searches[i] || !from[i]) return;
     searches[i] = { steps: berthSearch(gen, from[i], keepOff[i], { round: i > 0 }) };
   }
+  // Port i's berth, found now if it hasn't been (the airfields in its way
+  // asked about then and there): for when she's about to be there.
+  function ensure(i) {
+    if (searches[i] === 'done' || !from[i]) return berths[i];
+    if (!searches[i]) {
+      for (const g of i === 0 ? homeWays : mauiWays) fields.site(g.id);
+      search(i);
+    }
+    let r = searches[i].steps.next();
+    while (!r.done) r = searches[i].steps.next();
+    searches[i] = 'done';
+    found(i, r.value);
+    return berths[i];
+  }
   function stepSearches() {
     const until = performance.now() + SEARCH_MS;
     for (let i = 0; i < 2; i++) {
@@ -157,7 +171,8 @@ export function installCruise(game) {
     if (!b) return;
     if (i === 0) {
       site = b;
-      voyage = new Voyage([() => berths[0], () => berths[1]], gen.seed);
+      // (with no berth to be found at Maui, she goes out and comes back)
+      voyage = new Voyage([() => berths[0], () => berths[1] || (searches[1] === 'done' || !from[1] ? berths[0] : null)], gen.seed);
     }
     // the trees and the grass where the pier is, gone now it's there
     for (const ch of chunks.chunks.values()) clearChunk(ch, b);
@@ -1279,6 +1294,11 @@ export function installCruise(game) {
       stepSearches();
       if (!voyage) return;
       if (!voy.phase) place();
+      // aboard, bound somewhere, the berth there is wanted before she's carried across
+      if (voy.to !== null && voy.phase !== 'docked' && searches[voy.to] !== 'done' && (where.onShip || player.deck === deckFrame)) {
+        ensure(voy.to);
+        place();
+      }
 
       // (where she is now was worked out at the start of the frame: place())
       const docked = voy.phase === 'docked';
@@ -1489,6 +1509,11 @@ export function installCruise(game) {
     },
     get berths() {
       return berths.slice();
+    },
+    // how the looking for each berth is going: 'waiting' (for the airfields
+    // in its way), 'looking', 'done'
+    get searches() {
+      return searches.map((sr) => (sr === 'done' ? 'done' : sr ? 'looking' : 'waiting'));
     },
     get where() {
       return { onShip: where.onShip, deck: where.deck, room: where.room && (where.room.name || roomName(where.room.kind)), roomId: where.room && where.room.id, x: where.x, z: where.z, y: where.y, inside: where.inside, pier: where.pier, near: where.near };
