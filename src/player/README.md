@@ -51,6 +51,13 @@ it's like down there is [Under the water](../underwater/README.md). Water
 held up in something built (a pool, a hot tub: `world/basins.js`) is waded
 and swum in the same way, wherever it is.
 
+Zoom in (the mouse wheel, or the d-pad on a pad) and the camera comes in
+behind you; zoom in past the nearest it comes and it goes into your head,
+and you look out of your own eyes, able to look further up and down. Zoom
+out and it comes back out behind you. Something that moves you itself (a
+train, a plane, skis, a tube) shows you riding it, and puts you back behind
+your eyes when you get off.
+
 ## The camera behind you
 
 If steering the camera and walking at once is a handful, switch on *camera
@@ -92,7 +99,7 @@ the same pad properly.
 | right stick | look around |
 | **A** | jump · climb, flying · come up, out of your depth |
 | **B**, held | run · stoop, flying · dive, out of your depth |
-| d-pad **↑ ↓** | zoom in · out |
+| d-pad **↑ ↓** | zoom in · out · held in, into your own eyes |
 
 What the other buttons do is on the help panel, and in each feature's own
 notes beside its keys.
@@ -128,7 +135,7 @@ world are told, so don't change it once someone has played as them; the
 
 ```
 index.js              plugs it into the game: controls, the hiker, who you are, the camera behind you, where you arrive
-player.js             movement, collision, wading, swimming and diving, third-person camera, free or locked behind you
+player.js             movement, collision, wading, swimming and diving, the camera: behind you (free or locked) or from your eyes
 character.js          the body anyone has: bones, IK gait (forwards or backwards), work poses, swimming, things raised to the face, a stance on skis or a board; dressed as one of the hikers, at their size
 hikers.js             who you can be: the hikers, in the order they're offered
 hikers/hiker.js       the hiker's clothes: rain shell, daypack, trousers and boots

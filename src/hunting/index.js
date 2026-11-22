@@ -64,7 +64,7 @@ export function installHunting(game) {
     const n = builder.slotOf(rifle.id);
     return n <= 10 ? String(n % 10) : 'tool bar';
   };
-  commands.describe({ group: 'HUNT', help: rifleKey, label: 'the rifle: click to shoot, hold right-click to look through the scope' });
+  commands.describe({ group: 'HUNT', help: rifleKey, label: 'the rifle: click to shoot, right-click to look through the scope, and again to lower it' });
   commands.describe({ group: 'HUNT', help: 'hold click', label: 'beside a kill: dress it for its meat' });
   commands.describe({ group: 'HUNT', help: 'click', label: 'beside a campfire: roast meat on a spit · right-click: take it off' });
 

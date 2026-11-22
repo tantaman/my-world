@@ -26,6 +26,9 @@
 //
 // Water held up in something built (world/basins.js: a pool, a hot tub) is
 // waded and swum in like the land's, where your feet are about as high as it.
+//
+// Zoomed in past the nearest the camera comes, it goes into your head and
+// you look out of your own eyes (firstPerson); zoomed out, it comes back out.
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
@@ -74,9 +77,10 @@ const PRONE_DROP = 0.8;
 // Where your eyes are above your feet (m), upright (or treading water) and
 // lying flat.
 const HEAD = [1.6, 1.15];
-// How far the camera can pitch (radians): in the air, and under water, where
-// you can look up at the surface from below.
-const PITCH = { air: [-0.35, 1.25], under: [-1.05, 1.25] };
+// How far the camera can pitch (radians): in the air, under water, where
+// you can look up at the surface from below, and from your own eyes, where
+// nothing behind you has to stay out of the ground.
+const PITCH = { air: [-0.35, 1.25], under: [-1.05, 1.25], eye: [-1.35, 1.45] };
 // Flying higher than this (m) over the ground, you're above the trunks.
 const TRUNK_CLEAR = 10;
 // A tap of jump in the air (a touch screen has no holding it) climbs for this long (s).
@@ -86,8 +90,16 @@ const FLAP = 0.45;
 // nearer or further each second.
 const STICK_TURN = { yaw: 2.4, pitch: 1.4 };
 const ZOOM_HOLD = 2.5;
-// How near and far the camera can be (m).
+// How near and far the camera can be (m). Zoomed in past the nearest it goes
+// into your head; with a held button, once it has been held in there this
+// long (s), so as not to go in by overshooting.
 const CAM_DIST = [2.2, 16];
+const INTO_EYES = 0.35;
+// Looking out of your eyes with your head out of the water, they're at least
+// this far (m) over it.
+const EYE_OVER_WATER = 0.1;
+// A notch of the mouse wheel brings the camera this many times nearer.
+const WHEEL_STEP = 1.12;
 const _dir = new THREE.Vector3();
 const _from = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -282,12 +294,19 @@ export class Player extends Emitter {
     this.deck = null;
     this._deckAt = null; // where the deck was when you were last put on it
     // Something held up to the eye (a rifle's scope), or null. While there
-    // is one the camera looks out from your eye the way it was looking,
-    // `zoom` times closer; you aren't drawn (it would be the back of your own
-    // head), and the mouse turns the view `zoom` times more finely.
+    // is one the camera looks out from your eyes the way it was looking,
+    // `zoom` times closer, and the mouse turns the view `zoom` times more
+    // finely.
     //   { zoom }
     this.sight = null;
-    this._unsighted = null; // the field of view to go back to (degrees)
+    // Looking out of your own eyes rather than from behind you: zoomed in
+    // past the nearest the camera comes. Not while something moves you
+    // itself (aboard: a train, a plane, skis), which shows you riding it;
+    // you're back behind your eyes when you get off. (fromEye says whether
+    // the camera is there now, for this or a sight.)
+    this.firstPerson = false;
+    this._intoEyes = 0; // s a zoom button has been held in at the nearest
+    this._ownFov = null; // the field of view to go back to (degrees), while from the eye
     // carried through the air, and climbing (jump held, or tapped just now)
     this.flying = false;
     this.climbing = false;
@@ -372,6 +391,25 @@ export class Player extends Emitter {
     return this.carrier ? this.carrier.eye : lerp(EYE, EYE_FLAT, this.prone) * this.size;
   }
 
+  // Is the camera looking out of your eyes: first person, or through a sight?
+  get fromEye() {
+    return !!this.sight || (this.firstPerson && !this.aboard);
+  }
+
+  // Zoom by f (under 1 nearer, over 1 further). Past the nearest, into your
+  // eyes; out of them, back to the nearest. Aboard something, only the
+  // camera behind you zooms, and zooming out puts first person by.
+  _zoom(f) {
+    const eyes = this.firstPerson && !this.aboard;
+    if (f > 1) this.firstPerson = false;
+    if (eyes) {
+      if (f > 1) this.camDist = CAM_DIST[0];
+      return;
+    }
+    if (f < 1 && this.camDist <= CAM_DIST[0] && !this.aboard) this.firstPerson = true;
+    else this.camDist = clamp(this.camDist * f, ...CAM_DIST);
+  }
+
   update(dt) {
     const d = this.deck;
     if (!d) {
@@ -430,14 +468,18 @@ export class Player extends Emitter {
     const steady = this.sight ? Math.max(1, this.sight.zoom) : 1; // through a sight, finer
     const sens = 0.0026 / steady;
     this.camYaw -= look.x * sens + (stick.x * STICK_TURN.yaw * dt) / steady;
-    // under water you can look up at the surface from below
-    const range = this.submerged ? PITCH.under : PITCH.air;
-    this.camPitch = clamp(this.camPitch + look.y * sens + (stick.y * STICK_TURN.pitch * dt) / steady, PITCH.under[0], range[1]);
+    // under water you can look up at the surface from below, and from your
+    // eyes, well up and down
+    const range = this.fromEye ? PITCH.eye : this.submerged ? PITCH.under : PITCH.air;
+    this.camPitch = clamp(this.camPitch + look.y * sens + (stick.y * STICK_TURN.pitch * dt) / steady, Math.min(range[0], PITCH.under[0]), range[1]);
     if (this.camPitch < range[0]) this.camPitch = lerp(this.camPitch, range[0], 1 - Math.exp(-dt * 5));
     const z = input.consumeZoom();
-    if (z) this.camDist = clamp(this.camDist * (z > 0 ? 1.12 : 1 / 1.12), ...CAM_DIST);
+    if (z) this._zoom(z > 0 ? WHEEL_STEP : 1 / WHEEL_STEP);
     const zoomHeld = (input.isDown('zoomOut') ? 1 : 0) - (input.isDown('zoomIn') ? 1 : 0);
-    if (zoomHeld) this.camDist = clamp(this.camDist * Math.pow(ZOOM_HOLD, zoomHeld * dt), ...CAM_DIST);
+    // (held in at the nearest, it waits a moment before going into your eyes)
+    const atNearest = zoomHeld < 0 && !this.firstPerson && !this.aboard && this.camDist <= CAM_DIST[0];
+    this._intoEyes = atNearest ? this._intoEyes + dt : 0;
+    if (zoomHeld && (!atNearest || this._intoEyes >= INTO_EYES)) this._zoom(Math.pow(ZOOM_HOLD, zoomHeld * dt));
     if (input.isDown('turnLeft')) this.camYaw += dt * 1.8;
     if (input.isDown('turnRight')) this.camYaw -= dt * 1.8;
     if (this.aboard) return this._ride(dt, look.x || look.y || stick.x || stick.y || input.isDown('turnLeft') || input.isDown('turnRight'));
@@ -971,22 +1013,32 @@ export class Player extends Emitter {
     this._lookThrough(dir);
   }
 
-  // Through a sight, while one is held up (this.sight): from your eye, the
-  // same way the camera was looking, so the crosshair stays on what it was on.
+  // From your eyes, while you look out of them (fromEye: first person, or a
+  // sight held up): from the point the camera behind you looks at, the same
+  // way, so the crosshair stays on what it was on; through a sight, `zoom`
+  // times closer. They keep under a cave's roof, and out of the water while
+  // your head is. The hiker isn't drawn (it would be the inside of your own
+  // head): that is the figure, from the hips, so that whatever hides the
+  // whole of you (root.visible: a plane you board) still has it as it left it.
   _lookThrough(dir) {
     const cam = this.camera;
-    const s = this.sight;
-    if (!s && this._unsighted === null) return;
-    if (s) {
-      if (this._unsighted === null) this._unsighted = cam.fov;
-      cam.position.set(this.pos.x, this.pos.y + this.eye, this.pos.z);
+    const eye = this.fromEye;
+    if (!eye && this._ownFov === null) return;
+    if (eye) {
+      if (this._ownFov === null) this._ownFov = cam.fov;
+      const P = this.pos;
+      let y = P.y + this.eye;
+      if (this.space) {
+        if (this.spaces.at(P.x, P.z, P.y + 0.05, _in)) y = Math.min(y, _in.roof - CAVE_CAM.clear);
+      } else if (!this.submerged && this._water(P.x, P.z, P.y, _w) && _w.depth > 0) y = Math.max(y, _w.level + _w.rise + EYE_OVER_WATER);
+      cam.position.set(P.x, y, P.z);
       cam.lookAt(cam.position.x - dir.x, cam.position.y - dir.y, cam.position.z - dir.z);
-      cam.fov = this._unsighted / Math.max(1, s.zoom);
+      cam.fov = this._ownFov / (this.sight ? Math.max(1, this.sight.zoom) : 1);
     } else {
-      cam.fov = this._unsighted;
-      this._unsighted = null;
+      cam.fov = this._ownFov;
+      this._ownFov = null;
     }
     cam.updateProjectionMatrix();
-    this.character.root.visible = !s;
+    this.character.hips.visible = !eye;
   }
 }

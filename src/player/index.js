@@ -100,7 +100,7 @@ export function installPlayer(game) {
   commands.describe({ group: 'WANDER', help: 'shift · space', pad: ['PadB', 'PadA'], label: 'out of your depth: dive · come up' });
   commands.describe({ group: 'WANDER', help: 'W · mouse', pad: ['PadLS', 'PadRS'], label: 'under water, swim where you look' });
   commands.describe({ group: 'WANDER', help: 'mouse · Q E', pad: ['PadRS'], label: behind('turn · look up and down', 'look around') });
-  commands.describe({ group: 'WANDER', help: 'scroll', pad: ['PadUp', 'PadDown'], label: 'zoom' });
+  commands.describe({ group: 'WANDER', help: 'scroll', pad: ['PadUp', 'PadDown'], label: 'zoom · all the way in, look out of your own eyes' });
   commands.add({
     id: 'home',
     keys: ['KeyR'],
