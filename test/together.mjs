@@ -12,7 +12,7 @@
 // survive being walked past; and the second, signing in from another
 // browser, must come back as himself — where *he* left off. And they talk:
 // over the radio from anywhere, aloud only from close by; and each sees what
-// the other is riding.
+// the other is riding. They can take bot slots in the same Saltworks match.
 
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
@@ -404,6 +404,36 @@ try {
     // the browser he came in on first is still signed in
     await ben.open(`${QUERY}&w=${id}`);
     assert.ok(far(await ben.at(), benAt) < 0.5, 'and he is still where he stopped');
+  });
+
+  await step('each visitor takes a bot slot in the same arena', async () => {
+    const enter = async (visitor) => {
+      await visitor.page.bringToFront();
+      await visitor.page.evaluate(() => world.saltworks.go());
+      await visitor.page.keyboard.down('KeyW');
+      try {
+        await visitor.until(() => world.saltworks.active, null, 'walking through the gate enters the arena');
+      } finally {
+        await visitor.page.keyboard.up('KeyW');
+      }
+      await visitor.until(() => world.saltworks.state?.me != null, null, 'the shared arena issues a slot');
+      return visitor.page.evaluate(() => world.saltworks.state.me);
+    };
+
+    const first = await enter(ana);
+    const second = await enter(ben);
+    assert.notEqual(first, second);
+    await ana.until((slot) => world.saltworks.state?.fighters[slot].name === 'ben', second, 'ana sees ben take control');
+    const groups = await ben.page.evaluate(() => world.saltworks.state.fighters.filter((f) => f.human).map(({ name, team }) => ({ name, team })));
+    assert.deepEqual(groups, [{ name: 'ana', team: 0 }, { name: 'ben', team: 1 }]);
+
+    await ben.page.keyboard.press('Backspace');
+    await ana.until((slot) => world.saltworks.state?.fighters[slot].human === false, second, 'a bot takes over when ben leaves');
+    const returned = await enter(ben);
+    assert.equal(returned, second);
+    await ben.context.close();
+    await ana.until((slot) => world.saltworks.state?.fighters[slot].human === false, second, 'a bot takes over when ben disconnects');
+    await ana.page.keyboard.press('Backspace');
   });
 
   assert.deepEqual(problems, [], 'nothing went wrong in either page');

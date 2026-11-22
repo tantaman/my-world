@@ -6,7 +6,7 @@ export default defineConfig({
   // (the Worker in worker/) next to it.
   server: {
     host: true,
-    proxy: { '/api': { target: 'http://127.0.0.1:8787', changeOrigin: true } },
+    proxy: { '/api': { target: 'http://127.0.0.1:8787', changeOrigin: true, ws: true } },
   },
   build: {
     target: 'es2022',

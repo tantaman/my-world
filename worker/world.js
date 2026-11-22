@@ -47,6 +47,7 @@ import { encodeFrame } from '../src/save/frame.js';
 import { cleanName, nameKey, nameProblem, passwordProblem, NOT_SIGNED_IN } from '../src/save/who.js';
 import { hashPassword, checkPassword, newToken, tokenId, readCookie, sessionCookie, clearCookie, SESSION_LIFE } from './members.js';
 import { iceServers } from './ice.js';
+import { ArenaRoom } from './saltworks.js';
 
 export class World {
   constructor(ctx, env) {
@@ -55,6 +56,7 @@ export class World {
     this.sql = ctx.storage.sql;
     this.live = new Map(); // ws -> { id, member, name, x, z, yaw, colour }
     this.nextPeer = 1;
+    this.saltworks = new ArenaRoom();
     ctx.blockConcurrencyWhile(async () => this.#schema());
   }
 
@@ -397,6 +399,7 @@ export class World {
     } catch {
       return;
     }
+    if (!msg || typeof msg !== 'object') return;
     const me = this.#peer(ws);
     if (!me) return;
     if (msg.t === 'at') {
@@ -414,6 +417,13 @@ export class World {
       // this way, and says who is talking (src/voice/).
       const said = sayable(msg);
       if (!said) return;
+      if (said.ch === 'saltworks' && said.to === 'server') {
+        // The room consumes these messages and replies only to the sender.
+        if (raw.length > 512 || !said.body || typeof said.body !== 'object') return;
+        const body = this.saltworks.receive(me.id, me.name, said.body, Date.now());
+        if (body) send(ws, JSON.stringify({ t: 'say', ch: 'saltworks', from: 'server', body }));
+        return;
+      }
       const out = { t: 'say', ch: said.ch, from: me.id, name: me.name, body: said.body };
       if (said.to === null) return this.#tell(out, ws);
       const them = this.#socketOf(said.to);
@@ -437,7 +447,10 @@ export class World {
     // (read from the attachment if it hasn't spoken since this object woke)
     const me = this.#peer(ws);
     this.live.delete(ws);
-    if (me) this.#tell({ t: 'gone', id: me.id }, ws);
+    if (me) {
+      this.saltworks.leave(me.id, Date.now());
+      this.#tell({ t: 'gone', id: me.id }, ws);
+    }
   }
 
   webSocketError(ws) {
