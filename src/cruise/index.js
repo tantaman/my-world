@@ -827,7 +827,7 @@ export function installCruise(game) {
       car.dinged = true;
       sound.sfx('lift-ding', { down: car.to < car.from });
     }
-    cue(`${deckLine(car.to)} · ${Math.round(r.y - deckY(FIRST)) >= 0 ? `deck ${deckAt(r.y)}` : ''}`);
+    cue(`on its way to ${deckLine(car.to)} · passing deck ${deckAt(r.y)}`);
     if (!going) {
       // there: the doors open, and you can walk out
       const n = car.to;
