@@ -37,7 +37,7 @@ function spineTube(r, spine, seg, len, radius, color, { flat = 0.8, radial = 10,
   r.part(spine[n - 1], ellipsoid(radius(1) + 1e-4, (radius(1) + 1e-4) * flat, radius(1) * 2 + 1e-4, 5, 3), { matrix: at(0, 0, 0), color: color(1, 0, { x: 0, y: 0, z: 0 }).clone() });
 }
 
-function spineBones(r, n, seg, y) {
+export function spineBones(r, n, seg, y) {
   const spine = [];
   let prev = null;
   for (let i = 0; i < n; i++) {

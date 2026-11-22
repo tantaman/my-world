@@ -1,0 +1,631 @@
+// The swamp tour: an airboat ride through a real bayou, looking for
+// alligators. At the landing on Bayou Barataria, outside Jean Lafitte in
+// Louisiana (a real place brought in from a photo: world/hikes.js), the
+// guide sits up in the high seat of a blue airboat tied to the dock. Walk up
+// and click, and you're in the front row with a pair of ear defenders on,
+// and off you go: down the bayou, through the old canals in the cypress, and
+// back by the Waterway, stopping wherever there's a gator to point out.
+//
+//   tours.js      which tours there are, where each really goes, its guide
+//   route.js      the way on the water, and how fast the boat may go on it
+//   airboat.js    what the boat looks like: the hull, the seats, the cage, the propeller
+//   landing.js    the dock, the ticket shack, the pen with a young gator in it
+//   guide.js      the guide: how they look and sit, and what they say
+//   sound.js      the engine and the propeller, the starter, the ear defenders
+//
+// Nothing about the land changes for it: the landing stands on the bank as
+// it is, the plants in the way are hidden as their chunk grows, and the way
+// round is found on the water the real place already has, once its land has
+// come. The gators on the way are ordinary alligators (wildlife/gators.js),
+// put where the guide is going to point them out, and used to the boats.
+// Your tour is yours alone; how many you've been on, how many gators you've
+// seen and the biggest are kept.
+//
+// From the console:
+//   world.swamptour.list()            the tours, and whether each is ready
+//   await world.swamptour.go()        to the foot of the dock
+//   world.swamptour.board()           into the boat, and off
+//   world.swamptour.ride              how it's going: where, how fast, which gator next
+//   world.swamptour.skip(m)           (for trying it out) on along the way, m metres
+//   world.swamptour.leave()           back to the landing, now
+
+import * as THREE from 'three';
+import { TOURS, onCard } from './tours.js';
+import { findRoute, Course, CLEAR, PACE } from './route.js';
+import { buildAirboat, HULL, PROP } from './airboat.js';
+import { buildLanding } from './landing.js';
+import { airboatSound } from './sound.js';
+import { makeGuide, sitDriving, SAYS, gatorLine } from './guide.js';
+import { SPECIES } from '../wildlife/species.js';
+import { SEAT_HIPS } from '../player/character.js';
+import { VEG_STRIDE } from '../world/flora.js';
+import { hash2i, mulberry32, clamp, lerp } from '../noise.js';
+import { wrapAngle } from '../core/geom.js';
+
+const PREPARE = 2500; // m from the landing: nearer than this, its land is asked for and the way round found
+const SHOW = 900; // m: the landing and the boat are stood up this close...
+const HIDE = 1050; // ...and taken down past this
+const ROUTE_CELL = 1; // m: the grid the way round is found on (route.js)
+const BOARD = 4; // m from the boat's side that you can climb in from
+const GREET = 14; // m from the boat the guide says hello from
+const GREET_AGAIN = 120; // s before they say it again
+const START = 3.5; // s from climbing in to pulling away: the starter, the engine catching
+const DWELL = 12; // s stopped at each gator
+const SPAWN_AHEAD = 110; // m short of a gator's stop that it's put there
+const CREEP = 0.5; // m/s the boat noses up to a stop at, at the least
+const EASE = { up: 1.4, down: 2.2 }; // m/s² it gathers and sheds speed at, driving
+const EARMUFFS = 0.42; // how much everything is muffled with the ear defenders on (sound.muffle)
+const LINE_MS = 6500; // how long a line of the guide's stays up
+// sitting in the front row: knees together, feet on the deck, hands in the lap
+const PASSENGER = { spread: 0.15, hang: 0.42, fwd: 0.36, lean: 0.04, reins: 0.15, rest: 0 };
+const FRONT = 1; // which seat is yours: the middle of the front row (airboat.js)
+// how big the gators on the way are (m), in turn
+const SIZES = [3.3, 1.5, 2.6, 3.7, 2.2];
+// a gator on the map's badge
+const GLYPH = ['.......', '.......', '..#.#..', '#######', '.#####.', '#.#.#.#', '.......'];
+
+const _v = new THREE.Vector3();
+const _at = {};
+const _wet = { level: 0, depth: 0, flowX: 0, flowZ: 0, foam: 0 };
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+
+// The features this uses, so it is installed after them (game/features.js):
+// hikes for the real place it's on, towns for the guide's body and voice,
+// wildlife for the gators.
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'towns', 'wildlife', 'hikes'];
+export function installSwamptour(game) {
+  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, save, sound, wildlife } = game;
+
+  // ── The tours, on their real places ───────────────────────────────────────
+  const tours = [];
+  for (const def of TOURS) {
+    const card = landforms.cards.find((c) => c.id === def.hike);
+    if (!card) continue;
+    const [x, z] = onCard(card, def.landing.lat, def.landing.lon);
+    const by = def.by.map((b) => onCard(card, b.lat, b.lon));
+    tours.push({ def, card, x, z, by, land: null, course: null, halts: [], lay: null, built: null, failed: false, asked: false });
+  }
+  const byId = (id) => tours.find((t) => t.def.id === id) || null;
+
+  // ── What's yours ──────────────────────────────────────────────────────────
+  let taken = 0; // tours ridden to the end
+  let seen = 0; // gators pointed out, all told
+  let biggest = 0; // m, the longest
+  save.register({
+    id: 'swamptour',
+    scope: 'yours',
+    local: 'marks',
+    collect: () => ({ taken, seen, biggest }),
+    validate: (r) => ({ taken: Math.max(0, Number(r?.taken) || 0), seen: Math.max(0, Number(r?.seen) || 0), biggest: Math.max(0, Number(r?.biggest) || 0) }),
+    restore(r) {
+      ({ taken, seen, biggest } = r);
+    },
+  });
+
+  // ── Materials ─────────────────────────────────────────────────────────────
+  const materials = {
+    paint: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.15, side: THREE.DoubleSide }),
+    dark: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide }),
+    metal: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.7, side: THREE.DoubleSide }),
+    wood: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0.02, side: THREE.DoubleSide }),
+  };
+
+  // ── Laying one out ────────────────────────────────────────────────────────
+  // Once its land is here: the way round on the water, where the gators will
+  // be, where the boat ties up and the dock out to it.
+  function layOut(t) {
+    if (t.course || t.failed) return;
+    const land = gen.landforms.find((L) => L.id === t.card.id);
+    if (!land) return;
+    t.land = land;
+    const shore = (x, z) => land.shore(x, z);
+    const route = findRoute(shore, [[t.x, t.z], ...t.by, [t.x, t.z]], { cell: ROUTE_CELL, clear: CLEAR });
+    if (!route) {
+      t.failed = true;
+      console.warn(`${t.def.name}: no way round by water`);
+      return;
+    }
+    const plain = new Course(route);
+    t.halts = haltsOn(plain, shore, t.def.gators, hash2i(7, 31, gen.seed));
+    t.course = new Course(route, t.halts.map((h) => h.s));
+    // the boat ties up where the way starts, its side to the dock; the dock
+    // runs from the bank out to it, towards the shack
+    const b0 = t.course.at(0, {});
+    const level = waterLevel(b0.x, b0.z, land);
+    let ux = t.x - b0.x;
+    let uz = t.z - b0.z;
+    const ul = Math.hypot(ux, uz) || 1;
+    ux /= ul;
+    uz /= ul;
+    const end = { x: b0.x + ux * (HULL.beam / 2 + 0.25), z: b0.z + uz * (HULL.beam / 2 + 0.25) };
+    let bank = { x: end.x, z: end.z };
+    for (let d = 0; d < 40; d += 0.25) {
+      bank = { x: end.x + ux * d, z: end.z + uz * d };
+      if (shore(bank.x, bank.z) > 1.2) break;
+    }
+    const yaw = Math.atan2(-ux, -uz); // the frame looks out to the water
+    const at = { x: bank.x + ux * 5.5, z: bank.z + uz * 5.5, yaw };
+    at.y = gen.height(at.x, at.z);
+    t.lay = { at, dock: { a: bank, b: end, top: level + 0.55 }, level, moor: b0 };
+    hideIn(t);
+  }
+
+  // Where the gators will be: spread along the way, after the first stretch
+  // and before the last, each where there's a bank by the water to bask on
+  // or, failing that, out in the water beside the way.
+  function haltsOn(course, shore, n, seed) {
+    const rnd = mulberry32(seed);
+    const out = [];
+    const L = course.length;
+    for (let i = 0; i < n; i++) {
+      const s0 = L * (0.12 + (0.76 * (i + 0.5)) / n);
+      let best = null;
+      for (let ds = 0; ds <= 70 && !best; ds += 5) {
+        for (const s of [s0 + ds, s0 - ds]) {
+          const p = course.at(s, {});
+          for (const side of rnd() < 0.5 ? [1, -1] : [-1, 1]) {
+            // left of the way is (cos yaw, -sin yaw)
+            const nx = Math.cos(p.yaw) * side;
+            const nz = -Math.sin(p.yaw) * side;
+            for (let d = 1.5; d <= 9; d += 0.5) {
+              if (shore(p.x + nx * d, p.z + nz * d) < 0.5) continue;
+              const length = SIZES[i % SIZES.length] * (0.92 + rnd() * 0.16);
+              const gx = p.x + nx * (d + 0.4);
+              const gz = p.z + nz * (d + 0.4);
+              const yaw = Math.atan2(-nx, -nz) + (rnd() - 0.5) * 1.2;
+              best = { s, side: side > 0 ? 'left' : 'right', spot: { x: gx, z: gz, yaw, pose: 'bask', length, calm: true, life: 400 } };
+              break;
+            }
+            if (best) break;
+          }
+          if (best) break;
+        }
+      }
+      if (!best) {
+        // out in the water beside the way
+        const p = course.at(s0, {});
+        const side = rnd() < 0.5 ? 1 : -1;
+        const off = clamp(p.clear * 0.6, 1.5, 4);
+        const nx = Math.cos(p.yaw) * side;
+        const nz = -Math.sin(p.yaw) * side;
+        best = { s: s0, side: side > 0 ? 'left' : 'right', spot: { x: p.x + nx * off, z: p.z + nz * off, yaw: rnd() * Math.PI * 2, pose: 'float', length: SIZES[i % SIZES.length], calm: true, life: 400 } };
+      }
+      // (never two at once, nor out of order)
+      if (out.length && best.s < out[out.length - 1].s + 40) continue;
+      out.push(best);
+    }
+    return out;
+  }
+
+  // the level of the water at (x, z): the chunks', where they're grown, or
+  // the real place's own lake
+  function waterLevel(x, z, land) {
+    if (chunks.waterAt(x, z, _wet)) return _wet.level;
+    land.shore(x, z);
+    return land.level + land.offset;
+  }
+
+  // ── The forest round the landing ──────────────────────────────────────────
+  // The trees, bushes and stones on the landing hidden, as each chunk's
+  // plants come and those already there when it's laid out; no grass under
+  // the shack, the pen or the dock.
+  const clears = []; // { x, z, r }
+  function clearChunk(ch) {
+    if (!clears.length || !ch.vegLists) return;
+    const S = chunks.size;
+    const x0 = ch.cx * S;
+    const z0 = ch.cz * S;
+    const near = clears.filter((c) => c.x + c.r > x0 && c.x - c.r < x0 + S && c.z + c.r > z0 && c.z - c.r < z0 + S);
+    if (!near.length) return;
+    for (const kind in ch.vegLists) {
+      const list = ch.vegLists[kind];
+      for (let o = 0, k = 0; o < list.length; o += VEG_STRIDE, k++) {
+        if (list[o + 4] <= 0) continue;
+        if (near.some((c) => Math.hypot(list[o] - c.x, list[o + 2] - c.z) < c.r)) chunks.hideInstance(ch, kind, k);
+      }
+    }
+  }
+  chunks.on('vegetation', clearChunk);
+  grass.addClearing((x0, z0, x1, z1) => {
+    const near = clears.filter((c) => c.x + c.r > x0 && c.x - c.r < x1 && c.z + c.r > z0 && c.z - c.r < z1);
+    if (!near.length) return null;
+    return (x, z) => near.some((c) => Math.hypot(x - c.x, z - c.z) < c.r);
+  });
+  function hideIn(t) {
+    const L = t.lay;
+    // the landing (shack, pen, dock), and the water the boat lies in
+    const plan = buildLanding({ at: L.at, dock: L.dock, ground: (x, z) => gen.height(x, z), name: t.def.name, materials });
+    t.plan = plan;
+    clears.push(...plan.clear, { x: L.moor.x, z: L.moor.z, r: HULL.len / 2 + 1 });
+    for (const ch of chunks.chunks.values()) clearChunk(ch);
+    for (const c of plan.clear) grass.invalidate(c.x - c.r, c.z - c.r, c.x + c.r, c.z + c.r);
+  }
+
+  // ── Standing it up ────────────────────────────────────────────────────────
+  function show(t, on) {
+    if (!!t.built === on) return;
+    if (on) {
+      const boat = buildAirboat(materials);
+      const guide = makeGuide(t.def.guide, gen.seed + 5101);
+      const g = boat.seats[boat.seats.length - 1];
+      guide.mesh.position.set(g.x, g.y - guide.hips.userData.rest.y, g.z - 0.02);
+      boat.object.add(guide.mesh);
+      scene.add(t.plan.object);
+      scene.add(boat.object);
+      solids.set(t.plan, t.plan.solids);
+      t.built = { boat, guide, spin: 0, bob: Math.random() * 6 };
+    } else {
+      scene.remove(t.plan.object);
+      scene.remove(t.built.boat.object);
+      solids.clear(t.plan);
+      t.built.guide.dispose();
+      t.built = null;
+    }
+  }
+
+  // ── The ear defenders ─────────────────────────────────────────────────────
+  // Yellow cups over the ears and a black band over the cap, handed to you
+  // as you climb in, and taken back at the end.
+  const muffs = earDefenders(player.character.cap.crown);
+  player.character.addWorn(new THREE.Group(), { band: muffs });
+  muffs.visible = false;
+
+  // ── On the map ────────────────────────────────────────────────────────────
+  // where it is is the foot of the dock (or, until it's laid out, the landing)
+  const placeOf = (t) => {
+    const foot = t.lay ? { x: t.lay.dock.a.x - Math.sin(t.lay.at.yaw) * 2.5, z: t.lay.dock.a.z - Math.cos(t.lay.at.yaw) * 2.5 } : { x: t.x, z: t.z };
+    return {
+      id: `swamptour:${t.def.id}`,
+      x: foot.x,
+      z: foot.z,
+      yaw: t.lay ? t.lay.at.yaw : 0,
+      name: t.def.name,
+      kind: 'swamp tour',
+      note: 'an airboat ride through the swamp, looking for alligators',
+      glyph: GLYPH,
+      visited: taken > 0,
+    };
+  };
+  map.places.addSource({
+    list: 'swamp tours',
+    destinations: () => tours.map(placeOf),
+    within: (x0, z0, x1, z1) => tours.filter((t) => t.x >= x0 && t.x <= x1 && t.z >= z0 && t.z <= z1).map(placeOf),
+    get: (id) => {
+      const t = typeof id === 'string' && id.startsWith('swamptour:') ? byId(id.slice(10)) : null;
+      return t ? placeOf(t) : null;
+    },
+  });
+
+  // ── The sound of it ───────────────────────────────────────────────────────
+  const heard = { boat: null };
+  sound.addLayer(airboatSound(heard));
+
+  // ── The ride ──────────────────────────────────────────────────────────────
+  let ride = null; // { t, s, v, phase, timer, halt, said, gators: [], pointed, seen, biggest }
+  builder.idleWhile(() => ride !== null || nearBoat() !== null);
+  const mover = {
+    place(out, dt) {
+      const t = ride && ride.t;
+      if (!t || !t.built) {
+        out.x = player.pos.x;
+        out.y = player.pos.y;
+        out.z = player.pos.z;
+        out.yaw = player.yaw;
+        return;
+      }
+      const b = t.built.boat;
+      const seat = b.seats[FRONT];
+      b.object.updateMatrixWorld();
+      _v.set(seat.x, seat.y, seat.z).applyMatrix4(b.object.matrixWorld);
+      out.x = _v.x;
+      out.y = _v.y - SEAT_HIPS;
+      out.z = _v.z;
+      out.yaw = b.object.rotation.y;
+      out.heading = b.object.rotation.y;
+      out.back = 1.5;
+    },
+  };
+
+  function say(t, line) {
+    hud.flash(`${t.def.guide.name}: “${line}”`, LINE_MS);
+    const b = t.built && t.built.boat.object;
+    if (b) sound.call('hello', b.position.x, b.position.y + 2.6, b.position.z, { pitch: t.def.guide.her ? 1.2 : 0.82 });
+  }
+
+  // the tour whose boat you're beside, ready to go
+  function nearBoat() {
+    if (ride || player.aboard || player.carrier) return null;
+    for (const t of tours) {
+      if (!t.built || !t.course) continue;
+      const o = t.built.boat.object.position;
+      if (Math.hypot(player.pos.x - o.x, player.pos.z - o.z) < HULL.beam / 2 + BOARD && player.pos.y > o.y - 0.5) return t;
+    }
+    return null;
+  }
+
+  function board(t) {
+    if (!t || !t.course || !t.built || ride) return false;
+    ride = { t, s: 0, v: 0, phase: 'start', timer: START, halt: 0, said: new Set(), gators: [], pointed: -1, seen: 0, biggest: 0 };
+    player.aboard = mover;
+    player.vel.set(0, 0, 0);
+    player.character.seat(PASSENGER);
+    muffs.visible = true;
+    sound.sfx('earmuffs');
+    sound.muffle(EARMUFFS, 0.4);
+    say(t, SAYS.board);
+    sound.sfx('airboat-start');
+    return true;
+  }
+
+  // Off at the landing: onto the dock beside the boat. Counted if you went
+  // the whole way round.
+  function getOff(whole) {
+    const r = ride;
+    if (!r) return;
+    ride = null;
+    const t = r.t;
+    if (player.aboard === mover) {
+      player.aboard = null;
+      const d = t.lay.dock;
+      const yaw = t.lay.at.yaw + Math.PI;
+      const x = lerp(d.a.x, d.b.x, 0.7);
+      const z = lerp(d.a.z, d.b.z, 0.7);
+      player.spawn(x, z, yaw, yaw + Math.PI, d.top + 0.05);
+    }
+    player.character.seat(null);
+    muffs.visible = false;
+    sound.muffle(0, 0.4);
+    if (whole) taken++;
+    seen += r.seen;
+    biggest = Math.max(biggest, r.biggest);
+    if (whole || r.seen) save.touch();
+    // the gators stay where they are, and go about their business
+    for (const g of r.gators) if (g) g.calm = false;
+    // the boat back at its mooring
+    t.moored = true;
+    if (whole) setTimeout(() => hud.flash(`${t.def.name} · ${r.seen ? `${r.seen} gator${r.seen > 1 ? 's' : ''}, the biggest about ${Math.round(r.biggest / 0.3048)} ft` : 'no gators this time'}${taken > 1 ? ` · ${taken} tours` : ''}`, 5000), LINE_MS + 200);
+  }
+
+  // Driving: along the way at the pace it allows, stopping at each gator
+  // while it's pointed out, and back to the dock.
+  function drive(dt) {
+    const r = ride;
+    const t = r.t;
+    const C = t.course;
+    // taken somewhere else all at once (back to the start, say): out of the
+    // boat, and it goes back to its mooring
+    if (player.aboard !== mover) return void getOff(false);
+    // a gator put where it'll be pointed out, well before you get there
+    for (let i = r.halt; i < t.halts.length; i++) {
+      const h = t.halts[i];
+      if (r.gators[i] !== undefined || r.s < h.s - SPAWN_AHEAD) continue;
+      r.gators[i] = wildlife.spawnAt(SPECIES.alligator, { ...h.spot }) || null;
+    }
+    switch (r.phase) {
+      case 'start':
+        r.timer -= dt;
+        if (r.timer <= 0) r.phase = 'go';
+        break;
+      case 'go': {
+        const plan = C.at(r.s, _at).v;
+        const h = t.halts[r.halt];
+        const toHalt = h ? h.s - r.s : Infinity;
+        const want = toHalt < 3 ? Math.max(CREEP, plan) : plan;
+        r.v += clamp(want - r.v, -EASE.down * dt, EASE.up * dt);
+        r.s += Math.max(r.v, toHalt < 3 || C.length - r.s < 3 ? CREEP : 0.2) * dt;
+        if (h && r.s >= h.s - 0.1) {
+          r.phase = 'halt';
+          r.timer = DWELL;
+          r.v = 0;
+          const g = r.gators[r.halt];
+          if (g && !g.done) {
+            say(t, gatorLine({ L: g.L, pose: g.state === 'float' ? 'float' : 'bask' }, h.side, r.seen));
+            r.seen++;
+            r.biggest = Math.max(r.biggest, g.L);
+            r.pointed = r.halt;
+          } else r.timer = 2;
+        }
+        if (r.s >= C.length - 0.1) {
+          r.phase = 'done';
+          r.timer = 3;
+          say(t, r.seen ? SAYS.done : `${SAYS.none} ${SAYS.done}`);
+        }
+        // the guide's words along the way, when not pointing out a gator
+        for (const a of SAYS.along) {
+          if (r.said.has(a) || r.s < a.at * C.length) continue;
+          r.said.add(a);
+          say(t, a.line);
+          break;
+        }
+        break;
+      }
+      case 'halt':
+        r.timer -= dt;
+        r.v = 0;
+        if (r.timer <= 0) {
+          r.phase = 'go';
+          r.halt++;
+          r.pointed = -1;
+        }
+        break;
+      case 'done':
+        r.timer -= dt;
+        r.v = 0;
+        if (r.timer <= 0) getOff(true);
+        break;
+    }
+  }
+
+  // ── Each frame ────────────────────────────────────────────────────────────
+  let clock = 0;
+  let lastHello = -Infinity;
+  let greeted = false;
+  let cued = false;
+  game.addSystem({
+    name: 'swamptour',
+    phase: 'world',
+    update({ dt }) {
+      clock += dt;
+      const f = game.focus;
+      heard.boat = null;
+      for (const t of tours) {
+        const d = Math.hypot(f.x - t.x, f.z - t.z);
+        if (!t.course && !t.failed && d < PREPARE) {
+          if (!t.asked) {
+            t.asked = true;
+            landforms.ensure(t.card.id).then(
+              () => layOut(t),
+              () => (t.asked = false),
+            );
+          }
+          if (landforms.has(t.card.id)) layOut(t);
+        }
+        if (!t.course) continue;
+        const riding = ride && ride.t === t;
+        if (d < SHOW || riding) show(t, true);
+        else if (d > HIDE) show(t, false);
+        if (!t.built) continue;
+        if (riding) drive(dt);
+        steer(t, dt);
+      }
+
+      // at the dock beside a boat: the guide says hello, and a click gets you in
+      const t = nearBoat();
+      let cue = null;
+      if (t) {
+        cue = `<b>click</b> take the airboat tour with ${t.def.guide.name}`;
+        if (!greeted && clock - lastHello > GREET_AGAIN) {
+          greeted = true;
+          lastHello = clock;
+          say(t, pick(taken ? SAYS.back : SAYS.hello));
+          t.built.guide.waving = 1.8;
+        }
+        if (input.tapped('use')) board(t);
+      } else if (!ride) {
+        const near = tours.find((q) => q.built && Math.hypot(player.pos.x - q.built.boat.object.position.x, player.pos.z - q.built.boat.object.position.z) < GREET);
+        if (!near) greeted = false;
+      }
+      if (ride) {
+        cue = `on the airboat · ${ride.seen} gator${ride.seen === 1 ? '' : 's'} · <b>right-click</b> back to the landing`;
+        if (input.tapped('alt') && ride.phase !== 'done') {
+          say(ride.t, SAYS.early);
+          getOff(false);
+        }
+      }
+      if (cue) {
+        hud.cue({ html: cue });
+        cued = true;
+      } else if (cued) {
+        hud.cue(null);
+        cued = false;
+      }
+    },
+  });
+
+  // The boat where it is: tied up at the dock, or out on the way round; on
+  // the water, bobbing, its bow up when it's going, leaning into the turns;
+  // the propeller turning, the rudders over, the guide at the stick looking
+  // where they're pointing.
+  function steer(t, dt) {
+    const B = t.built;
+    const o = B.boat.object;
+    const r = ride && ride.t === t ? ride : null;
+    const C = t.course;
+    const p = C.at(r ? r.s : 0, _at);
+    const was = o.rotation.y;
+    const yaw = r ? p.yaw : C.at(0, {}).yaw;
+    const level = waterLevel(p.x, p.z, t.land);
+    B.bob += dt;
+    const v = r ? r.v : 0;
+    const k = v / PACE.open;
+    o.position.set(p.x, level + Math.sin(B.bob * 1.3) * 0.015 * (1 - k), p.z);
+    const turn = r ? wrapAngle(yaw - was) / Math.max(dt, 1e-3) : 0;
+    o.rotation.set(-0.05 * k + Math.sin(B.bob * 0.9) * 0.006, yaw, clamp(-turn * k * 0.08, -0.06, 0.06), 'YXZ');
+    // the engine: idling, or pulling, by how hard it's going
+    const running = !!r && r.phase !== 'done';
+    const throttle = !running ? 0 : r.phase === 'start' ? 0.05 : r.phase === 'halt' ? 0.05 : clamp(0.18 + 0.75 * k + Math.max(0, (_at.v - v) * 0.1), 0.08, 1);
+    if (running) B.spin += dt * (6 + 30 * throttle);
+    B.boat.prop.rotation.z = B.spin * 2.4;
+    B.boat.blur.opacity = running ? 0.12 + 0.28 * throttle : 0;
+    for (const rd of B.boat.rudders) rd.rotation.y = lerp(rd.rotation.y, clamp(turn * 0.6, -0.5, 0.5), clamp(dt * 5, 0, 1));
+    if (running) {
+      _v.set(0, PROP.y, PROP.z).applyMatrix4(o.matrixWorld);
+      heard.boat = { x: _v.x, y: _v.y, z: _v.z, throttle, running };
+    }
+    // the guide: looking where the way goes, or at the gator being pointed out
+    let lookAt = null;
+    let point = null;
+    const g = r && r.pointed >= 0 ? r.gators[r.pointed] : null;
+    if (g) {
+      lookAt = wrapAngle(Math.atan2(g.x - o.position.x, g.z - o.position.z) - yaw);
+      point = lookAt;
+    } else if (!r) {
+      const P = player.pos;
+      if (Math.hypot(P.x - o.position.x, P.z - o.position.z) < GREET) lookAt = wrapAngle(Math.atan2(P.x - o.position.x, P.z - o.position.z) - yaw);
+    }
+    sitDriving(B.guide, dt, { lookAt, point });
+  }
+
+  // ── From the console ──────────────────────────────────────────────────────
+  game.provide('swamptour', {
+    list: () => tours.map((t) => ({ id: t.def.id, name: t.def.name, hike: t.card.id, x: Math.round(t.x), z: Math.round(t.z), ready: !!t.course, length: t.course ? Math.round(t.course.length) : null, gators: t.halts.length })),
+    get tours() {
+      return tours;
+    },
+    get ride() {
+      if (!ride) return null;
+      const C = ride.t.course;
+      const h = ride.t.halts[ride.halt];
+      return { tour: ride.t.def.id, phase: ride.phase, s: Math.round(ride.s * 10) / 10, of: Math.round(C.length), v: Math.round(ride.v * 10) / 10, next: h ? Math.round(h.s) : null, seen: ride.seen, gators: ride.gators.filter(Boolean).map((g) => ({ label: g.label, x: Math.round(g.x), z: Math.round(g.z), state: g.state })) };
+    },
+    get record() {
+      return { taken, seen, biggest };
+    },
+    // to the foot of the dock, facing the boat, once the way round is known
+    async go(id = tours[0] && tours[0].def.id) {
+      const t = byId(id);
+      if (!t) return null;
+      const p = placeOf(t);
+      await game.api.teleport(p.x, p.z, p.yaw);
+      for (let i = 0; i < 600 && !t.course && !t.failed; i++) await new Promise((r) => requestAnimationFrame(r));
+      if (!t.course) return null;
+      const q = placeOf(t);
+      await game.api.teleport(q.x, q.z, q.yaw);
+      return { x: q.x, z: q.z };
+    },
+    board: (id = tours[0] && tours[0].def.id) => board(byId(id)),
+    skip(m) {
+      if (!ride) return null;
+      ride.s = Math.min(ride.t.course.length, ride.s + m);
+      if (ride.phase === 'start') ride.phase = 'go';
+      return ride.s;
+    },
+    leave: () => (ride ? (getOff(false), true) : false),
+  });
+}
+
+// Ear defenders: two yellow cups and the black band over the top, in the
+// cap's frame (player/head.js: crown says how big the cap is there).
+function earDefenders(crown) {
+  const group = new THREE.Group();
+  const yellow = new THREE.MeshStandardMaterial({ color: 0xe8c21a, roughness: 0.5 });
+  const black = new THREE.MeshStandardMaterial({ color: 0x18181a, roughness: 0.6 });
+  const W = crown.rx + 0.035;
+  for (const side of [1, -1]) {
+    const cup = new THREE.Mesh(new THREE.SphereGeometry(0.052, 12, 8), yellow);
+    cup.scale.set(0.55, 1, 0.85);
+    cup.position.set(side * W, crown.y - 0.085, crown.z - 0.01);
+    cup.castShadow = true;
+    group.add(cup);
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.02, 12), black);
+    pad.rotation.z = Math.PI / 2;
+    pad.position.set(side * (W - 0.03), crown.y - 0.085, crown.z - 0.01);
+    group.add(pad);
+  }
+  const band = new THREE.Mesh(new THREE.TorusGeometry(W, 0.011, 6, 24, Math.PI), black);
+  band.scale.set(1, 1.25, 1);
+  band.position.set(0, crown.y - 0.085, crown.z - 0.01);
+  band.castShadow = true;
+  group.add(band);
+  return group;
+}

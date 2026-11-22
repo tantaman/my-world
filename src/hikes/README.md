@@ -161,6 +161,19 @@ sky over it is doing, each as one entry in one table
 | `high mountains` | granite cliffs, talus of broken stone, pale grit paths; turf and stones over a treeline at 3,000 m, snow lying above it | slim spruces and firs, a few aspens, willow thickets | clear, thin air |
 | `snowy mountains` | snow on all of it but the crags, its lakes frozen over and snowed on: a ski resort in winter | firs in the valleys, thinning out to none at 2,050 m; the odd bush | clear and crisp |
 | `travertine canyon` | red sandstone walls in ledges, pale towards the rim; travertine where the water runs, which is a milky blue-green | cottonwoods along the water; away from it, the odd squat juniper over mesquite and catclaw; no reeds or lilies in its pools | thunderheads over the rims |
+| `bayou` | black mud a metre over still brown water that mirrors everything; reeds and floating weed in it | live oaks and bald cypress hung with Spanish moss, palmettos under them | low and grey, mist on the water |
+
+**Where the tide sets the level.** In a delta (`--country bayou`) the water
+doesn't run downhill: the bayous and the canals between them all lie at the
+level of the sea, still, whichever way the map draws them running. There all
+the water is one, at sea level: every area the map draws water over (a lake,
+a river, a canal, a bayou), with its islands left out; every river, stream
+and canal the map draws as a line, as wide as it is; and the channels whose
+beds the elevation data has under the sea (it has the bayous' beds, and the
+ones the map left out), where they join the rest. Its shore is kept on a grid
+of its own, 2 m fine in the game, so a canal a few metres across is one, and
+the land stands just clear of it. That's how Jean Lafitte came in, from the
+landing of an airboat tour there: see [the swamp tour](../swamptour/README.md).
 
 **Snow** lies where a real place's country has a snow line, at its real
 height: up on high mountains, everywhere on snowy mountains. A photo taken in

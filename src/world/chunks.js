@@ -59,6 +59,7 @@ class Chunk {
     this.veg = []; // { kind, mesh }
     this.vegLists = null; // raw placement lists by kind (see VEG_STRIDE)
     this.vegMesh = {}; // kind -> InstancedMesh
+    this.moss = []; // { kind, mesh, of: tree instance -> its moss's, or -1 }
     this.colliders = null; // Float32Array [x, z, r, ...]
     this.pos = null; // terrain vertex buffers, kept for live edits
     this.nor = null;
@@ -666,6 +667,9 @@ export class ChunkManager extends Emitter {
       const tree = FLORA[kind].tree;
       // (only a chunk on a real place can be anything but the forest's colours)
       const tints = this.gen.landformClearance(ch.x0 + this.size / 2, ch.z0 + this.size / 2) < this.size;
+      // the trees that have Spanish moss hanging from them, in a country
+      // that has it: which, and where (their own matrices)
+      const mossy = tree && tints && model.moss ? [] : null;
       for (let k = 0; k < count; k++) {
         const o = k * VEG_STRIDE;
         const s = list[o + 4];
@@ -689,7 +693,10 @@ export class ChunkManager extends Emitter {
         const c = tints && this.gen.countryAt(list[o], list[o + 2]);
         if (c && c.tints[kind]) _c.multiply(_t.setRGB(...c.tints[kind]));
         mesh.setColorAt(k, _c);
+        // (each tree its own share of it: some bare, some hung all over)
+        if (mossy && c && tint < (c.moss[kind] || 0)) mossy.push(k, ..._m.elements);
       }
+      if (mossy && mossy.length) this.hangMoss(ch, kind, mossy, count);
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       mesh.computeBoundingSphere();
@@ -707,12 +714,45 @@ export class ChunkManager extends Emitter {
     this.emit('vegetation', ch);
   }
 
+  // The Spanish moss on a chunk's trees of one kind: mossy is [k, ...its
+  // matrix's 16 numbers] for each tree that has it, of `count`.
+  hangMoss(ch, kind, mossy, count) {
+    const model = this.models[kind];
+    const n = mossy.length / 17;
+    const mesh = new THREE.InstancedMesh(model.moss.lod0, this.materials.vegetation, n);
+    const of = new Int32Array(count).fill(-1);
+    for (let i = 0; i < n; i++) {
+      const o = i * 17;
+      of[mossy[o]] = i;
+      _m.fromArray(mossy, o + 1);
+      mesh.setMatrixAt(i, _m);
+      const v = 0.85 + ((mossy[o] * 0.618) % 1) * 0.3;
+      mesh.setColorAt(i, _c.setRGB(v, v, v));
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    mesh.position.set(ch.x0, 0, ch.z0);
+    mesh.matrixAutoUpdate = false;
+    mesh.updateMatrix();
+    this.scene.add(mesh);
+    ch.moss.push({ kind, mesh, of });
+  }
+
   // Hide one plant instance (felled, picked up or cleared) and drop its collider.
   hideInstance(ch, kind, k) {
     const mesh = ch.vegMesh[kind];
     if (mesh) {
       mesh.setMatrixAt(k, _zero);
       mesh.instanceMatrix.needsUpdate = true;
+    }
+    // (and the moss that hung from it)
+    for (const m of ch.moss) {
+      if (m.kind !== kind || m.of[k] < 0) continue;
+      m.mesh.setMatrixAt(m.of[k], _zero);
+      m.mesh.instanceMatrix.needsUpdate = true;
     }
     const list = ch.vegLists && ch.vegLists[kind];
     if (!list) return;
@@ -755,6 +795,11 @@ export class ChunkManager extends Emitter {
       mesh.visible = ch.lod <= FLORA[kind].maxLod;
       if (FLORA[kind].tree) mesh.castShadow = ch.lod <= 1;
     }
+    // moss, near enough to make out
+    for (const { kind, mesh } of ch.moss) {
+      mesh.geometry = ch.lod === 0 ? this.models[kind].moss.lod0 : this.models[kind].moss.lod1;
+      mesh.visible = ch.lod <= 1;
+    }
   }
 
   disposeChunk(ch) {
@@ -768,11 +813,12 @@ export class ChunkManager extends Emitter {
       ch.water.geometry.dispose();
       ch.water = null;
     }
-    for (const { mesh } of ch.veg) {
+    for (const { mesh } of [...ch.veg, ...ch.moss]) {
       this.scene.remove(mesh);
       mesh.dispose();
     }
     ch.veg.length = 0;
+    ch.moss.length = 0;
   }
 
   stats() {

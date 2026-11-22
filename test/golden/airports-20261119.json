@@ -63,5 +63,18 @@
    false,
    true
   ]
+ },
+ {
+  "id": "airfield:647805:269166",
+  "region": "jean-lafitte",
+  "name": "Tolliver Strip",
+  "x": 647805.4,
+  "z": 269165.9,
+  "yaw": 0,
+  "mid": -6.711,
+  "clear": [
+   true,
+   false
+  ]
  }
 ]

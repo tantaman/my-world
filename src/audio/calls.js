@@ -316,3 +316,28 @@ defineCall('song', 14, (k) => {
   const sing = SONGS[opts.song ?? 'chips'];
   if (sing) k.end = sing(s, out, t, rand(0.06, 0.11));
 });
+
+// An alligator cornered on land: a long, open-mouthed hiss, the air forced
+// out of a big chest, rough and low. opts.size: about 1 for a grown one
+defineCall('hiss', 8, ({ s, t, opts, noise }) => {
+  const big = opts.size ?? 1;
+  const dur = rand(1.1, 1.6) * Math.sqrt(big);
+  noise(s.white, t, dur, [['bandpass', rand(2600, 3400) / Math.sqrt(big), 0.8], ['lowpass', 7000]], 0.9, 0.06, dur * 0.5);
+  noise(s.pink, t, dur, [['bandpass', 700 / Math.sqrt(big), 1.2]], 0.5, 0.08, dur * 0.45);
+});
+
+// A bull alligator's bellow, in the spring: a deep, rattling roar a couple of
+// seconds long, from low in the throat, carried far over the water, a few
+// in a row. opts.size: about 1 for a big bull
+defineCall('bellow', 90, ({ s, t, opts, voice, noise }) => {
+  const big = opts.size ?? 1;
+  const f = rand(32, 40) / Math.sqrt(big);
+  const n = 1 + Math.floor(rand(0, 3));
+  let at = t;
+  for (let i = 0; i < n; i++) {
+    const len = rand(1.4, 2.2);
+    voice('sawtooth', at, [[0, f * 1.2], [0.3, f * 1.35], [len, f]], [[0.25, 0.5], [len * 0.7, 0.42], [len, 0]], { filter: [['lowpass', 260], ['bandpass', 120, 0.7]], vib: rand(14, 18), vibDepth: f * 0.35, harm: 0.5 });
+    noise(s.brown, at, len, [['lowpass', 220]], 0.5, 0.3, len * 0.4);
+    at += len + rand(1.2, 2.4);
+  }
+});

@@ -217,6 +217,45 @@ function core(b, center, r, { sy = 1, color, sway, detail = 1, normal }) {
   });
 }
 
+// ── Spanish moss ───────────────────────────────────────────────────────────
+// Beards of it hanging from a tree's limbs, in a country that has it
+// (country.js, `moss`): at each of `hangs` ({ at, sway }: a point on a limb,
+// in the tree's own space, and how much the wind moves the limb there), a
+// curtain or two hanging straight down, turned their own ways, a metre or two
+// long, swaying more the further down they hang. Drawn as a mesh of its own
+// at the same place as the tree (chunks.js), so a tree has it or not.
+const MOSS_A = lin(0x7c806b); // grey, a little green
+const MOSS_B = lin(0x5e604f);
+export function hangMoss(hangs, seed, lod) {
+  const rng = mulberry32(seed);
+  const b = new GeoBuilder();
+  const DOWN = new THREE.Vector3(0, -1, 0);
+  for (const h of hangs) {
+    const n = lod ? 1 : 1 + (rng() < 0.6 ? 1 : 0);
+    for (let k = 0; k < n; k++) {
+      const len = (0.6 + rng() * rng() * 1.6) * (lod ? 1.2 : 1);
+      const a = rng() * Math.PI * 2;
+      const side = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+      const face = new THREE.Vector3(-side.z, 0.25, side.x).normalize();
+      const from = h.at.clone().add(new THREE.Vector3((rng() - 0.5) * 0.3, -0.05, (rng() - 0.5) * 0.3));
+      const drift = new THREE.Vector3((rng() - 0.5) * 0.2, 0, (rng() - 0.5) * 0.2);
+      const tone = 0.8 + rng() * 0.35;
+      b.card({
+        spine: (t, o) => o.copy(from).addScaledVector(DOWN, len * t).addScaledVector(drift, t * t),
+        side,
+        len,
+        halfW: (0.1 + rng() * 0.16) * (lod ? 1.3 : 1),
+        segs: lod ? 1 : 3,
+        sort: CARD.MOSS,
+        normal: (p, o) => o.copy(face),
+        color: (t) => _c.copy(MOSS_A).lerp(MOSS_B, t).multiplyScalar(tone).clone(),
+        sway: (p) => h.sway + Math.max(0, from.y - p.y) * 0.35,
+      });
+    }
+  }
+  return b.build();
+}
+
 // ── Conifer ────────────────────────────────────────────────────────────────
 // A spruce-like tree: a straight trunk, whorls of branches all the way up,
 // longest at the bottom, drooping low down and lifting at their tips, each a
@@ -225,6 +264,7 @@ function core(b, center, r, { sy = 1, color, sway, detail = 1, normal }) {
 export function makePine(seed = 1) {
   const H = 15;
   const R = 0.32;
+  const hangs = [[], [], []]; // where moss could hang, at each lod (hangMoss)
   const build = (lod) => {
     const rng = mulberry32(seed);
     const b = new GeoBuilder();
@@ -314,6 +354,7 @@ export function makePine(seed = 1) {
             .addScaledVector(out, reach * s)
             .addScaledVector(UP, reach * slope * s + lift * Math.pow(s, 2.4) - sag * Math.sin(Math.PI * s));
         const tint = 0.9 + rng() * 0.2;
+        if (t < 0.75) for (const s of [0.3, 0.55, 0.8]) hangs[lod].push({ at: spine(s, new THREE.Vector3()), sway: crownSway(spine(s, _p)) });
         const color = (s) => _c.copy(needleDark).lerp(needleMid, Math.min(1, s * 1.6)).lerp(needleTip, Math.max(0, s - 0.55) * 1.6).multiplyScalar(ao * tint).clone();
         const normal = (p, o) => {
           o.set(p.x, 0, p.z);
@@ -352,7 +393,9 @@ export function makePine(seed = 1) {
     }
     return b.build();
   };
-  return { lod0: build(0), lod1: build(1), lod2: build(2), height: 15, trunkRadius: R };
+  const model = { lod0: build(0), lod1: build(1), lod2: build(2), height: 15, trunkRadius: R };
+  model.moss = { lod0: hangMoss(hangs[0], seed + 101, 0), lod1: hangMoss(hangs[1], seed + 101, 1) };
+  return model;
 }
 
 // ── Broadleaf (oak / beech-ish) ────────────────────────────────────────────
@@ -362,6 +405,7 @@ export function makePine(seed = 1) {
 export function makeBroadleaf(seed = 2) {
   const H = 11;
   const R = 0.4;
+  const hangs = [[], [], []]; // where moss could hang, at each lod (hangMoss)
   const build = (lod) => {
     const rng = mulberry32(seed);
     const b = new GeoBuilder();
@@ -434,6 +478,10 @@ export function makeBroadleaf(seed = 2) {
       limb(b, from, dir, len, 0.19, 0.07, { sides: lod ? 4 : 5, color: bark, sway: woodSway });
       const tip = from.clone().addScaledVector(dir, len);
       ends.push(tip);
+      for (const s of [0.35, 0.65, 0.95]) {
+        const p = from.clone().addScaledVector(dir, len * s);
+        hangs[lod].push({ at: p, sway: woodSway(p) });
+      }
       if (lod) continue;
       for (let k = 0; k < 3; k++) {
         const at = from.clone().addScaledVector(dir, len * (0.45 + 0.2 * k));
@@ -442,6 +490,8 @@ export function makeBroadleaf(seed = 2) {
         const blen = 1.6 + rng() * 0.9;
         limb(b, at, bdir, blen, 0.065, 0.02, { sides: 3, color: bark, sway: woodSway, furrows: 5 });
         ends.push(at.clone().addScaledVector(bdir, blen));
+        const mid = at.clone().addScaledVector(bdir, blen * 0.6);
+        hangs[lod].push({ at: mid, sway: leafSway(mid) });
       }
     }
 
@@ -479,7 +529,9 @@ export function makeBroadleaf(seed = 2) {
     }
     return b.build();
   };
-  return { lod0: build(0), lod1: build(1), lod2: build(2), height: 11, trunkRadius: R };
+  const model = { lod0: build(0), lod1: build(1), lod2: build(2), height: 11, trunkRadius: R };
+  model.moss = { lod0: hangMoss(hangs[0], seed + 101, 0), lod1: hangMoss(hangs[1], seed + 101, 1) };
+  return model;
 }
 
 // ── Birch ──────────────────────────────────────────────────────────────────

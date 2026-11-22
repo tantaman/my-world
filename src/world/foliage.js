@@ -31,6 +31,7 @@ export const CARD = {
   BIRCH: 5, // white, with dark dashes across it (lenticels)
   FILL: 6, // the thick of a crown: ragged, with holes
   FROND: 7, // a fern's: leaflets either side of the stem
+  MOSS: 8, // Spanish moss: beards of fine grey strands hanging from a limb
 };
 
 // (needs NOISE_GLSL)
@@ -160,6 +161,33 @@ float frond(vec2 p, float len, float fw, out float shade) {
   return clamp(d / fw + 0.5, 0.0, 1.0);
 }
 
+// ── Spanish moss ──
+// A curtain of it hanging from a limb (p.x down it from the limb, p.y
+// across): beards side by side, each hanging its own length and narrowing to
+// a point, so the hem is ragged; and in each, fine crinkled strands close
+// together. Once a strand is under a pixel, the beard is a wisp with gaps in
+// it, and further off still the curtain a ragged grey mass.
+float moss(vec2 p, float len, float fw, out float shade) {
+  const float BEARD = 0.075; // m across a beard
+  const float STRAND = 0.011; // m between its strands
+  float col = floor(p.y / BEARD);
+  float h = hash12(vec2(col, 7.7 + len * 3.1));
+  float hangs = len * (0.3 + 0.7 * h);
+  float cy = (fract(p.y / BEARD) - 0.5) * BEARD;
+  float halfB = BEARD * 0.5 * (1.0 - smoothstep(hangs * 0.25, hangs, p.x)) + 0.003;
+  float dBeard = min(halfB - abs(cy), hangs - p.x);
+  float wob = sin(p.x * 37.0 + col * 3.1) * 0.0035 + sin(p.x * 93.0 + col * 1.7) * 0.0016;
+  float s = abs(fract((p.y + wob) / STRAND) - 0.5) * STRAND;
+  float near = 1.0 - smoothstep(STRAND * 0.2, STRAND * 0.7, fw);
+  float n1 = vnoise(vec2(p.y / 0.02, p.x / 0.09));
+  float d = mix(min(dBeard, (n1 - 0.38) * 0.03), min(dBeard, 0.0022 - s), near);
+  float far = smoothstep(BEARD * 0.3, BEARD * 1.3, fw);
+  float n = vnoise(vec2(p.y / 0.14, p.x / 0.4));
+  d = mix(d, min(len * (0.4 + 0.55 * n) - p.x, (n - 0.32) * 0.2), far);
+  shade = (0.78 + 0.4 * h) * mix(1.06, 0.84, clamp(p.x / len, 0.0, 1.0));
+  return clamp(d / fw + 0.5, 0.0, 1.0);
+}
+
 // ── The thick of a crown ──
 float vnoise3(vec3 p) {
   vec3 i = floor(p);
@@ -235,6 +263,7 @@ float cover(vec4 card, vec3 local, vec2 fw, float fl, out float shade) {
   if (sort == ${CARD.LEAVES}) return leaves(card.xy, card.z, f, 0.085, 0.072, 0.5, 0.38, shade);
   if (sort == ${CARD.SMALL}) return leaves(card.xy, card.z, f, 0.05, 0.03, 0.72, 0.14, shade);
   if (sort == ${CARD.FROND}) return frond(card.xy, card.z, f, shade);
+  if (sort == ${CARD.MOSS}) return moss(card.xy, card.z, f, shade);
   if (sort == ${CARD.FILL}) return fill(local, fl, shade);
   if (sort == ${CARD.BARK}) shade = bark(card.xy, card.z, fw);
   if (sort == ${CARD.BIRCH}) shade = birch(card.xy, card.z, fw);

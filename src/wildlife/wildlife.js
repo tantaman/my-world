@@ -15,6 +15,7 @@ import { SPECIES, CATEGORIES, ACTIVE } from './species.js';
 import { Beast } from './beasts.js';
 import { Flock, Flit, Soar, Owl } from './flyers.js';
 import { buildSnake, buildSalamander, Crawler } from './crawlers.js';
+import { Gator } from './gators.js';
 import { BeeSwarm, buildButterfly, Butterfly } from './insects.js';
 import { disposeAnimal } from './rig.js';
 import { smoothstep, clamp } from '../noise.js';
@@ -337,6 +338,7 @@ defineAnimalClass('flit', ({ wildlife, sp, spot, env, ctx }) => new Flit(wildlif
 defineAnimalClass('soar', ({ wildlife, sp, spot, env, ctx }) => new Soar(wildlife, sp, spot, env, ctx));
 defineAnimalClass('owl', ({ wildlife, sp, spot, env, ctx }) => new Owl(wildlife, sp, spot, env, ctx));
 defineAnimalClass('crawler', ({ sp, spot, env, toward }) => new Serpent(sp, spot.x, spot.z, toward + rand(-1.5, 1.5), env));
+defineAnimalClass('gator', ({ sp, spot, ctx, toward }) => new Gator(sp, spot, ctx, toward));
 defineAnimalClass('bees', ({ sp, spot, ctx }) => new Bees(sp, spot.x, spot.z, ctx));
 defineAnimalClass('butterflies', ({ sp, spot, ctx }) => new Flutter(sp, spot.x, spot.z, ctx));
 defineAnimalClass('herd', ({ sp, spot, env, toward, player }) => {
@@ -394,6 +396,13 @@ export class Wildlife {
       hours: 12,
       night: 0,
       ground: (x, z) => chunks.heightAt(x, z),
+      // the water at (x, z): its level and how deep it is there (depth < 0
+      // on dry land, by how far over the level the ground stands), or null
+      // where there's none near. Shared: copy what you keep.
+      water(x, z) {
+        if (!chunks.waterAt(x, z, _wet)) return null;
+        return _wet;
+      },
       distance: (x, z) => {
         const p = wl.player.pos;
         return Math.hypot(x - p.x, z - p.z);
@@ -587,7 +596,7 @@ export class Wildlife {
       const country = this.gen.countryAt(spot.x, spot.z);
       const lives = country && country.animals;
       for (const s of kinds) {
-        if (lives && !lives.includes(s.kind)) continue;
+        if (lives ? !lives.includes(s.kind) : s.only) continue;
         const w = s.abundance * Math.max(0, s.habitat(env)) * ACTIVE[s.active](hours);
         if (w > 0.001) {
           options.push({ s, spot, env, w });
