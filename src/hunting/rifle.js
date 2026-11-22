@@ -2,13 +2,14 @@
 // build/builder.js), registered by the hunting feature.
 //
 //   click              shoot at what the crosshair is on
-//   hold right-click   look through the scope
+//   right-click        look through the scope, and again to lower it
 //   hold click         beside a kill: dress it for its meat
 //   click              beside a campfire: put a cut of meat on a spit over it
 //   right-click        ...and take the meat off again
 //
 // A shot is heard a long way off: every animal near enough runs from it. It
-// holds five rounds, and pushes five more in when they're gone.
+// holds five rounds, and pushes five more in when they're gone: the scope
+// comes down to load it, and goes up again after.
 
 import { definePose } from '../player/character.js';
 import { FIRE } from '../fires/fires.js';
@@ -70,7 +71,8 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 // targets: anything else a shot can hit (shot.js Targets), or null
 export function rifleTool({ wildlife, fires, carcasses, spits, scope, which, eatHint, targets = null }) {
   let rounds = MAG;
-  let sighted = false;
+  let sighted = false; // looking through the scope now
+  let scoped = false; // ...or would be, but for loading (right-click turns it on and off)
   let clock = 0;
   let flash = null;
   let flashT = 0;
@@ -145,9 +147,9 @@ export function rifleTool({ wildlife, fires, carcasses, spits, scope, which, eat
       return sighted;
     },
 
-    // Every frame, in hand or not: the scope up while right-click is held
-    // (not beside a fire or a kill, where right-click has work to do), and the
-    // flash out again.
+    // Every frame, in hand or not: right-click puts the scope up, and again
+    // takes it down (not beside a fire or a kill, where right-click has work
+    // to do); it's down while you load. And the flash out again.
     update(b, dt) {
       clock += dt;
       if (flashT > 0) {
@@ -155,11 +157,14 @@ export function rifleTool({ wildlife, fires, carcasses, spits, scope, which, eat
         if (flashT <= 0 && flash) flash.visible = false;
       }
       const inHand = b.current === tool && !b.idle;
-      const want = inHand && rounds > 0 && b.input.holding('alt') && (sighted || !(b.tgt && b.tgt.here));
+      if (!inHand) scoped = false;
+      else if (b.input.tapped('alt') && (sighted || !(b.tgt && b.tgt.here))) scoped = !scoped;
+      const want = scoped && rounds > 0;
       if (want !== sighted) sight(b, want);
     },
 
     put(b) {
+      scoped = false;
       if (sighted) sight(b, false);
       b.dropHold();
     },
@@ -206,8 +211,8 @@ export function rifleTool({ wildlife, fires, carcasses, spits, scope, which, eat
       }
     }
     const on = look.label ? `${look.label} · ${formatDistance(look.t)} · ` : '';
-    const scoped = sighted ? '' : ' · <b>hold right-click</b> scope';
-    return { type: 'shoot', ok: true, prompt: `${on}<b>click</b> shoot <i>(${plural(rounds, 'round')})</i>${scoped}` };
+    const alt = sighted ? ' · <b>right-click</b> lower the scope' : ' · <b>right-click</b> scope';
+    return { type: 'shoot', ok: true, prompt: `${on}<b>click</b> shoot <i>(${plural(rounds, 'round')})</i>${alt}` };
   }
 
   function shoot(b) {

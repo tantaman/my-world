@@ -44,7 +44,7 @@ export default async function ({ page, step, key, take, frames, open, shot }) {
     const slot = await page.evaluate((i) => document.querySelectorAll('#hotbar .slot')[i - 1].querySelector('kbd')?.textContent, n);
     assert.equal(slot, String(n % 10), 'and the bar says so');
     const said = await prompt();
-    assert.match(said, /click shoot \(5 rounds\) · hold right-click scope/, `(prompt: "${said}")`);
+    assert.match(said, /click shoot \(5 rounds\) · right-click scope/, `(prompt: "${said}")`);
     await shot('rifle');
     return { prompt: said };
   });
@@ -75,20 +75,21 @@ export default async function ({ page, step, key, take, frames, open, shot }) {
     });
 
     const view = await page.evaluate(async () => {
-      T.press('alt', true);
+      await T.tap('alt');
       await T.frames(4);
       const deer = world.wildlife.entities[0].members[0];
       const b = T.body(deer);
       await T.lookAt(b.x, b.y, b.z);
-      return { sight: world.player.sight, scope: !document.getElementById('scope').hidden, fov: world.camera.fov, hidden: !world.player.character.root.visible };
+      return { sight: world.player.sight, scope: !document.getElementById('scope').hidden, fov: world.camera.fov, hidden: !world.player.character.hips.visible, said: T.prompt() };
     });
-    assert.deepEqual(view.sight, { zoom: 4 }, 'right-click brings the scope up');
+    assert.deepEqual(view.sight, { zoom: 4 }, 'right-click brings the scope up, and it stays up with the button let go');
     assert.ok(view.scope && view.hidden, 'its view is on the screen, and you are out of the way');
+    assert.match(view.said, /right-click lower the scope/, `(prompt: "${view.said}")`);
     await shot('scope');
     const was = await page.evaluate(() => world.wildlife.entities[0].members.length);
     await page.evaluate(() => T.tap('use'));
     const after = await page.evaluate(async () => {
-      T.press('alt', false);
+      await T.tap('alt');
       await T.frames(4);
       return {
         down: world.hunting.carcasses.list.map((c) => ({ kind: c.kind, cuts: c.cuts })),
@@ -105,7 +106,7 @@ export default async function ({ page, step, key, take, frames, open, shot }) {
     assert.match(after.said, /a clean shot · .* is down/);
     assert.ok(after.elk.length && after.elk.every((s) => s === 'flee'), `the elk ran at the shot (${after.elk.join(', ')})`);
     assert.equal(after.rounds, 4);
-    assert.equal(after.sight, null, 'letting go lowers the scope');
+    assert.equal(after.sight, null, 'right-click again lowers the scope');
     cuts = after.down[0].cuts;
     await frames(10);
     await shot('down');

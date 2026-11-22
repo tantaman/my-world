@@ -14,6 +14,7 @@ import { rayCapsule } from '../src/wildlife/beasts.js';
 import { Wildlife } from '../src/wildlife/wildlife.js';
 import { SPECIES } from '../src/wildlife/species.js';
 import { Player } from '../src/player/player.js';
+import { rifleTool, MAG, ZOOM } from '../src/hunting/rifle.js';
 
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) < eps;
 const v = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -282,10 +283,128 @@ test('a sight held up puts the camera at your eye, the same way, closer; let go,
   const through = new THREE.Vector3();
   camera.getWorldDirection(through);
   assert.ok(through.distanceTo(ahead) < 1e-6, 'looking the way it was');
-  assert.equal(player.character.root.visible, false, 'and you out of the way');
+  assert.equal(player.character.hips.visible, false, 'and you out of the way');
+  assert.equal(player.character.root.visible, true, '(the figure, not the root, which is for whatever carries you off)');
   player.sight = null;
   player.updateCamera(1 / 60, true);
   assert.equal(camera.fov, 55);
   assert.ok(camera.position.distanceTo(behind) < 1e-6);
-  assert.equal(player.character.root.visible, true);
+  assert.equal(player.character.hips.visible, true);
+});
+
+// A bench with nothing round it (build/builder.js) and the rifle in hand,
+// aimed at the ground a little way ahead: right-click as `taps`, click as `io`.
+function rifleBench({ fires = { near: () => null }, spits = {} } = {}) {
+  const taps = new Set();
+  const b = {
+    aimO: new THREE.Vector3(0, 1.45, 0),
+    aimD: new THREE.Vector3(0, -0.2, -1).normalize(),
+    aimPoint: null,
+    ground: null,
+    player: { pos: new THREE.Vector3(), eye: 1.45, sight: null, character: { tools: {}, play() {} } },
+    input: { tapped: (w) => taps.has(w) },
+    sound: { sfx() {} },
+    chips: { burst() {} },
+    chunks: { heightAt: () => 0, forEachPlant() {} },
+    buildings: null,
+    act: null,
+    idle: false,
+    tgt: null,
+    face() {},
+    dropHold() {},
+    deny() {},
+    flash() {},
+    swing(anim, dur, hitAt, onHit) {
+      this.act = { t: 0, dur, hitAt: dur * hitAt, hit: false, onHit };
+    },
+  };
+  const shown = [];
+  const tool = rifleTool({
+    wildlife: { aimed: () => null, startle() {} },
+    fires,
+    carcasses: { near: () => null },
+    spits,
+    scope: { show: (on) => shown.push(on) },
+    which: () => true,
+    eatHint: () => 'U to eat',
+  });
+  b.current = tool;
+  tool.setup(b);
+  // a frame of the bench (as Builder.update): what a click would do, the
+  // swing under way or the buttons worked, then every tool's update
+  b.frame = ({ alt = false, ...io } = {}, dt = 1 / 30) => {
+    if (alt) taps.add('alt');
+    b.tgt = tool.target(b);
+    if (b.act) {
+      const a = b.act;
+      a.t += dt;
+      if (!a.hit && a.t >= a.hitAt) {
+        a.hit = true;
+        a.onHit();
+      }
+      if (a.t >= a.dur) b.act = null;
+    } else tool.work(b, b.tgt, { use: false, alt, useTap: false, altTap: alt, dt, ...io });
+    tool.update(b, dt);
+    taps.clear();
+  };
+  b.until = (fn) => {
+    for (let i = 0; i < 600 && !fn(); i++) b.frame();
+    return fn();
+  };
+  return { b, tool, shown };
+}
+
+test('right-click puts the scope up, and it stays up till right-click again', () => {
+  const { b, tool } = rifleBench();
+  b.frame();
+  assert.match(b.tgt.prompt, /<b>right-click<\/b> scope/);
+  b.frame({ alt: true });
+  assert.ok(tool.sighted, 'up');
+  assert.deepEqual(b.player.sight, { zoom: ZOOM });
+  for (let i = 0; i < 30; i++) b.frame();
+  assert.ok(tool.sighted, 'and still up with the button let go');
+  assert.match(b.tgt.prompt, /<b>right-click<\/b> lower the scope/);
+  b.frame({ alt: true });
+  assert.ok(!tool.sighted, 'down again');
+  assert.equal(b.player.sight, null);
+  // put away with the scope up, and taken up again: it's down
+  b.frame({ alt: true });
+  tool.put(b);
+  b.frame();
+  assert.ok(!tool.sighted && b.player.sight === null, 'put away, down');
+  // ...and with the bench idle (riding, say), it doesn't come up
+  b.idle = true;
+  b.frame({ alt: true });
+  assert.ok(!tool.sighted, 'not while your hands are taken');
+});
+
+test('the scope comes down to load the rifle, and goes up again after', () => {
+  const { b, tool } = rifleBench();
+  b.frame({ alt: true });
+  for (let i = 0; i < MAG; i++) {
+    assert.ok(b.until(() => !b.act));
+    assert.ok(tool.sighted, `up for shot ${i + 1}`);
+    b.frame({ useTap: true });
+  }
+  assert.equal(tool.rounds, 0);
+  assert.ok(b.until(() => !tool.sighted), 'down to load it');
+  assert.ok(b.until(() => tool.rounds === MAG), 'loaded');
+  b.frame();
+  assert.ok(tool.sighted, 'and up again');
+});
+
+test('beside a fire, right-click is for the spit, not the scope', () => {
+  const spit = { x: 0, z: -2, cuts: [0.5] };
+  const off = [];
+  const { b, tool } = rifleBench({
+    fires: { near: () => ({ x: 0, z: -2 }), state: () => ({ state: 'burning' }), at: () => null },
+    spits: { at: () => spit, takeOff: (s) => (off.push(s), { done: 0, raw: 1, burnt: 0 }) },
+  });
+  b.aimPoint = new THREE.Vector3(0, 0, -2);
+  Object.assign(b, { dist: (x, z) => Math.hypot(x, z), have: () => false, gain() {}, creative: false, inv: { meat: 0 } });
+  b.frame();
+  assert.equal(b.tgt.type, 'roast');
+  b.frame({ alt: true });
+  assert.ok(!tool.sighted, 'no scope');
+  assert.ok(b.until(() => off.length === 1), 'the meat comes off');
 });

@@ -5,13 +5,14 @@ the [hunt club](../huntclub/README.md) goes too). Hunt game with it,
 dress what you shoot for its meat, roast the meat on a spit over a
 [campfire](../fires/README.md), and eat it.
 
-- **Shoot.** Aim with the crosshair and **click**. Hold **right-click** to
-  look through the scope: it brings things four times closer, steadies your
-  aim and slows you to a creep. When the crosshair is on game, with nothing
-  in the way, the prompt names it and says how far off it is. The rifle holds
-  five rounds and loads five more when they're gone. A shot is heard a long
-  way off. Every animal within a few hundred metres runs from it, and birds
-  burst up off the ground.
+- **Shoot.** Aim with the crosshair and **click**. **Right-click** to look
+  through the scope, and right-click again to lower it: it brings things four
+  times closer, steadies your aim and slows you to a creep. When the
+  crosshair is on game, with nothing in the way, the prompt names it and
+  says how far off it is. The rifle holds five rounds and loads five more
+  when they're gone (the scope comes down while you load, and goes back up
+  after). A shot is heard a long way off. Every animal within a few hundred
+  metres runs from it, and birds burst up off the ground.
 - **Game** is deer, elk, moose, black bears, wolves, mountain lions,
   bobcats, foxes, rabbits and squirrels. Anything smaller, and snakes and
   birds, isn't game: a shot goes past it. Animals notice you less if you
@@ -42,7 +43,7 @@ some: *raw meat* and *roast meat*, in cuts.
 |---|---|
 | **7** | the rifle |
 | **click** | shoot · beside a kill, hold to dress it · beside a fire, put meat on to roast |
-| **hold right-click** | look through the scope · beside a fire, right-click takes the meat off |
+| **right-click** | look through the scope, and again to lower it · beside a fire, take the meat off |
 | **U** | eat something you've roasted |
 
 ## Files
