@@ -24,7 +24,7 @@ const GENTLE = 0.08;
 // the same fall
 const KEEP = 0.4;
 // m: a drop less than this is a riffle, not a fall
-const LEAST = 0.8;
+const LEAST = 0.5;
 // m: how finely the ground is read between the stream's own points, to find
 // the edge of the lip and the foot of the cliff
 const PROBE = 0.25;
@@ -95,7 +95,9 @@ export function findFall(land, x, z) {
     let a = k;
     let b = k + 1;
     const slopeOf = (i) => (W[i] - W[i + 1]) / Math.max(1e-6, s[i + 1] - s[i]);
-    const keep = Math.max(GENTLE, steep * KEEP);
+    // (but anything steeper than half of falling is the same fall: a cliff
+    // that drops sheer for part of the way is no less a fall either side)
+    const keep = Math.max(GENTLE, Math.min(steep * KEEP, FALLING / 2));
     while (a > 0 && slopeOf(a - 1) > keep) a--;
     while (b < P.length - 1 && slopeOf(b) > keep) b++;
     const drop = W[a] - W[b];

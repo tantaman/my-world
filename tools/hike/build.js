@@ -6,7 +6,7 @@
 // this can be tested without the network.
 
 import { localFrame } from './geo.js';
-import { Landform, packHeights, packShore, packCover, COVER } from '../../src/world/landform.js';
+import { Landform, packHeights2, packShore, packCover, COVER } from '../../src/world/landform.js';
 
 export const DEFAULTS = {
   scale: 0.2, // game metres per real metre
@@ -52,6 +52,14 @@ const SEA_LEVEL = 0;
 const SEA_NAME = 'the sea';
 // real m: how far over the water a lake's, or the sea's, banks are kept
 const BANK = 0.5;
+// real m: how wide a stream, and a river, is where the map doesn't say and
+// draws no banks (Havasu Creek: a creek you could throw a stone across)
+const STREAM_WIDTH = 3;
+const RIVER_WIDTH = 10;
+// game m: how often a river's width is read between its banks, and the
+// share of it that must lie between them for that to be its width
+const BANK_STEP = 5;
+const BANKED = 0.3;
 // game m: the spacing of a pool's own grid (a lake too small for the
 // ground's), and how far round it that reaches
 const POOL_CELL = 0.5;
@@ -78,12 +86,15 @@ const SEA_CELL = 3;
 //   roads      [[[lat, lon], ...], ...]: roads and car parks, where a walk
 //              can begin
 //   beaches    [[[lat, lon], ...], ...]: the outline of each beach
-//   streams    [{ name, river, points: [[lat, lon], ...] }]: running water,
-//              each the way it flows
+//   streams    [{ name, river, points: [[lat, lon], ...], width? }]: running
+//              water, each the way it flows, and how wide (real m) if the map says
+//   riverbanks [[[lat, lon], ...], ...]: the areas rivers cover, bank to bank
 //   covers     [{ kind, rings: [[[lat, lon], ...], ...] }]: what covers the
 //              land, one of COVER (landform.js), holes and all (osm.js)
 //   falls      [{ name, lat, lon, height? }]: waterfalls, each a point on its
 //              stream, with its real height where the map says
+//   photos     [{ name, lat, lon, bearing, hour }]: more photos taken on the
+//              walk, each a place of its own to stand where it was taken
 //   middle     { lat, lon } to centre the land on, if not the photo: to take
 //              in the whole of a long trail, the photo part way along it
 //   from, to   { lat, lon }: where the walk starts, if not at the nearest
@@ -94,7 +105,7 @@ const SEA_CELL = 3;
 //   fineElevation  (lat, lon) -> metres, for the finer grid along the walk
 //              (opt.fine), where finer heights are to be had; elevation if not
 // → { def, preview: { width, height, rgb }, walk: [[x, z], ...] or null }
-export function buildHike({ id, name, photo, elevation, fineElevation = elevation, trails = [], waters = [], coast = [], roads = [], beaches = [], streams = [], covers = [], falls = [], middle = null, from = null, to = null, at = [0, 0], datum = null, ...opt }) {
+export function buildHike({ id, name, photo, elevation, fineElevation = elevation, trails = [], waters = [], coast = [], roads = [], beaches = [], streams = [], riverbanks = [], covers = [], falls = [], photos = [], middle = null, from = null, to = null, at = [0, 0], datum = null, ...opt }) {
   const o = { ...DEFAULTS, ...opt, trees: { ...DEFAULTS.trees, ...opt.trees } };
   const s = o.scale;
   const mid = middle || photo;
@@ -369,11 +380,18 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
   // The stretches that are on the land, each the way it flows. How high the
   // water stands along them is worked out from the ground when the land is
   // set into the world (Landform.settled).
+  // Each as wide as it really is: as the map says, or from bank to bank of
+  // the area the map draws the river over, or else as wide as a stream or a
+  // river usually is.
+  const banks = riverbanks.map((r) => r.map(toGame));
   const runs = [];
   for (const st of streams) {
     let cur = [];
     const flush = () => {
-      if (cur.length > 1) runs.push({ name: st.name, big: st.river ? 1 : 0, pts: simplify(cur, SIMPLIFY).flatMap(([x, z]) => [round(x, 10), round(z, 10)]) });
+      if (cur.length > 1) {
+        const width = (st.width || widthBetweenBanks(cur, banks) / s || (st.river ? RIVER_WIDTH : STREAM_WIDTH)) * s;
+        runs.push({ name: st.name, big: st.river ? 1 : 0, pts: simplify(cur, SIMPLIFY).flatMap(([x, z]) => [round(x, 10), round(z, 10)]), width: round(width, 10) });
+      }
       cur = [];
     };
     for (const p of st.points.map(toGame)) {
@@ -390,6 +408,15 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
   for (const f of falls) {
     const [x, z] = toGame([f.lat, f.lon]);
     if (inside(x, z, LAKE_INSET)) drops.push({ name: f.name, x: round(x, 10), z: round(z, 10), ...(f.height ? { height: f.height } : {}) });
+  }
+
+  // ── More photos ────────────────────────────────────────────────────────────
+  // Each a spot of its own on the walk, as the view is: where it was taken
+  // from, which way it looked, and when.
+  const shots = [];
+  for (const p of photos) {
+    const [x, z] = toGame([p.lat, p.lon]);
+    if (inside(x, z, TRAIL_INSET)) shots.push({ name: p.name, x: round(x, 10), z: round(z, 10), bearing: round(p.bearing, 10), hour: round(p.hour, 100) });
   }
 
   // The walk: from where you'd leave the car, by whatever paths lead to where
@@ -429,7 +456,7 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
     const fc = fo.cell * s;
     const S = FINE_TILE;
     const tiles = new Map();
-    for (const [ti, tj] of fineTiles(route ? route.pts : null, fo, s, R, [[vx, vz], ...drops.map((f) => [f.x, f.z])])) {
+    for (const [ti, tj] of fineTiles(route ? route.pts : null, fo, s, R, [[vx, vz], ...drops.map((f) => [f.x, f.z]), ...shots.map((p) => [p.x, p.z])])) {
       const F = new Float32Array(S * S);
       for (let j = 0; j < S; j++) {
         for (let i = 0; i < S; i++) {
@@ -473,10 +500,19 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
     ...(runs.length ? { streams: runs } : {}),
     // waterfalls, by name: where each is (relative to `at`), and its real height if the map says
     ...(drops.length ? { falls: drops } : {}),
+    // more photos taken on the walk, each a spot to stand where it was taken
+    ...(shots.length ? { photos: shots } : {}),
     paths: lines.map((l) => l.pts.flatMap(([x, z]) => [round(x, 10), round(z, 10)])),
     // the stretches of them with chains to hold on to
     ...(lines.some((l) => l.rope) ? { ropes: lines.filter((l) => l.rope).map((l) => l.pts.flatMap(([x, z]) => [round(x, 10), round(z, 10)])) } : {}),
-    ground: { n, cell, heights: packHeights(H, n), ...(fine ? { fine: { cell: fine.cell, size: fine.size, tiles: [...fine.tiles.values()].map((t) => [t.ti, t.tj, packHeights(t.H, fine.size, fine.size)]) } } : {}) },
+    // (packed small: nobody asks about the corners outside its circle)
+    ground: {
+      n,
+      cell,
+      pack: 2,
+      heights: packHeights2(H, n, n, (i, j) => Math.hypot(gx(i), gx(j)) < R + o.fade * s + cell * 3),
+      ...(fine ? { fine: { cell: fine.cell, size: fine.size, tiles: [...fine.tiles.values()].map((t) => [t.ti, t.tj, packHeights2(t.H, fine.size, fine.size)]) } } : {}),
+    },
     ...(areas.length ? { cover: { kinds: COVER, cells: packCover(cover) } } : {}),
   };
   // First in its part of the world: its own trailhead sets the heights, at
@@ -667,6 +703,29 @@ export function fillRings(rings, put, n, cell, half) {
       for (let i = i0; i <= i1; i++) put(i, j);
     }
   }
+}
+
+// How wide (game m) a river is, read between the banks of the areas drawn
+// over it (rings, game m) along its line `pts`: where enough of it lies
+// between them, the width most of it has (it needn't run down the middle);
+// else 0, for not known.
+function widthBetweenBanks(pts, rings) {
+  if (!rings.length) return 0;
+  const widths = [];
+  let count = 0;
+  for (let k = 1; k < pts.length; k++) {
+    const [a, b] = [pts[k - 1], pts[k]];
+    const steps = Math.max(1, Math.ceil(dist(a, b) / BANK_STEP));
+    for (let i = k > 1 ? 1 : 0; i <= steps; i++) {
+      const [x, z] = [a[0] + ((b[0] - a[0]) * i) / steps, a[1] + ((b[1] - a[1]) * i) / steps];
+      count++;
+      const d = signedDistance(rings, x, z);
+      if (d < 0) widths.push(-2 * d);
+    }
+  }
+  if (widths.length < count * BANKED) return 0;
+  widths.sort((p, q) => p - q);
+  return widths[Math.floor(widths.length * 0.75)];
 }
 
 // Signed distance from (x, z) to a set of rings (negative inside: even-odd).

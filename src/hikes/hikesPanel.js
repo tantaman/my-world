@@ -6,11 +6,12 @@
 // so it knows nothing about the world, the player or the map. It makes its
 // list (el), and the map shows it.
 //
-//   hikes   [{ id, name, trail, length, climb, lakes, end }]: length and
-//           climb in real metres (a climb below zero is a walk down), lakes a
-//           list of names of the water on it (its falls too), end whether
-//           the walk goes on past the view to an end of its own
-//   onGo    (id, 'trailhead' | 'view' | 'end') => void
+//   hikes   [{ id, name, trail, length, climb, lakes, end, photos }]: length
+//           and climb in real metres (a climb below zero is a walk down),
+//           lakes a list of names of the water on it (its falls too), end
+//           whether the walk goes on past the view to an end of its own,
+//           photos the names of more photos taken on the walk
+//   onGo    (id, 'trailhead' | 'view' | 'end' | 'photo-k') => void
 //   here    () => the id of the hike you're on, or null
 
 import './hikes.css';
@@ -46,7 +47,7 @@ export class HikesPanel {
         <div class="hikes-facts">${facts.map(esc).join(' · ')}</div>
         <div class="hikes-go">
           <button type="button" data-act="trailhead">trailhead</button>
-          <button type="button" data-act="view">the view</button>${h.end ? '\n          <button type="button" data-act="end">the end</button>' : ''}
+          <button type="button" data-act="view">the view</button>${(h.photos || []).map((p, k) => `\n          <button type="button" data-act="photo-${k}">${esc(p)}</button>`).join('')}${h.end ? '\n          <button type="button" data-act="end">the end</button>' : ''}
         </div>
       </li>`;
   }

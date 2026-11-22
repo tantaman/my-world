@@ -123,7 +123,7 @@ const mix = (a, b, t) => a + (b - a) * t;
 
 // One channel near the point being shaped (see _hit()).
 function makeHit() {
-  return { d: 0, cw: 0, g: 0, W: 0, Wq: 0, above: 0, slope: 0, tx: 0, tz: 0, size: 0, river: false, real: false, depth: 0, ramp: 0, v0: 0, v1: 0, v2: 0, region: 0 };
+  return { d: 0, cw: 0, g: 0, keep: 1, W: 0, Wq: 0, above: 0, slope: 0, tx: 0, tz: 0, size: 0, river: false, real: false, depth: 0, ramp: 0, v0: 0, v1: 0, v2: 0, region: 0 };
 }
 const MAX_HITS = 12;
 
@@ -218,9 +218,17 @@ export class Water {
     const px = P[bq * 2] + (P[bq * 2 + 2] - P[bq * 2]) * bt;
     const pz = P[bq * 2 + 1] + (P[bq * 2 + 3] - P[bq * 2 + 1]) * bt;
     cw *= 1 + WIDTH_VARY * this.nWidth(px / WIDTH_WAVE, pz / WIDTH_WAVE);
-    cw *= smoothstep(4, 30, this.gen.padClearance(x, z));
-    // (a real place's own streams run on it; the forest's give way to it)
-    if (!s.real && this.gen.landforms.length) cw *= smoothstep(0, LANDFORM_DRY, this.gen.landformClearance(x, z));
+    // (a structure's: not the clearing kept round where a hike's photo was
+    // taken, which is for trees, and may be on the bank of the very stream)
+    cw *= smoothstep(4, 30, this.gen.padClearance(x, z, false));
+    // (a real place's own streams run on it; the forest's give way to it,
+    // banks and all)
+    let keep = 1;
+    if (!s.real && this.gen.landforms.length) cw *= keep = smoothstep(0, LANDFORM_DRY, this.gen.landformClearance(x, z));
+    // (and where it has given way altogether it isn't there: not its water,
+    // its level or its banks, however near its line runs)
+    if (keep <= 0) return false;
+    hit.keep = keep;
     hit.d = d;
     hit.cw = cw;
     hit.frozen = !!s.frozen;
@@ -322,11 +330,13 @@ export class Water {
     const s = smoothstep(cw + 0.8, cw + V, d);
     let out = h + (near + (h - near) * s - h) * g;
     // just past the bank the ground always stands above the water, so the
-    // only water you see is in the channel (or in a hole you dig there)
+    // only water you see is in the channel (or in a hole you dig there);
+    // as far as the channel is there at all (keep: one of the forest's gives
+    // way on real land, which may lie far below its water: a canyon)
     if (d >= cw && d < cw + L.region + 2) {
       const u = d - cw;
       const floor = Wq + 0.2 * smoothstep(0, 1.2, u) - 0.3 * Math.max(0, u - L.region) ** 2;
-      if (out < floor) out = floor;
+      if (out < floor) out += (floor - out) * L.keep;
     }
     // in a pond or lake a channel only deepens the bed, it doesn't raise banks
     if (lake < 0.5) {
