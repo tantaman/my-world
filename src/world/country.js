@@ -48,12 +48,24 @@
 //            calls them: { broad: ['kamani', 'a kamani'] }
 //   slim     how much slimmer a kind of tree grows here than the forest's
 //            own, as a share of its width: { pine: 0.45 } makes a spire of
-//            a spruce
+//            a spruce, and less than 0, broader: { pine: -1.2 } with a small
+//            size (sizes) makes a squat juniper
 //   tints    what colour a kind of plant (or stone) is here, as what the
 //            forest's own colour is multiplied by: { rock: [1.4, 1.4, 1.3] }
 //   treeline [from, to]: the real heights (m above the sea) over which the
 //            trees thin out to none, and the ground above is thin turf among
 //            stones; or null for none
+//   riparian what grows by the water, where that differs from what grows
+//            away from it (a desert canyon's creek is lined with cottonwoods,
+//            its benches and the plateau over it dotted with junipers):
+//            { reach, trees, dry }. Within `reach` (m) of a stream's bank or a
+//            lake's shore the trees are `trees`; further off they're the
+//            country's own `trees`, and only `dry` (0..1) of as many of them.
+//            null: the same everywhere
+//   sizes    how big a kind of tree grows here, as a share of the forest's
+//            own: { pine: 0.3 } with a broad slim makes a juniper of a pine
+//   shallows how much of the forest's reeds and lily pads grows in its still
+//            shallow water: { reeds, lilies }, 1 being the forest's
 //   water    what colour its streams and lakes are, where it isn't the
 //            forest's clear brown-green: { shallow, deep, milk }, the colour
 //            the water itself sends back over a shallow bed and a deep one,
@@ -97,6 +109,9 @@ const FOREST = {
   tints: {},
   treeline: null,
   snowline: null,
+  riparian: null,
+  sizes: {},
+  shallows: { reeds: 1, lilies: 1 },
   water: null,
   frozen: false,
 };
@@ -260,7 +275,9 @@ export const COUNTRY = {
   // A side canyon of the Grand Canyon, where a creek fed by springs runs
   // all year (Havasu Canyon): walls of red sandstone in ledges, pale
   // limestone and sandstone up at the rim, slopes of dry grass, mesquite and
-  // catclaw, and cottonwoods along the water. The springs carry so much lime
+  // catclaw, cottonwoods along the water, and up on the plateau and the dry
+  // benches only the odd squat juniper. No reeds or lily pads in its pools:
+  // the lime coats everything that would root there. The springs carry so much lime
   // that the creek lays it down as travertine, in terraces and in the
   // drapes the falls pour over, and the water is a milky blue-green that
   // hides its bed a metre down. Summer: thunderheads build over the rims.
@@ -274,14 +291,20 @@ export const COUNTRY = {
       barren: 0.45,
       layers: { upper: [0.5, 0.42, 0.31], at: 1450, bed: 7, varnish: 0.45 },
     },
-    trees: [['broad', 1]],
+    trees: [['pine', 1]],
+    riparian: { reach: 14, trees: [['broad', 1]], dry: 0.3 },
+    // (a pine is a tall forest conifer: a juniper is a third as tall, and
+    // nearly as broad as it is tall)
+    sizes: { pine: 0.3 },
+    slim: { pine: -1.2 },
+    shallows: { reeds: 0.12, lilies: 0 },
     under: { fern: [['fern', 0.35]], bush: [['bush', 0.9]] },
     rocks: 0.38,
     clouds: { deck: 2900, cover: 0.45, shade: 0.12 },
     haze: 0.65,
     animals: ['deer', 'cougar', 'bobcat', 'fox', 'rabbit', 'squirrel', 'mouse', 'snake', 'flock', 'flit', 'crows', 'hawk', 'butterflies', 'bees'],
-    names: { broad: ['cottonwood', 'a cottonwood'] },
-    tints: { bush: [0.85, 0.95, 0.62] },
+    names: { broad: ['cottonwood', 'a cottonwood'], pine: ['juniper', 'a juniper'] },
+    tints: { bush: [0.85, 0.95, 0.62], pine: [0.72, 0.85, 0.78] },
     water: { shallow: [0.1, 0.42, 0.4], deep: [0.025, 0.25, 0.3], milk: 0.75 },
   }),
 };

@@ -210,6 +210,14 @@ export function withRealPlaces(Land) {
       return null;
     }
 
+    // Metres from (x, z) to the real place's own water there, a stream's
+    // bank or a lake's shore (negative in it); far, off real land or with
+    // none near. (The forest's water gives way on real land, so it isn't asked.)
+    realWater(x, z) {
+      for (const L of this.landforms) if (L.weight(x, z) > 0.5) return L.waterNear(x, z);
+      return 1e9;
+    }
+
     species(x, z) {
       let s = super.species(x, z);
       for (const L of this.landforms) {

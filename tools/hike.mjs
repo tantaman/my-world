@@ -37,6 +37,11 @@
 //                     come down from, past a village with lanes of its own)
 //   --to lat,lon      where the walk ends, if it goes on past the photo: the
 //                     point of a path nearest there
+//   --fall "Name@lat,lon"   a waterfall the map doesn't have (as many as you
+//                     like): where on its stream it is
+//   --photo "Name@lat,lon,bearing,hour"   another photo taken on the walk
+//                     (as many as you like): a spot of its own to stand at,
+//                     as the view is
 //   --snow 1200       the height snow lies above, or `none`. Unsaid, it's
 //                     where it would lie in winter if the photo was taken
 //                     then (hike/snow.js), else where its country has it
@@ -57,7 +62,7 @@ import { readPhoto } from './hike/exif.js';
 import { decodePng, encodePng } from './hike/png.js';
 import { localFrame, tileXY, terrarium, metresPerDegree } from './hike/geo.js';
 import { blockOf, blockTiles, missing } from './hike/usgs.js';
-import { parseOsm, mergeOsm, trails, waters, coastlines, roads, beaches, streams, covers, peaks, falls, incompleteWaters } from './hike/osm.js';
+import { parseOsm, mergeOsm, trails, waters, coastlines, roads, beaches, streams, riverbanks, covers, peaks, falls, incompleteWaters } from './hike/osm.js';
 import { buildHike, splitHike, fineTiles, tileBox, DEFAULTS } from './hike/build.js';
 import { placeHike } from './hike/place.js';
 import { winterSnow, snowlineFrom } from './hike/snow.js';
@@ -79,10 +84,13 @@ const AGENT = 'my-world hike importer (a three.js game; occasional one-off impor
 const argv = process.argv.slice(2);
 const flags = {};
 const files = [];
+// (these can be given more than once)
+const MANY = new Set(['fall', 'photo']);
 for (let k = 0; k < argv.length; k++) {
   const a = argv[k];
   if (!a.startsWith('--')) files.push(a);
   else if (a === '--force') flags.force = true;
+  else if (MANY.has(a.slice(2))) (flags[a.slice(2)] ||= []).push(argv[++k]);
   else flags[a.slice(2)] = argv[++k];
 }
 if (files.length !== 1) {
@@ -127,6 +135,19 @@ const middle = latLon('middle');
 // where the walk starts and ends, if not at the road and the photo
 const from = latLon('from');
 const to = latLon('to');
+// "Name@a,b,c…" -> { name, nums: [a, b, c…] }
+function named(flag, s, count) {
+  const at = s.lastIndexOf('@');
+  const nums = s.slice(at + 1).split(',').map(Number);
+  if (at < 1 || nums.length < count || nums.some((v) => !Number.isFinite(v))) {
+    console.error(`--${flag} wants "Name@${['lat', 'lon', 'bearing', 'hour'].slice(0, count).join(',')}" (not "${s}")`);
+    process.exit(1);
+  }
+  return { name: s.slice(0, at), nums };
+}
+// waterfalls the map doesn't have, and more photos taken on the walk
+const extraFalls = (flags.fall || []).map((s) => named('fall', s, 2)).map(({ name, nums: [lat, lon] }) => ({ name, lat, lon }));
+const photos = (flags.photo || []).map((s) => named('photo', s, 4)).map(({ name, nums: [lat, lon, bearing, hour] }) => ({ name, lat, lon, bearing, hour }));
 
 const DEM = flags.dem || 'terrain';
 if (!DEMS.includes(DEM)) {
@@ -331,7 +352,7 @@ else {
 }
 
 // ── Build it ─────────────────────────────────────────────────────────────────
-const parts = { id, name, photo, middle, from, to, elevation, trails: ts, waters: ws, coast, roads: roads(osm), beaches: beaches(osm), streams: streams(osm), covers: cover, falls: falls(osm), at, datum, ...opt };
+const parts = { id, name, photo, middle, from, to, elevation, trails: ts, waters: ws, coast, roads: roads(osm), beaches: beaches(osm), streams: streams(osm), riverbanks: riverbanks(osm), covers: cover, falls: [...falls(osm), ...extraFalls], photos, at, datum, ...opt };
 let built;
 try {
   built = buildHike({ ...parts, fine: null });
@@ -342,7 +363,7 @@ try {
 // The finer grid goes where the walk goes, which is known now: its heights
 // are fetched for there, and it is built again with them.
 if (opt.fine) {
-  const near = [[built.def.view.x, built.def.view.z], ...(built.def.falls || []).map((f) => [f.x, f.z])];
+  const near = [[built.def.view.x, built.def.view.z], ...(built.def.falls || []).map((f) => [f.x, f.z]), ...(built.def.photos || []).map((p) => [p.x, p.z])];
   const tiles = fineTiles(built.walk, opt.fine, opt.scale, opt.radius * opt.scale, near);
   const fineElevation = await elevationFor(opt.fine.cell, tiles.map((t) => tileBox(t, opt.fine, opt.scale)), 'along the walk');
   built = buildHike({ ...parts, fineElevation });
@@ -383,6 +404,9 @@ const unnamed = (def.streams || []).filter((s) => !s.name).length;
 const running = [...flowing, ...(unnamed ? [`${unnamed} unnamed stream${unnamed > 1 ? 's' : ''}`] : [])];
 console.log(`  water: ${[...def.lakes.map((l) => l.name || 'an unnamed lake'), ...running].join(', ') || 'none'}${def.beaches ? `; ${def.beaches.length} beach${def.beaches.length > 1 ? 'es' : ''}` : ''}`);
 if (def.falls) console.log(`  falls: ${def.falls.map((f) => f.name || 'an unnamed fall').join(', ')}`);
+if (def.photos) console.log(`  more photos: ${def.photos.map((p) => p.name).join(', ')}`);
+const wide = (def.streams || []).filter((r) => r.name).map((r) => `${r.name} ${Math.round(r.width / def.scale)} m`);
+if (wide.length) console.log(`  how wide: ${[...new Set(wide)].join(', ')}`);
 if (def.country) console.log(`  country: ${def.country}`);
 if ('snowline' in def) console.log(`  snow: ${def.snowline === null ? 'none' : `lying from ${def.snowline[0]} m`}${flags.snow === undefined ? ' (the photo was taken in winter: --snow to say otherwise)' : ''}`);
 console.log(`  a picture of it: ${previewFile}`);

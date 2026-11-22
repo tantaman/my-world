@@ -68,7 +68,7 @@ export function peaks(osm) {
 // Water and land cover relations some of whose ways weren't in the box: they
 // need fetching whole.
 export function incompleteWaters(osm) {
-  return osm.relations.filter((r) => r.tags.type === 'multipolygon' && (isWater(r.tags) || coverOf(r.tags)) && r.members.some((m) => m.type === 'way' && !osm.ways.has(m.ref))).map((r) => r.id);
+  return osm.relations.filter((r) => r.tags.type === 'multipolygon' && (isWater(r.tags) || isRiverbank(r.tags) || coverOf(r.tags)) && r.members.some((m) => m.type === 'way' && !osm.ways.has(m.ref))).map((r) => r.id);
 }
 
 const FOOT = new Set(['path', 'footway', 'track', 'steps', 'bridleway']);
@@ -124,30 +124,58 @@ export function waters(osm) {
   return out;
 }
 
-// Running water: [{ name, river, points: [[lat, lon], ...] }], each drawn the
-// way it flows (as OpenStreetMap draws a waterway). Streams and rivers that
-// run all year: not ditches or canals, nor gulches that are dry till it rains.
+// Running water: [{ name, river, points: [[lat, lon], ...], width? }], each
+// drawn the way it flows (as OpenStreetMap draws a waterway), with its width
+// (m) where the map says. Streams and rivers that run all year: not ditches
+// or canals, nor gulches that are dry till it rains.
 export function streams(osm) {
   const out = [];
   for (const w of osm.ways.values()) {
     const t = w.tags;
     if ((t.waterway !== 'stream' && t.waterway !== 'river') || t.intermittent === 'yes') continue;
     const points = coords(osm, w.refs);
-    if (points.length > 1) out.push({ name: t.name || '', river: t.waterway === 'river', points });
+    const width = Number.parseFloat(t.width);
+    if (points.length > 1) out.push({ name: t.name || '', river: t.waterway === 'river', points, ...(width > 0 ? { width } : {}) });
+  }
+  return out;
+}
+
+// The area a river covers, from bank to bank, where the map draws it
+// (natural=water with water=river, or the older waterway=riverbank):
+// [[[lat, lon], ...], ...], outer rings. What a river's width is read from.
+const isRiverbank = (t) => (t.natural === 'water' && t.water === 'river') || t.waterway === 'riverbank';
+export function riverbanks(osm) {
+  const out = [];
+  for (const w of osm.ways.values()) {
+    if (!isRiverbank(w.tags) || w.refs.length < 4 || w.refs[0] !== w.refs[w.refs.length - 1]) continue;
+    out.push(coords(osm, w.refs));
+  }
+  for (const r of osm.relations) {
+    if (r.tags.type !== 'multipolygon' || !isRiverbank(r.tags)) continue;
+    const parts = r.members.filter((m) => m.type === 'way' && m.role !== 'inner').map((m) => osm.ways.get(m.ref));
+    if (parts.some((p) => !p)) continue; // part of it is outside what we were sent
+    for (const ring of joinRings(parts.map((p) => p.refs))) out.push(coords(osm, ring));
   }
   return out;
 }
 
 // Waterfalls: [{ name, lat, lon, height? }], each a point on its stream
-// (waterway=waterfall), with its real height (m) where the map says.
+// (waterway=waterfall), with its real height (m) where the map says. A point
+// the map names as a fall (Little Navajo Falls) but tags as something else (a
+// spring) is one too, unless it's a viewpoint or the like (tourism=*), or a
+// fall of that name is there already.
+const FALLS_NAME = /\bfalls?$/i;
 export function falls(osm) {
   const out = [];
+  const named = [];
   for (const [id, t] of osm.tagged) {
-    if (t.waterway !== 'waterfall') continue;
     const [lat, lon] = osm.nodes.get(id);
     const height = Number.parseFloat(t.height);
-    out.push({ name: t.name || '', lat, lon, ...(height > 0 ? { height } : {}) });
+    const fall = { name: t.name || '', lat, lon, ...(height > 0 ? { height } : {}) };
+    if (t.waterway === 'waterfall') out.push(fall);
+    else if (t.name && FALLS_NAME.test(t.name) && !t.tourism && !t.waterway && !t.highway) named.push(fall);
   }
+  for (const f of named) if (!out.some((o) => o.name === f.name)) out.push(f);
   return out;
 }
 

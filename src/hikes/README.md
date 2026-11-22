@@ -88,7 +88,27 @@ Mooney Falls), each of which is a path on the ground too, the gap with
 chains if it's steep. A path the map says is private, or closed to walkers,
 is on the ground but the walk keeps off it.
 Where the map marks a waterfall on a stream, the water falls there, as high
-as the cliff really is: see [Waterfalls](../falls/README.md).
+as the cliff really is: see [Waterfalls](../falls/README.md). A point the map
+names as a fall but tags as something else (Little Navajo Falls is a spring
+to it) is one too, and a fall the map doesn't have at all can be given:
+`--fall "Rock Falls@36.25174,-112.69876"`.
+
+**More photos.** A walk you took more than one photo on can have each of
+them: `--photo "Beaver Falls@36.28118,-112.72965,147,14.5"` (where, which way
+it looked, at what hour), as many as you like. Each is a spot of its own,
+kept clear as the view is, with a cairn, a place on the map, and a button
+in the list beside **the view** that puts you there, facing the way it
+looked, at that hour. Havasu Falls has the falls from the pool below, Beaver
+Falls from the creek under it, and the open canyon floor on the way down to
+the Colorado.
+
+**How wide its water is.** A stream or a river is as wide as it really is:
+as the map says (`width`), or between the banks of the area the map draws a
+river over (the Colorado, 36 to 48 m there), or as a stream or a river
+usually is (3 m, 10 m) where the map says nothing; and its channel is cut as
+deep as a channel that wide. Where its water drops more than a little from
+one point of it to the next, its level is worked out every half metre, so it
+comes down a cliff where the cliff is.
 Where OpenStreetMap says what covers the land, it comes too: woods, willow
 scrub and wetland, meadow, alpine tundra, scree and bare rock, glaciers. A
 scree is grey with broken stone and strewn with boulders, bare rock that
@@ -140,7 +160,7 @@ sky over it is doing, each as one entry in one table
 | `red rock canyon` | red sand and slickrock; sandstone cliffs in beds, streaked dark, turning white towards the rim | ponderosa pines and oaks over scrub | clear and dry, fair-weather cloud over the rims |
 | `high mountains` | granite cliffs, talus of broken stone, pale grit paths; turf and stones over a treeline at 3,000 m, snow lying above it | slim spruces and firs, a few aspens, willow thickets | clear, thin air |
 | `snowy mountains` | snow on all of it but the crags, its lakes frozen over and snowed on: a ski resort in winter | firs in the valleys, thinning out to none at 2,050 m; the odd bush | clear and crisp |
-| `travertine canyon` | red sandstone walls in ledges, pale towards the rim; travertine where the water runs, which is a milky blue-green | cottonwoods, mesquite and catclaw scrub | thunderheads over the rims |
+| `travertine canyon` | red sandstone walls in ledges, pale towards the rim; travertine where the water runs, which is a milky blue-green | cottonwoods along the water; away from it, the odd squat juniper over mesquite and catclaw; no reeds or lilies in its pools | thunderheads over the rims |
 
 **Snow** lies where a real place's country has a snow line, at its real
 height: up on high mountains, everywhere on snowy mountains. A photo taken in
@@ -176,6 +196,11 @@ hikes on Maui, 4,200 km away, are 835 km off to the south-west. The forest
 round the middle is the game's own, not the real Hoh, so a hike is kept a
 few kilometres clear of it (`tools/hike/place.js`). Between hikes it's
 forest; the list beside the map is the quick way across.
+
+A real place can go down a long way below the forest round it (a canyon
+cut into a plateau, its trailhead on the rim): the haze is as clear down in
+it as on the forest floor, and the forest's own streams, which run on over
+it unseen at the forest's level, leave no trace in it.
 
 Hikes close enough to overlap are the same land, and join: the second is
 placed from the first by the real distance between their photos, and stands
@@ -234,6 +259,8 @@ each wait for it.
 | `--middle lat,lon` | the photo | where to centre the land: somewhere along a long trail, to take in the whole of it |
 | `--from lat,lon` | the nearest road | where the walk starts: the point of a path nearest there |
 | `--to lat,lon` | the photo | where the walk ends, if it goes on past the photo |
+| `--fall "Name@lat,lon"` | the map's | a waterfall the map doesn't have (as many as you like) |
+| `--photo "Name@lat,lon,bearing,hour"` | none | another photo taken on the walk, a spot of its own (as many as you like) |
 | `--country "…"` | forest | what kind of country it is (above) |
 | `--snow` | in winter, where it lay then; else the country's | the real height snow lies from, or `none` |
 | `--lat --lon --bearing --hour` | from the photo | for a photo that doesn't say |

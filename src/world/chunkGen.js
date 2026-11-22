@@ -348,6 +348,15 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
       }
       if (!kind) continue;
       if (!dry(x, z, 1.4 + r5 * 1.6)) continue;
+      // in a country where what grows by the water isn't what grows away
+      // from it: by it, that; away from it, fewer, of its own (the same
+      // numbers, thinned: nothing else moves)
+      const rip = real && real.riparian;
+      if (rip) {
+        if (gen.realWater(x, z) < rip.reach) kind = pick(rip.trees, r3) || kind;
+        else if (r1 > (f * 0.8 + 0.02) * rip.dry) continue;
+      }
+      if (real && real.sizes[kind]) s *= real.sizes[kind];
       // a lone tree in the open grows big; one near the treeline, small
       s *= 1 + smoothstep(0.3, 0.05, f) * 0.35;
       s *= 1 - gen.above(x, z, y) * 0.55;

@@ -11,8 +11,10 @@ So past the streamed-in forest the land is drawn once more, coarsely — one
 mesh to a square, no trees standing on it but the dark crowns of the woods
 raised over the ground, meadows, bare rock on the steeps, snow on the tops,
 and water that mirrors the sky. Where the real chunks are it sinks out of
-sight beneath them, so close to you it is the real ground and the real trees
-you see, and the far land only shows past their edge. As far as there is land
+sight beneath them (the further where the land falls away steeply between
+its points, as down the walls of a canyon), so close to you it is the real
+ground and the real trees you see, and the far land only shows past their
+edge. As far as there is land
 drawn in every direction, the air clears: climb a massif and the haze opens
 out with you.
 

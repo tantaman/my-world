@@ -11,8 +11,8 @@
 //   - On a hike, the HUD points the way to that spot (unless you're
 //     following a mark of your own), and on past it to where the walk ends,
 //     if it goes on.
-//   - A signpost stands at the trailhead and a cairn at the view, and the
-//     map names them.
+//   - A signpost stands at the trailhead and a cairn at the view (and at
+//     each more photo taken on the walk), and the map names them.
 //   - From up there you can see the whole of it (the far view, src/far/).
 //
 // It works from the hikes' cards (what and where each one is: world/landforms.js),
@@ -51,15 +51,17 @@ export function installHikes(game) {
   const outer = (c) => c.radius + c.fade;
 
   // ── Where things are ─────────────────────────────────────────────────────
-  // { x, z, yaw, camYaw } for 'trailhead', 'view', or 'end' (where a walk
-  // that goes on past the view ends: facing back the way it came)
+  // { x, z, yaw, camYaw } for 'trailhead', 'view', 'end' (where a walk that
+  // goes on past the view ends: facing back the way it came), or 'photo-k'
+  // (the k-th more photo taken on the walk, as the view is)
+  const shotOf = (c, at) => (at === 'view' ? c.view : /^photo-\d+$/.test(at) ? (c.photos || [])[Number(at.slice(6))] : null);
   function spot(c, at) {
     if (at === 'end' && c.end) {
       const t = c.trailhead;
       return { x: c.at[0] + c.end.x, z: c.at[1] + c.end.z, yaw: Math.atan2(t.x - c.end.x, t.z - c.end.z) };
     }
-    if (at === 'view') {
-      const v = c.view;
+    if (shotOf(c, at)) {
+      const v = shotOf(c, at);
       const b = v.bearing === null || v.bearing === undefined ? null : deg(v.bearing);
       const [x, z] = [c.at[0] + v.x, c.at[1] + v.z];
       // facing along the bearing, with the camera behind looking the same way
@@ -93,6 +95,13 @@ export function installHikes(game) {
     const v = spot(c, 'view');
     const b = deg(c.view.bearing ?? 0);
     stand(makeCairn(hash2i(Math.round(c.at[0]), Math.round(c.at[1]), CONFIG.seed)), v.x - Math.cos(b) * CAIRN_ASIDE, v.z - Math.sin(b) * CAIRN_ASIDE);
+    // a cairn where each more photo was taken too, and a place on the map
+    (c.photos || []).forEach((p, k) => {
+      const s = spot(c, `photo-${k}`);
+      const pb = deg(p.bearing ?? 0);
+      stand(makeCairn(hash2i(Math.round(s.x), Math.round(s.z), CONFIG.seed)), s.x - Math.cos(pb) * CAIRN_ASIDE, s.z - Math.sin(pb) * CAIRN_ASIDE);
+      spots.push({ id: `hike:${c.id}:photo-${k}`, x: s.x, z: s.z, name: p.name, kind: 'view', note: `where a photo was taken, on the walk past ${c.name}`, glyph: PEAK });
+    });
     // beside the start of the trail, its arrow pointing at it, so you see it
     // face on as you arrive
     const t = spot(c, 'trailhead');
@@ -132,10 +141,11 @@ export function installHikes(game) {
     player.spawn(s.x, s.z, s.yaw, s.camYaw);
     arrivedOn = c;
     far.want(c.id, ...farBox(c));
-    if (at === 'view') {
+    const shot = shotOf(c, at);
+    if (shot) {
       player.camPitch = VIEW_PITCH;
-      if (Number.isFinite(c.view.hour)) sky.hours = c.view.hour;
-      hud.flash(`${c.name} · where the photo was taken`);
+      if (Number.isFinite(shot.hour)) sky.hours = shot.hour;
+      hud.flash(`${shot === c.view ? c.name : shot.name} · where the photo was taken`);
     } else if (at === 'end') hud.flash(`${c.name} · the end of the trail`);
     else {
       const t = c.trail;
@@ -157,6 +167,7 @@ export function installHikes(game) {
       climb: c.trail ? c.trail.climb / c.scale : 0,
       lakes: waterOn(c),
       end: !!c.end,
+      photos: (c.photos || []).map((p) => p.name),
     })),
     onGo(id, at) {
       map.close();
@@ -247,6 +258,7 @@ export function installHikes(game) {
           trailhead: spot(c, 'trailhead'),
           view: spot(c, 'view'),
           end: c.end ? spot(c, 'end') : null,
+          photos: (c.photos || []).map((p, k) => ({ name: p.name, ...spot(c, `photo-${k}`) })),
           trail: c.trail,
           water: waterOn(c),
           land: landforms.has(c.id),
@@ -262,7 +274,7 @@ export function installHikes(game) {
         while (!chunks.isFullyLoaded() || !far.has(c.id));
         const s = spot(c, at);
         player.spawn(s.x, s.z, s.yaw, s.camYaw);
-        if (at === 'view') player.camPitch = VIEW_PITCH;
+        if (shotOf(c, at)) player.camPitch = VIEW_PITCH;
         for (let i = 0; i < 4; i++) {
           game.grass.update(s.x, s.z, Infinity);
           await frame();
