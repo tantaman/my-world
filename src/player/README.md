@@ -1,6 +1,6 @@
 # The hiker
 
-You can be one of two people, picked on the settings panel (**O**, under
+You can be one of a few people, picked on the settings panel (**O**, under
 *you*: who is hiking). Your browser remembers who, and the others in a shared
 world see you as them.
 
@@ -12,6 +12,13 @@ world see you as them.
   grey socks, and royal blue trainers with white soles and a red-orange heel.
   His dark hair is faded short at the sides and spiky on top, his eyes are
   brown, and his ears stand out a little.
+- **Elliott** is nearly three, and about 0.95 m tall. He wears a dark
+  forest-green puffer jacket quilted in channels, unzipped at the top so the
+  collar falls open on its navy lining, over an oatmeal henley; sage-green
+  joggers rolled up at the ankle; and charcoal trainers with a strap across
+  and a red band round the collar. His dark brown hair is long on top and
+  falls forward into a straight fringe, clipped short at the sides, with a
+  few strands standing up at the crown.
 
 The clothes have woven surfaces generated in code. Sleeves and trouser legs
 bend with the elbows and knees, and folds catch the light as you move.
@@ -105,9 +112,12 @@ A hiker is a file in `hikers/` and a line in `HIKERS` (`hikers.js`), which
 is also the order they're offered in. The file exports
 `{ id, name, size, dress(body) }`: what each of those is, and what `dress`
 hangs clothes on and has to say back, is at the top of `Character` in
-`character.js`. `oliver.js` is the one to start from. His head is built
-round his eyes, and his clothes reuse the grown-up's patterns taken in. The
-helpers for putting things on the bones are at the end of `clothing.js`.
+`character.js`. For a child, `oliver.js` is the one to start from. A child's
+head is built round the eyes by `child.js`, to a look: how big the skull is,
+where the face sits on it, where the hair stops and how it lies, and the
+colours. Oliver's clothes reuse the grown-up's patterns taken in; Elliott's
+jacket and sleeves are rows of their own, quilted. The helpers for putting
+things on the bones are at the end of `clothing.js`.
 
 Measurements are in metres of the grown-up's body, whatever `size` is: the
 whole figure is scaled by it afterwards. The `id` is what others in a shared
@@ -122,7 +132,9 @@ player.js             movement, collision, wading, swimming and diving, third-pe
 character.js          the body anyone has: bones, IK gait (forwards or backwards), work poses, swimming, things raised to the face, a stance on skis or a board; dressed as one of the hikers, at their size
 hikers.js             who you can be: the hikers, in the order they're offered
 hikers/hiker.js       the hiker's clothes: rain shell, daypack, trousers and boots
-hikers/oliver.js      Oliver: his head and hair, henley, joggers and trainers
+hikers/oliver.js      Oliver: his look, henley, joggers and trainers
+hikers/elliott.js     Elliott: his look, puffer jacket, henley at the neck, joggers and trainers
+hikers/child.js       what the children share: a head built to a look, patterns taken in, trainers
 clothing.js           garment sections, cloth folds, boots and generated weave, and putting them on the bones
 head.js               the hiker's face and beard, sunglasses and snapback
 input.js              keyboard, mouse, touch, and a pad's buttons as keys

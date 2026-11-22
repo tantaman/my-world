@@ -29,15 +29,18 @@ test('the hikers: each with an id the save server will pass on, a name and a siz
     assert.ok(h.size > 0.3 && h.size <= 1.2, `${h.id} is ${h.size} the grown-up's size`);
   }
   assert.equal(hiker('oliver').name, 'Oliver');
+  assert.equal(hiker('elliott').name, 'Elliott');
   assert.equal(hiker('somebody-newer'), HIKERS[0], 'someone this build has never heard of is the first');
   assert.equal(hiker(undefined), HIKERS[0]);
 });
 
-test('the hiker is a grown-up and Oliver a five-year-old', () => {
+test('the hiker is a grown-up, Oliver a five-year-old and Elliott nearly three', () => {
   const grown = height(new Character());
   const oliver = height(new Character(hiker('oliver')));
+  const elliott = height(new Character(hiker('elliott')));
   assert.ok(grown > 1.72 && grown < 1.88, `the hiker stands ${grown.toFixed(2)} m`);
   assert.ok(oliver > 1.1 && oliver < 1.24, `Oliver stands ${oliver.toFixed(2)} m`);
+  assert.ok(elliott > 0.9 && elliott < 1.0, `Elliott stands ${elliott.toFixed(2)} m`);
 });
 
 // Walking along +z at `speed`, how far a planted foot slides over the ground
@@ -79,7 +82,9 @@ test('someone smaller takes quicker steps', () => {
   };
   const grown = steps(new Character());
   const oliver = steps(new Character(hiker('oliver')));
+  const elliott = steps(new Character(hiker('elliott')));
   assert.ok(oliver > grown * 1.15, `${oliver} steps to the hiker's ${grown} in five seconds`);
+  assert.ok(elliott > oliver, `Elliott ${elliott} to Oliver's ${oliver}`);
 });
 
 test('sat on something, the hips are on the seat whoever sits there', () => {
