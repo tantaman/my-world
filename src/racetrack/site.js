@@ -196,9 +196,12 @@ export function* trackSite(gen, town, layout, cell, keepOff = () => false, patie
       spot.x = town.x + Math.cos(a) * r;
       spot.z = town.z + Math.sin(a) * r;
       spot.yaw = Math.atan2(town.x - spot.x, town.z - spot.z) + TURNS[k % TURNS.length];
-      // inside the town's square, all of it
-      const box = union(tiles(spot, plan));
+      // inside the town's square, all of it, and not somewhere that's
+      // quickly told it may not be (before the land is looked at, which is dear)
+      const ts = tiles(spot, plan);
+      const box = union(ts);
       if (!inCell(box)) continue;
+      if (keepOff.quick && ts.some((b) => keepOff.quick(b[0] - CLEAR, b[1] - CLEAR, b[2] + CLEAR, b[3] + CLEAR))) continue;
       let lo = Infinity;
       let hi = -Infinity;
       for (const [u, v] of quick) {
@@ -379,12 +382,14 @@ const MOUTH = 30; // m between a cave's mouth and the grounds
 const RAILS = 14; // m between the railway and the grounds
 export function clearOf({ landforms, sites, towns, caves, lines, spaceport = null, stores = () => [], airfield = () => false, buildings = () => [], start = null, startClear = 0 }) {
   const over = (b, x0, z0, x1, z1) => b[0] < x1 && b[2] > x0 && b[1] < z1 && b[3] > z0;
+  const nearStart = (x0, z0, x1, z1) => {
+    if (!start) return false;
+    const dx = Math.max(x0 - start.x, 0, start.x - x1);
+    const dz = Math.max(z0 - start.z, 0, start.z - z1);
+    return Math.hypot(dx, dz) < startClear;
+  };
   const keepOff = (x0, z0, x1, z1) => {
-    if (start) {
-      const dx = Math.max(x0 - start.x, 0, start.x - x1);
-      const dz = Math.max(z0 - start.z, 0, start.z - z1);
-      if (Math.hypot(dx, dz) < startClear) return true;
-    }
+    if (nearStart(x0, z0, x1, z1)) return true;
     if (landforms.reaches(x0, z0, x1, z1)) return true;
     const pads = !spaceport ? [] : spaceport.within ? spaceport.within(x0, z0, x1, z1) : [spaceport];
     for (const { box } of pads) if (over(box, x0, z0, x1, z1)) return true;
@@ -393,6 +398,8 @@ export function clearOf({ landforms, sites, towns, caves, lines, spaceport = nul
     if (buildings(x0, z0, x1, z1).length) return true;
     return airfield([x0, z0, x1, z1]);
   };
+  // (what's quick to tell, asked first: the ring round the start)
+  keepOff.quick = nearStart;
   keepOff.points = (x0, z0, x1, z1) => {
     const out = [];
     for (const s of sites.within(x0, z0, x1, z1)) {
