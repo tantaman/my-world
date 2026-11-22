@@ -1,5 +1,6 @@
 // You: the controls, the hiker, the camera that follows. Which hiker you are
-// (hikers.js) is yours to choose on the settings panel, and remembered here.
+// (hikers.js) is yours to choose on the settings panel, and remembered here,
+// as is whether the camera is locked behind you (player.lockCamera).
 
 import { Input } from './input.js';
 import { padNames } from './gamepad.js';
@@ -17,6 +18,7 @@ export function installPlayer(game) {
 
   const input = new Input(game.renderer.domElement);
   const player = new Player({ scene, camera, world: chunks, input, solids, spaces, basins, who: hiker(settings.get('hiker', 'string')) });
+  player.lockCamera = settings.get('cameraBehind', 'boolean') ?? false;
   game.provide('input', input);
   game.provide('player', player);
 
@@ -78,12 +80,26 @@ export function installPlayer(game) {
     },
   });
 
-  commands.describe({ group: 'WANDER', help: 'W A S D', pad: ['PadLS'], label: 'walk' });
+  // How you get about: with the camera locked behind you, the same keys and
+  // stick turn you rather than step you sideways, and looking about turns you.
+  hud.setting({
+    id: 'camera-behind',
+    group: 'YOU',
+    label: 'camera locked behind you',
+    get: () => player.lockCamera,
+    set(on) {
+      player.lockCamera = on;
+      settings.set('cameraBehind', on);
+    },
+  });
+
+  const behind = (locked, free) => () => (player.lockCamera ? locked : free);
+  commands.describe({ group: 'WANDER', help: 'W A S D', pad: ['PadLS'], label: behind('walk · left and right turn you', 'walk') });
   commands.describe({ group: 'WANDER', help: 'shift', pad: ['PadB'], label: 'run' });
   commands.describe({ group: 'WANDER', help: 'space', pad: ['PadA'], label: 'jump' });
   commands.describe({ group: 'WANDER', help: 'shift · space', pad: ['PadB', 'PadA'], label: 'out of your depth: dive · come up' });
   commands.describe({ group: 'WANDER', help: 'W · mouse', pad: ['PadLS', 'PadRS'], label: 'under water, swim where you look' });
-  commands.describe({ group: 'WANDER', help: 'mouse · Q E', pad: ['PadRS'], label: 'look around' });
+  commands.describe({ group: 'WANDER', help: 'mouse · Q E', pad: ['PadRS'], label: behind('turn · look up and down', 'look around') });
   commands.describe({ group: 'WANDER', help: 'scroll', pad: ['PadUp', 'PadDown'], label: 'zoom' });
   commands.add({
     id: 'home',

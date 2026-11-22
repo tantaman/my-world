@@ -76,6 +76,10 @@ See [Building together](src/save/README.md) to set the server up, or skip it
 | **O** | settings: the picture, the hour, sound, frame stats |
 | **Tab** | your pack: everything there is to do, what is at hand first, and what's yours |
 
+If you'd rather not steer the camera, switch on *camera locked behind you*
+in the settings (**O**): then left and right turn you, and the camera stays
+behind you ([the hiker](src/player/README.md#the-camera-behind-you)).
+
 Those get you about. Everything else — the map, the tools, talking, riding —
 has its keys in its own README, in its folder under [`src/`](src/), and **H**
 in the game lists them: the help panel is written from the keys the
