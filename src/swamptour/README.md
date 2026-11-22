@@ -49,6 +49,11 @@ in its front row with the guide up behind you, and you see them in theirs.
 | **click** by the boat | take the tour |
 | **right-click** on the tour | back to the landing |
 
+Both are in your pack too (**Tab**: see [your pack](../pack/README.md)),
+with no key of their own: by the boat *take the airboat tour* is at hand, and
+on the tour *back to the landing* (on a touch screen, a button of its own).
+Anywhere else it says where the tour is.
+
 From the console:
 
 ```js

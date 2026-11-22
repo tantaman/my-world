@@ -45,6 +45,7 @@ import { SEAT_HIPS } from '../player/character.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { hash2i, mulberry32, clamp, lerp } from '../noise.js';
 import { wrapAngle } from '../core/geom.js';
+import { formatDistance } from '../core/format.js';
 
 const PREPARE = 2500; // m from the landing: nearer than this, its land is asked for and the way round found
 const SHOW = 900; // m: the landing and the boat are stood up this close...
@@ -313,8 +314,26 @@ export function installSwamptour(game) {
   sound.addLayer(airboatSound(heard));
 
   // ── The ride ──────────────────────────────────────────────────────────────
-  commands.describe({ group: 'SWAMP TOUR', help: 'click', label: 'by the airboat at the landing in Jean Lafitte: take the tour' });
-  commands.describe({ group: 'SWAMP TOUR', help: 'right-click', label: 'on the tour: back to the landing' });
+  // In your pack (and at hand, a button on a touch screen) with no key of its
+  // own: get in by the boat, back to the landing on it; anywhere else, where
+  // the tour is. On the help panel, the clicks that do the same.
+  let doing = '';
+  function press() {
+    if (ride) {
+      if (ride.phase === 'done') return false;
+      say(ride.t, SAYS.early);
+      getOff(false);
+      return true;
+    }
+    const t = nearBoat();
+    if (t) return board(t);
+    const near = tours.map((q) => ({ q, d: Math.hypot(q.x - player.pos.x, q.z - player.pos.z) })).sort((a, b) => a.d - b.d)[0];
+    if (near) hud.flash(near.d < HIDE ? `the airboat waits at the end of the dock, at ${near.q.def.name}` : `the airboat tour leaves from ${near.q.def.name}, at ${near.q.card.name} in Louisiana, ${formatDistance(near.d)} off · it’s on the map, under swamp tours`, LINE_MS);
+    return false;
+  }
+  commands.add({ id: 'swamptour', group: 'SWAMP TOUR', label: 'airboat tour: get in at the landing in Jean Lafitte · back to the landing', run: press, now: () => doing });
+  commands.describe({ group: 'SWAMP TOUR', help: 'click', pad: ['PadRT'], label: 'by the airboat at the landing in Jean Lafitte: take the tour' });
+  commands.describe({ group: 'SWAMP TOUR', help: 'right-click', pad: ['PadLT'], label: 'on the tour: back to the landing' });
   let ride = null; // { t, s, v, phase, timer, halt, said, gators: [], pointed, seen, biggest }
   builder.idleWhile(() => ride !== null || nearBoat() !== null);
   const mover = {
@@ -536,11 +555,10 @@ export function installSwamptour(game) {
       }
       if (ride) {
         cue = `on the airboat · ${ride.seen} gator${ride.seen === 1 ? '' : 's'} · <b>right-click</b> back to the landing`;
-        if (input.tapped('alt') && ride.phase !== 'done') {
-          say(ride.t, SAYS.early);
-          getOff(false);
-        }
+        if (input.tapped('alt')) press();
       }
+      // what the pack's line for it would do, here and now
+      doing = ride ? (ride.phase === 'done' ? '' : 'back to the landing') : t ? 'take the airboat tour' : '';
       if (cue) {
         hud.cue({ html: cue });
         cued = true;

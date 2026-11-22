@@ -50,6 +50,8 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.keyboard.up('KeyW');
     assert.ok(by, 'out along the dock to the boat');
     assert.match(await prompt(), /^click take the airboat tour with \w+$/);
+    const atHand = () => page.evaluate(() => (world.pack.list().hand.find((h) => h.id === 'swamptour') || {}).word || null);
+    assert.equal(await atHand(), 'take the airboat tour', 'and it is at hand in your pack');
     assert.match(await page.evaluate(() => world.swamptour.said), /^\w+: “.*(Mornin|Hey there)/, 'the guide says hello');
     await shot('the airboat at the dock');
     await page.evaluate(() => T.tap('use'));
@@ -58,6 +60,8 @@ export default async function ({ page, step, key, frames, shot }) {
     const aboard = await page.evaluate(() => ({ seated: !!world.player.character.seated, aboard: !!world.player.aboard, idle: world.builder.idle }));
     assert.deepEqual(aboard, { seated: true, aboard: true, idle: true }, 'sitting in the front row, tools put away');
     assert.match(await page.evaluate(() => world.swamptour.said), /ear muffs/);
+    await frames(2);
+    assert.equal(await atHand(), 'back to the landing', 'aboard, the pack has the way back');
     return r;
   });
 
