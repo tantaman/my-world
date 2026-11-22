@@ -90,7 +90,7 @@ export function installVoice(game) {
     return save.connected;
   };
   commands.add({ id: 'talk', keys: ['KeyC'], group: 'TALK', help: 'hold C', label: 'talk to whoever is near', run: able, hold: () => (held.aloud = true) });
-  commands.add({ id: 'radio', keys: ['KeyX'], group: 'TALK', help: 'hold X', label: 'talk on the radio, to everyone', run: able, hold: () => (held.radio = true) });
+  commands.add({ id: 'radio', keys: ['KeyX'], mode: 'any', group: 'TALK', help: 'hold X', label: 'talk on the radio, to everyone', run: able, hold: () => (held.radio = true) });
 
   talk.on('change', (mode, was) => {
     mic.live = mode !== QUIET;

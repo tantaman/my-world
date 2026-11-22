@@ -73,6 +73,12 @@ the pack (and, at hand, from its button on a touch screen), and has no line
 on the help panel. That is how a new feature gets something done without
 finding a free letter: there are none left.
 
+Somewhere that isn't the forest and has keys of its own (a `mode`, in
+`src/game/commands.js`: the town through the Dry Wells gate) has its own
+things to do, and none of the forest's: while you're there, what is at hand
+is what its commands say, and their buttons on a touch screen take the place
+of the forest's.
+
 **Something to have** is said by the feature that gives it to you (which
 names `pack` in its `after`, as for anything it takes from the game), as a
 function that returns what you have of it now:

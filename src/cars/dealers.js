@@ -332,3 +332,16 @@ export function lotTop(site, x, z, ground, local = {}) {
 }
 
 export { onPlan };
+
+// The dealerships, as something to keep clear of (world/claims.ts), for
+// what's grown after them: a box holds one if a lot's box overlaps it. Those
+// of the towns round it are looked for then and there if they haven't been
+// (so ask ready() first).
+export const lotsOver = (dealers) => ({
+  holds: (x0, z0, x1, z1) => dealers.within(x0, z0, x1, z1).length > 0,
+  ready(x0, z0, x1, z1) {
+    let known = true;
+    for (const t of dealers.towns.within(x0 - OUT_OF_TOWN, z0 - OUT_OF_TOWN, x1 + OUT_OF_TOWN, z1 + OUT_OF_TOWN, false)) if (dealers.peek(t) === undefined) known = false;
+    return known;
+  },
+});

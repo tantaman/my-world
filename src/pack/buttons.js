@@ -26,25 +26,35 @@ export class HandButtons {
     this.root = root;
     this.press = press;
     this.release = release;
-    this.made = new Map(); // id -> { el, pic, says, word, icon, down }
+    this.made = new Map(); // id -> { el, pic, says, word, icon, down, round }
+    this.round = 0; // how many times show() has been asked: a button knows the last it was offered in
   }
 
   show(offers, on) {
     if (!this.root) return;
+    this.round++;
     for (const o of offers) {
       if (o.word === null) continue;
       const b = this.made.get(o.id) || this._make(o.id);
+      b.round = this.round;
       const word = on ? o.word || '' : '';
-      const icon = (word && o.icon) || null;
-      if (word === b.word && icon === b.icon) continue;
-      if (word !== b.word && !word) this._up(o.id, b); // gone from under the finger: let go of it
-      b.word = word;
-      b.icon = icon;
-      b.el.hidden = !word;
-      b.says.textContent = word;
-      b.pic.hidden = !icon;
-      if (icon) b.pic.src = url(icon);
+      this._say(o.id, b, word, (word && o.icon) || null);
     }
+    // what is no longer on offer at all (the keys are somewhere else's now:
+    // commands.js, `mode`) has nothing to say either
+    for (const [id, b] of this.made) if (b.round !== this.round) this._say(id, b, '', null);
+  }
+
+  // What a button says, and its picture: '' for nothing, and then it's gone.
+  _say(id, b, word, icon) {
+    if (word === b.word && icon === b.icon) return;
+    if (word !== b.word && !word) this._up(id, b); // gone from under the finger: let go of it
+    b.word = word;
+    b.icon = icon;
+    b.el.hidden = !word;
+    b.says.textContent = word;
+    b.pic.hidden = !icon;
+    if (icon) b.pic.src = url(icon);
   }
 
   _make(id) {
@@ -57,7 +67,7 @@ export class HandButtons {
     pic.alt = '';
     pic.draggable = false;
     const says = el.appendChild(document.createElement('span'));
-    const b = { el, pic, says, word: '', icon: null, down: false };
+    const b = { el, pic, says, word: '', icon: null, down: false, round: 0 };
     // The buttons sit over the look pad: act on the press itself, and don't
     // let it through to turn the camera.
     el.addEventListener('pointerdown', (e) => {

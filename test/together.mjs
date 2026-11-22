@@ -11,8 +11,9 @@
 // something a *newer* game saved, which this one has never heard of, must
 // survive being walked past; and the second, signing in from another
 // browser, must come back as himself — where *he* left off. And they talk:
-// over the radio from anywhere, aloud only from close by; and each sees what
-// the other is riding.
+// over the radio from anywhere, aloud only from close by; each sees what
+// the other is riding; and they play a match in Dry Wells, one walking in
+// after the other, and one walking out on it.
 
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
@@ -415,6 +416,66 @@ try {
     // the browser he came in on first is still signed in
     await ben.open(`${QUERY}&w=${id}`);
     assert.ok(far(await ben.at(), benAt) < 0.5, 'and he is still where he stopped');
+  });
+
+  await step('ana walks into Dry Wells; ben follows, into the same match, in a bot’s place', async () => {
+    await ana.until(() => world.save.connected && world.peers.list().some((p) => p.name === 'ben'), null, 'ana can see ben is here');
+    await ana.page.evaluate(() => world.skirmish.enter());
+    await ana.until(() => world.skirmish.session.state === 'host' && !!world.skirmish.match?.mine, null, 'ana is in, and with nobody there before her, runs the match');
+    // (the town, and word of who's in it, are only fetched once you come near the gate)
+    await ben.page.evaluate(() => world.skirmish.go());
+    await ben.until(() => world.skirmish.session?.inside.size === 1, null, 'ben, at the gate, hears there’s someone in there');
+    await ben.page.evaluate(() => world.skirmish.enter());
+    await ben.until(() => world.skirmish.session.state === 'guest' && !!world.skirmish.match?.mine, null, 'ben is her guest, with a place of his own');
+    const place = (v) =>
+      v.page.evaluate(() => {
+        const m = world.skirmish.match;
+        return { me: m.mine.name, team: m.mine.team, people: m.fighters.filter((f) => f.owner).map((f) => f.name).sort(), bots: m.fighters.filter((f) => !f.owner).length, round: m.rounds.round };
+      });
+    const [a, b] = [await place(ana), await place(ben)];
+    assert.deepEqual([a.me, b.me], ['ana', 'ben'], 'each under their own name');
+    assert.deepEqual(a.people, ['ana', 'ben']);
+    assert.deepEqual(b.people, a.people, 'both see who the people are');
+    assert.deepEqual([a.bots, b.bots, b.round], [8, 8, a.round], 'and the other eight are bots, in the same round');
+    assert.notEqual(a.team, b.team, 'on opposite sides');
+    // ben shoots one of ana's side, as he sees them: it counts in her match
+    await ana.page.evaluate(() => {
+      const m = world.skirmish.match;
+      for (const f of m.fighters) if (f.bot) f.bot.think = () => ({ wish: { x: 0, z: 0 } });
+      world.skirmish.hurry();
+    });
+    await ben.until(() => world.skirmish.match.rounds.phase === 'live', null, 'ben is told the round is on');
+    const victim = await ana.page.evaluate(() => {
+      const m = world.skirmish.match;
+      const v = m.fighters.find((f) => f.bot && f.team === m.mine.team);
+      v.kit.helmet = false;
+      m._place(v, -9, 0, 36, 0);
+      return v.id;
+    });
+    await ben.until((id) => Math.abs(world.skirmish.match.fighters[id].body.pos.x + 9) < 0.2, victim, 'ben sees where they stand');
+    await ben.page.evaluate(() => {
+      const me = world.skirmish.match.mine;
+      Object.assign(me.body.pos, { x: 0, y: 0, z: 36 });
+      me.yaw = Math.PI / 2;
+      me.pitch = 0;
+      me.draw = 0;
+      world.input.hit.add('use');
+    });
+    await ana.until((id) => !world.skirmish.match.fighters[id].alive, victim, 'ana’s match has them down');
+    await ben.until((id) => !world.skirmish.match.fighters[id].alive && world.skirmish.match.mine.kills === 1, victim, 'and ben is told it was his');
+    await ana.until(() => Math.hypot(world.skirmish.match.fighters.find((f) => f.name === 'ben').body.pos.x, world.skirmish.match.fighters.find((f) => f.name === 'ben').body.pos.z - 36) < 0.6, null, 'ana sees ben where he stands');
+    // ana walks out: the match is ben's to run, as it stood
+    const was = await ana.page.evaluate(() => ({ round: world.skirmish.match.rounds.round, score: world.skirmish.match.rounds.score }));
+    await ana.page.evaluate(() => world.skirmish.leave());
+    await ben.until(() => world.skirmish.session.state === 'host', null, 'ben runs it now');
+    const now = await ben.page.evaluate(() => {
+      const m = world.skirmish.match;
+      return { round: m.rounds.round, score: m.rounds.score, people: m.fighters.filter((f) => f.owner).map((f) => f.name), bots: m.fighters.filter((f) => f.bot).length, kills: m.mine.kills };
+    });
+    assert.deepEqual(now, { ...was, people: ['ben'], bots: 9, kills: 1 }, 'the same match, with a bot back in ana’s place');
+    assert.deepEqual(await ana.page.evaluate(() => ({ inside: world.skirmish.inside, covered: world.game.covered, aboard: !!world.player.aboard })), { inside: false, covered: false, aboard: false }, 'and ana is back in the forest');
+    await ben.page.evaluate(() => world.skirmish.leave());
+    await ana.until(() => world.skirmish.session.inside.size === 0, null, 'ana hears the town is empty');
   });
 
   assert.deepEqual(problems, [], 'nothing went wrong in either page');

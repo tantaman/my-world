@@ -1,0 +1,165 @@
+/* Dry Wells: the match's HUD, in place of the forest's. */
+
+/* While you're in the town the forest's HUD makes way. */
+body.in-skirmish #hotbar,
+body.in-skirmish #inv,
+body.in-skirmish #hint,
+body.in-skirmish #prompt,
+body.in-skirmish #crosshair,
+body.in-skirmish #progress,
+body.in-skirmish #coords,
+body.in-skirmish #track,
+body.in-skirmish #corner,
+body.in-skirmish #touch-act #act-stake,
+body.in-skirmish #touch-act #act-dive { display: none !important; }
+
+/* On a touch screen the town has more at hand than fits in one column over
+   the use button, so here they fill upwards from it and then go on in
+   another column beside it: nearest the thumb, what's wanted in a hurry;
+   furthest, the way out. */
+body.in-skirmish #touch-act { top: calc(64px + var(--inset-t)); flex-direction: column-reverse; flex-wrap: wrap-reverse; align-content: flex-start; }
+body.in-skirmish #touch-act #act-use { order: -2; }
+body.in-skirmish #touch-act #act-alt { order: -1; }
+body.in-skirmish #touch-act [data-do='skirmish-reload'] { order: 1; }
+body.in-skirmish #touch-act [data-do='skirmish-use'] { order: 2; }
+body.in-skirmish #touch-act [data-do='skirmish-next'] { order: 3; }
+body.in-skirmish #touch-act [data-do='skirmish-buy'] { order: 4; }
+body.in-skirmish #touch-act [data-do='skirmish-crouch'] { order: 5; }
+body.in-skirmish #touch-act [data-do='skirmish-drop'] { order: 6; }
+body.in-skirmish #touch-act [data-do='skirmish-leave'] { order: 7; }
+/* (and the list of what you carry, by its number keys, is under them: left out where there are no keys) */
+@media (hover: none) { #skirmish .belt { display: none; } }
+
+#skirmish {
+  position: fixed; inset: 0; pointer-events: none; z-index: 11; font-family: var(--font); color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.45);
+  --attack: #e2674a; --defend: #6aa2e0; --mine: var(--attack);
+}
+#skirmish[hidden] { display: none; }
+#skirmish[data-side='defend'] { --mine: var(--defend); }
+#skirmish [hidden] { display: none !important; }
+
+/* Smoke round you, a flash in your eyes, the red of being hit. */
+#skirmish .veil { position: absolute; inset: 0; background: #a9a59c; opacity: 0; }
+#skirmish .blind { position: absolute; inset: 0; background: #fff; opacity: 0; }
+#skirmish .hurt { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0) 45%, rgba(190, 0, 0, 0.5) 100%); opacity: 0; }
+#skirmish .hurt.on { animation: skirmish-hurt 0.9s ease-out; }
+@keyframes skirmish-hurt { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+/* The crosshair: four ticks, further apart the looser your aim. */
+#skirmish .cross { position: absolute; left: 50%; top: 50%; width: 0; height: 0; --gap: 5px; }
+#skirmish .cross i { position: absolute; background: #b9ff6a; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); }
+#skirmish .cross i:nth-child(1) { left: -1px; width: 2px; height: 8px; top: calc(-8px - var(--gap)); }
+#skirmish .cross i:nth-child(2) { left: -1px; width: 2px; height: 8px; top: var(--gap); }
+#skirmish .cross i:nth-child(3) { top: -1px; height: 2px; width: 8px; left: calc(-8px - var(--gap)); }
+#skirmish .cross i:nth-child(4) { top: -1px; height: 2px; width: 8px; left: var(--gap); }
+#skirmish .cross u { position: absolute; left: -1px; top: -1px; width: 2px; height: 2px; background: #b9ff6a; }
+
+/* Through the long rifle's sight: a round window, hairs across it. */
+#skirmish .scope { position: absolute; inset: 0; background: radial-gradient(circle at center, transparent 0, transparent min(38vh, 38vw), #000 calc(min(38vh, 38vw) + 3px)); }
+#skirmish .scope::before, #skirmish .scope::after { content: ''; position: absolute; background: #000; }
+#skirmish .scope::before { left: 0; right: 0; top: 50%; height: 1px; }
+#skirmish .scope::after { top: 0; bottom: 0; left: 50%; width: 1px; }
+#skirmish .scope i { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: #d22; }
+
+#skirmish .radar {
+  position: absolute; left: calc(14px + var(--inset-l)); top: calc(14px + var(--inset-t)); width: 176px; height: 176px;
+  border: 1px solid rgba(0, 0, 0, 0.55); border-radius: 4px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* The clock, the score, who's still standing. */
+#skirmish .top { position: absolute; left: 0; right: 0; top: calc(10px + var(--inset-t)); display: flex; justify-content: center; align-items: center; gap: 12px; }
+#skirmish .top .mid { min-width: 92px; text-align: center; background: rgba(12, 10, 8, 0.5); border-radius: 4px; padding: 3px 10px 4px; }
+#skirmish .clock { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+#skirmish .clock.fuse { color: #ff5a3c; }
+#skirmish .round { display: block; font-size: 10px; letter-spacing: 0.1em; opacity: 0.85; }
+#skirmish .score { font-size: 26px; min-width: 28px; text-align: center; }
+#skirmish .score.attack { color: var(--attack); }
+#skirmish .score.defend { color: var(--defend); }
+#skirmish .pips { display: flex; gap: 4px; }
+#skirmish .pips i { width: 9px; height: 16px; border-radius: 2px; background: currentColor; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); }
+#skirmish .pips.attack { color: var(--attack); flex-direction: row-reverse; }
+#skirmish .pips.defend { color: var(--defend); }
+#skirmish .pips i.down { background: rgba(0, 0, 0, 0.45); }
+#skirmish .pips i.me { outline: 1px solid #fff; outline-offset: 1px; }
+
+#skirmish .feed { position: absolute; right: calc(16px + var(--inset-r)); top: calc(14px + var(--inset-t)); font-size: 12px; line-height: 1.7; text-align: right; max-width: 46vw; }
+#skirmish .feed div { background: rgba(12, 10, 8, 0.45); border-radius: 3px; padding: 0 7px; margin-bottom: 3px; display: inline-block; clear: both; float: right; }
+#skirmish .feed i { font-style: normal; opacity: 0.8; margin: 0 5px; }
+
+#skirmish .aimed { position: absolute; left: 0; right: 0; top: calc(50% + 34px); text-align: center; font-size: 12px; }
+#skirmish .aimed small, #skirmish .watching small { opacity: 0.75; margin-left: 4px; }
+#skirmish .watching { position: absolute; left: 0; right: 0; bottom: calc(96px + var(--inset-b)); text-align: center; font-size: 13px; }
+#skirmish .cue { position: absolute; left: 0; right: 0; bottom: calc(132px + var(--inset-b)); text-align: center; font-size: 13px; padding: 0 16px; }
+#skirmish .cue b { color: #ffd76a; }
+#skirmish .bar { position: absolute; left: 50%; bottom: calc(112px + var(--inset-b)); width: 220px; height: 8px; margin-left: -110px; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 4px; overflow: hidden; }
+#skirmish .bar i { display: block; height: 100%; width: 0; background: #ffd76a; }
+
+/* The bottom: health and vest, money, what's in your hands. */
+#skirmish .stat { position: absolute; bottom: calc(16px + var(--inset-b)); font-size: 30px; font-weight: 700; display: flex; align-items: baseline; gap: 7px; }
+#skirmish .stat .icon { font-size: 20px; opacity: 0.85; }
+#skirmish .health { left: calc(18px + var(--inset-l)); }
+#skirmish .health .icon { color: #8fe06a; }
+#skirmish .health.low b { color: #ff6a55; }
+#skirmish .armor { left: calc(120px + var(--inset-l)); font-size: 22px; }
+#skirmish .armor .icon { color: #9fc4ee; font-size: 16px; }
+#skirmish .cash { position: absolute; left: calc(18px + var(--inset-l)); bottom: calc(58px + var(--inset-b)); font-size: 17px; color: #b9e58a; font-weight: 700; }
+#skirmish .ammo { right: calc(18px + var(--inset-r)); }
+#skirmish .ammo small { font-size: 15px; font-weight: 400; opacity: 0.85; }
+#skirmish .ammo.low b { color: #ff6a55; }
+#skirmish .gun { position: absolute; right: calc(18px + var(--inset-r)); bottom: calc(56px + var(--inset-b)); font-size: 12px; letter-spacing: 0.06em; opacity: 0.9; }
+#skirmish .belt { position: absolute; right: calc(18px + var(--inset-r)); bottom: calc(82px + var(--inset-b)); display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 11px; }
+#skirmish .belt span { opacity: 0.6; }
+#skirmish .belt span.held { opacity: 1; color: #ffd76a; }
+#skirmish kbd { font: inherit; display: inline-block; min-width: 14px; text-align: center; margin-right: 6px; padding: 0 3px; border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 3px; font-size: 10px; }
+
+#skirmish .big {
+  position: absolute; left: 0; right: 0; top: 24%; text-align: center; font-size: 26px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: lowercase; opacity: 0; transition: opacity 0.25s; padding: 0 16px;
+}
+#skirmish .big.show { opacity: 1; }
+#skirmish .big small { display: block; font-size: 13px; font-weight: 400; letter-spacing: 0.06em; margin-top: 8px; color: rgba(255, 255, 255, 0.88); text-transform: none; }
+#skirmish .big.attack { color: var(--attack); }
+#skirmish .big.defend { color: var(--defend); }
+#skirmish .big.alarm { color: #ffb84a; }
+
+/* The shop and the scores: panels over the middle. */
+#skirmish .shop, #skirmish .scores {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(16, 13, 10, 0.86);
+  border: 1px solid rgba(232, 200, 140, 0.3); border-radius: 4px; padding: 14px 18px; font-size: 13px; text-shadow: none;
+}
+#skirmish .shop { width: min(360px, calc(100vw - 32px)); pointer-events: auto; }
+#skirmish h2 { margin: 0 0 10px; font-size: 16px; letter-spacing: 0.1em; text-transform: lowercase; display: flex; justify-content: space-between; }
+#skirmish .shop h2 small { color: #b9e58a; }
+#skirmish .shop button {
+  display: flex; width: 100%; align-items: center; gap: 4px; margin: 0 0 3px; padding: 5px 8px; font: inherit; color: inherit; text-align: left;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid transparent; border-radius: 3px; cursor: pointer;
+}
+#skirmish .shop button:hover { border-color: rgba(232, 200, 140, 0.5); }
+#skirmish .shop button span { flex: 1; }
+#skirmish .shop button small { opacity: 0.7; font-size: 11px; margin-right: 8px; }
+#skirmish .shop button b { color: #b9e58a; }
+#skirmish .shop button.no { opacity: 0.45; cursor: default; }
+#skirmish .shop p, #skirmish .scores p { margin: 10px 0 0; font-size: 11px; opacity: 0.8; text-align: center; }
+#skirmish .scores { min-width: min(460px, calc(100vw - 32px)); }
+#skirmish .scores h2 { justify-content: center; }
+#skirmish .scores table { width: 100%; border-collapse: collapse; margin-bottom: 10px; table-layout: fixed; }
+#skirmish .scores th:not(:first-child) { width: 66px; }
+#skirmish .scores th { font-weight: 400; font-size: 10px; letter-spacing: 0.1em; opacity: 0.75; text-align: right; padding-bottom: 3px; }
+#skirmish .scores th:first-child { text-align: left; font-size: 13px; font-weight: 700; opacity: 1; }
+#skirmish .scores table.attack th:first-child { color: var(--attack); }
+#skirmish .scores table.defend th:first-child { color: var(--defend); }
+#skirmish .scores td { padding: 3px 6px; text-align: right; font-variant-numeric: tabular-nums; }
+#skirmish .scores td:first-child { text-align: left; }
+#skirmish .scores td small { opacity: 0.55; font-size: 10px; }
+#skirmish .scores tr.me td { background: rgba(255, 255, 255, 0.09); }
+#skirmish .scores tr.down td { opacity: 0.5; }
+
+@media (max-width: 700px) {
+  #skirmish .radar { width: 110px; height: 110px; }
+  #skirmish .big { font-size: 19px; }
+  #skirmish .stat { font-size: 22px; }
+  #skirmish .belt { display: none; }
+  #skirmish .feed { top: calc(56px + var(--inset-t)); }
+}
+@media (prefers-reduced-motion: reduce) { #skirmish .big { transition: none; } #skirmish .hurt.on { animation: none; } }

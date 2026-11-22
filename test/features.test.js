@@ -132,22 +132,33 @@ test('no two features bind the same key', () => {
   //
   // Read as text like the rest of this section. Keys built in a loop (the tool
   // bar's digits) are written as template strings and are not checked here.
-  const bound = new Map(); // key code -> ['feature:id', ...]
+  //
+  // A command may say a `mode`: somewhere whose keys are its own, where the
+  // forest's do nothing (commands.js). Two commands share a key only if they
+  // never share a mode: so it's a mode and a key that mustn't be bound twice,
+  // and a command that runs in 'any' mode shares its keys with nobody.
+  const bound = new Map(); // key code -> [{ mode, who: 'feature:id' }, ...]
   for (const f of real) {
     for (const call of f.text.split('commands.add(').slice(1)) {
       const head = call.slice(0, 400);
       const id = head.match(/id: '([^']+)'/)?.[1] ?? head.match(/id: `([^`]+)`/)?.[1];
       const keys = head.match(/keys: \[([^\]]*)\]/)?.[1];
       if (!id || keys === undefined) continue;
+      const mode = head.match(/mode: '([^']+)'/)?.[1] ?? '';
       for (const code of [...keys.matchAll(/'([^']+)'/g)].map((m) => m[1])) {
         if (!bound.has(code)) bound.set(code, []);
-        bound.get(code).push(`${f.name}:${id}`);
+        bound.get(code).push({ mode, who: `${f.name}:${id}` });
       }
     }
   }
   assert.ok(bound.size > 10, `the bindings were found (${bound.size})`);
+  const clash = (a, b) => a.who !== b.who && (a.mode === b.mode || a.mode === 'any' || b.mode === 'any');
   const twice = [...bound]
-    .filter(([, who]) => new Set(who).size > 1)
-    .map(([code, who]) => `${code} is bound by ${[...new Set(who)].join(' and ')}`);
+    .map(([code, users]) => [code, [...new Set(users.filter((a) => users.some((b) => clash(a, b))).map((u) => u.who))]])
+    .filter(([, who]) => who.length > 1)
+    .map(([code, who]) => `${code} is bound by ${who.join(' and ')}`);
   assert.deepEqual(twice, []);
+  // ...and the keys of a mode were read as that mode's, not the forest's
+  const modes = new Set([...bound.values()].flat().map((u) => u.mode));
+  assert.ok(modes.has('') && modes.has('any'), `the forest's keys, and those of any mode (${[...modes].join(', ')})`);
 });
