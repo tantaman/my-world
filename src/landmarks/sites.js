@@ -126,6 +126,16 @@ export class Sites {
     return s;
   }
 
+  // The site in cell (ci, cj) if the cell has been looked at (null: nothing
+  // there), or undefined if not yet, and then it's queued for pump(): for
+  // lists that would rather wait a frame than stall.
+  peek(ci, cj) {
+    const k = key(ci, cj);
+    const s = this.cells.get(k);
+    if (s === undefined) this.queue.add(k);
+    return s;
+  }
+
   // Sites whose plan comes within r of (x, z).
   near(x, z, r) {
     return this.within(x - r, z - r, x + r, z + r).filter((s) => boxDist(s.box, x, z) <= r);

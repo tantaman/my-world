@@ -23,3 +23,33 @@ test('directions give the reachable flight and update at each end', () => {
   assert.deepEqual(steps(planRoute(alps, peak, { fields, here: alps })), [['walk', 'peak']]);
   assert.deepEqual(steps(planRoute(start, alps, { fields, here: home })), [['flight', 'alps']]);
 });
+
+test('places are listed by kind, nearest first, from every source in the list', async () => {
+  const { Places } = await import('../src/map/places.js');
+  const { GridNearest } = await import('../src/core/nearest.js');
+  const places = new Places();
+  // one on every 100 m square, at its middle
+  places.addSource({
+    within: () => [],
+    get: () => null,
+    list: 'wells',
+    nearest: (x, z) => new GridNearest(x, z, { size: 100, at: (i, j) => [{ id: `well:${i}:${j}`, x: i * 100 + 50, z: j * 100 + 50 }] }),
+  });
+  places.addSource({ list: 'ski', destinations: () => [{ id: 'peak', x: 1000, z: 0 }] });
+  places.addSource({ list: 'ski', destinations: () => [{ id: 'hill', x: 120, z: 0 }] });
+  assert.deepEqual(places.lists(), ['ski', 'wells']);
+  const take = (stream, n) => {
+    const out = [];
+    while (out.length < n) {
+      if (stream.ready) out.push(stream.take().place.id);
+      else if (stream.work() === 'done' && !stream.ready) break;
+    }
+    return out;
+  };
+  assert.deepEqual(take(places.around(0, 0, 'ski'), 5), ['hill', 'peak']);
+  assert.deepEqual(take(places.around(10, 10, 'wells'), 1), ['well:0:0']);
+  // everywhere: the wells as they come, the hill among them
+  const all = take(places.around(0, 0), 12);
+  assert.equal(all.length, 12);
+  assert.ok(all.indexOf('hill') > 0 && all.indexOf('hill') < 12);
+});

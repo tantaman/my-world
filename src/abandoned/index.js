@@ -5,7 +5,8 @@ import { clearOf } from '../videostore/site.js';
 import { boxOf, toLocal, toWorld, onPlan, planDiscs } from '../landmarks/sites.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { rayBox } from '../core/geom.js';
-import { findBuildings, OutlyingBuildings, overlaps } from './sites.js';
+import { findBuildings, OutlyingBuildings, overlaps, DISTRICT } from './sites.js';
+import { GridNearest, ListNearest, MergeNearest } from '../core/nearest.js';
 import { buildInstitution } from './building.js';
 import { Visit } from './visit.js';
 import { institutionMaterial } from './surfaces.js';
@@ -18,7 +19,7 @@ const _local = {};
 export const after = ['videostore', 'airports'];
 export function installAbandoned(game) {
   const { gen, player, landforms, landmarks, towns, caves, railway, spaceport, videostore, airports, builder, chunks, grass, spaces, scene, camera, sky, solids, map, sound, save, hud } = game;
-  const reserved = clearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, spaceport: spaceport.site });
+  const reserved = clearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, spaceport: spaceport.sites });
   function keepOff(...box) {
     if ((videostore.site && overlaps(box, videostore.site.box)) || reserved(...box)) return true;
     const x = (box[0] + box[2]) / 2,
@@ -146,11 +147,20 @@ export function installAbandoned(game) {
     return places.get(s);
   }
   map.places.addSource({
-    destinations() {
-      // Rebuild saved outlying addresses only when the directory is opened.
-      for (const id of visited) if (!known.has(id)) byId(id);
-      return [...known.values()].filter(stands).map(asPlace);
-    },
+    // the named ones round the start, then a district at a time outward
+    list: 'abandoned buildings',
+    nearest: (x, z) =>
+      new MergeNearest([
+        new ListNearest(x, z, home.filter(stands).map(asPlace)),
+        new GridNearest(x, z, {
+          size: DISTRICT,
+          origin: player.start,
+          at(i, j) {
+            const s = remember(districts.cell(i, j));
+            return s && stands(s) ? [asPlace(s)] : [];
+          },
+        }),
+      ]),
     within: (a, b, c, d) => [...known.values()].filter((s) => s.door.x >= a && s.door.z >= b && s.door.x <= c && s.door.z <= d && stands(s)).map(asPlace),
     get(id) {
       const s = byId(id);

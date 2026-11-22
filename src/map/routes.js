@@ -4,9 +4,14 @@ const FLIGHT_SAVING = 2000; // metres of walking saved before suggesting a fligh
 const WAYS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const distance = (a, b) => Math.hypot(b.x - a.x, b.z - a.z);
 
-function leg(mode, from, to) {
+// Which way (N, NE, ...) to head from one point to another.
+export function bearing(from, to) {
   const angle = Math.atan2(to.x - from.x, from.z - to.z);
-  return { mode, from, to, distance: distance(from, to), bearing: WAYS[(Math.round(angle / (Math.PI / 4)) + 8) % 8] };
+  return WAYS[(Math.round(angle / (Math.PI / 4)) + 8) % 8];
+}
+
+function leg(mode, from, to) {
+  return { mode, from, to, distance: distance(from, to), bearing: bearing(from, to) };
 }
 
 function closest(fields, point) {

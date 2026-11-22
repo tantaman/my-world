@@ -1,11 +1,12 @@
 // The launch site: walk up to the rocket, T climbs aboard, a countdown and
 // it lifts off to orbit; in the arena the controls are an arena shooter's
 // (W runs, the view is yours, the use button fires the railgun) and a rail
-// frags a bot; T, T flies you home, and you step out onto the pad.
+// frags a bot; T, T flies you home, and you step out onto the pad. Far out
+// there are others, each with its name, and the rocket there flies too.
 //
 // Needs: nothing in particular (the launch site is near where you first
 // arrive, and go() takes you there from anywhere).
-// Leaves: you on the pad at the launch site, beside the rocket.
+// Leaves: you on the pad at the launch site by the start, beside the rocket.
 
 import assert from 'node:assert/strict';
 
@@ -129,5 +130,33 @@ export default async function ({ page, step, key, frames, shot }) {
     await frames(4);
     assert.ok(await page.evaluate(() => !world.spaceport.station && !world.player.aboard && !world.game.covered && document.querySelector('#space .station').hidden
       && world.player.character.root.visible && world.player.character.root.parent === world.scene), 'the hiker is home from the station');
+  });
+
+  await step('another launch site, far out', async () => {
+    const { home, far } = await page.evaluate(() => {
+      const sites = world.spaceport.sites;
+      for (let r = 0; r < 4; r++) {
+        for (let j = -r; j <= r; j++) {
+          for (let i = -r; i <= r; i++) {
+            const s = Math.max(Math.abs(i), Math.abs(j)) === r && sites.cell(i, j);
+            if (s) return { home: sites.home.id, far: { id: s.id, name: s.name } };
+          }
+        }
+      }
+      return { home: sites.home.id, far: null };
+    });
+    assert.ok(far, 'there is one out there');
+    await page.evaluate((id) => world.spaceport.go(id), far.id);
+    await frames(40);
+    const there = await page.evaluate(() => ({ id: world.spaceport.site.id, name: world.spaceport.site.name, prompt: T.prompt(), been: world.spaceport.record.been }));
+    assert.equal(there.id, far.id, 'it is the one stood up now');
+    assert.notEqual(there.name, 'Skyhook launch site');
+    assert.match(there.prompt, /climb aboard/, 'and its rocket is ready');
+    assert.ok(there.been.includes(far.id), 'remembered as somewhere you have been');
+    await shot('far-launch-site');
+    await page.evaluate((id) => world.spaceport.go(id), home);
+    await frames(40);
+    assert.equal(await page.evaluate(() => world.spaceport.site.id), home, 'and back home');
+    return far;
   });
 }

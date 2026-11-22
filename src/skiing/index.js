@@ -324,6 +324,7 @@ export function installSkiing(game) {
       glyph: ['.......', '...#...', '..#.#..', '..###..', '.#####.', '.#####.', '#######'],
     };
     map.places.addSource({
+      list: 'ski',
       destinations: () => [peak],
       get: (id) => id === peak.id ? peak : null,
       within: (x0, z0, x1, z1) => peak.x >= x0 && peak.x <= x1 && peak.z >= z0 && peak.z <= z1 ? [peak] : [],

@@ -1,0 +1,23 @@
+{
+ "spaceport:far:-2:-2": {
+  "name": "Cirrus launch site",
+  "x": -43906.395,
+  "z": -52167.554,
+  "yaw": 0.44,
+  "top": 10.731
+ },
+ "spaceport:far:-1:-2": {
+  "name": "Meridian launch site",
+  "x": -17024.845,
+  "z": -44413.014,
+  "yaw": 2.249,
+  "top": -8.954
+ },
+ "spaceport:far:-2:-1": {
+  "name": "Lodestar launch site",
+  "x": -39803.505,
+  "z": -13212.291,
+  "yaw": 1.991,
+  "top": -14.861
+ }
+}

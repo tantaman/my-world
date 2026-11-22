@@ -473,6 +473,7 @@ export class MapView {
   update(dt) {
     if (!this.isOpen) return;
     this.t += dt;
+    if (this.tab === 'routes') this.routes.update();
     // places fill in as their owners learn of them: list them as they do
     this._nearbyIn = (this._nearbyIn ?? NEARBY.every) - dt;
     if (this._nearbyIn <= 0) {

@@ -6,9 +6,19 @@ export default async function ({ page, step, key, frames, shot }) {
     await key('KeyM');
     await page.click('[data-tab="routes"]');
     const option = (prefix) => page.locator(`button[data-destination^="${prefix}"]`).first();
-    assert.ok(await option('spaceport:').count());
-    assert.ok(await option('ski:').count());
+    const list = (name) => page.click(`.route-lists button[data-list="${name}"]`);
+    const rows = () => page.locator('.route-options button').count();
+    // everywhere, nearest first, and more as the end of it comes into view
+    await page.waitForFunction(() => document.querySelectorAll('.route-options button').length >= 20);
+    const first = await rows();
+    await page.locator('.route-more').scrollIntoViewIfNeeded();
+    await page.waitForFunction((n) => document.querySelectorAll('.route-options button').length > n, first, { timeout: 30000 });
+    await list('launch sites');
+    await option('spaceport:').waitFor();
+    await list('ski');
+    await option('ski:').waitFor();
     assert.ok(await option('hike:vallee-blanche:view').count());
+    await list('video stores');
     await option('videostore:').click();
     const directions = page.locator('.route-detail ol');
     assert.match(await directions.textContent(), /Head .*direct/);
@@ -18,6 +28,7 @@ export default async function ({ page, step, key, frames, shot }) {
     await key('KeyM');
     await page.click('[data-route="follow"]');
     await page.click('[data-route="back"]');
+    await list('ski');
     await option('hike:tignes:view').click();
     await page.waitForFunction(() => document.querySelector('.route-detail ol')?.textContent.includes('Fly to'), null, { timeout: 60000 });
     assert.match(await directions.textContent(), /Head .*Tignes/);

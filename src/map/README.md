@@ -24,10 +24,14 @@ such as the [hikes](../hikes/README.md) and the [railway's stations](../railway/
 Going to one from its list closes the map. The map opens on the tab you last
 had (on a phone, the lists are behind the *lists* button).
 
-**Routes** lists the ski peaks at Tignes and Vallée Blanche, the launch site,
-the video store and the hike viewpoints. A snowy high-country run near your
-starting region also gets a pin when the terrain supports one. Pick a destination
-to see its pin and directions from your position. You can also choose *directions* on any place or mark.
+**Routes** lists everywhere you could go, nearest first, with how far each
+is and which way. The chips over it pick one kind of place: *launch sites*,
+*video stores*, *ski*, *towns*, *old places*, *caves*, *stations*,
+*abandoned buildings*, *hikes*, or *everywhere* at once. There's no end to
+it: scroll to the bottom (or move down it with the pad) and it looks further
+out and lists more, as far as you care to go. What you're tracking stays at
+the top. Pick a destination to see its pin and directions from your position.
+You can also choose *directions* on any place or mark.
 Walking legs give straight-line distances and compass bearings. When a flight
 saves a long walk, the route shows the departure and arrival airfields. Walk
 to the first, choose the second in *flights*, then follow the last bearing.
@@ -74,10 +78,10 @@ mapRender.js          pure top-down tile renderer (runs in a worker)
 mapWorker.js          Web Worker wrapper around mapRender
 tiles.js              tile cache + worker scheduling
 mapView.js            the map overlay: pan/zoom, pins, mark editor, the lists beside it (map.addTab) and the options under them (map.addAction)
-routePanel.js         destination list, directions and HUD guidance
+routePanel.js         the destinations, by kind and nearest first without end; directions and HUD guidance
 routes.js             walking and flight legs and their lines on the map
 marks.js              the marks, their icons and colours
-places.js             places other features put on the map (an old cabin), to look up and track
+places.js             places other features put on the map (an old cabin), to look up, track and list in Routes
 markers.js            your marks as pennants in the world
 map.css               map styles
 ```

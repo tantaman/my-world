@@ -225,6 +225,15 @@ export class Lines {
     return out;
   }
 
+  // The line in square (ci, cj) if it has been surveyed (null: none), or
+  // undefined if not yet, and then it's queued for pump().
+  peek(ci, cj) {
+    const k = key(ci, cj);
+    const line = this.cells.get(k);
+    if (line === undefined) this.queue.add(k);
+    return line;
+  }
+
   // Lines known so far within r of (x, z); the rest are queued.
   known(x, z, r) {
     return this.within(x - r, z - r, x + r, z + r, false);

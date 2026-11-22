@@ -161,16 +161,14 @@ export function findSite(gen, start, keepOff = () => false) {
 // What the store keeps clear of, all of it there first: the land of a real
 // place (world/landforms.js), the old places (landmarks/sites.js), towns
 // (towns/towns.js), the mouths of caves (caves/caves.js), the railway
-// (railway/lines.js) and the launch site (spaceport/site.js).
-// -> keepOff for findSite.
+// (railway/lines.js) and the launch sites (spaceport/site.js: a site, or
+// all of them, LaunchSites). -> keepOff for findSite.
 const MOUTH_CLEAR = 30; // m from a cave's mouth
 export function clearOf({ landforms, sites, towns, caves, lines, spaceport = null }) {
   return (x0, z0, x1, z1) => {
     if (landforms.reaches(x0, z0, x1, z1)) return true;
-    if (spaceport) {
-      const b = spaceport.box;
-      if (b[0] < x1 && b[2] > x0 && b[1] < z1 && b[3] > z0) return true;
-    }
+    const pads = !spaceport ? [] : spaceport.within ? spaceport.within(x0, z0, x1, z1) : [spaceport];
+    for (const { box: b } of pads) if (b[0] < x1 && b[2] > x0 && b[1] < z1 && b[3] > z0) return true;
     if (sites.within(x0, z0, x1, z1).length) return true;
     if (towns.within(x0, z0, x1, z1).length) return true;
     for (const c of caves.inBox(x0, z0, x1, z1)) {
