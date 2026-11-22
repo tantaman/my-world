@@ -49,6 +49,10 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.ok(won, 'it trusts you');
     await frames(3);
     assert.match(await page.evaluate(() => T.prompt()), /Z ride your horse/);
+    const mine = await page.evaluate(() => world.pack.list().yours.filter((t) => /^your /.test(t.label)));
+    assert.equal(mine.length, 1, 'your pack lists it with what else is yours');
+    assert.equal(mine[0].label, 'your horse');
+    assert.match(mine[0].note, /^about \d+ m to the /, 'with where it is');
     // on, and away at a gallop
     await key('KeyZ');
     assert.equal(await page.evaluate(() => world.mounts.riding), 'horse');
@@ -167,6 +171,8 @@ export default async function ({ page, step, key, frames, shot }) {
       return JSON.parse(localStorage.getItem(world.save.local.keyFor('build'))).mounts;
     });
     assert.deepEqual(Object.keys(kept.tame).sort(), ['eagle', 'horse', 'turtle'], 'all three are kept as yours');
+    const mine = await page.evaluate(() => world.pack.list().yours.map((t) => t.label).filter((l) => /^your /.test(l)));
+    assert.deepEqual(mine.sort(), ['your eagle', 'your horse', 'your turtle'], 'and all three are in your pack');
     return { swam: true, flew: true, kept: Object.keys(kept.tame).length };
   });
 }

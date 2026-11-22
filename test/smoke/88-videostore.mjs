@@ -144,6 +144,12 @@ export default async function ({ page, step, key, frames, shot }) {
     await standAt(0, 10.4, 0);
     await frames(20);
     assert.equal((await store()).out.length, 2, 'they are yours till they are due');
+    // and are in your pack, with your card
+    const mine = await page.evaluate(() => world.pack.list().yours);
+    const rented = mine.filter((t) => /^rented · /.test(t.note));
+    assert.deepEqual(rented.map((t) => t.label).sort(), [...s.out].sort(), 'your pack lists each movie you have out');
+    assert.ok(rented.every((t) => /^rented · due back \S+$/.test(t.note)), `and the day it is due (${rented.map((t) => t.note)})`);
+    assert.ok(mine.some((t) => / card$/.test(t.label) && /^no\. /.test(t.note)), 'and your membership card');
     return { receipt: receipt.replace(/\s+/g, ' ').trim() };
   });
 
@@ -152,6 +158,7 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.match((await store()).prompt, /drop your 2 movies in the returns/, 'by the drop box, a click would return them');
     await page.evaluate(() => T.tap('use'));
     assert.deepEqual((await store()).out, [], 'returned');
+    assert.deepEqual(await page.evaluate(() => world.pack.list().yours.filter((t) => /^rented/.test(t.note))), [], 'and out of your pack');
   });
 
   await step('the security gate', async () => {

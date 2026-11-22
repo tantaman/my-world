@@ -45,7 +45,7 @@ import { FACES, FACE_BY_ID, DOOR, CLERK, QUEUE, RETURN_SLOT, BOX, ROW, aim, slot
 import { Catalog, STORE, STAFF } from './catalog.js';
 import { Atlas } from './covers.js';
 import { buildStore, makeHeldBox, DROP_BOX } from './store.js';
-import { Counter, HANDS, termsOf, money, sameCopy } from './browse.js';
+import { Counter, HANDS, termsOf, money, sameCopy, daysLate } from './browse.js';
 import { Card, receiptHtml } from './card.js';
 import { shopSounds } from './sound.js';
 import { Body } from '../towns/people.js';
@@ -76,6 +76,7 @@ const CAM_IN = 3.4; // m: the camera comes in this close as you go in, to browse
 const LIT = 0.62; // how much of its own colour the inside gives off, lit by its strip lights
 const GREET_AGAIN = 90; // s before the clerk says hello again
 const QUIET = 0.4; // how shut in you are, inside: the forest's sounds muffled
+const TAPES_LISTED = 5; // rented tapes named one by one in your pack, before "and more"
 const HUSH = 0.7; // ...and how much quieter the birds and the wind are in there
 const NEON = { day: 1.0, night: 2.3 }; // the sign's brightness
 const OVERHEAD = { day: 1.5, night: 5, range: 9, decay: 1.2, up: 2.4 }; // the light over you inside: how bright by day and by night, how far it reaches, how high (m)
@@ -102,10 +103,11 @@ const overlaps = (a, b) => a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] 
 // The features this uses, so it is installed after them (game/features.js):
 // landmarks, towns, caves, railway, spaceport and airports for what the
 // stores keep clear of (and towns for where the branches are and its clerk's
-// body and voice; caves so the shop's quiet goes on after a cave's).
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks', 'towns', 'caves', 'railway', 'spaceport', 'airports'];
+// body and voice; caves so the shop's quiet goes on after a cave's); pack to
+// say what's yours.
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'landmarks', 'towns', 'caves', 'railway', 'spaceport', 'airports', 'pack'];
 export function installVideostore(game) {
-  const { scene, camera, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, sky, landmarks, towns, caves, railway, spaceport, airports } = game;
+  const { scene, camera, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, sky, landmarks, towns, caves, railway, spaceport, airports, pack } = game;
 
   // ── Where they are ────────────────────────────────────────────────────────
   // Rewind Video by the start, and its branches beside the villages
@@ -163,6 +165,20 @@ export function installVideostore(game) {
   });
   const beenTo = (s) => (s === home ? visited : been.includes(s.id));
   counter.on('change', () => save.touch());
+  // In your pack, with what else is yours: your card, each tape you have out
+  // and when it's due, and how many you've bought.
+  pack.have(() => {
+    const mine = [];
+    const now = Date.now();
+    if (counter.card) mine.push({ label: `a ${STORE.name} card`, note: `no. ${counter.card.number}` });
+    for (const o of counter.out.slice(0, TAPES_LISTED)) {
+      const due = daysLate(o.due, now) ? 'overdue' : `due back ${new Date(o.due).toLocaleDateString(undefined, { weekday: 'long' })}`;
+      mine.push({ label: o.title, note: `rented · ${due}` });
+    }
+    if (counter.out.length > TAPES_LISTED) mine.push({ label: 'more rented tapes', note: `${counter.out.length - TAPES_LISTED}` });
+    if (counter.owned.length) mine.push({ label: 'tapes of your own', note: `${counter.owned.length}` });
+    return mine;
+  });
 
   // ── Materials ─────────────────────────────────────────────────────────────
   // The inside is lit by its strip lights: its surfaces give off a share of
