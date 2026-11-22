@@ -28,7 +28,7 @@ const FAR = [1.9, 2600]; // the last thing drawn: this many sights off, and neve
 const SKY_DEPTH = 1.3e-4; // 1/m: how much nearer than the far plane the picture's "sky" begins, as 1/z
 const LOW = 0.16; // how far above level the light from the pit comes (sine)
 
-const MURK = 3.2; // how strong the light of the murk itself is
+const MURK = 2.0; // how strong the light of the murk itself is (the fires are lights of their own: render/lights.js)
 const PIT = 2.6; // and the light from the pit
 
 const KEYS = ['zen', 'hor', 'glow', 'amb', 'gnd'];

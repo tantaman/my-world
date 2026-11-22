@@ -10,10 +10,13 @@
 // hole in it; each has a skirt hanging from its edges to hide the crack where
 // a fine tile meets a coarse one.
 //
-// What lies in the land's hollows (a river, a marsh, pitch) is not drawn
-// apart: where the land says there is a liquid, the tile's surface is the
-// liquid's, flat, and each vertex carries how deep it is (aFx.w), so the
-// shore falls where the bed comes up through it, pixel by pixel.
+// What lies in the land's hollows (a river, a marsh, pitch) is drawn apart:
+// the ground goes down to its bed, and a tile with any of it in it has a
+// second mesh, the liquid's surface, flat at its level, on the OVER layer
+// (render/liquid.js), which shows the bed through it and mirrors what
+// stands over it. It runs a little way up under the banks, and the ground
+// hides the rest. Each ground vertex still carries how deep the liquid over
+// it is (aFx.w), for the bed to be drawn wet.
 //
 // Each tile is a mesh at its own corner, its vertices measured from there
 // (render/origin.js), and remembers which turn of the land it was built for
@@ -22,6 +25,7 @@
 
 import * as THREE from 'three';
 import { R, H, ONE, TAU } from './plan.js';
+import { OVER, HEAT } from '../render/pipeline.js';
 
 export const TILES = {
   root: 2048, // m: the coarsest tile
@@ -88,6 +92,7 @@ class Tile {
     this.z0 = j * this.size;
     this.kids = null;
     this.mesh = null;
+    this.liquid = null; // the surface of what liquid lies in it, if any (hung from mesh)
     this.turn = 0;
     this.wanted = 0; // the frame it was last asked for
     this.queued = false;
@@ -96,15 +101,22 @@ class Tile {
   }
 }
 
+const UNDER_BANK = 0.6; // m: how far under the ground at its edge a liquid's surface runs
+
 export class HellTerrain {
-  // land: the HellLand · material: what the ground is drawn with · group:
-  // where its meshes go
-  constructor({ land, material, group }) {
+  // land: the HellLand · material: what the ground is drawn with · liquid:
+  // what the liquids' surfaces are (render/liquid.js) · group: where its
+  // meshes go
+  // (and haze: the shimmer over the hot ones, render/haze.js)
+  constructor({ land, material, liquid, haze = null, group }) {
     this.land = land;
     this.material = material;
+    this.liquid = liquid;
+    this.haze = haze;
     this.group = group;
     this.roots = new Map();
     this.queue = [];
+    this._lev = new Float64Array(V * V);
     this.frame = 0;
     this.drawn = [];
     this.built = 0; // tiles built so far (for the curious)
@@ -254,15 +266,15 @@ export class HellTerrain {
     const col = new Float32Array(COUNT * 3);
     const fx = new Float32Array(COUNT * 4);
     const kind = new Float32Array(COUNT);
+    const lev = this._lev;
     let lo = Infinity;
     let hi = -Infinity;
     for (let j = -1; j <= V; j++) {
       for (let i = -1; i <= V; i++) {
         const s = land.sample(t.x0 + i * step, t.z0 + j * step, ref, _o, true);
         const w = i + 1 + (j + 1) * W;
-        const wet = s.liq > s.h;
-        // the surface: the ground, or what lies over it
-        H0[w] = wet ? s.liq : s.h;
+        // the ground (what lies over it is drawn apart: _liquid)
+        H0[w] = s.h;
         G[w] = s.h;
         if (i < 0 || j < 0 || i > N || j > N) continue;
         const v = i + j * V;
@@ -280,6 +292,7 @@ export class HellTerrain {
         fx[v * 4 + 2] = s.ice;
         fx[v * 4 + 3] = s.liq > -1e8 ? Math.max(-6, Math.min(8, s.liq - s.h)) : -6;
         kind[v] = s.kind;
+        lev[v] = s.liq;
       }
     }
     for (let j = 0; j <= N; j++) {
@@ -331,10 +344,88 @@ export class HellTerrain {
       t.mesh.visible = false;
       this.group.add(t.mesh);
     }
+    this._liquid(t, pos, fx, kind, lev);
     t.turn = this._turn(t);
     t.lo = lo;
     t.hi = hi;
     this.built++;
+  }
+
+  // The surface of whatever liquid lies in the tile, as a mesh of its own
+  // (hung from the ground's, which it is drawn and let go of with), or none.
+  _liquid(t, pos, fx, kind, lev) {
+    const top = this.land.top;
+    const idx = [];
+    const has = (v) => lev[v] > -1e8 && fx[v * 4 + 3] > -UNDER_BANK;
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const a = i + j * V;
+        const b = a + 1;
+        const c = a + V;
+        const d = c + 1;
+        if (!has(a) && !has(b) && !has(c) && !has(d)) continue;
+        if ((i + j) & 1) idx.push(a, c, b, b, c, d);
+        else idx.push(a, c, d, a, d, b);
+      }
+    }
+    const old = t.liquid;
+    if (!idx.length) {
+      if (old) {
+        t.mesh.remove(old);
+        old.geometry.dispose();
+        t.liquid = null;
+      }
+      return;
+    }
+    const n = V * V;
+    const lp = new Float32Array(n * 3);
+    const depth = new Float32Array(n);
+    const lk = new Float32Array(n);
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let v = 0; v < n; v++) {
+      const at = lev[v] > -1e8;
+      // (where there is none, it is tucked under the ground)
+      const y = at ? lev[v] - top : pos[v * 3 + 1] - UNDER_BANK * 2;
+      lp[v * 3] = pos[v * 3];
+      lp[v * 3 + 1] = y;
+      lp[v * 3 + 2] = pos[v * 3 + 2];
+      depth[v] = at ? fx[v * 4 + 3] : -1;
+      lk[v] = kind[v];
+      if (at) {
+        lo = Math.min(lo, y);
+        hi = Math.max(hi, y);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(lp, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(n * 3).map((_, k) => (k % 3 === 1 ? 1 : 0)), 3));
+    geo.setAttribute('aDepth', new THREE.BufferAttribute(depth, 1));
+    geo.setAttribute('aKind', new THREE.BufferAttribute(lk, 1));
+    geo.setIndex(idx);
+    const half = t.size / 2;
+    if (lo > hi) lo = hi = 0;
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(half, (lo + hi) / 2, half), Math.hypot(half, half, (hi - lo) / 2 + 1));
+    if (old) {
+      old.geometry.dispose();
+      old.geometry = geo;
+      for (const haze of old.children) haze.geometry = geo;
+      return;
+    }
+    const mesh = new THREE.Mesh(geo, this.liquid);
+    mesh.layers.set(OVER);
+    mesh.matrixAutoUpdate = false;
+    mesh.receiveShadow = true;
+    t.mesh.add(mesh);
+    mesh.updateMatrixWorld();
+    t.liquid = mesh;
+    // the air shimmering over it, where it's hot (the same surface)
+    if (this.haze) {
+      const haze = new THREE.Mesh(geo, this.haze);
+      haze.layers.set(HEAT);
+      haze.matrixAutoUpdate = false;
+      mesh.add(haze);
+    }
   }
 
   // Let go of tiles nobody has wanted for a while.
@@ -354,7 +445,9 @@ export class HellTerrain {
       if (t.mesh && t.wanted < old) {
         this.group.remove(t.mesh);
         t.mesh.geometry.dispose();
+        if (t.liquid) t.liquid.geometry.dispose();
         t.mesh = null;
+        t.liquid = null;
       }
     };
     for (const [key, root] of this.roots) {
@@ -379,6 +472,7 @@ export class HellTerrain {
       if (t.mesh) {
         this.group.remove(t.mesh);
         t.mesh.geometry.dispose();
+        if (t.liquid) t.liquid.geometry.dispose();
       }
       if (t.kids) for (const k of t.kids) if (k) drop(k);
     };

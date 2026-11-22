@@ -221,8 +221,14 @@ place in that order, not at the end:
 | `player/player.js` | something that moves you itself (a train you sit in, skis you steer, a tube the river carries) | `player.aboard = { place(out, dt) }` |
 | `player/player.js` | a floor that moves, carrying whoever's on it (a ship under way) | `player.deck = { still, at }`, `player.spawnOnDeck(…)` |
 | `player/player.js` | something held to the eye: look through it, magnified | `player.sight = { zoom }` |
+| `render/flame.js` | a fire, as a volume of burning gas | `createFlameMaterial()` on a `flameBox()`, on the `OVER` layer |
+| `render/haze.js` | the air over something hot shimmering | `createHazeMaterial()` on a `flameBox()`, on the `HEAT` layer; `scene.userData.heat = true` |
+| `render/implicit.js` | a body melted out of balls, bones and skins over a spine | `new Melt({ cell, blend })`, `.ball / .bone / .rings`, `.mesh()` or `.steps()` |
+| `render/lights.js` | light given off by something (a fire, lava, a lantern), and its shadows | `game.lights.add(scene, { x, y, z, color, power, range })`, or `addSource(scene, (eye, out) => …)` |
+| `render/liquid.js` | the surface of a liquid other than the forest's water (blood, pitch, lava) | `createLiquidMaterial(kinds)` on the `OVER` layer |
 | `render/origin.js` | a uniform that says where something is | `game.origin.place(uniform)` |
 | `render/pipeline.js` | something drawn over the water, not seen through it (a splash, a spark), or over what's behind it | `object.layers.set(OVER)`; a light on it: `light.layers.enableAll()` |
+| `render/skin.js` | skin: a hide, a horn, a wing, a crust over fire, with its pores, veins and wet | `createSkinMaterial({ hot, baked })` |
 | `roads/index.js` | driving on the roads: the top of the road under a spot, and what it's made of | `game.roads.under(x, z, game.roads.around(x, z, r))` |
 | `save/domains.js` | something that is saved | `game.save.register({ id, collect, restore, … })` |
 | `save/worldSave.js` | a word to the others here, never stored | `game.save.say(ch, body, to)`, `game.save.on('message', fn)` |

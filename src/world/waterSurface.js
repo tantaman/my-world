@@ -55,7 +55,7 @@
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL, UNDER_GLSL, PERIOD, wave } from '../render/glsl.js';
+import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL, UNDER_GLSL, PERIOD, wave, mirrorGLSL } from '../render/glsl.js';
 import { SHARED, SKY, WADE, UNDER, BEHIND, WATERS, BREAKERS, MAX_COUNTRIES } from '../render/uniforms.js';
 import { NO_WATER } from './water.js';
 import { BREAKER_GLSL } from './breakers.js';
@@ -407,49 +407,7 @@ export function createWaterMaterial() {
           return step(hash12(c), many) * (1.0 - smoothstep(0.07, 0.15, length(f)));
         }
 
-        // What lies behind the water, from the copy (render/pipeline.js):
-        // how far off it is (view depth, m) at a place in the picture (uv).
-        float behindZ(vec2 uv) {
-          return texelFetch(tBehind, ivec2(clamp(uv, 0.0, 1.0) * uBehindRes - 0.5), 0).a;
-        }
-        vec2 onScreen(vec3 q) {
-          vec4 c = uProj * vec4(q, 1.0);
-          return c.xy / c.w * 0.5 + 0.5;
-        }
-        // Follow a ray from p along r (view space) across the copy until it
-        // passes behind something drawn there: (where in the picture, how
-        // sure, how far along it, m). Sure is 0 if it met nothing in sight.
-        vec4 mirrored(vec3 p, vec3 r) {
-          float t0 = 0.0;
-          float t = ${MIRROR.first.toFixed(3)};
-          for (int i = 0; i < ${MIRROR.steps}; i++) {
-            vec3 q = p + r * t;
-            if (q.z > -0.05) break; // behind the eye
-            vec2 uv = onScreen(q);
-            if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) break;
-            float zb = behindZ(uv);
-            float dz = -q.z - zb;
-            // behind it, but not so far that it went behind something thin
-            // and is out the other side
-            if (dz > 0.0 && zb < ${FAR_SKY.toFixed(1)} && dz < (t - t0) * 1.5 + zb * 0.02 + 0.2) {
-              float a = t0;
-              float b = t;
-              for (int k = 0; k < ${MIRROR.refine}; k++) {
-                float m = 0.5 * (a + b);
-                vec3 qm = p + r * m;
-                if (-qm.z > behindZ(onScreen(qm))) b = m;
-                else a = m;
-              }
-              vec2 hit = onScreen(p + r * b);
-              vec2 edge = min(hit, 1.0 - hit);
-              float sure = smoothstep(0.0, 0.07, min(edge.x, edge.y)) * (1.0 - smoothstep(${(MIRROR.far * 0.6).toFixed(1)}, ${MIRROR.far.toFixed(1)}, b));
-              return vec4(hit, sure, b);
-            }
-            t0 = t;
-            t *= ${MIRROR.grow.toFixed(6)};
-          }
-          return vec4(0.0);
-        }`,
+        ${mirrorGLSL({ ...MIRROR, farSky: FAR_SKY })}`,
       )
       .replace(
         '#include <color_fragment>',

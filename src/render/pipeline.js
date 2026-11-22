@@ -22,6 +22,12 @@
 //    camera under water, the fog is the water's instead: everything loses its
 //    reds with depth, fades into green or blue within a few tens of metres,
 //    and light comes down through it in slanting shafts.
+//    And where the air over something hot shimmers (the HEAT layer, below:
+//    render/haze.js), the picture is drawn through it, bent this way and
+//    that.
+//    And round each light that things give off (render/lights.js: a fire,
+//    lava), the air between glows with the light it scatters back at you:
+//    a halo in a haze, a fire's warmth hanging in the smoke over it.
 // 4. Bloom: the brightest light spills a little into what's round it, as it
 //    does in an eye or a lens: the sun through the branches, a fire at night.
 //    A chain of ever smaller copies, each blurred, added back up again.
@@ -42,6 +48,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { SKY, DECK, UNDER, SHARED, BEHIND } from './uniforms.js';
 import { NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, UNDER_GLSL } from './glsl.js';
+import { Lights, LIGHTS_AIR } from './lights.js';
 
 // The layer that is drawn second, over a copy of everything else (see 1.,
 // above): `mesh.layers.set(OVER)`. Lights that should fall on it are on it
@@ -49,10 +56,18 @@ import { NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, 
 // the lights the camera can see.
 export const OVER = 1;
 
+// The layer of what makes the air over it shimmer (render/haze.js): drawn
+// not into the picture but into a small buffer of how far each pixel is
+// bent, which the composite draws the picture through. Only for a scene that
+// says it has any (scene.userData.heat), so that others don't pay for it.
+export const HEAT = 2;
+
 const FOG_DENSITY = 0.0021; // per metre at the height of the eye, in the forest's air
 const FOG_THIN = 0.03; // per metre of height: how quickly the forest's haze thins upward
 const FOG_TINT = 0.82; // the fog's colour: the sky's behind it, a little dimmed
 const FAR_Z = 6.0e4; // m: how far off the sky is said to be in the copy (as far as half a float holds)
+const GLOW_AIR = 1.6; // how much more the air near a light scatters than the haze shows: the smoke and heat over a fire
+const GLOW_NEAR = 0.2; // m: the least a ray passes a light by (none is a point)
 
 const AO_RADIUS = 0.9; // m: how far round a spot the occlusion looks
 const AO_SAMPLES = 10; // per pixel (times the 16 turns of the pattern)
@@ -179,6 +194,8 @@ uniform float uUnderSea;
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
 uniform sampler2D tAO;
+uniform sampler2D tHeat;
+uniform float uHeat;
 uniform vec2 uAORes;
 uniform float uAO;
 uniform vec2 uRes;
@@ -196,6 +213,10 @@ uniform float uFogTint;
 uniform float uDeck;
 uniform float uDeckCover;
 uniform vec2 uDeckMid;
+uniform vec3 uGlowPos[${LIGHTS_AIR}];
+uniform vec3 uGlowCol[${LIGHTS_AIR}];
+uniform float uGlowRange[${LIGHTS_AIR}];
+uniform float uGlowAir;
 varying vec2 vUv;
 ${NOISE_GLSL}
 ${WORLD_GLSL}
@@ -287,8 +308,40 @@ vec3 underWater(vec3 col, vec3 rd, float dist, vec2 frag) {
   return col;
 }
 
+// The light each light scatters toward the eye from the air along the ray,
+// up to dist: for a light I at distance h from the ray, the sum of
+// I / (h² + (t - tc)²) along it is I / h times the angle the stretch of ray
+// subtends at the light. Only the stretch within its range counts, and it
+// fades as the ray passes nearer the edge of that.
+vec3 airGlow(vec3 rd, float dist) {
+  vec3 sum = vec3(0.0);
+  for (int i = 0; i < ${LIGHTS_AIR}; i++) {
+    vec3 L = uGlowCol[i];
+    if (L.r + L.g + L.b <= 0.0) continue;
+    vec3 q = uGlowPos[i] - uCamPos;
+    float tc = dot(q, rd);
+    float R2 = uGlowRange[i] * uGlowRange[i];
+    float h2 = max(dot(q, q) - tc * tc, ${(GLOW_NEAR * GLOW_NEAR).toFixed(4)});
+    if (h2 >= R2) continue;
+    float half_ = sqrt(R2 - h2);
+    float t0 = max(0.0, tc - half_);
+    float t1 = min(dist, tc + half_);
+    if (t1 <= t0) continue;
+    float h = sqrt(h2);
+    float a = atan((t1 - tc) / h) - atan((t0 - tc) / h);
+    float win = 1.0 - h2 / R2;
+    sum += L * (a / h) * win * win;
+  }
+  return sum * uGlowAir * 0.0796; // (1 / 4π: scattered evenly every way)
+}
+
 void main() {
-  vec3 col = texture2D(tColor, vUv).rgb;
+  // (drawn through the shimmer over anything hot)
+  vec2 bent = uHeat > 0.0 ? texture2D(tHeat, vUv).xy : vec2(0.0);
+  vec3 col = texture2D(tColor, vUv + bent).rgb;
+  // (a pixel that has come out as no number at all would spread through the
+  // bloom into a blot: it is dark instead)
+  if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
   float d = texture2D(tDepth, vUv).x;
   bool sky = d >= 0.99999;
   // the ray through this pixel, and how far along it the scene is
@@ -319,6 +372,7 @@ void main() {
     vec3 frd = normalize(vec3(rd.x, clamp(rd.y, 0.0, 0.08), rd.z));
     col = mix(col, skyGradient(frd) * uFogTint, clamp(fog, 0.0, 1.0));
   }
+  if (uUnder < 0.5 && uGlowAir > 0.0) col += airGlow(rd, sky ? 1.0e4 : dist);
 
   // The layer of cloud: whatever lies past it along the ray is behind it.
   if (uDeckCover > 0.003) {
@@ -508,6 +562,9 @@ void main() {
   gl_FragColor = vec4(col, 1.0);
 }`;
 
+const _eye = new THREE.Vector3();
+const _clear = new THREE.Color();
+
 const pass = (uniforms, fragmentShader, extra = {}) =>
   new THREE.ShaderMaterial({ uniforms, vertexShader: FS_VERT, fragmentShader, depthTest: false, depthWrite: false, ...extra });
 
@@ -545,6 +602,11 @@ export class Pipeline {
     // to nothing.
     this.fogThin = FOG_THIN;
 
+    // Light given off by things in the world (lights.js): a pool of real
+    // lights, given each frame to the sources that matter most in the scene
+    // being drawn, the nearest casting shadows.
+    this.lights = new Lights({ count: CONFIG.lights, shadows: CONFIG.lightShadows });
+
     this.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
     this.quad.frustumCulled = false;
@@ -569,6 +631,8 @@ export class Pipeline {
         tColor: { value: null },
         tDepth: { value: null },
         tAO: { value: null },
+        tHeat: { value: null },
+        uHeat: { value: 0 },
         uAORes: { value: new THREE.Vector2() },
         uAO: { value: 0 },
         uRes: { value: new THREE.Vector2() },
@@ -583,6 +647,10 @@ export class Pipeline {
         uFogFloor: { value: 0 },
         uFogFar: { value: 250 },
         uFogTint: { value: FOG_TINT },
+        uGlowPos: { value: Array.from({ length: LIGHTS_AIR }, () => new THREE.Vector3()) },
+        uGlowCol: { value: Array.from({ length: LIGHTS_AIR }, () => new THREE.Vector3()) },
+        uGlowRange: { value: new Array(LIGHTS_AIR).fill(1) },
+        uGlowAir: { value: 0 },
       },
       COMPOSITE_FRAG,
     );
@@ -636,7 +704,7 @@ export class Pipeline {
     if (lw === this.lowW && lh === this.lowH) return;
     this.lowW = lw;
     this.lowH = lh;
-    for (const rt of [this.rtScene, this.rtBehind, this.rtAO, this.rtHDR, this.rtLow, ...this.bloomChain]) {
+    for (const rt of [this.rtScene, this.rtBehind, this.rtAO, this.rtHeat, this.rtHDR, this.rtLow, ...this.bloomChain]) {
       if (!rt) continue;
       rt.depthTexture?.dispose();
       rt.dispose();
@@ -660,6 +728,8 @@ export class Pipeline {
     // the occlusion at half size, once there are pixels enough to spare
     const aoDiv = lh > 400 ? 2 : 1;
     this.rtAO = hdrTarget(Math.ceil(lw / aoDiv), Math.ceil(lh / aoDiv), THREE.NearestFilter);
+    // how far the shimmer over anything hot bends each pixel: at half size
+    this.rtHeat = hdrTarget(Math.ceil(lw / 2), Math.ceil(lh / 2));
     this.rtHDR = hdrTarget(lw, lh);
     this.rtLow = new THREE.WebGLRenderTarget(lw, lh, {
       type: THREE.UnsignedByteType,
@@ -715,6 +785,12 @@ export class Pipeline {
     const r = this.renderer;
     const pixel = this.enabled;
 
+    // The lights things give off, to those that matter most from here. (The
+    // scene may be slid to an origin near the camera just now, origin.js, and
+    // the camera with it: where the eye is in the world is the difference.)
+    _eye.copy(camera.position).sub(scene.position);
+    this.lights.assign(scene, _eye, SHARED.uTime.value);
+
     // Everything but what is on OVER...
     const layers = camera.layers.mask;
     r.setRenderTarget(this.rtScene);
@@ -750,6 +826,28 @@ export class Pipeline {
       r.shadowMap.autoUpdate = shadows;
     }
 
+    // The shimmer over anything hot, if there is any here: how far it bends
+    // each pixel (haze.js), from the same view, over a clear buffer.
+    const heat = !!scene.userData.heat;
+    if (heat) {
+      const clear = r.getClearAlpha();
+      r.getClearColor(_clear);
+      r.setClearColor(0x000000, 0);
+      r.shadowMap.autoUpdate = false;
+      scene.background = null;
+      camera.layers.mask = 1 << HEAT;
+      try {
+        r.setRenderTarget(this.rtHeat);
+        r.clear();
+        r.render(scene, camera);
+      } finally {
+        camera.layers.mask = layers;
+        scene.background = background;
+        r.shadowMap.autoUpdate = shadows;
+        r.setClearColor(_clear, clear);
+      }
+    }
+
     if (this.ao > 0) {
       const o = this.occlusion.uniforms;
       o.tDepth.value = this.rtScene.depthTexture;
@@ -763,6 +861,8 @@ export class Pipeline {
     u.tDepth.value = this.rtScene.depthTexture;
     u.tAO.value = this.rtAO.texture;
     u.uAO.value = this.ao;
+    u.tHeat.value = this.rtHeat.texture;
+    u.uHeat.value = heat ? 1 : 0;
     u.uNear.value = camera.near;
     u.uFar.value = camera.far;
     u.uProjInv.value.copy(camera.projectionMatrixInverse);
@@ -774,6 +874,17 @@ export class Pipeline {
     u.uFogDensity.value = FOG_DENSITY * this.haze;
     u.uFogFloor.value = this.fogFloor;
     u.uFogHeight.value = this.fogThin;
+    // the air round the lights, where they are in the picture's frame (slid
+    // as the scene is)
+    u.uGlowAir.value = FOG_DENSITY * this.haze * GLOW_AIR;
+    const glow = this.lights.glow;
+    for (let i = 0; i < glow.length; i++) {
+      const o = glow[i];
+      u.uGlowPos.value[i].set(o.x + scene.position.x, o.y + scene.position.y, o.z + scene.position.z);
+      if (o.on) u.uGlowCol.value[i].set(o.r, o.g, o.b);
+      else u.uGlowCol.value[i].set(0, 0, 0);
+      u.uGlowRange.value[i] = o.range;
+    }
     this.draw(this.composite, this.rtHDR);
 
     // the ever smaller copies, which the bloom and the eye both work from

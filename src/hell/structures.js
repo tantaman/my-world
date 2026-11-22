@@ -19,7 +19,8 @@ import { R, H, BOLGE, SECTOR, STEPS, bankTop, bolgeOuter } from './plan.js';
 import { WALL, CASTLE, BROOK } from './land.js';
 import { SHARED } from '../render/uniforms.js';
 import { NOISE_GLSL } from '../render/glsl.js';
-import { flameGeometry, stillFlames } from './shades.js';
+import { flameGeometry, stillFlames, createFlameHaze, hazeOver } from './shades.js';
+import { OVER } from '../render/pipeline.js';
 import { SEEN } from './look.js';
 
 const IRON = [0.07, 0.066, 0.07]; // Malebolge's stone, "of an iron colour"
@@ -262,6 +263,14 @@ function createFallsMaterial() {
 }
 
 // ── Where they stand ────────────────────────────────────────────────────────
+// The light from a fire on something built: one at (x, y, z) `size` wide and
+// `tall` high (the flame's own scale), from its upper part.
+const LIT_NEAR = 160; // m: further off than this, a built fire lights nothing you'd see
+function fireLight(x, y, z, size, tall, seed) {
+  const big = Math.sqrt(size * tall);
+  return { x, y: y + tall * 0.6, z, color: [1, 0.4, 0.12], power: 16 * big * big, range: 16 * big, decay: 2, flicker: seed % 97 };
+}
+
 export class Structures {
   // land: Hell's · group: where its meshes go · stone, fire: what the built
   // things and their flames are drawn with (look.js, shades.js)
@@ -287,12 +296,21 @@ export class Structures {
     this.lamp = new THREE.PointLight(0xffe2b0, 0, 280, 1.6);
     this.castles = new Map(); // k -> where its lantern is
     group.add(this.lamp);
+    // the light the fires give, on the towers and in the sector's own places
+    // (render/lights.js): lightsNear()
+    this.towerLit = [];
+    this.towerFires.layers.set(OVER); // (as a flame must be: render/flame.js)
+    this.haze = createFlameHaze();
     for (const m of [this.wall, this.towers, this.towerFires]) {
       m.count = 0;
       m.frustumCulled = false;
       m.visible = false;
       group.add(m);
     }
+    // the air over the towers' fires shimmering
+    this.towerHaze = hazeOver(this.towerFires, this.haze);
+    this.towerHaze.visible = false;
+    group.add(this.towerHaze);
   }
 
   _shape(name, make) {
@@ -343,6 +361,13 @@ export class Structures {
     if (best) this.lamp.position.copy(best.at);
   }
 
+  // The fires near `eye` that give light (render/lights.js), onto out.
+  lightsNear(eye, out) {
+    const near = (f) => Math.abs(f.x - eye.x) < LIT_NEAR && Math.abs(f.z - eye.z) < LIT_NEAR;
+    if (this.wall.visible) for (const f of this.towerLit) if (near(f)) out.push(f);
+    for (const g of this.sectors.values()) for (const f of g.userData.lit) if (near(f)) out.push(f);
+  }
+
   // The bridges: one over every ditch but the sixth, along every spoke.
   _bridges(r) {
     if (this.bridges || r > PIT_NEAR) return;
@@ -367,7 +392,7 @@ export class Structures {
   // The wall of Dis, in lengths round the stretch nearest you.
   _wall(r, th) {
     const near = Math.abs(r - WALL.r) < WALL_NEAR;
-    this.wall.visible = this.towers.visible = this.towerFires.visible = near;
+    this.wall.visible = this.towers.visible = this.towerFires.visible = this.towerHaze.visible = near;
     if (!near) return;
     const L = this.land;
     const per = LENGTH / WALL.r; // radians a length
@@ -395,7 +420,13 @@ export class Structures {
       }
     }
     this.wall.count = w;
-    this.towers.count = this.towerFires.count = t;
+    this.towers.count = this.towerFires.count = this.towerHaze.count = t;
+    this.towerLit.length = 0;
+    const m = new THREE.Matrix4();
+    for (let i = 0; i < t; i++) {
+      this.towerFires.getMatrixAt(i, m);
+      this.towerLit.push(fireLight(m.elements[12], m.elements[13], m.elements[14], 3.2, 4.2, i));
+    }
     this.wall.instanceMatrix.needsUpdate = this.towers.instanceMatrix.needsUpdate = this.towerFires.instanceMatrix.needsUpdate = true;
   }
 
@@ -439,11 +470,13 @@ export class Structures {
     const falls = add(this._shape('falls', () => fallsGeometry(H.c7 - H.bolge - 4, FALL_WIDE)), this.falls, lip - 4, s.brook, H.c7 + BROOK.level + 0.2, this._inward(s.brook));
     falls.renderOrder = 2;
 
+    g.userData.lit = fires.map(([at, size, tall], i) => fireLight(at.x, at.y, at.z, size, tall, k * 31 + i));
     if (fires.length) {
       const fm = new THREE.InstancedMesh(stillFlames(this.flame, fires.length), this.fire, fires.length);
+      fm.layers.set(OVER);
       fires.forEach(([at, size, tall], i) => fm.setMatrixAt(i, _m.compose(at, _q.identity(), _v.set(size, tall, size))));
       fm.frustumCulled = false;
-      g.add(fm);
+      g.add(fm, hazeOver(fm, this.haze));
     }
     this.group.add(g);
     this.sectors.set(k, g);

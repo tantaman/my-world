@@ -58,6 +58,51 @@ eye's) way of turning that into a picture. Pixel art is a setting.
    blended across a narrow band at its edges. The band's width is the
    *softness* setting, and it's what lets the pixels melt together.
 
+**Light from things.** A fire, a pool of lava, a lantern gives light of its
+own (`lights.js`): a feature says where light comes from and how bright,
+and each frame the few that matter most from where you're looking are made
+real lights, the nearest casting shadows of whatever stands in its light, as
+everything does by a fire. Where the air is thick the light hangs in it,
+a glow round each fire in the haze (the composite pass). It is a pool of the
+same few lights, given to whichever deserve them, because a shader is
+compiled for a number of lights, and changing the number would compile
+everything again.
+
+**Fire and heat.** A flame is a volume of burning gas, not a picture on a
+card (`flame.js`): each ray through it adds up the light of the gas it
+passes, a tongue torn up by turbulence that rises and quickens, hottest low
+in the middle and cooling to dull red at its tips, its colour and brightness
+from how hot each part is. It is drawn over a copy of the rest (`OVER`), so
+it fades into the ground it stands on rather than being cut off by it. Over
+it the air shimmers (`haze.js`): hot things draw, on the `HEAT` layer, how
+far they bend the light behind them, and the composite draws the whole
+picture through that.
+
+**Skin.** What is alive is drawn as skin is (`skin.js`): its small shape is
+drawn pixel by pixel (relief, `glsl.js`: a height that tips the normal, no
+texture and no tangents) — a net of creases, wrinkles, veins standing out,
+pores; horn has rings, iron is pitted and rusts, a wing is veined — and it
+is lit as skin is lit, from inside as much as off its face: light that goes
+in comes out a little way round, so the edge of the shadow on it is soft and
+red, and light comes through the thin parts, an ear, a wing, red with the
+blood it went through. It is wet, a clear layer that shines, most of all in
+its creases, which the light round it doesn't get into.
+
+**Bodies, melted.** A body made of balls, bones and skins over a spine can be
+run together into one surface (`implicit.js`), each piece filleted into
+what it touches the way clay is when it's worked, and meshed as finely as it
+needs: a muscle swells smoothly out of the next, with no seams. As it's
+meshed, each vertex is told how open it is to the light round it (a crease)
+and how thick the body is there (for the light that comes through). Melting
+takes a moment, so it can be done a few milliseconds a frame.
+
+**Liquids.** The forest's water is its own (`world/waterSurface.js`); any
+other liquid is drawn by `liquid.js` from what it does to light: which
+colours it takes and how fast, how cloudy, how thick (its ripples longer and
+slower), how much it boils, its own glow, a crust of black plates with fire
+in the cracks. It mirrors what stands over it the way the water does
+(`glsl.js`: the mirror is shared).
+
 The materials do the rest. Their colours are what real things reflect:
 needles and dark bark a few per cent, leaves up to a fifth in the green,
 birch bark over half. Darker than that and shade goes black, which is what
@@ -125,7 +170,13 @@ On the settings panel (**O**, or *settings* in the corner), under *picture*:
 ```
 index.js              plugs it into the game: renderer, scene, camera, the picture's settings
 origin.js             where each frame is drawn from, so far-off places stay sharp
-pipeline.js           render (all but the water; a copy; the water over it) → occlusion → composite → bloom → the eye → tone map → screen
+pipeline.js           render (all but the water; a copy; the water over it; the heat) → occlusion → composite → bloom → the eye → tone map → screen
 uniforms.js           shader uniforms everything shares: time, wind, sky
-glsl.js               shared GLSL: noise, patterns over the world, sky, ground colour
+glsl.js               shared GLSL: noise (and in three dimensions), patterns over the world, sky, ground colour, relief, a mirror
+lights.js             light given off by things: a pool of real lights for those that matter most, and their shadows
+flame.js              a flame, as a volume of burning gas
+haze.js               the shimmer of the air over something hot
+skin.js               skin: hides, horn, iron, a wing, a crust over fire; lit as skin is
+implicit.js           bodies melted together out of balls, bones and skins, and meshed
+liquid.js             the surface of a liquid by what it does to light: blood, pitch, a marsh, lava
 ```

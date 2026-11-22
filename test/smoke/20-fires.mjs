@@ -47,7 +47,7 @@ export default async function ({ page, step, key, take, frames, shot, open, made
     assert.match(prompts.feed, /put on more wood/, `(prompt: "${prompts.feed}")`);
     await page.evaluate(() => T.tap('use'));
     assert.ok(await until(() => world.fires.serialize()[0][3] === 1.5), 'more wood on it');
-    const lit = await page.evaluate(() => ({ light: world.fires.lights[0].intensity, heard: world.fires.heard.length, solid: world.solids.owners.has(world.fires.list.values().next().value) }));
+    const lit = await page.evaluate(() => ({ light: world.fires.lights[0].power, heard: world.fires.heard.length, solid: world.solids.owners.has(world.fires.list.values().next().value) }));
     assert.ok(lit.light > 0 && lit.heard === 1, 'it lights the room and can be heard');
     assert.ok(lit.solid, 'and you walk round it');
     await shot('campfire');

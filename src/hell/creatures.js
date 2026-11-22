@@ -6,9 +6,17 @@
 //     .userData.parts    { name: Object3D } for whatever of it moves (a
 //                        wing, a jaw, a tail): each turns about its own origin
 //
-// `material` is what it is drawn with (look.js: createHellStone({ hot: true,
-// flesh: true })): colours are per vertex, and aHot makes a part glow (eyes
-// like coals).
+// `material` is what it is drawn with (render/skin.js: createSkinMaterial({
+// hot: true, baked: true })): colours are per vertex, aHot makes a part glow
+// (eyes like coals), and what each part is made of (a hide, horn, iron,
+// wood, cloth, a wing) is said vertex by vertex from its colour (MADE_OF).
+//
+// Their bodies are melted (sculpt.js, render/implicit.js): what is round
+// and alive runs together into one skin, with the muscles of a man under
+// it where the frame of one is used. That takes a moment, so a creature is
+// built from its pieces at first, as it always was, and meltSome(ms) melts
+// what's waiting, a little at a time; every copy then takes the melted
+// shape.
 //
 // Some have more in userData: the boat its `deck` (m above the water, where a
 // rider stands), Geryon his `seat` ([x, y, z], where a rider's feet go).
@@ -32,6 +40,7 @@
 
 import * as THREE from 'three';
 import { Sculpt } from './sculpt.js';
+import { SURF } from '../render/skin.js';
 
 const TAU = Math.PI * 2;
 
@@ -75,6 +84,26 @@ const BRUTE = [0.21, 0.125, 0.09]; // a demon's hide, red-brown
 const CLOTH = [0.22, 0.2, 0.16]; // old undyed cloth
 const GIANT = [0.19, 0.16, 0.135]; // a giant's hide, like weathered stone
 const SHAGGY = [0.04, 0.032, 0.026]; // coarse dark hair
+
+// What each of those is (render/skin.js); anything else is a hide.
+const MADE_OF = new Map([
+  [TOOTH, SURF.horn],
+  [HORN, SURF.horn],
+  [WOOD, SURF.wood],
+  [OLDWOOD, SURF.wood],
+  [RAG, SURF.cloth],
+  [CLOTH, SURF.cloth],
+  [HOARY, SURF.cloth],
+  [SHAGGY, SURF.cloth],
+  [IRON, SURF.iron],
+]);
+const madeOf = (c) => MADE_OF.get(c);
+
+// Melted (sculpt.js): how many cells tall a creature is meshed in, and how
+// wide the fillet is where one part of it runs into another (of its height).
+const MELT_CELLS = 120;
+const MELT_BLEND = 0.012;
+const MELT_BUDGET = 32000; // triangles, about, in the melted parts of a creature: past that it's meshed coarser
 
 // ── Lines, turns and frames ──────────────────────────────────────────────────
 // n points along a smooth line through a few.
@@ -207,6 +236,27 @@ class Flesh extends Sculpt {
     return [_v.x, _v.y, _v.z];
   }
 
+  // A muscle, under the skin of a melted body (sculpt.js), swelling from a
+  // to b, r thick, flattened to `flat` of that along `face` (the way its
+  // flat side looks: a breast's forward). Unmelted, there is none: the
+  // pieces are only a sketch of the body anyway.
+  muscle(a, b, r, color, o = {}) {
+    if (!this.melt) return this;
+    const k = this._scale();
+    const pa = this._put(a);
+    const pb = this._put(b);
+    const half = len(sub(pb, pa)) / 2;
+    if (half < 1e-6) return this;
+    const axis = unit(sub(pb, pa));
+    let face = this._turn(o.face || square(sub(b, a)));
+    face = sub(face, mul(axis, dot(face, axis)));
+    face = len(face) > 1e-6 ? unit(face) : square(axis);
+    const across = cross(axis, face);
+    const rr = r * k;
+    this.melt.ball(mix(pa, pb, 0.5), [half, rr * (o.flat ?? 1), rr], [...axis, ...face, ...across], { ...this._look(color, 0), blend: this.melt.blend * 0.35 });
+    return this;
+  }
+
   // A skin over a spine: a body, a limb, a neck, a tail, a horn. It runs
   // through `points`; `radii` is how thick it is at each, a number or
   // [across, deep] (one for all, or one for each point). Its ends are
@@ -215,8 +265,22 @@ class Flesh extends Sculpt {
   // and how far round (k of `sides`: 0 is across, a quarter of them deep).
   skin(points, radii, color, o = {}) {
     if (points.length < 2) return this;
-    const sides = o.sides || 8;
     const rings = ringsOf(points, radii, o.side);
+    // melted: the rings as they are, run into the rest of the body
+    const k = this._scale();
+    let thick = 0;
+    for (const r of rings) thick += Math.min(r.a, r.b) * k;
+    if (this._melts(typeof color === 'function' ? color(rings[0].i, 0) : color, o.hot, thick / rings.length)) {
+      const look = this._look(color, 0, o.sides || 8);
+      if (typeof color === 'function') look.surf = this.surf;
+      this.melt.rings(
+        rings.map((r) => ({ c: this._put(r.c), u: this._turn(r.u), w: this._turn(r.w), a: r.a * k, b: r.b * k, i: r.i })),
+        look,
+      );
+      this._roughly((rough) => rough.skin(points, radii, color, o));
+      return this;
+    }
+    const sides = this.melt ? Math.round((o.sides || 8) * 1.6) : o.sides || 8;
     const caps = Array.isArray(o.caps) ? o.caps : [o.caps || 'round', o.caps || 'round'];
     const dome = o.dome ?? 0.8;
     for (const end of [0, 1]) {
@@ -265,6 +329,7 @@ class Flesh extends Sculpt {
         this.tags.push(this.tag);
       }
     }
+    this._more(m * sides, typeof color === 'function' ? null : color);
     for (let i = 0; i < m - 1; i++) {
       for (let k = 0; k < sides; k++) {
         const a = base + i * sides + k;
@@ -305,9 +370,13 @@ class Flesh extends Sculpt {
           this.nor.push(n[0] * face, n[1] * face, n[2] * face);
           this.col.push(c[0], c[1], c[2]);
           this.hot.push(hot);
-        this.tags.push(this.tag);
+          this.tags.push(this.tag);
         }
       }
+      const was = this.thin;
+      this.thin = o.thin ?? 0.004;
+      this._more(rows * cols, typeof color === 'function' ? null : color);
+      this.thin = was;
       for (let i = 0; i < rows - 1; i++) {
         for (let j = 0; j < cols - 1; j++) {
           const a = base + i * cols + j;
@@ -353,8 +422,9 @@ class Flesh extends Sculpt {
       this.nor.push(n[0], n[1], n[2]);
       this.col.push(color[0], color[1], color[2]);
       this.hot.push(hot);
-        this.tags.push(this.tag);
+      this.tags.push(this.tag);
     }
+    this._more(sides + 1, color);
     for (let k = 0; k < sides; k++) this.idx.push(at + k, at + ((k + 1) % sides), at + sides);
     return this;
   }
@@ -380,6 +450,12 @@ class Flesh extends Sculpt {
 // would make (from the top of it down), and its hem is torn: `ragged` (0..1)
 // is how much of its length some of it has lost.
 function drape(s, points, radii, color, o = {}) {
+  const was = s.surf;
+  s.surf = SURF.cloth;
+  drape_(s, points, radii, color, o);
+  s.surf = was;
+}
+function drape_(s, points, radii, color, o) {
   const on = onSkin(points, radii);
   const n = o.n || 14;
   const down = 4;
@@ -413,10 +489,13 @@ function batWing(s, L, c, flip = 1, n = 4, hang = 1) {
   const tips = [P(1.0, 0.17, -0.06), P(0.93, -0.27, -0.13), P(0.67, -0.54, -0.12), P(0.36, -0.58, -0.05)];
   const flank = P(0.02, -0.44, 0);
   const web = (i) => shade(c.web, 0.8 + 0.4 * rnd(i + 3));
+  const was = s.surf;
+  s.surf = SURF.membrane;
   for (let i = 0; i < 3; i++) s.web(wrist, tips[i], tips[i + 1], web(i), 0.24, n);
   s.web(elbow, wrist, tips[3], web(3), 0, 1);
   s.web(elbow, tips[3], flank, web(4), 0.22, n);
   s.web(elbow, flank, root, web(5), 0, 1);
+  s.surf = was;
   s.skin([root, elbow, wrist], [0.03 * L, 0.024 * L, 0.017 * L], c.bone, { sides: 5 });
   tips.forEach((tip, i) => {
     // (each finger a little bowed)
@@ -438,14 +517,23 @@ function batWing(s, L, c, flip = 1, n = 4, hang = 1) {
 function creature(material, height, build) {
   const g = new THREE.Group();
   const parts = {};
-  const body = new Flesh();
+  // melted into one, as finely as its size asks; and its pores a man's, or a giant's
+  const made = { melt: { cell: height / MELT_CELLS, blend: height * MELT_BLEND }, body: height / 1.8 };
+  const flesh = () => {
+    const f = new Flesh(made);
+    f.surfOf = madeOf;
+    return f;
+  };
+  const body = flesh();
+  const melts = []; // [sculpt, mesh] for each piece to be melted
   const part = (name, pivot, make, o = {}) => {
-    const s = new Flesh();
+    const s = flesh();
     const hold = o.basis ? o.basis.clone() : new THREE.Matrix4();
     hold.setPosition(pivot[0], pivot[1], pivot[2]);
     if (!o.own) s.frame = hold.clone().invert();
     make(s);
-    const mesh = new THREE.Mesh(s.build(), material);
+    const mesh = new THREE.Mesh(s.build({ later: true }), material);
+    if (s.pending) melts.push([s, mesh]);
     mesh.name = name;
     if (o.basis) {
       // (its axes are the holder's: the part itself is left unturned, for whoever moves it)
@@ -461,9 +549,21 @@ function creature(material, height, build) {
     return mesh;
   };
   const more = build(body, part) || {};
-  if (body.idx.length) g.add(new THREE.Mesh(body.build(), material));
+  if (body.idx.length || (body.melt && !body.melt.empty)) {
+    const mesh = new THREE.Mesh(body.build({ later: true }), material);
+    if (body.pending) melts.push([body, mesh]);
+    g.add(mesh);
+  }
+  // the whole creature meshed as finely as its budget allows, its parts alike
+  let area = 0;
+  for (const [s] of melts) for (const p of s.melt.prims) area += p.area || 0;
+  const cell = Math.max(height / MELT_CELLS, Math.sqrt((area * 1.6) / MELT_BUDGET));
+  for (const [s] of melts) {
+    s.melt.cell = cell;
+    s.melt.budget = Infinity;
+  }
   g.userData = { height, parts, ...more };
-  return g;
+  return { g, melts };
 }
 
 // ── The frame of a man ───────────────────────────────────────────────────────
@@ -536,9 +636,48 @@ function man(o) {
       m.trunk = [pts, rad];
       const flat = typeof color === 'function' ? color(4, 0) : color;
       const tilt = { rx: lean + hunch * 0.5 };
-      // the breast, and the seat
-      if (t.pecs !== false) s.ball(chest[0], chest[1] - 0.004 * h, chest[2] + 0.05 * h * chestK, 0.06 * h * chestK, flat, { sx: 1.7, sy: 0.78, sz: 0.64, ...tilt });
+      // the breast, and the seat (melted, the muscles under the skin, below)
+      if (t.pecs !== false && !s.melt) s.ball(chest[0], chest[1] - 0.004 * h, chest[2] + 0.05 * h * chestK, 0.06 * h * chestK, flat, { sx: 1.7, sy: 0.78, sz: 0.64, ...tilt });
       if (t.seat !== false) for (const side of [-1, 1]) s.ball(hips[0] + side * 0.046 * h * hipW, hips[1] - 0.025 * h, hips[2] - 0.045 * h * k, 0.066 * h * k, flat, { rx: lean });
+      if (s.melt && t.muscles !== false) m.muscles(s, flat, t);
+      return m;
+    },
+
+    // The muscles of his trunk, under a melted skin: breast, belly, flanks,
+    // back, the slope of the shoulders. (How much they stand out goes with
+    // his bulk; a belly hides the ones over it.)
+    muscles(s, color, t = {}) {
+      const belly = (t.belly ?? o.belly ?? 0) * h;
+      const fwdOf = (a) => [0, -Math.sin(a), Math.cos(a)];
+      const fChest = fwdOf(lean + hunch * 0.5);
+      const fWaist = fwdOf(lean);
+      const cut = Math.max(0, 1 - belly / (0.03 * h)); // a belly hides them
+      const deep = 0.09 * h * chestK; // how far the front of his chest is from its middle
+      for (const side of [-1, 1]) {
+        const x = (v) => [side * v[0], v[1], v[2]];
+        // the breast: from the breastbone out to the shoulder, flat to the front
+        const pecIn = along(add(chest, [side * 0.02 * h, 0.008 * h, 0]), fChest, deep * 0.86);
+        const pecOut = along(add(chest, [side * 0.1 * h * chestK, 0.028 * h, 0]), fChest, deep * 0.5);
+        s.muscle(pecIn, pecOut, 0.052 * h * chestK, color, { face: fChest, flat: 0.62 });
+        // the belly: three pairs down from the breast, a groove between
+        if (cut > 0.2) {
+          for (let r = 0; r < 3; r++) {
+            const at = mix(chest, waist, 0.42 + r * 0.24);
+            const c = along(add(at, [side * 0.026 * h, -0.012 * h, 0]), fWaist, 0.068 * h * k * (1 - r * 0.06));
+            s.muscle(add(c, [0, 0.015 * h, 0]), add(c, [0, -0.015 * h, 0]), 0.022 * h * Math.sqrt(k) * cut, color, { face: fWaist, flat: 0.6 });
+          }
+        }
+        // the flank, from under the breast down to the hip
+        const ob = add(mix(chest, hips, 0.55), x([0.085 * h * k, 0, 0.01 * h]));
+        s.muscle(add(ob, [0, 0.04 * h, 0.01 * h]), add(ob, [0, -0.045 * h, -0.005 * h]), 0.032 * h * k, color, { face: [side, 0, 0.3], flat: 0.6 });
+        // the wing of the back, from the armpit to the small of the back
+        const lat = add(mix(chest, collar, 0.3), x([0.09 * h * chestK, 0, -0.04 * h]));
+        s.muscle(lat, add(mix(waist, chest, 0.2), x([0.045 * h, 0, -0.05 * h])), 0.04 * h * chestK, color, { face: [side, 0, -1], flat: 0.55 });
+        // the long muscles either side of the spine
+        s.muscle(add(mix(chest, collar, 0.2), x([0.025 * h, 0, -0.07 * h * k])), add(hips, x([0.022 * h, 0.03 * h, -0.05 * h * k])), 0.022 * h * k, color, { face: [0, 0, -1], flat: 0.6 });
+        // the slope from the neck to the shoulder
+        s.muscle(add(neck, x([0.012 * h, -0.012 * h, -0.012 * h])), add(m.shoulder(side), [-side * 0.03 * h, 0.01 * h, -0.015 * h]), 0.03 * h * neckK, color, { face: [0, 1, -0.3], flat: 0.55 });
+      }
       return m;
     },
 
@@ -550,6 +689,20 @@ function man(o) {
       const r = h * k * (a.thick ?? 1);
       s.ball(sh[0], sh[1], sh[2], 0.05 * r, color);
       s.skin([sh, mix(sh, el, 0.16), mix(sh, el, 0.52), el, mix(el, wr, 0.24), mix(el, wr, 0.62), wr], [0.047 * r, 0.052 * r, 0.043 * r, 0.031 * r, 0.038 * r, 0.03 * r, 0.021 * r], color, { sides: a.sides || 7 });
+      if (s.melt && a.muscles !== false) {
+        // the shoulder's cap; and on the upper arm the one that bends it
+        // (on the inside of the bend) and the one that straightens it; and
+        // the forearm's, thick by the elbow
+        const up = unit(sub(el, sh));
+        const bend = unit(sub(mix(sh, wr, 0.5), el)); // toward the inside of the elbow
+        const back = mul(bend, -1);
+        const outward = unit(sub(sh, m.collar));
+        s.muscle(along(sh, outward, 0.018 * r), along(along(sh, up, 0.45 * upper), outward, 0.03 * r), 0.046 * r, color, { face: outward, flat: 0.8 });
+        s.muscle(along(along(sh, up, 0.3 * upper), bend, 0.03 * r), along(along(sh, up, 0.86 * upper), bend, 0.022 * r), 0.033 * r, color, { face: bend, flat: 0.85 });
+        s.muscle(along(along(sh, up, 0.2 * upper), back, 0.028 * r), along(along(sh, up, 0.8 * upper), back, 0.02 * r), 0.032 * r, color, { face: back, flat: 0.8 });
+        const fdir = unit(sub(wr, el));
+        s.muscle(along(along(el, fdir, 0.06 * fore), back, 0.012 * r), along(along(el, fdir, 0.55 * fore), back, 0.006 * r), 0.031 * r, color, { face: cross(fdir, bend), flat: 0.85 });
+      }
       const dir = unit(sub(wr, el));
       const size = 0.1 * h * (a.handSize ?? 1) * Math.sqrt(k);
       if (a.hand !== 'none') handOn(s, wr, dir, size, a.handColor || color, { pose: a.hand, palm: a.palm, claws: a.claws, side });
@@ -566,6 +719,19 @@ function man(o) {
       // (the calf stands out behind the shin)
       const back = unit(sub(mix(hp, ank, 0.5), kn));
       s.skin([hp, mix(hp, kn, 0.35), kn, along(mix(kn, ank, 0.26), back, 0.012 * r), mix(kn, ank, 0.62), ank], [0.066 * r, 0.062 * r, 0.041 * r, 0.046 * r, 0.033 * r, 0.025 * r], color, { sides: a.sides || 7 });
+      if (s.melt && a.muscles !== false) {
+        // the front of the thigh, its teardrop over the inside of the knee,
+        // the back of it, the knee cap, the calf's two heads
+        const td = unit(sub(kn, hp));
+        const front = mul(back, -1);
+        const inner = [-side, 0, 0];
+        s.muscle(along(along(hp, td, 0.18 * thigh), front, 0.038 * r), along(along(hp, td, 0.82 * thigh), front, 0.026 * r), 0.048 * r, color, { face: front, flat: 0.8 });
+        s.muscle(along(along(along(hp, td, 0.62 * thigh), front, 0.012 * r), inner, 0.022 * r), along(along(kn, td, -0.08 * thigh), inner, 0.018 * r), 0.03 * r, color, { face: inner, flat: 0.8 });
+        s.muscle(along(along(hp, td, 0.15 * thigh), back, 0.036 * r), along(along(hp, td, 0.8 * thigh), back, 0.026 * r), 0.042 * r, color, { face: back, flat: 0.8 });
+        s.muscle(along(kn, front, 0.03 * r), along(along(kn, front, 0.03 * r), td, 0.05 * thigh), 0.018 * r, color, { face: front, flat: 0.7 });
+        const sd = unit(sub(ank, kn));
+        for (const t of [-1, 1]) s.muscle(along(along(along(kn, sd, 0.1 * shin), back, 0.025 * r), inner, t * 0.01 * r), along(along(along(kn, sd, 0.5 * shin), back, 0.012 * r), inner, t * 0.008 * r), 0.026 * r, color, { face: back, flat: 0.75 });
+      }
       if (a.foot !== 'none') {
         const toe = unit(a.toe || [side * 0.25, 0, 1]);
         const fl = 0.15 * h * Math.sqrt(k);
@@ -799,7 +965,7 @@ const MAKERS = {
     const g = new THREE.Group();
     g.add(new THREE.Mesh(s.build(), material));
     g.userData = { height: 1.8, parts: {} };
-    return g;
+    return { g, melts: [] };
   },
 
   // Charon, the ferryman of Acheron: "an old man, hoary with the hair of
@@ -1862,13 +2028,79 @@ const MAKERS = {
 
 export const CREATURE_NAMES = Object.keys(MAKERS);
 
-export function makeCreature(name, material) {
+// Each is made once and copied after: the copies share its shapes, and have
+// parts of their own to move. Its flesh is built from pieces at first, and
+// melted into one (sculpt.js) a few milliseconds at a time, when meltSome()
+// is called; then it and every copy of it take the melted shapes.
+const made = new Map(); // name:material -> the first
+const queue = []; // { first, meshes, jobs: [{ sculpt, at, work }], copies: [meshes] }
+
+const meshesOf = (g) => {
+  const out = [];
+  g.traverse((o) => {
+    if (o.isMesh) out.push(o);
+  });
+  return out;
+};
+
+// later: true when it is only being got ready, not wanted just now (it
+// waits its turn behind what is). rough: true for its pieces only, never
+// melted (a shape taken once, to be strewn by the hundred: furnish.js)
+export function makeCreature(name, material, { later = false, rough = false } = {}) {
   const make = MAKERS[name];
   if (!make) throw new Error(`no such creature: ${name} (there are: ${CREATURE_NAMES.join(', ')})`);
-  const g = make(material);
-  g.name = name;
+  const key = `${name}:${material ? material.uuid : ''}${rough ? ':rough' : ''}`;
+  let first = made.get(key);
+  if (!first) {
+    const { g, melts } = make(material);
+    first = g;
+    first.name = name;
+    first.traverse((o) => {
+      if (o.isMesh) o.castShadow = o.receiveShadow = true;
+    });
+    made.set(key, first);
+    if (melts.length && !rough) {
+      const meshes = meshesOf(first);
+      queue.push({ first, meshes, jobs: melts.map(([sculpt, mesh]) => ({ sculpt, at: meshes.indexOf(mesh), work: null })), copies: [] });
+    }
+  }
+  // (three.js copies userData through JSON: not the parts, which are meshes)
+  const kept = first.userData;
+  first.userData = {};
+  const g = first.clone();
+  first.userData = kept;
+  const parts = {};
   g.traverse((o) => {
-    if (o.isMesh) o.castShadow = o.receiveShadow = true;
+    if (o.isMesh && kept.parts[o.name]) parts[o.name] = o;
   });
+  g.userData = { ...kept, parts };
+  const q = queue.findIndex((e) => e.first === first);
+  if (q >= 0) {
+    queue[q].copies.push(meshesOf(g));
+    // (wanted now: to the front)
+    if (!later && q > 0) queue.unshift(...queue.splice(q, 1));
+  }
   return g;
+}
+
+// Melt what's waiting, for up to ms. -> how many creatures are still waiting.
+export function meltSome(ms) {
+  const until = performance.now() + ms;
+  while (queue.length && performance.now() < until) {
+    const e = queue[0];
+    const job = e.jobs.find((j) => !j.done);
+    if (!job) {
+      queue.shift();
+      continue;
+    }
+    job.work ||= job.sculpt.melting();
+    if (!job.work.step(until)) break;
+    job.done = true;
+    const fine = job.work.geometry;
+    const rough = e.meshes[job.at].geometry;
+    for (const meshes of [e.meshes, ...e.copies]) meshes[job.at].geometry = fine;
+    rough.dispose();
+    job.sculpt = job.work = null;
+  }
+  return queue.length;
 }

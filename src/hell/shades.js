@@ -18,6 +18,9 @@
 import * as THREE from 'three';
 import { SHARED } from '../render/uniforms.js';
 import { NOISE_GLSL } from '../render/glsl.js';
+import { HEAT } from '../render/pipeline.js';
+import { createFlameMaterial as createFlame, flameBox } from '../render/flame.js';
+import { createHazeMaterial } from '../render/haze.js';
 
 // The travel of an instance, for a vertex shader: moves `p` (the vertex,
 // already placed by its instance) and gives how much of it is there (0..1).
@@ -100,75 +103,49 @@ export function createShadeMaterial({ hip = 0.92, shoulder = 1.42 } = {}) {
   return mat;
 }
 
-// A flame: two upright cards crossed, a metre high and half as wide, the
-// fire drawn on them. Its instances can travel, like shades (the eighth
-// ditch, where every flame is somebody).
+// How a flame (and the shimmer over it) is carried along, if it travels:
+// for render/flame.js's `move`.
+const CARRIED = `{
+  vec4 q = p;
+  fade = travel(q);
+  carry = q.xyz - p.xyz;
+}`;
+
+// A flame: a box the fire burns in, a metre high and as wide
+// (render/flame.js). Its instances can travel, like shades (the eighth
+// ditch, where every flame is somebody). It is drawn on the OVER layer
+// (render/pipeline.js), as a flame must be.
 export function flameGeometry() {
-  const g = new THREE.BufferGeometry();
-  const pos = [];
-  const uv = [];
-  const idx = [];
-  for (let k = 0; k < 2; k++) {
-    const c = k ? 0 : 0.5;
-    const s = k ? 0.5 : 0;
-    const b = pos.length / 3;
-    pos.push(-c, 0, -s, c, 0, s, c, 1, s, -c, 1, -s);
-    uv.push(0, 0, 1, 0, 1, 1, 0, 1);
-    idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
-  }
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  g.setIndex(idx);
-  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.5, 0), 0.8);
-  return g;
+  return flameBox();
 }
 
 export function createFlameMaterial() {
-  return new THREE.ShaderMaterial({
-    uniforms: { uTime: SHARED.uTime },
-    vertexShader: /* glsl */ `
-      ${GO_GLSL}
-      varying vec2 vUv;
-      varying float vSeed;
-      varying float vFade;
-      void main() {
-        vUv = uv;
-        vec4 p = vec4(position, 1.0);
-        #ifdef USE_INSTANCING
-          p = instanceMatrix * p;
-          vSeed = fract(instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.71);
-        #else
-          vSeed = 0.0;
-        #endif
-        // it leans and licks about, more at the top
-        float t = uTime * 2.3 + vSeed * 40.0;
-        p.x += sin(t + p.y * 1.7) * 0.07 * uv.y * uv.y;
-        p.z += cos(t * 1.3 + p.y) * 0.07 * uv.y * uv.y;
-        vFade = travel(p);
-        gl_Position = projectionMatrix * modelViewMatrix * p;
-      }`,
-    fragmentShader: /* glsl */ `
-      ${NOISE_GLSL}
-      uniform float uTime;
-      varying vec2 vUv;
-      varying float vSeed;
-      varying float vFade;
-      void main() {
-        float x = abs(vUv.x - 0.5) * 2.0;
-        float n = fbm4(vec2(vUv.x * 2.6 + vSeed * 31.0, vUv.y * 2.2 - uTime * 1.9 - vSeed * 7.0));
-        // wide at the foot, drawn to a point, eaten into by the noise
-        float body = 1.0 - x / max(0.05, 1.0 - vUv.y * 0.95);
-        float f = body * (1.0 - vUv.y * 0.6) + (n - 0.55) * (0.5 + vUv.y);
-        f = smoothstep(0.05, 0.6, f) * smoothstep(0.0, 0.08, vUv.y);
-        if (f < 0.01) discard;
-        vec3 col = mix(vec3(0.85, 0.12, 0.015), vec3(1.0, 0.5, 0.12), smoothstep(0.35, 1.0, f));
-        gl_FragColor = vec4(col * f * 2.6 * vFade, 1.0);
-      }`,
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
+  return createFlame({
+    head: GO_GLSL,
+    move: CARRIED,
   });
+}
+
+// The shimmer over a flame (render/haze.js), carried with it as it is.
+export function createFlameHaze() {
+  return createHazeMaterial({ head: GO_GLSL, move: CARRIED });
+}
+
+// A flame's shimmer, as a mesh drawn alongside the flames' own `mesh`
+// (sharing its shape and where each of them is), on the HEAT layer.
+export function hazeOver(mesh, material) {
+  const haze = new THREE.InstancedMesh(mesh.geometry, material, mesh.count);
+  haze.instanceMatrix = mesh.instanceMatrix;
+  haze.count = mesh.count;
+  haze.layers.set(HEAT);
+  haze.frustumCulled = mesh.frustumCulled;
+  haze.matrixAutoUpdate = mesh.matrixAutoUpdate;
+  haze.position.copy(mesh.position);
+  haze.quaternion.copy(mesh.quaternion);
+  haze.scale.copy(mesh.scale);
+  haze.updateMatrix();
+  if (mesh.boundingSphere) haze.boundingSphere = mesh.boundingSphere.clone();
+  return haze;
 }
 
 // The flame's geometry for n fires that stay where they are: its own, sharing

@@ -94,6 +94,37 @@ its own and fades at the ends, so a file of them never runs out (`shades.js`).
 What was built stands where the land says: bridges, the wall of Dis in
 lengths, a castle, a tower, the falls (`structures.js`).
 
+**How it is lit and drawn** is the engine's (see [the look](../render/README.md)),
+nothing of it Hell's own but what it's made of:
+
+- Every fire is a light: the fire in each tomb, the flames on the sand, the
+  fires in the towers of Dis, the flames that walk the eighth ditch. The few
+  that matter most where you are light the ground, the stone and whoever is
+  near (`render/lights.js`), the nearest casting shadows; the murk hangs
+  round each, glowing. The light of the murk itself is low, so that it's the
+  fires you see by.
+- A flame is a volume of burning gas, not a card (`render/flame.js`), and the
+  air over it shimmers (`render/haze.js`); so does the air over Phlegethon,
+  and over the brook across the sand.
+- What lies in the hollows is a surface of its own (`render/liquid.js`), with
+  what each liquid does to light (`look.js`: LIQUIDS): Acheron black and
+  still, a mirror of what stands on its banks; Styx muddy and bubbling;
+  Phlegethon boiling blood with a skin on it that the boiling breaks, its own
+  dull light glowing through, brighter where it heaves; the pitch a black
+  mirror, thick and slow. The ground under them is their bed. Where the sand
+  burns hottest it has run and cooled into a crust of black plates, with fire
+  in the cracks.
+- The keepers and monsters are melted (`sculpt.js`, `render/implicit.js`):
+  their bodies run together into one skin, a muscle swelling smoothly out of
+  the next, rather than pieces stuck together; and drawn as skin
+  (`render/skin.js`), with creases, veins, pores and a wet sheen, horn and
+  iron and wood as what they are, the light coming soft and red round the
+  edge of a shadow on them and through a bat's wing. Melting one takes a
+  moment, so each is drawn from its pieces at first, as it always was, and
+  melted a few milliseconds a frame while you're down there.
+- Stone has its grain and its pits; the ground its grit, lumps, and the
+  ledges of the beds in a cliff, which a fire's light picks out.
+
 Where the people you share a world with are is sent only in plan, not how
 high (`player/peers.js`), so for now someone who has gone down is seen by the
 others walking the forest overhead, and isn't seen in Hell.
@@ -107,6 +138,7 @@ world.hell.go(2550, 0.03)        // stand at a radius and an angle (here: among 
 world.hell.here                  // { r, th, turn }
 world.hell.region                // 'limbo', 'styx', 'malebolge'…
 world.hell.stage('geryon', 20)   // stand one of its creatures in front of you
+world.hell.melt()                // melt every creature now, not a little each frame
 ```
 
 ## Files
@@ -120,17 +152,17 @@ gate.js               the gate: its stonework and tablet, its passage and chambe
 land.js               Hell's ground: heights, liquids, the ways down, what was built across the way
 space.js              the floor, walls and roof you walk by
 terrain.js            the ground, drawn: tiles round you, fine near and coarse far
-look.js               what the ground and the stone are drawn with
+look.js               what the ground, the stone and the liquids are drawn with, and what each liquid does to light
 air.js                the dark overhead, the light from the pit, how far you can see
 weather.js            what falls and blows: rain, flakes of fire, the wind
 furnish.js            what the ground is strewn with, and who is on it, square by square
 models.js             their shapes: rocks, the trees of the wood, tombs, shades
-shades.js             what shades and fires are drawn with, and how they go
+shades.js             what shades and fires are drawn with, and how they go (and the shimmer over a fire)
 structures.js         what was built: the bridges, the wall of Dis, a castle, a tower, the falls
-creatures.js          the keepers and monsters, as shapes
+creatures.js          the keepers and monsters, as shapes, melted into one a little at a time
 denizens.js           where they stand, and what little they do
 rides.js              what carries you: Charon's boat, Phlegyas's, Geryon, Antaeus
-sculpt.js             shapes made of simple ones
+sculpt.js             shapes made of simple ones, or melted out of them
 sound.js              what it sounds like
 card.js               the dark at the door, and the name of each place
 ```

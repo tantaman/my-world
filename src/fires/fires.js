@@ -12,9 +12,10 @@
 // nothing to keep in sync: it is stored as how much wood was put on it and
 // when it was lit, and what's left is worked out from those wherever it's seen.
 //
-// The couple of fires nearest you light their surroundings, from a small pool
-// of point lights that stays in the scene so that lighting a fire never makes
-// every material recompile. How it all looks is in look.js.
+// The couple of fires nearest you light their surroundings: they are
+// sources of light for the picture's pool of lights (render/lights.js),
+// which gives real ones, and a shadow, to whatever matters most where you
+// are. How it all looks is in look.js.
 //
 // Emits:
 //   'change'   ()   a fire was made, laid, lit, fed, put out or taken apart
@@ -28,6 +29,9 @@ import { regionOf } from '../save/regions.js';
 import { SHARED, SKY } from '../render/uniforms.js';
 import { addFireRing, addFirewood, addCoals } from './geometry.js';
 import { FireFx, createCoalMaterial, createFlameMaterial, flicker } from './look.js';
+import { flameBox } from '../render/flame.js';
+import { createHazeMaterial } from '../render/haze.js';
+import { OVER, HEAT } from '../render/pipeline.js';
 
 export const FIRE = {
   stones: 4, // to ring a pit
@@ -77,8 +81,10 @@ export function fireState(f, now = Date.now()) {
 
 export class Fires extends Emitter {
   // sky: the Sky, for how much firelight shows against the daylight (optional)
+  // lights: the game's (render/lights.js), to give light by; without them
+  //   (in a test) none is given
   // clock: () => ms since the epoch; the wall clock unless a test says otherwise
-  constructor({ scene, solids, sky = null, clock = Date.now }) {
+  constructor({ scene, solids, sky = null, lights = null, clock = Date.now }) {
     super();
     this.scene = scene;
     this.solids = solids;
@@ -89,17 +95,19 @@ export class Fires extends Emitter {
     this.wood = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
     this.list = new Map(); // "x,z" -> fire
     this.fx = new FireFx(scene);
-    this.flameGeo = new THREE.PlaneGeometry(1, 1, 1, 6).translate(0, 0.5, 0);
-    this.flameGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.5, 0), 0.75);
+    // a flame is a box the fire burns in (render/flame.js), and the air over
+    // it shimmers (render/haze.js)
+    this.flameGeo = flameBox();
+    this.hazeMat = createHazeMaterial({ tall: 3.2 });
+    // The light the nearest of them give: a fire is a spread-out source, not
+    // a point, so a gentler falloff than the inverse square keeps the stones
+    // beside it from burning out to white and lets the light reach the edge
+    // of the clearing. Which of them are real lights, and which casts
+    // shadows, the picture decides (render/lights.js).
     this.lights = [];
     for (let i = 0; i < LIGHTS; i++) {
-      // A fire is a spread-out source, not a point: a gentler falloff than the
-      // inverse square keeps the stones beside it from burning out to white
-      // and lets the light reach the edge of the clearing.
-      const l = new THREE.PointLight(0xff8c40, 0, 16, 1.5);
-      l.castShadow = false;
-      l.layers.enableAll(); // and on the water (render/pipeline.js)
-      scene.add(l);
+      const l = { x: 0, y: 0, z: 0, color: [1, 0.55, 0.2], power: 0, range: 16, decay: 1.5 };
+      if (lights) lights.add(scene, l);
       this.lights.push(l);
     }
     // The fires nearest you that are alight, nearest first, for the sound to
@@ -232,9 +240,11 @@ export class Fires extends Emitter {
     f.flameMat = createFlameMaterial(seed);
     f.flame = new THREE.Mesh(this.flameGeo, f.flameMat);
     f.flame.castShadow = false;
-    f.flame.renderOrder = 6;
-    // billboards are placed in world space by their shader, so don't spin it with the group
+    f.flame.layers.set(OVER); // (it reads what's behind it: render/flame.js)
     f.flame.position.set(f.x, f.y + 0.02, f.z);
+    f.haze = new THREE.Mesh(this.flameGeo, this.hazeMat);
+    f.haze.layers.set(HEAT);
+    f.flame.add(f.haze);
     this.scene.add(f.flame);
 
     f.group = g;
@@ -287,7 +297,8 @@ export class Fires extends Emitter {
       if (st.state === 'burning') {
         const h = st.heat;
         const fl = flicker(t, f.seed);
-        f.flame.scale.set(0.45 + 0.45 * h, (0.4 + 1.05 * h) * (0.92 + 0.16 * fl), 1);
+        const wide = 0.45 + 0.45 * h;
+        f.flame.scale.set(wide, (0.4 + 1.05 * h) * (0.92 + 0.16 * fl), wide);
         f.flameMat.uniforms.uHeat.value = h;
         // the teepee burns down as the wood goes, and falls in at the end
         const k = Math.min(1, st.fuel / FIRE.lay);
@@ -302,6 +313,8 @@ export class Fires extends Emitter {
       if (st.state === 'burning' || st.state === 'embers') near.push({ f, st, d });
     }
     near.sort((a, b) => a.d - b.d);
+    // (the air shimmers over a fire that's burning: render/pipeline.js, HEAT)
+    this.scene.userData.heat = near.some((n) => n.st.state === 'burning' && n.d < SEEN);
 
     // Firelight. By day the sun swamps it; at night it's what you can see by.
     const sun = this.sky ? Math.min(1, this.sky.sun.intensity / 3.2) : 0;
@@ -310,16 +323,20 @@ export class Fires extends Emitter {
       const l = this.lights[i];
       const n = near[i];
       if (!n) {
-        l.intensity = 0;
+        l.power = 0;
         continue;
       }
       const { f, st } = n;
       const fl = flicker(t, f.seed);
       const burning = st.state === 'burning';
       const power = burning ? 5 * st.heat * (0.82 + 0.3 * fl) : 0.9 * Math.pow(st.heat, 1.5) * (0.9 + 0.15 * fl);
-      l.intensity = power * (0.3 + 0.7 * night);
-      l.color.setRGB(1, burning ? 0.52 + 0.06 * fl : 0.3, burning ? 0.2 : 0.07);
-      l.position.set(f.x + (fl - 0.5) * 0.06, f.y + (burning ? 0.55 + 0.25 * st.heat : 0.25), f.z + (flicker(t * 1.3, f.seed + 9) - 0.5) * 0.06);
+      l.power = power * (0.3 + 0.7 * night);
+      l.color[0] = 1;
+      l.color[1] = burning ? 0.52 + 0.06 * fl : 0.3;
+      l.color[2] = burning ? 0.2 : 0.07;
+      l.x = f.x + (fl - 0.5) * 0.06;
+      l.y = f.y + (burning ? 0.55 + 0.25 * st.heat : 0.25);
+      l.z = f.z + (flicker(t * 1.3, f.seed + 9) - 0.5) * 0.06;
     }
 
     // What the sound should be crackling (see sound.js).

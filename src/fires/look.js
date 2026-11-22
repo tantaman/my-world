@@ -9,6 +9,7 @@ import { SHARED } from '../render/uniforms.js';
 import { anchor } from '../render/origin.js';
 import { OVER } from '../render/pipeline.js';
 import { NOISE_GLSL, POINT_GLSL, POINT_DISC_GLSL } from '../render/glsl.js';
+import { createFlameMaterial as createFlame } from '../render/flame.js';
 
 // Which way smoke drifts and flames lean, as the trees sway.
 export const WIND = new THREE.Vector2(1, 0.45).normalize();
@@ -62,56 +63,13 @@ export function createCoalMaterial(base) {
   return mat;
 }
 
-// Flames: a quad that turns about its upright axis to face you, filled with
-// noise that rises and licks into tongues. Additive and HDR, so the tone
-// mapping turns the hot core yellow-white and leaves the edges orange.
+// Flames: a volume of burning gas (render/flame.js), hotter and taller the
+// more the fire has to burn, and different for every fire.
 export function createFlameMaterial(seed) {
-  return new THREE.ShaderMaterial({
-    uniforms: { uTime: SHARED.uTime, uWind: SHARED.uWind, uHeat: { value: 0 }, uSeed: { value: (seed % 97) * 0.37 } },
-    vertexShader: /* glsl */ `
-      uniform float uTime;
-      uniform float uWind;
-      uniform float uSeed;
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        vec3 c = modelMatrix[3].xyz;
-        float sx = length(modelMatrix[0].xyz);
-        float sy = length(modelMatrix[1].xyz);
-        vec2 toCam = cameraPosition.xz - c.xz;
-        toCam /= max(length(toCam), 1e-4);
-        vec3 right = vec3(toCam.y, 0.0, -toCam.x);
-        // the top of the flame leans downwind and wavers
-        float lean = uv.y * uv.y * (0.12 * uWind + 0.07 * sin(uTime * 2.1 + uSeed));
-        vec3 wp = c + right * position.x * sx + vec3(0.0, position.y * sy, 0.0) + vec3(${WIND.x.toFixed(3)}, 0.0, ${WIND.y.toFixed(3)}) * lean * sy;
-        gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
-      }`,
-    fragmentShader: /* glsl */ `
-      uniform float uTime;
-      uniform float uHeat;
-      uniform float uSeed;
-      varying vec2 vUv;
-      ${NOISE_GLSL}
-      void main() {
-        float y = vUv.y;
-        float n1 = fbm4(vec2(vUv.x * 3.1 + uSeed, y * 2.2 - uTime * 2.4));
-        float n2 = vnoise(vec2(vUv.x * 7.0 - uSeed, y * 5.5 - uTime * 4.3));
-        float x = (vUv.x - 0.5) * 2.0 + (n1 - 0.5) * 0.7 * y;
-        // a teardrop that breaks up into licking tongues towards the top
-        float w = mix(0.95, 0.12, pow(y, 0.85));
-        float body = 1.0 - smoothstep(0.35, 1.0, abs(x) / w);
-        float top = 1.0 - smoothstep(0.25, 0.95, y + (n1 - 0.5) * 0.75 + (n2 - 0.5) * 0.3);
-        float base = smoothstep(0.0, 0.1, y);
-        float f = body * top * base * (0.55 + 0.75 * n2);
-        if (f < 0.03) discard;
-        vec3 col = mix(vec3(0.85, 0.16, 0.02), vec3(1.0, 0.46, 0.07), smoothstep(0.1, 0.45, f));
-        col = mix(col, vec3(1.0, 0.86, 0.5), smoothstep(0.5, 0.9, f));
-        gl_FragColor = vec4(col * f * (1.6 + 2.6 * uHeat), 1.0);
-      }`,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  });
+  const mat = createFlame();
+  mat.uniforms.uHeat = { value: 0 };
+  mat.uniforms.uSeed = { value: (seed % 97) * 0.37 };
+  return mat;
 }
 
 // ── Smoke and sparks ────────────────────────────────────────────────────────
