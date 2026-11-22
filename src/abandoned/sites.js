@@ -156,4 +156,20 @@ export class OutlyingBuildings {
     const parts = /^abandoned:district:(-?\d{1,6}):(-?\d{1,6})$/.exec(id);
     return parts ? this.cell(Number(parts[1]), Number(parts[2])) : null;
   }
+  // Districts' buildings whose box overlaps a rectangle of the world, those
+  // not surveyed yet surveyed now: for what else is grown from the seed to
+  // keep clear of. A district's building stays inside its own square, so
+  // only the squares the rectangle touches are asked.
+  within(x0, z0, x1, z1) {
+    const out = [];
+    const box = [x0, z0, x1, z1];
+    const st = this.start;
+    for (let j = Math.floor((z0 - st.z) / DISTRICT); j <= Math.floor((z1 - st.z) / DISTRICT); j++) {
+      for (let i = Math.floor((x0 - st.x) / DISTRICT); i <= Math.floor((x1 - st.x) / DISTRICT); i++) {
+        const s = this.cell(i, j);
+        if (s && overlaps(s.box, box)) out.push(s);
+      }
+    }
+    return out;
+  }
 }

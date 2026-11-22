@@ -196,17 +196,19 @@ export function missedBy(o, d, p, v) {
 }
 
 // ── What's yours ────────────────────────────────────────────────────────────
-// What's kept of you at the club ('huntclub', yours): whether you've been
+// What's kept of you at the clubs ('huntclub', yours): whether you've been
 // given a shotgun, your best round, how many rounds you've shot to the end,
-// and whether you've been. A save is bytes somebody sent us: made safe here
-// before it's believed.
-export function validateRecord(raw) {
+// whether you've been to the first club, and which of the rest you've been
+// to (by id, the latest `keep`). A save is bytes somebody sent us: made safe
+// here before it's believed.
+export function validateRecord(raw, keep = 500) {
   const r = raw && typeof raw === 'object' ? raw : {};
   return {
     gun: r.gun === true,
     best: Number.isInteger(r.best) && r.best >= 0 && r.best <= TARGETS ? r.best : null,
     rounds: Number.isInteger(r.rounds) && r.rounds >= 0 ? r.rounds : 0,
     visited: r.visited === true,
+    been: Array.isArray(r.been) ? r.been.filter((id) => typeof id === 'string').slice(0, keep) : [],
   };
 }
 

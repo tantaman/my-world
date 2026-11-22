@@ -1,6 +1,9 @@
-// The hunt club: a timber clubhouse with a skeet field in front of it, a
-// longer walk out from where you first arrive than the video store. It's on
-// the map, so `go here` sets you down at the foot of its porch steps.
+// The hunt clubs: a timber clubhouse with a skeet field in front of it, the
+// first a longer walk out from where you first arrive than the video store,
+// and the rest out in the forest, a little under one to every two squares
+// of FAR.cell (site.js). They're on the map, so `go here` sets you down at the foot of a
+// club's porch steps; the nearest is the one that stands, and the shotgun,
+// the round and your best are the same at any of them.
 //
 // Up on the porch, the steward serves from a hatch in the wall. Ask, and
 // you're given a shotgun, yours from then on: it goes in the rifle's slot on
@@ -9,8 +12,8 @@
 // and doubles from eight stations round the field, scored on a card at the
 // top of the screen. Your best round is kept.
 //
-//   site.js       where the club is, grown from the seed and the land, and
-//                 how high everything in it stands
+//   site.js       where the clubs are, grown from the seed and the land, and
+//                 how high everything in one stands
 //   skeet.js      the field, a target's flight, the shot's pattern, the rules of a round
 //   range.js      the field at work: the throws, the targets flying and breaking, the score
 //   club.js       what it looks like: the clubhouse, the houses, the pads, the walks
@@ -19,12 +22,14 @@
 //   scorecard.js  the card at the top of the screen while you shoot a round
 //   sound.js      the shot, loading, "pull!", the trap, a target breaking
 //
-// Nothing about the forest changes for the club: see site.js. Whether you
-// have a shotgun, and your best round, are yours, saved.
+// Nothing about the forest changes for a club: see site.js. Whether you
+// have a shotgun, your best round and which clubs you've been to are yours,
+// saved.
 //
 // From the console:
-//   world.huntclub.site               where it is
-//   await world.huntclub.go()         stand at the foot of the porch steps
+//   world.huntclub.site               the club you're at, or were last near
+//   world.huntclub.home               the first club; .clubs, the rest (cell(i, j), byId(id))
+//   await world.huntclub.go(id?)      stand at the foot of the porch steps (there, or at the club with that id)
 //   world.huntclub.toCounter()        stand at the hatch
 //   world.huntclub.toStation(n)       stand on station n, facing the crossing point
 //   world.huntclub.range              the round, the throw, the targets in the air
@@ -32,7 +37,7 @@
 //   world.huntclub.lead(target)       where to aim to break a target in the air
 
 import * as THREE from 'three';
-import { candidates, pickSite, clearOf, regionsInTheWay, clubName, layout, PLAN, CLUB, EDGE, TREAD } from './site.js';
+import { candidates, pickSite, clearOf, regionsInTheWay, layout, HuntClubs, FAR, FAR_REACH, RING, PLAN, CLUB, EDGE, TREAD } from './site.js';
 import { STATIONS, HOUSES, FIELD, meeting, validateRecord } from './skeet.js';
 import { Range } from './range.js';
 import { buildClub, COUNTER } from './club.js';
@@ -46,7 +51,13 @@ import { onPlan, planDiscs, toWorld, toLocal } from '../landmarks/sites.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { rayBox, wrapAngle } from '../core/geom.js';
 import { hash2i, mulberry32 } from '../noise.js';
+import { GridNearest, PendingNearest, MergeNearest } from '../core/nearest.js';
 
+const BEEN_KEPT = 500; // far clubs you've been to, the most remembered
+const NEAREST_AFTER = 0.5; // s between looks for the nearest club
+const SWAP_NEARER = 120; // m nearer another club must be to take the place of one that's stood up
+const PREFETCH = 2500; // m round you within which clubs are looked for ahead of time
+const PUMP_MS = [1.5, 6]; // ms a frame spent looking for them: about, and while the map is open
 const SHOW = 450; // m: the club is stood up this close...
 const HIDE = 560; // ...and taken down past this
 const ARRIVE = 40; // m from the foot of the steps that counts as there
@@ -79,70 +90,88 @@ const CHEER = (score) => (score === 25 ? 'A straight! Twenty-five straight!' : s
 
 const _l = { x: 0, z: 0 };
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
+const overlaps = (b, x0, z0, x1, z1) => b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0;
 
 // The features this uses, so it is installed after them (game/features.js):
 // the video store, the abandoned buildings and the airfields for what the
-// club keeps clear of, along with everything they keep clear of; towns for
+// clubs keep clear of, along with everything they keep clear of; towns for
 // the steward's body and voice; hunting for game and kills, and to put the
 // shotgun in the rifle's slot.
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'towns', 'wildlife', 'hunting', 'videostore', 'abandoned', 'airports'];
 export function installHuntclub(game) {
   const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway, spaceport, videostore, abandoned, airports, wildlife, hunting } = game;
 
-  // ── Where it is ───────────────────────────────────────────────────────────
-  // The flat dry spots it could be are looked for now. Which of them it is
-  // waits for the airfields that might be in the way to be found: the
-  // airports feature looks for those a little at a time once the world is
-  // open, so as not to hold up the start, and this doesn't hurry it. Until
-  // then the club isn't anywhere, and fills in on the map when it is. Asked
-  // for by its id (it's being tracked, say), it's found there and then.
+  // ── Where they are ────────────────────────────────────────────────────────
+  // Clear of everything there first: what the video store keeps clear of,
+  // every store and abandoned building, and the airfields. (Every launch
+  // site, store and building, not the ones nearest you: where a club is
+  // mustn't depend on where you were when it was decided.)
   const fields = airports.airports;
-  const inTheWay = regionsInTheWay(fields.regions, player.start);
-  // (every launch site and video store, not the ones nearest you: where the
-  // club is mustn't depend on where you were when it was decided)
   const reserved = storeClearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, spaceport: spaceport.sites });
-  const keepOff = clearOf({
-    reserved: (x0, z0, x1, z1) => reserved(x0, z0, x1, z1) || videostore.branches.within(x0, z0, x1, z1).length > 0,
-    boxes: () => [videostore.home && videostore.home.box, ...abandoned.sites.map((s) => s.box)].filter(Boolean),
-    airfields: fields,
-  });
+  const others = (...box) => reserved(...box) || videostore.stores(...box).length > 0 || abandoned.within(...box).length > 0;
+  others.ready = reserved.ready;
+  const keepOff = clearOf({ reserved: others, airfields: fields });
+
+  // The first club. The flat dry spots it could be are looked for now. Which
+  // of them it is waits for the airfields that might be in the way to be
+  // found: the airports feature looks for those a little at a time once the
+  // world is open, so as not to hold up the start, and this doesn't hurry
+  // it. Until then it isn't anywhere, and fills in on the map when it is.
+  // Asked for by its id (it's being tracked, say), it's found there and then.
+  const inTheWay = regionsInTheWay(fields.regions, player.start);
   const spots = candidates(gen, player.start);
-  const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset ? chunks.heightOffset(x, z) : 0);
-  const name = clubName(gen.seed);
-  let site = null;
-  let lay = null; // how high everything stands, on the land as it was grown
-  let range = null;
+  let home = null;
   let decided = false;
   // whether the airfields in its way have all been found (asking for any that haven't)
   const fieldsKnown = () => inTheWay.every((g) => fields.site(g.id, false) !== undefined);
   function decide() {
-    if (decided) return site;
+    if (decided) return home;
     decided = true;
-    site = pickSite(gen, spots, keepOff);
-    if (site) settle();
-    return site;
+    home = pickSite(gen, spots, keepOff);
+    if (home) {
+      for (const ch of chunks.chunks.values()) clearChunk(ch, home);
+      grass.invalidate(...home.box);
+    }
+    return home;
   }
+  // The rest, out in the forest, looked for round about you as you go.
+  const clubs = new HuntClubs(gen, { start: player.start, keepOff, away: (...box) => !!landforms.reaches(...box) });
+  // every club whose box overlaps a rectangle (wait = false: only those found already)
+  const all = (x0, z0, x1, z1, wait = true) => {
+    const out = home && overlaps(home.box, x0, z0, x1, z1) ? [home] : [];
+    return out.concat(clubs.within(x0, z0, x1, z1, wait));
+  };
+
+  // The one you're at, or were last near: what's stood up and shot at.
+  // Another takes its place when you come nearer that one.
+  let site = null;
+  let lay = null; // how high everything in it stands, on the land as it was grown
+  let range = null;
+  const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset ? chunks.heightOffset(x, z) : 0);
   const local = (x, z, out = _l) => toLocal(site, x, z, out);
 
   // ── What's yours ──────────────────────────────────────────────────────────
   let owned = false; // you've been given a shotgun
   let best = null; // your best round
   let rounds = 0; // rounds shot to the end
-  let visited = false;
+  let visited = false; // the first club
+  let been = []; // the rest you've been to, by id, latest first
   save.register({
     id: 'huntclub',
     scope: 'yours',
     local: 'marks',
-    collect: () => ({ gun: owned, best, rounds, visited }),
-    validate: validateRecord,
+    collect: () => ({ gun: owned, best, rounds, visited, been: [...been] }),
+    validate: (raw) => validateRecord(raw, BEEN_KEPT),
     restore(r) {
       owned = r.gun;
       best = r.best;
       rounds = r.rounds;
       visited = r.visited;
+      been = [...r.been];
       if (owned) arm();
     },
   });
+  const beenTo = (s) => (s === home ? visited : been.includes(s.id));
 
   // ── The shotgun ───────────────────────────────────────────────────────────
   // On the tool bar once you've been given it, in the rifle's slot.
@@ -163,7 +192,7 @@ export function installHuntclub(game) {
         targets: hunting.targets,
         skeet,
         owned: () => owned,
-        notYours: `not yours · the steward at ${name} will give you one`,
+        notYours: 'not yours · the steward at any hunt club will give you one',
       }),
     );
     return shotgun;
@@ -195,14 +224,14 @@ export function installHuntclub(game) {
 
   const card = new Scorecard(document.getElementById('hud') || document.body);
 
-  // ── The forest round it ───────────────────────────────────────────────────
-  // The trees, bushes and stones on the field hidden: as each chunk's plants
-  // come, and those already there when the club is found.
-  function clearChunk(ch) {
+  // ── The forest round them ─────────────────────────────────────────────────
+  // The trees, bushes and stones on a field hidden: as each chunk's plants
+  // come, and those already there when the first club is found.
+  function clearChunk(ch, s) {
     const S = chunks.size;
     const x0 = ch.cx * S;
     const z0 = ch.cz * S;
-    const b = site.box;
+    const b = s.box;
     if (!ch.vegLists || b[0] > x0 + S + 3 || b[2] < x0 - 3 || b[1] > z0 + S + 3 || b[3] < z0 - 3) return;
     for (const kind in ch.vegLists) {
       const list = ch.vegLists[kind];
@@ -210,40 +239,66 @@ export function installHuntclub(game) {
         const scale = list[o + 4];
         if (scale <= 0) continue;
         const back = (KEEP_BACK[kind] ?? 0.6) * (SCALED[kind] ? scale : 1);
-        if (onPlan(site, list[o], list[o + 2], back)) chunks.hideInstance(ch, kind, k);
+        if (onPlan(s, list[o], list[o + 2], back)) chunks.hideInstance(ch, kind, k);
       }
     }
   }
-  chunks.on('vegetation', (ch) => site && clearChunk(ch));
-  // no grass under the clubhouse, the houses, the pads or the walks
-  let bare = null;
-  grass.addClearing((x0, z0, x1, z1) => {
-    const b = site && site.box;
-    if (!b || b[0] > x1 || b[2] < x0 || b[1] > z1 || b[3] < z0) return null;
-    return bare;
+  chunks.on('vegetation', (ch) => {
+    const S = chunks.size;
+    const x0 = ch.cx * S;
+    const z0 = ch.cz * S;
+    for (const s of all(x0 - 3, z0 - 3, x0 + S + 3, z0 + S + 3)) clearChunk(ch, s);
   });
-  // ── Building goes round it ────────────────────────────────────────────────
-  let discs = [];
+  // How high a club's things stand, worked out once each, on the land as it
+  // was grown.
+  const lays = new Map(); // club id -> layout
+  const layOf = (s) => lays.get(s.id) || lays.set(s.id, layout(s, (x, z) => gen.height(x, z))).get(s.id);
+  // no grass under a clubhouse, its houses, its pads or its walks
+  const bares = new Map(); // club id -> (x, z) -> whether it's bare there
+  function bareOf(s) {
+    let bare = bares.get(s.id);
+    if (bare) return bare;
+    const foot = EDGE - layOf(s).steps.length * TREAD;
+    const R = FIELD.radius;
+    const arcZ = -Math.sqrt(R * R - (FIELD.chord / 2) ** 2);
+    const _g = { x: 0, z: 0 };
+    bare = (x, z) => {
+      toLocal(s, x, z, _g);
+      const u = _g.x;
+      const v = _g.z;
+      if (u > CLUB.x0 - 0.8 && u < CLUB.x1 + 0.8 && v > foot - 0.3 && v < CLUB.z1 + 0.4) return true;
+      for (const h of Object.values(HOUSES)) if (u > h.box[0] - 0.3 && u < h.box[2] + 0.3 && v > h.box[1] - 0.3 && v < h.box[3] + 0.3) return true;
+      for (const st of STATIONS) if (Math.abs(u - st.x) < FIELD.pad + 0.15 && Math.abs(v - st.z) < FIELD.pad + 0.15) return true;
+      if (v > -0.5 && Math.abs(Math.hypot(u, v - arcZ) - R) < 0.6) return true;
+      return Math.abs(u) < 0.65 && v > 0 && v < foot;
+    };
+    bares.set(s.id, bare);
+    return bare;
+  }
+  grass.addClearing((x0, z0, x1, z1) => {
+    const here = all(x0, z0, x1, z1);
+    if (!here.length) return null;
+    const bare = here.map(bareOf);
+    return bare.length === 1 ? bare[0] : (x, z) => bare.some((b) => b(x, z));
+  });
+  // ── Building goes round them ──────────────────────────────────────────────
+  const discs = new Map(); // club id -> discs over its plan
   builder.obstacles.addSource((x, z, R2, out) => {
-    const b = site && site.box;
-    if (!b || x + R2 + 3 < b[0] || x - R2 - 3 > b[2] || z + R2 + 3 < b[1] || z - R2 - 3 > b[3]) return;
-    for (const d of discs) {
-      if (Math.hypot(d.x - x, d.z - z) > R2 + d.r + 1) continue;
-      out.push({ x: d.x, z: d.z, what: 'the skeet field', dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
+    for (const s of all(x - R2 - 3, z - R2 - 3, x + R2 + 3, z + R2 + 3)) {
+      if (!discs.has(s.id)) discs.set(s.id, planDiscs(s, 3));
+      for (const d of discs.get(s.id)) {
+        if (Math.hypot(d.x - x, d.z - z) > R2 + d.r + 1) continue;
+        out.push({ x: d.x, z: d.z, what: 'the skeet field', dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
+      }
     }
   });
   // ── On the map ────────────────────────────────────────────────────────────
-  // where it is is the foot of its steps: that's where `go here` and tracking
-  // it lead
-  let place = null;
-  map.places.addSource({
-    list: 'hunt clubs',
-    destinations: () => (site ? [asPlace()] : []),
-    within: (x0, z0, x1, z1) => (site && site.door.x >= x0 && site.door.x <= x1 && site.door.z >= z0 && site.door.z <= z1 ? [asPlace()] : []),
-    get: (id) => (typeof id === 'string' && id.startsWith('huntclub:') && decide() && id === site.id ? asPlace() : null),
-  });
-  function asPlace() {
-    if (place && place.visited === visited) return place;
+  // where one is is the foot of its steps: that's where `go here` and
+  // tracking it lead (made once each, and again when you've been there)
+  const places = new Map();
+  function asPlace(s) {
+    let p = places.get(s.id);
+    if (p && p.visited === beenTo(s)) return p;
     const corners = ([x0, z0, x1, z1]) =>
       [
         [x0, z0],
@@ -251,49 +306,55 @@ export function installHuntclub(game) {
         [x1, z1],
         [x0, z1],
       ].map(([u, v]) => {
-        const p = toWorld(site, u, v);
-        return [p.x, p.z];
+        const w = toWorld(s, u, v);
+        return [w.x, w.z];
       });
-    place = {
-      id: site.id,
-      x: site.door.x,
-      z: site.door.z,
-      yaw: site.door.yaw,
-      name: site.name,
+    p = {
+      id: s.id,
+      x: s.door.x,
+      z: s.door.z,
+      yaw: s.door.yaw,
+      name: s.name,
       kind: 'hunt club',
       note: 'get a shotgun from the steward and shoot a round of skeet',
       glyph: GLYPH,
-      visited,
+      visited: beenTo(s),
       shape: [corners([CLUB.x0, EDGE, CLUB.x1, CLUB.z1]), ...Object.values(HOUSES).map((h) => corners(h.box))],
       ground: [corners(PLAN)],
     };
-    return place;
+    places.set(s.id, p);
+    return p;
   }
-
-  // Found: how high everything stands, the field at work, and the forest,
-  // the grass and building told.
-  function settle() {
-    lay = layout(site, (x, z) => gen.height(x, z));
-    range = new Range({ scene, site, lay, ground, chips: builder.chips, sound });
-    listen(range);
-    for (const ch of chunks.chunks.values()) clearChunk(ch);
-    const foot = EDGE - lay.steps.length * TREAD;
-    const R = FIELD.radius;
-    const arcZ = -Math.sqrt(R * R - (FIELD.chord / 2) ** 2);
-    const _g = { x: 0, z: 0 };
-    bare = (x, z) => {
-      toLocal(site, x, z, _g);
-      const u = _g.x;
-      const v = _g.z;
-      if (u > CLUB.x0 - 0.8 && u < CLUB.x1 + 0.8 && v > foot - 0.3 && v < CLUB.z1 + 0.4) return true;
-      for (const h of Object.values(HOUSES)) if (u > h.box[0] - 0.3 && u < h.box[2] + 0.3 && v > h.box[1] - 0.3 && v < h.box[3] + 0.3) return true;
-      for (const s of STATIONS) if (Math.abs(u - s.x) < FIELD.pad + 0.15 && Math.abs(v - s.z) < FIELD.pad + 0.15) return true;
-      if (v > -0.5 && Math.abs(Math.hypot(u, v - arcZ) - R) < 0.6) return true;
-      return Math.abs(u) < 0.65 && v > 0 && v < foot;
-    };
-    grass.invalidate(...site.box);
-    discs = planDiscs(site, 3);
-  }
+  const doorIn = (s, x0, z0, x1, z1) => s.door.x >= x0 && s.door.x <= x1 && s.door.z >= z0 && s.door.z <= z1;
+  // how far from the start the first club's door can be, at the most
+  const HOME_REACH = RING[1] + Math.hypot(PLAN[2] - PLAN[0], PLAN[3] - PLAN[1]);
+  map.places.addSource({
+    within: (x0, z0, x1, z1) => all(x0, z0, x1, z1, false).filter((s) => doorIn(s, x0, z0, x1, z1)).map(asPlace),
+    get(id) {
+      if (!String(id).startsWith('huntclub:')) return null;
+      const s = clubs.byId(id) || (decide() && id === home.id ? home : null);
+      return s ? asPlace(s) : null;
+    },
+    // the first club (once it's found), then a square at a time outward (a
+    // club keeps inside its own)
+    list: 'hunt clubs',
+    nearest: (x, z) =>
+      new MergeNearest([
+        new PendingNearest(x, z, () => (decided ? home && asPlace(home) : undefined), Math.max(0, Math.hypot(x - player.start.x, z - player.start.z) - HOME_REACH)),
+        new GridNearest(x, z, {
+          size: FAR.cell,
+          // (where a square's can be is known from the seed alone, cheaply)
+          box(i, j) {
+            const s = clubs.spot(i, j);
+            return s ? [s.x - FAR_REACH, s.z - FAR_REACH, s.x + FAR_REACH, s.z + FAR_REACH] : null;
+          },
+          at(i, j) {
+            const s = clubs.peek(i, j);
+            return s === undefined ? undefined : s ? [asPlace(s)] : [];
+          },
+        }),
+      ]),
+  });
 
   // ── Standing it up ────────────────────────────────────────────────────────
   let built = null;
@@ -314,6 +375,23 @@ export function installHuntclub(game) {
       range.clear();
     }
   }
+  // Another club takes this one's place: this one is taken down (and built
+  // again if you come back), and its field is this one's.
+  function moveTo(s) {
+    if (built) {
+      show(false);
+      built.object.traverse((o) => o.isMesh && o.geometry.dispose());
+      built.steward.body.dispose();
+      built = null;
+    }
+    if (range) range.clear();
+    site = s;
+    lay = layOf(s);
+    range = new Range({ scene, site, lay, ground, chips: builder.chips, sound });
+    listen(range);
+    arrived = false;
+    greeted = false;
+  }
 
   // The camera doesn't look through a wall or a roof.
   player.cameraBlockers.push((origin, dir, max) => {
@@ -329,10 +407,12 @@ export function installHuntclub(game) {
 
   // ── The steward ───────────────────────────────────────────────────────────
   // Behind the hatch in a blaze-orange vest and cap, looking up when you come
-  // near, waving when you come up to the porch.
-  const who = STEWARDS[hash2i(5, 9, gen.seed) % STEWARDS.length];
+  // near, waving when you come up to the porch. Each club has its own, from
+  // its seed.
+  const stewardOf = (s) => STEWARDS[hash2i(5, 9, s.seed) % STEWARDS.length];
   function makeSteward(at) {
-    const rnd = mulberry32(gen.seed + 4421);
+    const who = stewardOf(site);
+    const rnd = mulberry32(site.seed + 4421);
     const c = (hex) => new THREE.Color(hex);
     const look = {
       her: who.her,
@@ -352,18 +432,18 @@ export function installHuntclub(game) {
       hatColor: c(0xf26a1a),
       beard: !who.her && rnd() < 0.6,
     };
-    const body = new Body(look, gen.seed);
+    const body = new Body(look, site.seed);
     body.mesh.position.set(at.x, at.y, at.z);
     body.mesh.rotation.y = at.yaw;
-    return { body, at };
+    return { body, at, who };
   }
   let lastHello = -Infinity;
   function say(line, wave = false) {
     const s = built && built.steward;
     if (!s) return;
-    hud.flash(`${who.name}: “${line}”`, 4200);
+    hud.flash(`${s.who.name}: “${line}”`, 4200);
     const p = toWorld(site, s.at.x, s.at.z);
-    sound.call('hello', p.x, lay.deck + 1.6, p.z, { pitch: who.her ? 1.25 : 0.85 });
+    sound.call('hello', p.x, lay.deck + 1.6, p.z, { pitch: s.who.her ? 1.25 : 0.85 });
     if (wave) s.body.waving = 1.8;
   }
 
@@ -419,14 +499,37 @@ export function installHuntclub(game) {
   let arrived = false;
   let cued = false;
   let greeted = false;
+  let lookIn = 0;
+  // The nearest club found so far, and how far: the first, or one of the
+  // rest looked for round about.
+  function nearest(p) {
+    let best = home;
+    let bd = home ? Math.hypot(home.x - p.x, home.z - p.z) : Infinity;
+    for (const s of clubs.cells.values()) {
+      const d = s ? Math.hypot(s.x - p.x, s.z - p.z) : Infinity;
+      if (d < bd) [best, bd] = [s, d];
+    }
+    return best && { site: best, d: bd };
+  }
   game.addSystem({
     name: 'huntclub',
     phase: 'world',
     update({ dt }) {
       if (!decided && fieldsKnown()) decide();
+      const f = game.focus;
+      // the clubs round about looked for ahead of time, and the nearest
+      // stood up in place of the last (not while a round's under way there)
+      if (clubs.queue.size) clubs.pump(map.isOpen ? PUMP_MS[1] : PUMP_MS[0]);
+      lookIn -= dt;
+      if (lookIn <= 0) {
+        lookIn = NEAREST_AFTER;
+        clubs.prefetch(f.x, f.z, PREFETCH);
+        const n = !(shown && range.round) && nearest(f);
+        const at = site ? Math.hypot(site.x - f.x, site.z - f.z) : Infinity;
+        if (n && n.site !== site && (shown ? n.d < at - SWAP_NEARER : n.d < at)) moveTo(n.site);
+      }
       if (!site) return;
       clock += dt;
-      const f = game.focus;
       const d = Math.hypot(site.x - f.x, site.z - f.z);
       if (d < SHOW) show(true);
       else if (d > HIDE) show(false);
@@ -447,8 +550,9 @@ export function installHuntclub(game) {
       if (!arrived && toDoor < ARRIVE) {
         arrived = true;
         hud.flash(owned ? `${site.name} · out to station 1 for a round of skeet` : `${site.name} · up on the porch, the steward has a shotgun for you`, 4200);
-        if (!visited) {
-          visited = true;
+        if (!beenTo(site)) {
+          if (site === home) visited = true;
+          else been = [site.id, ...been].slice(0, BEEN_KEPT);
           save.touch();
         }
       }
@@ -516,10 +620,18 @@ export function installHuntclub(game) {
 
   // ── From the console ──────────────────────────────────────────────────────
   game.provide('huntclub', {
-    // null until it's been found (a moment after the world opens)
+    // the club you're at, or were last near: null until one's been found (a
+    // moment after the world opens)
     get site() {
       return site;
     },
+    // the first club (null until it's been found), and the rest
+    get home() {
+      return home;
+    },
+    clubs,
+    // every club whose box overlaps a rectangle of the world
+    within: all,
     get lay() {
       return lay;
     },
@@ -538,17 +650,23 @@ export function installHuntclub(game) {
     get rounds() {
       return rounds;
     },
+    get been() {
+      return [...been];
+    },
     get ready() {
       return shown;
     },
     get steward() {
-      return who.name;
+      return built ? built.steward.who.name : site ? stewardOf(site).name : null;
     },
-    // stand at the foot of the porch steps, facing the clubhouse
-    async go() {
-      if (!site) return null;
-      await game.api.teleport(site.door.x, site.door.z, site.door.yaw);
-      return { x: site.door.x, z: site.door.z };
+    // stand at the foot of the porch steps, facing the clubhouse: of the
+    // club you're at, or of the one with this id
+    async go(id) {
+      const to = id ? (id === (home && home.id) ? home : clubs.byId(id)) : site;
+      if (!to) return null;
+      if (to !== site) moveTo(to);
+      await game.api.teleport(to.door.x, to.door.z, to.door.yaw);
+      return { x: to.door.x, z: to.door.z };
     },
     // stand at the hatch, facing the steward
     toCounter() {

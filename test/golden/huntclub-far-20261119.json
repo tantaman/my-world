@@ -1,0 +1,30 @@
+{
+ "huntclub:far:-1:-1": {
+  "name": "Partridge Brook Hunt Club",
+  "x": -2109.908,
+  "z": -2522.339,
+  "yaw": 1.794,
+  "base": -9.501
+ },
+ "huntclub:far:-2:1": {
+  "name": "Cedar Creek Hunt Club",
+  "x": -9058.281,
+  "z": 10549.733,
+  "yaw": 5.308,
+  "base": -9.85
+ },
+ "huntclub:far:-1:1": {
+  "name": "Elk Point Hunt Club",
+  "x": -1490.353,
+  "z": 6945.883,
+  "yaw": 1.693,
+  "base": -21.353
+ },
+ "huntclub:far:0:1": {
+  "name": "Tamarack Valley Hunt Club",
+  "x": 3441.346,
+  "z": 8982.264,
+  "yaw": 4.823,
+  "base": -6.12
+ }
+}

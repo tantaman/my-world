@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GridNearest, ListNearest, MergeNearest } from '../src/core/nearest.js';
+import { GridNearest, ListNearest, MergeNearest, PendingNearest } from '../src/core/nearest.js';
 import { mulberry32, hash2i } from '../src/noise.js';
 
 // A made-up grid: some squares have a place or two, some spill a little out.
@@ -98,4 +98,29 @@ test('a square that says where its places can be is only looked in when that is 
   assert.equal(looked.length, new Set(looked).size, 'each looked in once');
   assert.ok(looked.every((k) => spot(...k.split(':').map(Number))), 'and only those that can have something');
   assert.ok(looked.length <= 10, `no more of them than it took (${looked.length})`);
+});
+
+test('a place still being worked out holds up only what could be further than it', () => {
+  const x = 0;
+  const z = 0;
+  let known; // undefined: still being worked out
+  const late = { id: 'late', x: 300, z: 0 };
+  const merged = () =>
+    new MergeNearest([
+      new PendingNearest(x, z, () => known, 250),
+      new ListNearest(x, z, [
+        { id: 'a', x: 100, z: 0 },
+        { id: 'b', x: 400, z: 0 },
+      ]),
+    ]);
+  const s = merged();
+  assert.equal(s.ready.place.id, 'a', 'nearer than it could be: listed straight away');
+  s.take();
+  assert.equal(s.ready, null, 'further than it could be: held up');
+  assert.equal(s.work(), 'wait', 'while it is worked out');
+  known = late;
+  assert.equal(s.work(), 'more');
+  assert.deepEqual(pull(s, 5).map((f) => f.place.id), ['late', 'b'], 'then in its place');
+  known = null;
+  assert.deepEqual(pull(merged(), 5).map((f) => f.place.id), ['a', 'b'], 'and nothing, if there is none');
 });

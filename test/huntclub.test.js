@@ -17,9 +17,9 @@ import { Landforms } from '../src/world/landforms.js';
 import { findSite as findPad, clearOf as padClear } from '../src/spaceport/site.js';
 import { findSite as findStore, clearOf as storeClear } from '../src/videostore/site.js';
 import { Branches } from '../src/videostore/branches.js';
-import { findBuildings, overlaps } from '../src/abandoned/sites.js';
+import { findBuildings, OutlyingBuildings, overlaps } from '../src/abandoned/sites.js';
 import { Airports } from '../src/airports/airports.js';
-import { findSite, candidates, pickSite, clearOf, regionsInTheWay, mayReach, clubName, layout, PLAN, CLUB, EDGE, TREAD, RING } from '../src/huntclub/site.js';
+import { findSite, candidates, pickSite, clearOf, regionsInTheWay, mayReach, clubName, farName, farSpot, HuntClubs, FAR, layout, PLAN, CLUB, EDGE, TREAD, RING } from '../src/huntclub/site.js';
 import { FIELD, STATIONS, HOUSES, CLAY, SHOT, SCHEDULE, TARGETS, Round, fly, launch, pattern, meeting, missedBy, housesOf, validateRecord } from '../src/huntclub/skeet.js';
 import { Range, describe } from '../src/huntclub/range.js';
 import { buildClub, COUNTER, HATCH } from '../src/huntclub/club.js';
@@ -35,7 +35,7 @@ const near = (a, b, eps) => Math.abs(a - b) < eps;
 
 // ── Where it is ─────────────────────────────────────────────────────────────
 
-// The world as the game has it: the things the club keeps clear of, made the
+// The world as the game has it: the things the clubs keep clear of, made the
 // way their features make them.
 function worldOf(land, seed = SEED) {
   const gen = growWorld(seed, [], land);
@@ -54,8 +54,14 @@ function worldOf(land, seed = SEED) {
   // the store's branches, beside the villages, clear of the store and the airfields
   const field = (box) => airports.regions.some((g) => mayReach(g, Math.hypot((box[0] + box[2]) / 2 - g.x, (box[1] + box[3]) / 2 - g.z), Math.hypot(box[2] - box[0], box[3] - box[1]) / 2) && airports.site(g.id) && overlaps(box, airports.site(g.id).box));
   const branches = new Branches(gen, { towns, keepOff: reserved, also: (...box) => (store && overlaps(box, store.box)) || field(box) });
-  const keepOff = clearOf({ reserved: (...box) => reserved(...box) || branches.within(...box).length > 0, boxes: () => [store.box, ...abandoned.map((s) => s.box)], airfields: airports });
-  return { gen, start, keepOff, store, abandoned, airports, branches };
+  const stores = (...box) => (store && overlaps(box, store.box)) || branches.within(...box).length > 0;
+  // the abandoned buildings further out, clear of every store and the airfields
+  const districts = new OutlyingBuildings(gen, start, (...box) => stores(...box) || reserved(...box) || field(box));
+  const others = (...box) => reserved(...box) || stores(...box) || abandoned.some((s) => overlaps(box, s.box)) || districts.within(...box).length > 0;
+  others.ready = reserved.ready;
+  const keepOff = clearOf({ reserved: others, airfields: airports });
+  const clubs = (opts = {}) => new HuntClubs(gen, { start, keepOff, away: keepHike, ...opts });
+  return { gen, start, keepOff, store, abandoned, airports, branches, districts, clubs };
 }
 
 test('the hunt club is grown from the seed: the same every time, on flat dry ground, clear of what was there first', () => {
@@ -116,6 +122,95 @@ test('the hunt club keeps off somewhere it is told to, and a seed names it', () 
   assert.ok(names.size > 4, `different seeds, different names (${[...names].join(', ')})`);
   // every name can be painted on its sign
   for (let s = 0; s < 60; s++) for (const ch of clubName(s).toUpperCase()) assert.ok(ch === ' ' || glyph(ch), `"${ch}" is in the font`);
+});
+
+// ── Further out ─────────────────────────────────────────────────────────────
+
+test('the rest are out in the forest, grown from the seed, each in its own square, and pinned', () => {
+  const { gen, start, keepOff, clubs } = worldOf(LANDS[0]);
+  const far = clubs();
+  const home = findSite(gen, start, keepOff);
+  const pinned = {};
+  // the squares round the start that have one
+  const near = [];
+  for (let j = -2; j <= 1; j++) for (let i = -2; i <= 1; i++) if (far.spot(i, j)) near.push([i, j]);
+  for (const [i, j] of near) {
+    const s = far.cell(i, j);
+    if (!s) continue;
+    assert.ok(s.box[0] >= i * FAR.cell && s.box[2] < (i + 1) * FAR.cell && s.box[1] >= j * FAR.cell && s.box[3] < (j + 1) * FAR.cell, `${s.name} is inside its own square`);
+    const d = Math.hypot(s.x - start.x, s.z - start.z);
+    assert.ok(d > FAR.start - FAR.ring[1] - 1, `well away from the start (${(d / 1000).toFixed(1)} km)`);
+    assert.ok(!overlaps(s.box, home.box), 'and from the first club');
+    gen.height(s.x, s.z);
+    assert.ok(gen.water.edge >= 40, 'out of the water');
+    assert.ok(s.hi - s.lo <= 3.2, `on ground that's flat enough (${(s.hi - s.lo).toFixed(2)} m)`);
+    assert.ok(!keepOff(...s.box), 'clear of everything it keeps clear of');
+    assert.ok(Math.abs(Math.sin(2 * (s.yaw - farSpot(SEED, i, j).yaw))) < 1e-9, 'facing the way its square says, or a quarter turn round');
+    assert.ok(Math.abs(Math.cos(s.door.yaw - s.yaw) - 1) < 1e-9, 'go here sets you down facing the clubhouse');
+    assert.match(s.name, / Hunt Club$/);
+    assert.notEqual(s.name, home.name, 'by a name of its own');
+    assert.deepEqual(clubs().byId(s.id), s, 'found again by its id, the same');
+    const round = (v) => Math.round(v * 1000) / 1000;
+    pinned[s.id] = { name: s.name, x: round(s.x), z: round(s.z), yaw: round(s.yaw), base: round(s.base) };
+  }
+  assert.ok(Object.keys(pinned).length >= 3, `there are some (${Object.keys(pinned).length})`);
+  // places people track are where they were
+  matchesGolden(`huntclub-far-${SEED}`, pinned, { tolerance: 1e-6 });
+  // and none round the start but the first
+  assert.deepEqual(far.within(start.x - 1500, start.z - 1500, start.x + 1500, start.z + 1500), []);
+  assert.equal(far.byId(home.id), null, "the first club isn't one of the rest");
+  assert.equal(far.byId('huntclub:far:x:0'), null);
+});
+
+test('a far club is the same looked for a little at a time, waiting on what it keeps clear of', () => {
+  const { gen, keepOff, clubs } = worldOf(LANDS[0]);
+  const outright = clubs();
+  // the railway and the airfields "still being looked for" for a while
+  let asked = 0;
+  const slow = (...box) => keepOff(...box);
+  slow.ready = () => ++asked > 5;
+  const bit = clubs({ keepOff: slow });
+  let at = null;
+  for (let k = 1; !at; k++) if (bit.spot(k, 1)) at = [k, 1];
+  assert.equal(bit.peek(...at), undefined, 'not known at first');
+  let rounds = 0;
+  while (bit.pump(1) > 0) rounds++;
+  assert.ok(rounds > 1 && asked > 5, 'it took a while');
+  assert.ok(bit.peek(...at), 'and found');
+  assert.deepEqual(bit.peek(...at), outright.cell(...at));
+  // a square with nothing in it isn't queued at all
+  const empty = [...Array(40).keys()].map((k) => [k, 3]).find(([i, j]) => !farSpot(gen.seed, i, j));
+  assert.equal(bit.peek(...empty), null);
+  assert.equal(bit.queue.size, 0);
+});
+
+test('a club keeps off a real place, and off the airfields until they are known', () => {
+  const gen = growWorld(SEED);
+  const start = gen.findSpawn(0, 0);
+  // a square that's all a real place has nothing looked for in it
+  const all = new HuntClubs(gen, { start, away: () => true });
+  for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) assert.equal(all.spot(i, j), null);
+  // the readiness of somewhere an airfield might reach waits on that airfield
+  const fresh = new Airports(gen, { cards: CARDS, start });
+  const keepOff = clearOf({ airfields: fresh });
+  assert.equal(keepOff.ready(start.x + 2000, start.z, start.x + 2100, start.z + 100), false, 'the airfield round the start not found yet');
+  assert.ok(fresh.queue.has('home'), 'and asked for');
+  fresh.site('home');
+  assert.equal(keepOff.ready(start.x + 2000, start.z, start.x + 2100, start.z + 100), true, 'and then it is');
+  assert.equal(clearOf({ airfields: new Airports(gen, { cards: CARDS, start }) }).ready(start.x + 900000, start.z, start.x + 900100, start.z + 100), true, 'nowhere near one: nothing to wait for');
+});
+
+test('no two clubs within three squares of each other share a name, and every name can be painted', () => {
+  for (const seed of [SEED, 1, 42]) {
+    for (let j = -3; j <= 3; j++) {
+      for (let i = -3; i <= 3; i++) {
+        const a = farName(seed, i, j);
+        assert.notEqual(a, clubName(seed), "never the first club's");
+        for (let dj = -3; dj <= 3; dj++) for (let di = -3; di <= 3; di++) if (di || dj) assert.notEqual(a, farName(seed, i + di, j + dj), `(${i}, ${j}) and (${i + di}, ${j + dj})`);
+        for (const ch of a.toUpperCase()) assert.ok(ch === ' ' || glyph(ch), `"${ch}" is in the font`);
+      }
+    }
+  }
 });
 
 // ── The field ───────────────────────────────────────────────────────────────
@@ -252,9 +347,10 @@ test('a round is 25 targets: singles at every station, doubles at 1, 2, 6 and 7,
 });
 
 test("what's kept of you is made safe before it's believed", () => {
-  assert.deepEqual(validateRecord({ gun: true, best: 23, rounds: 4, visited: true }), { gun: true, best: 23, rounds: 4, visited: true });
-  assert.deepEqual(validateRecord(null), { gun: false, best: null, rounds: 0, visited: false });
-  assert.deepEqual(validateRecord({ gun: 'yes', best: 26, rounds: -1, visited: 1 }), { gun: false, best: null, rounds: 0, visited: false });
+  assert.deepEqual(validateRecord({ gun: true, best: 23, rounds: 4, visited: true, been: ['huntclub:far:1:2'] }), { gun: true, best: 23, rounds: 4, visited: true, been: ['huntclub:far:1:2'] });
+  assert.deepEqual(validateRecord(null), { gun: false, best: null, rounds: 0, visited: false, been: [] });
+  assert.deepEqual(validateRecord({ gun: 'yes', best: 26, rounds: -1, visited: 1, been: 'all' }), { gun: false, best: null, rounds: 0, visited: false, been: [] });
+  assert.deepEqual(validateRecord({ been: ['a', 3, null, 'b', 'c'] }, 2).been, ['a', 'b'], 'only ids, and only so many');
   assert.deepEqual(validateRecord({ best: 2.5 }).best, null);
   assert.deepEqual(validateRecord({ best: 0 }).best, 0);
 });
