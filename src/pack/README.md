@@ -38,7 +38,7 @@ be held (to calm a wild horse).
 
 **On a pad** there are buttons for only some things. When something at hand
 has none, a line in the corner says so beside the pack's own button
-(*L3 · get in*): open the pack, and it is the first thing in it.
+(*L3 · eat*): open the pack, and it is the first thing in it.
 
 ## Putting something in it
 
@@ -48,12 +48,16 @@ what it would do `now` is at hand while that gives a word:
 
 ```js
 commands.add({
-  id: 'tube', keys: ['KeyV'], group: 'WANDER',
-  label: 'inner tube: pull it out and float down the river · get out',
-  run: press,
-  now: () => (afloat ? 'get out' : byRunningWater ? 'float' : ''),
+  id: 'eat', keys: ['KeyU'], group: 'HUNT',
+  label: "eat something you've roasted",
+  run: eat,
+  now: () => (roasted > 0 ? 'eat' : ''),
 });
 ```
+
+Getting into something, onto it, and out or off again is the act key's
+(**F**: [Acting](../act/README.md)), which is at hand named for whatever it
+would do; a feature offers it that rather than a command of its own.
 
 A command needs no key at all. With a label and no `keys` it is done from
 the pack (and, at hand, from its button on a touch screen), and has no line

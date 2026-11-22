@@ -82,9 +82,9 @@ const pick = (list) => list[Math.floor(Math.random() * list.length)];
 // The features this uses, so it is installed after them (game/features.js):
 // hikes for the real place it's on, towns for the guide's body and voice,
 // wildlife for the gators.
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'towns', 'wildlife', 'hikes'];
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'towns', 'wildlife', 'hikes', 'act'];
 export function installSwamptour(game) {
-  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, wildlife, peers } = game;
+  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, wildlife, peers, act } = game;
 
   // ── The tours, on their real places ───────────────────────────────────────
   const tours = [];
@@ -314,10 +314,9 @@ export function installSwamptour(game) {
   sound.addLayer(airboatSound(heard));
 
   // ── The ride ──────────────────────────────────────────────────────────────
-  // In your pack (and at hand, a button on a touch screen) with no key of its
-  // own: get in by the boat, back to the landing on it; anywhere else, where
-  // the tour is. On the help panel, the clicks that do the same.
-  let doing = '';
+  // The act key (F) gets you in by the boat, and on the tour takes you back
+  // to the landing. In your pack too, with no key of its own: anywhere else,
+  // it says where the tour is.
   function press() {
     if (ride) {
       if (ride.phase === 'done') return false;
@@ -331,11 +330,20 @@ export function installSwamptour(game) {
     if (near) hud.flash(near.d < HIDE ? `the airboat waits at the end of the dock, at ${near.q.def.name}` : `the airboat tour leaves from ${near.q.def.name}, at ${near.q.card.name} in Louisiana, ${formatDistance(near.d)} off · it’s on the map, under swamp tours`, LINE_MS);
     return false;
   }
-  commands.add({ id: 'swamptour', group: 'SWAMP TOUR', label: 'airboat tour: get in at the landing in Jean Lafitte · back to the landing', run: press, now: () => doing });
-  commands.describe({ group: 'SWAMP TOUR', help: 'click', pad: ['PadRT'], label: 'by the airboat at the landing in Jean Lafitte: take the tour' });
-  commands.describe({ group: 'SWAMP TOUR', help: 'right-click', pad: ['PadLT'], label: 'on the tour: back to the landing' });
+  commands.add({ id: 'swamptour', group: 'SWAMP TOUR', label: 'airboat tour: where it leaves from, at the landing in Jean Lafitte', run: press });
+  commands.describe({ group: 'SWAMP TOUR', help: 'F', pad: ['PadY'], label: 'by the airboat at the landing in Jean Lafitte: take the tour · on it: back to the landing' });
+  act.offer({
+    id: 'swamptour',
+    at() {
+      if (ride) return ride.phase === 'done' ? null : { d: 0, word: 'back to the landing', run: press };
+      const t = nearBoat();
+      if (!t) return null;
+      const o = t.built.boat.object.position;
+      return { d: Math.hypot(player.pos.x - o.x, player.pos.z - o.z), word: 'get in', run: () => board(t) };
+    },
+  });
   let ride = null; // { t, s, v, phase, timer, halt, said, gators: [], pointed, seen, biggest }
-  builder.idleWhile(() => ride !== null || nearBoat() !== null);
+  builder.idleWhile(() => ride !== null);
   const mover = {
     place(out, dt) {
       const t = ride && ride.t;
@@ -537,28 +545,24 @@ export function installSwamptour(game) {
         steer(t, dt);
       }
 
-      // at the dock beside a boat: the guide says hello, and a click gets you in
+      // at the dock beside a boat: the guide says hello, and F gets you in
       const t = nearBoat();
       let cue = null;
       if (t) {
-        cue = `<b>click</b> take the airboat tour with ${t.def.guide.name}`;
+        cue = `<b>${act.key('get in')}</b> take the airboat tour with ${t.def.guide.name}`;
         if (!greeted && clock - lastHello > GREET_AGAIN) {
           greeted = true;
           lastHello = clock;
           say(t, pick(taken ? SAYS.back : SAYS.hello));
           t.built.guide.waving = 1.8;
         }
-        if (input.tapped('use')) board(t);
       } else if (!ride) {
         const near = tours.find((q) => q.built && Math.hypot(player.pos.x - q.built.boat.object.position.x, player.pos.z - q.built.boat.object.position.z) < GREET);
         if (!near) greeted = false;
       }
       if (ride) {
-        cue = `on the airboat · ${ride.seen} gator${ride.seen === 1 ? '' : 's'} · <b>right-click</b> back to the landing`;
-        if (input.tapped('alt')) press();
+        cue = `on the airboat · ${ride.seen} gator${ride.seen === 1 ? '' : 's'}${ride.phase === 'done' ? '' : ` · <b>${act.key('back to the landing')}</b>${input.isTouch ? '' : ' back to the landing'}`}`;
       }
-      // what the pack's line for it would do, here and now
-      doing = ride ? (ride.phase === 'done' ? '' : 'back to the landing') : t ? 'take the airboat tour' : '';
       if (cue) {
         hud.cue({ html: cue });
         cued = true;

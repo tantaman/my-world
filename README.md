@@ -347,8 +347,10 @@ and if it has a voice, a `defineCall`. Four-legged mammals need nothing else.
 written from the same list, and two features wanting one key are warned about.
 The letters are all taken, so a new thing to do goes without one: leave `keys`
 out and it is done from [your pack](src/pack/README.md), which lists every
-command. Give it `now: () => 'get in'` (or `''`) and, while that gives a
+command. Give it `now: () => 'eat'` (or `''`) and, while that gives a
 word, it is at hand: first in the pack, and a button on a touch screen.
+Getting into something or onto it, and out or off again, is the act key's
+(**F**): offer it with `game.act.offer`, and F is at hand named for it.
 Something you set once and leave doesn't need a key: it's a switch or a
 slider on the settings panel, `game.hud.setting({ id, group, label, get, set })`.
 

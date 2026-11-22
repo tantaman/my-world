@@ -13,20 +13,21 @@ for as far out as you scroll.
 
 **Your car** waits on the pit apron in front of the garages: an open-wheeler
 on a road circuit, a winged sprint car on dirt, red, with a 1 on its sides.
-Walk up to it and **click**, and you're in it at the back of the grid, with
+Walk up to it and press **F** (the key that gets you into anything: see
+[Acting](../act/README.md)), and you're in it at the back of the grid, with
 five others in front of you. Five red lights come on over the line, one a
 second. A moment after the last, they all go out, and you're racing: three
 laps, and whoever's over the line first after the third wins.
 
 | | |
 |---|---|
-| **click** by your car | get in and race |
+| **F** by your car | get in and race |
 | **W** · **S** | throttle · brake, and back up once you've stopped |
 | **A D** | steer |
 | **space** | the handbrake: the back steps out, to slide it round a tight bend |
-| **right-click**, stopped | get out |
+| **F**, stopped | get out |
 | **click**, stopped, after a race | race again |
-| on a pad | the left stick steers, **RT** throttle, **LT** brake |
+| on a pad | the left stick steers, **RT** throttle, **LT** brake; **Y** is F |
 
 **Driving it.** It takes a while to get up to speed, and longer to come
 down from it. The faster you go, the less the wheel turns it, and the

@@ -1,10 +1,10 @@
 // The swamp tour: picked on the map, `go here` sets you down at the airboat
 // landing in Jean Lafitte, Louisiana, a real place a long way from the
-// forest. Out along the dock the guide says hello from the boat, and a click
-// there puts you in its front row with the ear defenders on, tools put
+// forest. Out along the dock the guide says hello from the boat, and F (the
+// act key) there puts you in its front row with the ear defenders on, tools put
 // away. The boat sets off along the way round, on the water; at its first
 // stop a gator is waiting where the guide points it out, and the boat
-// stands while you look. A right-click and you're run back to the dock.
+// stands while you look. F again and you're run back to the dock.
 // Taken somewhere else on the way round, you're off it where you are. Then
 // once more, the whole way round: back at the dock you're off, and it
 // counts.
@@ -46,15 +46,15 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.evaluate(() => world.swamptour.go());
     await frames(4);
     await page.keyboard.down('KeyW');
-    const by = await page.evaluate(() => T.until(() => T.prompt().startsWith('click take the airboat tour'), 20000));
+    const by = await page.evaluate(() => T.until(() => T.prompt().startsWith('F take the airboat tour'), 20000));
     await page.keyboard.up('KeyW');
     assert.ok(by, 'out along the dock to the boat');
-    assert.match(await prompt(), /^click take the airboat tour with \w+$/);
-    const atHand = () => page.evaluate(() => (world.pack.list().hand.find((h) => h.id === 'swamptour') || {}).word || null);
-    assert.equal(await atHand(), 'take the airboat tour', 'and it is at hand in your pack');
+    assert.match(await prompt(), /^F take the airboat tour with \w+$/);
+    const atHand = () => page.evaluate(() => (world.pack.list().hand.find((h) => h.id === 'act') || {}).word || null);
+    assert.equal(await atHand(), 'get in', 'and it is at hand in your pack');
     assert.match(await page.evaluate(() => world.swamptour.said), /^\w+: “.*(Mornin|Hey there)/, 'the guide says hello');
     await shot('the airboat at the dock');
-    await page.evaluate(() => T.tap('use'));
+    await key('KeyF');
     const r = await ride();
     assert.ok(r && r.phase === 'start', 'in the boat, and the engine starting');
     const aboard = await page.evaluate(() => ({ seated: !!world.player.character.seated, aboard: !!world.player.aboard, idle: world.builder.idle }));
@@ -96,7 +96,7 @@ export default async function ({ page, step, key, frames, shot }) {
   });
 
   await step('back to the landing, and round again', async () => {
-    await page.evaluate(() => T.tap('alt'));
+    await key('KeyF');
     const back = await page.evaluate(() => ({ ride: world.swamptour.ride, aboard: !!world.player.aboard, seated: !!world.player.character.seated, record: world.swamptour.record }));
     assert.deepEqual([back.ride, back.aboard, back.seated], [null, false, false], 'out of the boat');
     assert.equal(back.record.taken, 0, 'a tour cut short is not counted');

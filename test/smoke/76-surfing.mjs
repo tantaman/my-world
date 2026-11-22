@@ -67,7 +67,7 @@ export default async function ({ page, step, key, frames, shot }) {
       await world.teleport(s.beach.x, s.beach.z, Math.atan2(s.nx, s.nz));
       await T.frames(30);
       const b = world.breakers;
-      return { near: world.surfing.near?.id, set: b.spot?.id, waves: b.waves.length, layers: world.sound.layers.map((l) => l.name), hand: world.pack.list().hand.map((r) => r.id) };
+      return { near: world.surfing.near?.id, set: b.spot?.id, waves: b.waves.length, layers: world.sound.layers.map((l) => l.name), hand: world.pack.list().hand.map((r) => r.word) };
     }, spot);
     assert.equal(got.near, spot.id, 'the break nearest you is rolling');
     assert.equal(got.set, spot.id);
@@ -96,7 +96,7 @@ export default async function ({ page, step, key, frames, shot }) {
       return null;
     }, spot);
     assert.ok(at, 'deep enough water off the beach');
-    assert.deepEqual((await hand()).find((r) => r.id === 'surf'), { id: 'surf', word: 'surf' }, 'surf is at hand');
+    assert.deepEqual((await hand()).find((r) => r.id === 'act'), { id: 'act', word: 'surf' }, 'surf is at hand (F)');
     // the pack opens on what's at hand: Enter does it
     await key('Tab');
     await key('Enter');
@@ -111,7 +111,7 @@ export default async function ({ page, step, key, frames, shot }) {
     }));
     assert.deepEqual({ active: on.active, mode: on.mode, lying: on.lying, aboard: on.aboard, idle: on.idle }, { active: true, mode: 'prone', lying: true, aboard: true, idle: true });
     assert.match(on.said, /^on your board at .* · paddle out past where it breaks$/);
-    assert.deepEqual((await hand()).find((r) => r.id === 'surf'), { id: 'surf', word: 'swim' }, 'and swim is at hand, to get off it');
+    assert.deepEqual((await hand()).find((r) => r.id === 'act'), { id: 'act', word: 'swim' }, 'and swim is at hand, to get off it');
     return at;
   });
 

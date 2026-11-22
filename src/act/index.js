@@ -1,5 +1,6 @@
 // Acting on what's at hand: one key for it, whatever it is. F on a keyboard,
-// Y on a game controller, a button on a touch screen: into a car, a boat or a
+// Y on a game controller, at hand in the pack (and so a button on a touch
+// screen, named for what it would do): into a car, a boat or a
 // train and out again, onto your horse and off, out of your tube, the jetpack
 // off its rack, aboard the rocket, a movie rented at the counter, a shotgun
 // from the steward, a car off a dealer's lot. Whatever is at hand says so in
@@ -24,47 +25,27 @@
 
 import { Offers } from './offers.js';
 
+const NOTHING_MS = 2200; // ms "nothing at hand" stays on the screen
+
 // The features this uses, so it is installed after them (game/features.js):
-// the keys are read and the touch buttons kept by the player and the HUD.
+// the keys are read by the player, and the HUD says when there's nothing to do.
 export const after = ['ui', 'player'];
 export function installAct(game) {
-  const { input, commands } = game;
+  const { input, commands, hud } = game;
   const offers = new Offers();
 
+  // What it would do here, in a word, is what the pack lists it by while
+  // there's something at hand, and what its button on a touch screen says
+  // (src/pack/: held down there as the key would be, to calm a wild horse).
   commands.add({
     id: 'act',
     keys: ['KeyF', 'PadY'],
     group: 'WANDER',
     help: 'F',
     label: 'act on what’s at hand: get in or out, on or off · ride, calm (hold) · buy, rent, ask · in orbit: fly home',
-    run: () => offers.press(),
+    run: () => offers.press() || hud.flash('nothing at hand here to get into, or onto, or act on', NOTHING_MS),
     hold: (dt) => offers.hold(dt),
-  });
-
-  // On a touch screen, one button for it, named for what it would do, and
-  // held down for as long as it's touched.
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.id = 'act-do';
-  btn.hidden = true;
-  let touching = false;
-  btn.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    touching = true;
-    offers.press();
-  });
-  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) btn.addEventListener(ev, () => (touching = false));
-  document.getElementById('touch-act')?.prepend(btn);
-  game.addSystem({ name: 'act-held', phase: 'input', update: ({ dt }) => touching && offers.hold(dt) });
-  game.addSystem({
-    name: 'act',
-    phase: 'late',
-    update() {
-      const a = input.isTouch ? offers.here() : null;
-      btn.hidden = !a || !a.word;
-      if (a && a.word && btn.textContent !== a.word) btn.textContent = a.word;
-    },
+    now: () => offers.here()?.word || '',
   });
 
   game.provide('act', {

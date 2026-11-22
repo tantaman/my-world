@@ -50,6 +50,9 @@ const lineup = (s) => Math.max(30, (s.size / BREAKER.gamma / SURF.bar) * 1.2);
 const OUT_THERE = SURF.span + 120;
 // In the sea at least this deep (m) to lie on a board.
 const DEEP_ENOUGH = 0.55;
+// How far off (m) a board to take out counts for, against what else the act
+// key could do: it's at your feet, in the water you're in.
+const OUT_THERE_D = 1;
 // How the camera follows: round behind the way you're going this fast (1/s),
 // lying down and standing; and back this much further (m) per m/s, up to BACK_MOST.
 const BEHIND = [0.7, 1.8];
@@ -69,9 +72,9 @@ const _w = waterSample();
 const _s = { rise: 0, gx: 0, gz: 0, fx: 0, fz: 0, wave: null };
 
 // The features this uses, so it is installed after them (game/features.js).
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'map', 'splashes'];
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'map', 'splashes', 'act'];
 export function installSurfing(game) {
-  const { scene, camera, chunks, gen, breakers, landforms, player, input, hud, commands, save, sound, builder, map, splashes } = game;
+  const { scene, camera, chunks, gen, breakers, landforms, player, input, hud, commands, save, sound, builder, map, splashes, act } = game;
   const level = gen.sea ? gen.sea.level : null;
 
   // ── The breaks ────────────────────────────────────────────────────────────
@@ -350,8 +353,18 @@ export function installSurfing(game) {
     if (!canSurf()) return hud.flash(`wade out into the sea at ${near.name} to take a board out`);
     on();
   }
-  // (at hand in the sea at a break, and while you surf: in the pack, and a button on a touch screen)
-  commands.add({ id: 'surf', group: 'WANDER', label: 'surf: take a board out, in the sea at a surf spot (or get off it)', run: toggle, now: () => (active ? 'swim' : canSurf() ? 'surf' : '') });
+  // Onto a board and off it with the act key (F), as onto and off anything:
+  // in the sea at a break, 'surf'; on the board, 'swim'. In the pack too,
+  // where anywhere else it says where to find the surf.
+  act.offer({
+    id: 'surf',
+    at() {
+      if (active) return { d: 0, word: 'swim', run: () => off(false, 'off the board') };
+      return canSurf() ? { d: OUT_THERE_D, word: 'surf', run: () => on() } : null;
+    },
+  });
+  commands.add({ id: 'surf', group: 'WANDER', label: 'surf: where the surf is · take a board out, in the sea at a surf spot', run: toggle });
+  commands.describe({ group: 'WANDER', help: 'F', pad: ['PadY'], label: 'in the sea at a surf spot: take a board out · on it: off, and swim' });
   commands.describe({ group: 'WANDER', help: 'on a board', label: 'W paddle · A D turn · shift duck a wave · space stand up as one takes you' });
   commands.describe({ group: 'WANDER', help: 'surfing', label: 'A D carve · W pump · S stall · shift crouch, to be barrelled · space off the lip' });
 

@@ -82,6 +82,7 @@ const WHEEL_R = 0.33; // m, how far round the others' wheels are, to spin them
 
 const _l = { x: 0, z: 0 };
 const _w = { x: 0, z: 0 };
+const _a = { x: 0, z: 0 };
 const _p = {};
 const _near = {};
 const _wall = { nx: 0, nz: 0, depth: 0 };
@@ -95,10 +96,11 @@ const way = (dx, dz) => WAYS[Math.round((((Math.atan2(dx, -dz) * 180) / Math.PI 
 // The features this uses, so it is installed after them (game/features.js):
 // landmarks, towns, caves, railway, spaceport, airports, videostore and
 // abandoned for what the tracks keep clear of (and towns for where they
-// are), pack to say what's yours.
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'landmarks', 'towns', 'caves', 'railway', 'spaceport', 'airports', 'videostore', 'abandoned', 'pack'];
+// are), pack to say what's yours, act for the key (F) that gets you into
+// your car and out again.
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'landmarks', 'towns', 'caves', 'railway', 'spaceport', 'airports', 'videostore', 'abandoned', 'pack', 'act'];
 export function installRacetrack(game) {
-  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway, spaceport, airports, videostore, abandoned, pack, peers } = game;
+  const { scene, gen, chunks, grass, solids, landforms, player, input, builder, map, hud, commands, save, sound, landmarks, towns, caves, railway, spaceport, airports, videostore, abandoned, pack, act, peers } = game;
 
   // ── Where they are ────────────────────────────────────────────────────────
   const fields = airports.airports;
@@ -458,8 +460,7 @@ export function installRacetrack(game) {
   };
   let moved = false;
   let camWas = null;
-  // (and by your car, where a click gets you in rather than swinging a tool)
-  builder.idleWhile(() => driving || nearCar());
+  builder.idleWhile(() => driving);
 
   function getIn() {
     if (driving || !built) return false;
@@ -606,7 +607,9 @@ export function installRacetrack(game) {
     }
   }
 
-  // ── Getting in: the key-less command, and a click by the car ──────────────
+  // ── Getting in and out: the act key (F) ──────────────────────────────────
+  // By your car, F gets you in; stopped in it, out. A key-less command in
+  // the pack says where your car is, and races again after a race.
   const nearCar = () => {
     if (!shown || driving || player.carrier || player.aboard) return false;
     const a = apronSpot();
@@ -626,12 +629,23 @@ export function installRacetrack(game) {
     } else hud.flash('no race track near here · the map lists them, under race tracks', SAY);
     return false;
   }
-  let doing = '';
-  commands.add({ id: 'racetrack', group: 'RACE TRACK', label: 'race track: get in your car and race · get out', run: press, now: () => doing });
-  commands.describe({ group: 'RACE TRACK', help: 'click', pad: ['PadRT'], label: 'by your car on the pit apron: get in and race · after a race, stopped: race again' });
+  const stopped = () => driving && Math.abs(car.speed) < STOPPED;
+  act.offer({
+    id: 'racetrack',
+    at() {
+      if (driving) return stopped() ? { d: 0, word: 'get out', run: getOut } : { d: 0, word: '', run: () => hud.flash('stop first, to get out', 1600) };
+      if (!nearCar()) return null;
+      const a = apronSpot();
+      toWorld(site, a.x, a.z, _a);
+      return { d: Math.hypot(player.pos.x - _a.x, player.pos.z - _a.z), word: 'get in', run: getIn };
+    },
+  });
+  // (after a race, stopped, racing again is at hand: in the pack, and a button on a touch screen)
+  commands.add({ id: 'racetrack', group: 'RACE TRACK', label: 'race track: where your car is · after a race: race again', run: press, now: () => (stopped() && over() ? 'race again' : '') });
+  commands.describe({ group: 'RACE TRACK', help: 'F', pad: ['PadY'], label: 'by your car on the pit apron: get in and race · in it, stopped: get out' });
+  commands.describe({ group: 'RACE TRACK', help: 'click', pad: ['PadRT'], label: 'after a race, stopped: race again' });
   commands.describe({ group: 'RACE TRACK', help: 'W S', pad: ['PadRT', 'PadLT'], label: 'in the car: throttle · brake, and back up' });
   commands.describe({ group: 'RACE TRACK', help: 'A D', pad: ['PadLS'], label: 'steer · space: the handbrake, to slide it round' });
-  commands.describe({ group: 'RACE TRACK', help: 'right-click', pad: ['PadLT'], label: 'in the car, stopped: get out' });
 
   // The nearest track found so far.
   function nearestKnown(p) {
@@ -725,13 +739,10 @@ export function installRacetrack(game) {
     name: 'racing',
     phase: 'update',
     update({ dt }) {
-      doing = '';
       if (!driving) {
         if (nearCar()) {
-          doing = 'race';
           const L = LAYOUTS[site.layout];
-          cue(input.isTouch ? `<b>race</b> get in your car: ${RACE.laps} laps of the ${L.label}` : `<b>click</b> get in your car and race: ${RACE.laps} laps of the ${L.label}`);
-          if (input.tapped('use')) getIn();
+          cue(`<b>${act.key('get in')}</b> get in your car and race: ${RACE.laps} laps of the ${L.label}`);
         } else cue(null);
         return;
       }
@@ -806,22 +817,17 @@ export function installRacetrack(game) {
         dots.push(dot);
       }
       board.drawMap(built.outline, dots, car.yaw);
-      // stopped: right-click gets out; after a race, click races again
-      const stopped = Math.abs(car.speed) < STOPPED;
+      // stopped: F gets out (act, above); after a race, click races again
+      const still = stopped();
       const done = over();
-      doing = done && stopped ? 'race again' : 'get out';
-      if (stopped && input.tapped('alt')) {
-        getOut();
-        return;
-      }
-      if (done && stopped && input.tapped('use')) {
+      if (done && still && input.tapped('use')) {
         again();
         return;
       }
       if (input.isTouch) cue(null);
-      else if (done) cue(stopped ? '<b>click</b> race again · <b>right-click</b> get out' : 'the race is over · stop to race again, or get out');
+      else if (done) cue(still ? `<b>click</b> race again · <b>${act.key('get out')}</b> get out` : 'the race is over · stop to race again, or get out');
       else if (race.state === 'lights') cue('<b>W</b> throttle · <b>S</b> brake · <b>A D</b> steer · <b>space</b> handbrake');
-      else if (stopped && race.time > 3) cue('<b>right-click</b> get out');
+      else if (still && race.time > 3) cue(`<b>${act.key('get out')}</b> get out`);
       else cue(null);
     },
   });
