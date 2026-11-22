@@ -22,6 +22,8 @@ Run `npm test` after any change. Run `npm run smoke` after touching anything
 a player does (tools, movement, HUD, saving, sound, wildlife);
 `node test/smoke.mjs build fires` plays only the parts named. Run
 `npm run together` after touching `src/save/`, `src/voice/` or `worker/`.
+`npm test` and `npm run smoke` also run on every pull request
+(`.github/workflows/ci.yml`).
 
 ## How to add things
 

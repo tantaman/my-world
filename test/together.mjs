@@ -21,7 +21,7 @@ let chromium;
 try {
   ({ chromium } = createRequire(import.meta.url)('playwright'));
 } catch {
-  console.error('this needs Playwright: npm i -D playwright && npx playwright install chromium');
+  console.error('this needs Playwright: npm install && npx playwright install chromium');
   process.exit(2);
 }
 

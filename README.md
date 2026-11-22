@@ -391,9 +391,15 @@ a file of its own, so adding to the play-through doesn't mean editing anyone
 else's; the top of `test/smoke.mjs` says what a part is handed and how to
 pick its number. `node test/smoke.mjs build fires` plays only those. It
 drives the keys and the crosshair and reads results through `window.world`,
-so it doesn't care how the insides are arranged. The last two need
-[Playwright](https://playwright.dev) (`npm i -D playwright && npx playwright
-install chromium`).
+so it doesn't care how the insides are arranged. A part that fails doesn't
+end the play: the rest go on from a page opened afresh, and the run ends by
+listing every part that failed. The last two need
+[Playwright](https://playwright.dev)'s browser, a download of its own
+(`npx playwright install chromium`).
+
+`npm test` and `npm run smoke` run on every pull request and every push to
+`main` (`.github/workflows/ci.yml`); the play-through's report, and a picture
+of the game as each failed part left it, are kept with the run.
 
 ## Layout
 
