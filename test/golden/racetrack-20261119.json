@@ -1,0 +1,30 @@
+{
+ "racetrack:town:1:-3": {
+  "name": "Little Mosscombe Circuit",
+  "layout": "kidney",
+  "x": 1663.288,
+  "z": -2398.69,
+  "yaw": -2.279
+ },
+ "racetrack:town:-2:-1": {
+  "name": "Meadowfield Circuit",
+  "layout": "kidney",
+  "x": -1455.225,
+  "z": -353.191,
+  "yaw": 1.416
+ },
+ "racetrack:town:-1:3": {
+  "name": "Little Mosscombe Circuit",
+  "layout": "kidney",
+  "x": -268.345,
+  "z": 3450.225,
+  "yaw": -0.532
+ },
+ "racetrack:town:0:3": {
+  "name": "Orcutt's Camp Speedway",
+  "layout": "oval",
+  "x": 176.688,
+  "z": 3529.816,
+  "yaw": 0.041
+ }
+}
