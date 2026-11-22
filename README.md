@@ -211,6 +211,7 @@ place in that order, not at the end:
 | `game/budget.ts` | work that can wait (a search, a survey), done a little each frame out of one allowance | `game.budget.add({ name, work(ms) })` |
 | `game/commands.js` | a key or a pad's button, and its line on the help panel | `game.commands.add({ keys, run, group, label })` |
 | `game/commands.js` | something to do that needs no key: in your pack, and at hand (first there, a button on a touch screen) while it says what it would do | `game.commands.add({ run, group, label, icon, now: () => 'float' })` |
+| `game/commands.js` | keys of its own for somewhere that isn't the forest, where the forest's do nothing | `commands.add({ …, mode })`, `commands.mode = …` |
 | `game/game.ts` | something done every frame | `game.addSystem({ name, phase, update })` |
 | `game/game.ts` | something that must be here before the hiker is set down where they were left | `game.beforeArrival(look.ready())` |
 | `game/settings.js` | a remembered preference | `game.settings.get / set` |

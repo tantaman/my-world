@@ -20,7 +20,7 @@ export function installHud(game) {
     hud.toggleHelp();
   };
   game.on('panel', (which) => which !== 'help' && hud.closeHelp());
-  game.commands.add({ id: 'help', keys: ['KeyH', 'Slash', 'PadStart'], run: toggleHelp });
+  game.commands.add({ id: 'help', keys: ['KeyH', 'Slash', 'PadStart'], mode: 'any', run: toggleHelp });
   hud.button('help-btn', toggleHelp);
 
   const toggleSettings = () => {
@@ -28,7 +28,7 @@ export function installHud(game) {
     settings.toggle();
   };
   game.on('panel', (which) => which !== 'settings' && settings.close());
-  game.commands.add({ id: 'settings', keys: ['KeyO'], group: 'LOOK', label: 'settings · the picture, sound, the hour', icon: pictures.SETTINGS, run: toggleSettings });
+  game.commands.add({ id: 'settings', keys: ['KeyO'], mode: 'any', group: 'LOOK', label: 'settings · the picture, sound, the hour', icon: pictures.SETTINGS, run: toggleSettings });
   hud.button('settings-btn', toggleSettings);
 
   // The help panel lists whatever keys ended up bound, by whichever features.

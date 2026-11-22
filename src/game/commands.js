@@ -26,6 +26,13 @@
 //   icon    what it looks like in your pack: a picture (src/pack/picture.js),
 //           or () => one, for a command whose picture is of whatever is at
 //           hand (the act key's: a canoe, a horse)
+//   mode    where its keys are its own. Somewhere that isn't the forest (an
+//           arena, with a shooter's keys) is a *mode*: while one is on
+//           (commands.mode = 'skirmish'), only the commands that name it run
+//           and are on offer, and the forest's keys do nothing; while none
+//           is, they don't and aren't. 'any': whatever the mode (help,
+//           settings). So two commands may share a key if they never share a
+//           mode, and in a mode of its own a feature has every key to itself.
 //
 // A command needs no key. One with a label is done from the pack whether it
 // has one or not (offers(), below), so a new feature doesn't have to find a
@@ -60,19 +67,23 @@ export class Commands {
   constructor() {
     this.list = [];
     this.rows = []; // what the help panel shows, in the order it was said
-    this.bound = new Map(); // key code -> command id
+    this.bound = new Map(); // key code -> [{ mode, id }], the commands that use it
+    this.mode = null; // the mode that's on (see `mode`, above), or null in the forest
     this.pressed = new Set(); // ids held down from somewhere other than their keys (press())
-    this._offers = []; // what offers() hands out, made again when a command is added
+    this._offers = []; // what offers() hands out, made again when a command is added or the mode changes
     this._offering = []; // ...and the command behind each
-    this._offered = -1;
+    this._offered = '';
   }
 
   add(cmd) {
     const c = { keys: [], ...cmd };
+    const mode = c.mode || '';
     for (const code of c.keys) {
-      const taken = this.bound.get(code);
-      if (taken && taken !== c.id) console.warn(`key ${code} is bound to both "${taken}" and "${c.id}"`);
-      this.bound.set(code, c.id);
+      // a key is taken by a command of the same mode, or by one that runs in any
+      const users = this.bound.get(code) || [];
+      const taken = users.find((u) => u.id !== c.id && (u.mode === mode || u.mode === 'any' || mode === 'any'));
+      if (taken) console.warn(`key ${code} is bound to both "${taken.id}" and "${c.id}"`);
+      this.bound.set(code, [...users, { mode, id: c.id }]);
     }
     this.list.push(c);
     if (c.label) {
@@ -107,9 +118,15 @@ export class Commands {
     this.pressed.delete(id);
   }
 
+  // Does a command run in the mode that's on?
+  live(c) {
+    return c.mode === 'any' || (c.mode || null) === this.mode;
+  }
+
   // input: { wasPressed(code), down(...codes) }
   update(input, dt) {
     for (const c of this.list) {
+      if (!this.live(c)) continue;
       if (c.run && c.keys.some((k) => input.wasPressed(k))) c.run();
       if (!c.hold) continue;
       for (const k of c.keys) if (input.down(k)) c.hold(dt, k);
@@ -118,8 +135,8 @@ export class Commands {
   }
 
   // Everything there is to do by pressing something, for whoever offers it
-  // without its key (the pack, src/pack/): each command with a label, and
-  // what it would do now.
+  // without its key (the pack, src/pack/): each command with a label that
+  // runs in the mode that's on, and what it would do now.
   //   -> [{ id, group, label, help, pad?, word }], group by group as the help
   //      panel has them, and within a group in the order they were added
   //   help   its keys as the help panel writes them ('' if it has none)
@@ -130,11 +147,13 @@ export class Commands {
   // The same array and rows are handed out each time, with the words as they
   // are now: copy what you keep.
   offers() {
-    if (this._offered !== this.list.length) {
-      this._offered = this.list.length;
+    const made = `${this.list.length}:${this.mode}`;
+    if (this._offered !== made) {
+      this._offered = made;
       const groups = [];
       const all = [];
       for (const c of this.list) {
+        if (!this.live(c)) continue;
         if (!c.label || !c.run || (c.hold && !c.now)) continue;
         const group = c.group || 'OTHER';
         if (!groups.includes(group)) groups.push(group);

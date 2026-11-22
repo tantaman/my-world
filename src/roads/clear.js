@@ -113,3 +113,18 @@ export function firstThere({ sites, caves, towns, pads = null, store = null, bra
 
   return { clear, ready };
 }
+
+// All of that, as one thing to keep clear of (world/claims.ts), for what's
+// grown after the roads and keeps clear of whatever they do: a box holds
+// some of it if the box of any of those shapes overlaps it.
+//   there   firstThere()'s
+export const thereFirst = (there) => ({
+  holds(x0, z0, x1, z1) {
+    for (const s of there.clear(x0, z0, x1, z1)) {
+      const b = s.site ? s.site.box : s.box || [s.x - s.r, s.z - s.r, s.x + s.r, s.z + s.r];
+      if (b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0) return true;
+    }
+    return false;
+  },
+  ready: there.ready,
+});

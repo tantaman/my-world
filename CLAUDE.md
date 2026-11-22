@@ -49,6 +49,9 @@ starts with the contract.
   without a key: a command with a `label` is in the pack (`src/pack/`, Tab),
   and one whose `now()` gives a word ('get in', 'float') is at hand, with a
   button on a touch screen. Don't make touch buttons by hand.
+  (Somewhere that isn't the forest and has keys of its own, like the town in
+  `src/skirmish/`, is a `mode`: its commands name it, and while it's on only
+  they run and are at hand, so there the letters are its own.)
 - Anything persistent goes through `game.save.register` and calls
   `game.save.touch()` when it changes. Do not use `localStorage` directly;
   keys live in `src/core/storage.js`.
@@ -164,8 +167,9 @@ don't edit the same lines:
   have visited or are tracking are saved by id. The caves in `caves/` are
   the same: grown from the seed without changing the land, and pinned in
   `test/golden/caves-*.json`. So are the railways in `railway/`, whose
-  stations are pinned in `test/golden/railway-*.json`, and the gate in
-  `hell/`, pinned in `test/golden/hell-*.json`.
+  stations are pinned in `test/golden/railway-*.json`, and the gates in
+  `hell/` and `skirmish/`, pinned in `test/golden/hell-*.json` and
+  `test/golden/skirmish-*.json`.
 - **Element spelling is for good**, whatever the lands are doing. Keys and
   values in `test/golden/save-elements.json` are what is on the save server
   and in people's browsers. Add new element kinds; never change existing ones

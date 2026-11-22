@@ -85,6 +85,51 @@ test('held keys are told how long, and which', () => {
   assert.equal(hour, 13);
 });
 
+test('a mode has the keys to itself: its own commands run, the forest\'s don\'t, and some run whatever', () => {
+  const commands = new Commands();
+  const input = keys();
+  const ran = [];
+  commands.add({ id: 'home', keys: ['KeyR'], run: () => ran.push('home') });
+  commands.add({ id: 'reload', keys: ['KeyR'], mode: 'arena', run: () => ran.push('reload') });
+  commands.add({ id: 'help', keys: ['KeyH'], mode: 'any', run: () => ran.push('help') });
+  commands.add({ id: 'crouch', keys: ['KeyC'], mode: 'arena', hold: () => ran.push('crouch') });
+  const press = (code) => {
+    input.press(code);
+    commands.update(input, 0.016);
+    input.endFrame();
+  };
+  press('KeyR');
+  press('KeyH');
+  assert.deepEqual(ran, ['home', 'help'], 'in the forest, the forest\'s');
+  ran.length = 0;
+  commands.mode = 'arena';
+  press('KeyR');
+  press('KeyH');
+  input.hold('KeyC');
+  commands.update(input, 0.016);
+  assert.deepEqual(ran, ['reload', 'help', 'crouch'], 'in the arena, the arena\'s');
+  ran.length = 0;
+  commands.mode = null;
+  commands.update(input, 0.016);
+  assert.deepEqual(ran, [], 'and its held keys do nothing outside it');
+  // two commands on one key is a mistake only if they could both run
+  const warned = [];
+  const warn = console.warn;
+  console.warn = (msg) => warned.push(msg);
+  try {
+    commands.add({ id: 'map', keys: ['KeyM'], run() {} });
+    commands.add({ id: 'mark', keys: ['KeyM'], mode: 'arena', run() {} });
+    assert.deepEqual(warned, [], 'the same key in two modes is fine');
+    commands.add({ id: 'mute', keys: ['KeyM'], mode: 'any', run() {} });
+    commands.add({ id: 'again', keys: ['KeyR'], run() {} });
+    commands.add({ id: 'hint', keys: ['KeyH'], mode: 'arena', run() {} });
+  } finally {
+    console.warn = warn;
+  }
+  assert.equal(warned.length, 3, 'with one that runs in any mode, or another of its own, it isn\'t');
+  assert.match(warned[1], /key KeyR is bound to both "home" and "again"/);
+});
+
 test('the help panel is written from what is bound', () => {
   const commands = new Commands();
   let tools = 7;

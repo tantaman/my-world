@@ -173,6 +173,32 @@ test('a button on a touch screen has the picture of what it would do', (t) => {
   assert.equal(pictures()[1][1], url(PIE), 'and it changes with what is at hand');
 });
 
+test('somewhere with keys of its own, its things are what is at hand, and the forest\'s aren\'t', (t) => {
+  const root = page(t);
+  const { commands, at, done } = someCommands();
+  let low = true;
+  commands.add({ id: 'reload', keys: ['KeyR'], mode: 'arena', group: 'ARENA', label: 'reload', run: () => done.push('reload'), now: () => (low ? 'reload' : '') });
+  const buttons = new HandButtons({ root, press: (id) => commands.press(id), release: (id) => commands.release(id) });
+  const seen = () => root.children.filter((b) => !b.hidden).map((b) => [b.dataset.do, b.textContent]);
+  const ids = () => pages(commands.offers(), 'pack').rest.flatMap((g) => g.rows.map((r) => r.id));
+  at.boat = true;
+  buttons.show(commands.offers(), true);
+  assert.deepEqual(seen(), [['boat', 'get in']], 'in the forest, the forest\'s');
+  assert.ok(!ids().includes('reload'), 'and the arena\'s aren\'t in the pack');
+  commands.mode = 'arena';
+  buttons.show(commands.offers(), true);
+  assert.deepEqual(seen(), [['reload', 'reload']], 'in the arena, the arena\'s: the boat\'s button has gone, though the boat is still there');
+  assert.deepEqual(pages(commands.offers(), 'pack').hand.map((r) => r.id), ['reload']);
+  assert.ok(!ids().includes('map'));
+  low = false;
+  buttons.show(commands.offers(), true);
+  assert.deepEqual(seen(), []);
+  commands.mode = null;
+  buttons.show(commands.offers(), true);
+  assert.deepEqual(seen(), [['boat', 'get in']], 'and back out, as it was');
+  assert.ok(ids().includes('map') && !ids().includes('reload'));
+});
+
 test('a button held is the key held, until the finger comes up or what it was for has gone', (t) => {
   const root = page(t);
   let wild = true;

@@ -1101,3 +1101,17 @@ export function samplesNear(road, x, z, r, fn) {
     }
   }
 }
+
+// The roads, as something to keep clear of (world/claims.ts), for what's
+// grown after them: a box holds one if a road runs within `near` m of it.
+// The roads there are surveyed then and there if they haven't been (dear: so
+// ask ready() first, which says whether they have and sends for them if not).
+export const roadsNear = (roads, near) => ({
+  holds(x0, z0, x1, z1) {
+    for (const road of roads.within(x0 - near, z0 - near, x1 + near, z1 + near)) {
+      for (let i = 0; i < road.n; i++) if (road.x[i] >= x0 - near && road.x[i] <= x1 + near && road.z[i] >= z0 - near && road.z[i] <= z1 + near) return true;
+    }
+    return false;
+  },
+  ready: (x0, z0, x1, z1) => roads.allKnown(x0 - near, z0 - near, x1 + near, z1 + near),
+});
