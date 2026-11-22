@@ -19,6 +19,8 @@ import { findSite as findStore, clearOf as storeClear } from '../src/videostore/
 import { Branches } from '../src/videostore/branches.js';
 import { findBuildings, OutlyingBuildings, overlaps } from '../src/abandoned/sites.js';
 import { Airports } from '../src/airports/airports.js';
+import { Tracks } from '../src/racetrack/tracks.js';
+import { clearOf as trackClear } from '../src/racetrack/site.js';
 import { findSite, candidates, pickSite, clearOf, regionsInTheWay, mayReach, clubName, farName, farSpot, HuntClubs, FAR, layout, PLAN, CLUB, EDGE, TREAD, RING } from '../src/huntclub/site.js';
 import { FIELD, STATIONS, HOUSES, CLAY, SHOT, SCHEDULE, TARGETS, Round, fly, launch, pattern, meeting, missedBy, housesOf, validateRecord } from '../src/huntclub/skeet.js';
 import { Range, describe } from '../src/huntclub/range.js';
@@ -60,8 +62,15 @@ function worldOf(land, seed = SEED) {
   const others = (...box) => reserved(...box) || stores(...box) || abandoned.some((s) => overlaps(box, s.box)) || districts.within(...box).length > 0;
   others.ready = reserved.ready;
   const keepOff = clearOf({ reserved: others, airfields: airports });
-  const clubs = (opts = {}) => new HuntClubs(gen, { start, keepOff, away: keepHike, ...opts });
-  return { gen, start, keepOff, store, abandoned, airports, branches, districts, clubs };
+  // the race tracks beside the towns, clear of the ring round the start the first club may be in
+  const startClear = RING[1] + Math.hypot(...PLAN.slice(2)) + 20;
+  const buildings = (...box) => [...abandoned.filter((s) => overlaps(s.box, box)), ...districts.within(...box)];
+  const tracks = new Tracks(gen, { towns, keepOff: trackClear({ landforms, sites, towns, caves, lines, spaceport: pad, stores: (...box) => [store, ...branches.within(...box)].filter((s) => s && overlaps(s.box, box)), airfield: field, buildings, start, startClear }) });
+  // ...which the rest keep clear of
+  const farKeepOff = (...box) => keepOff(...box) || tracks.within(...box).length > 0;
+  farKeepOff.ready = keepOff.ready;
+  const clubs = (opts = {}) => new HuntClubs(gen, { start, keepOff: farKeepOff, away: keepHike, ...opts });
+  return { gen, start, keepOff, farKeepOff, store, abandoned, airports, branches, districts, tracks, clubs };
 }
 
 test('the hunt club is grown from the seed: the same every time, on flat dry ground, clear of what was there first', () => {
@@ -127,7 +136,7 @@ test('the hunt club keeps off somewhere it is told to, and a seed names it', () 
 // ── Further out ─────────────────────────────────────────────────────────────
 
 test('the rest are out in the forest, grown from the seed, each in its own square, and pinned', () => {
-  const { gen, start, keepOff, clubs } = worldOf(LANDS[0]);
+  const { gen, start, keepOff, farKeepOff, tracks, clubs } = worldOf(LANDS[0]);
   const far = clubs();
   const home = findSite(gen, start, keepOff);
   const pinned = {};
@@ -144,7 +153,8 @@ test('the rest are out in the forest, grown from the seed, each in its own squar
     gen.height(s.x, s.z);
     assert.ok(gen.water.edge >= 40, 'out of the water');
     assert.ok(s.hi - s.lo <= 3.2, `on ground that's flat enough (${(s.hi - s.lo).toFixed(2)} m)`);
-    assert.ok(!keepOff(...s.box), 'clear of everything it keeps clear of');
+    assert.ok(!farKeepOff(...s.box), 'clear of everything it keeps clear of');
+    assert.equal(tracks.within(...s.box).length, 0, 'the race tracks among them');
     assert.ok(Math.abs(Math.sin(2 * (s.yaw - farSpot(SEED, i, j).yaw))) < 1e-9, 'facing the way its square says, or a quarter turn round');
     assert.ok(Math.abs(Math.cos(s.door.yaw - s.yaw) - 1) < 1e-9, 'go here sets you down facing the clubhouse');
     assert.match(s.name, / Hunt Club$/);
@@ -163,11 +173,11 @@ test('the rest are out in the forest, grown from the seed, each in its own squar
 });
 
 test('a far club is the same looked for a little at a time, waiting on what it keeps clear of', () => {
-  const { gen, keepOff, clubs } = worldOf(LANDS[0]);
+  const { gen, farKeepOff, clubs } = worldOf(LANDS[0]);
   const outright = clubs();
   // the railway and the airfields "still being looked for" for a while
   let asked = 0;
-  const slow = (...box) => keepOff(...box);
+  const slow = (...box) => farKeepOff(...box);
   slow.ready = () => ++asked > 5;
   const bit = clubs({ keepOff: slow });
   let at = null;

@@ -76,7 +76,8 @@ time.
 
 Every club keeps clear of real places brought in from a photo, the old
 places, towns, the mouths of caves, the railway, the launch sites, the
-video stores, the abandoned buildings and the airfields. Everyone in a
+video stores, the abandoned buildings and the airfields, and the far ones of
+the race tracks (which keep away from where the first can be). Everyone in a
 world finds them in the same places, by the same names. **Nothing about the
 land changes for one**: the clubhouse stands on a deck on posts, the houses
 and the pads on the ground, and the walks follow it; the trees, bushes and
