@@ -39,10 +39,22 @@ export class ArenaHud {
         <div class="hurt"></div>
         <div class="scores" hidden></div>
       </div>
+      <button type="button" class="launch-touch" hidden>Choose destination</button>
+      <div class="station" hidden>
+        <div class="station-place"><small></small><strong></strong></div>
+        <div class="station-actions">
+          <button type="button" data-deck><kbd>Enter</kbd> <span></span></button>
+          <button type="button" data-home><kbd>T</kbd> Fly home</button>
+        </div>
+      </div>
       <div class="big"></div>`;
     document.body.appendChild(el);
     const q = (s) => el.querySelector(s);
     this.arena = q('.arena');
+    this.station = q('.station');
+    this.launchTouch = q('.launch-touch');
+    this.deckButton = q('[data-deck]');
+    this.homeButton = q('[data-home]');
     this.glareEl = q('.glare');
     this.bigEl = q('.big');
     this.feedEl = q('.feed');
@@ -59,11 +71,16 @@ export class ArenaHud {
 
   show(on) {
     this.arena.hidden = !on;
-    document.body.classList.toggle('in-orbit', on);
     if (!on) {
       this.feedEl.textContent = '';
       this.scores(null);
     }
+  }
+
+  stationDeck(inside) {
+    this.station.querySelector('small').textContent = inside ? 'Deep Space 9' : 'Bajoran system';
+    this.station.querySelector('strong').textContent = inside ? 'Promenade' : 'Deep Space 9';
+    this.deckButton.querySelector('span').textContent = inside ? 'View exterior' : 'Dock at Promenade';
   }
 
   glare(v) {

@@ -1,12 +1,11 @@
-// The launch site: a rocket standing ready on a concrete pad a few hundred
-// metres from where you first arrive. Walk up to it and press T, and you
-// climb the tower into the capsule; after a countdown it lifts off and
-// carries you up into orbit, to The Orrery: platforms hung over the world,
-// where it's a railgun deathmatch against bots. Railguns only, one hit and
-// you're fragged, and the gun never runs dry; first to the frag limit wins.
-// When it's over, T brings you home: the capsule comes down under its
-// parachute onto the pad, and the next rocket is already standing there.
+// The launch site and its two flights. The Orrery hosts a railgun match,
+// and Deep Space 9 has an exterior flyby and a walkable Promenade.
+// Both flights share the launch and the capsule ride home.
 //
+//   flightPanel.js  the launch manifest
+//   station.js      the approach, docking and walking on the station
+//   stationHull.js  the rings, core and pylons
+//   promenade.js    the shops, balcony and observation windows
 //   site.js        where the launch site is, grown from the seed and the land
 //   launchSite.js  the pad, the tower, the rocket, the capsule, the exhaust
 //   flight.js      the trip: boarding, countdown, the climb, the way home
@@ -31,14 +30,16 @@
 // From the console:
 //   world.spaceport.site          where it is
 //   await world.spaceport.go()    stand beside the rocket
-//   world.spaceport.board()       climb aboard (as T does beside it)
+//   world.spaceport.board('ds9')  board a flight (default: The Orrery)
 //   world.spaceport.hurry()       skip on to the end of this part of the trip
 //   world.spaceport.arena         the match, while you're up there
 
 import * as THREE from 'three';
 import { findSite, clearOf, PAD, ROCKET_AT, LANDING_AT } from './site.js';
 import { buildLaunchSite, makeCapsule, makeExhaust, ROCKET, SMOKE } from './launchSite.js';
-import { Flight } from './flight.js';
+import { Flight, DESTINATIONS } from './flight.js';
+import { FlightPanel } from './flightPanel.js';
+import { StationVisit } from './station.js';
 import { Arena } from './arena.js';
 import { ArenaLook } from './arenaLook.js';
 import { ArenaHud, named } from './arenaHud.js';
@@ -154,7 +155,7 @@ export function installSpaceport(game) {
     let place = null;
     const asPlace = () => {
       if (place && place.visited === record.visited) return place;
-      place = { id: site.id, x: site.x, z: site.z, name: SITE_NAME, kind: 'launch site', note: 'a rocket stands ready on the pad: it goes to orbit', glyph: GLYPH, visited: record.visited, shape: [corners(site.plan[0])], ground: [corners(site.cleared[0])] };
+      place = { id: site.id, x: site.x, z: site.z, name: SITE_NAME, kind: 'launch site', note: 'rocket flights to Deep Space 9 and The Orrery', glyph: GLYPH, visited: record.visited, shape: [corners(site.plan[0])], ground: [corners(site.cleared[0])] };
       return place;
     };
     map.places.addSource({
@@ -198,6 +199,7 @@ export function installSpaceport(game) {
   }
 
   // ── The trip ──────────────────────────────────────────────────────────────
+  let station = null; // built on the first visit, reused on later flights
   let arena = null;
   let look = null;
   const arenaCam = new THREE.PerspectiveCamera(74, camera.aspect, 0.05, 12000);
@@ -221,12 +223,24 @@ export function installSpaceport(game) {
     seat.y = site.top + up;
   }
 
-  function board() {
-    if (!site || flight.phase !== 'ground') return false;
+  const manifest = new FlightPanel(input, (id) => {
+    if (nearRocket()) board(id);
+  });
+  game.on('panel', (which) => { if (which !== 'rocket') manifest.close(); });
+  function chooseFlight() {
+    if (flight.phase !== 'ground' || !nearRocket()) return;
+    if (player.aboard || player.carrier) return hud.flash('get off first');
+    game.emit('panel', 'rocket');
+    manifest.open();
+  }
+
+  function board(destination = 'orrery') {
+    if (!site || flight.phase !== 'ground' || !Object.hasOwn(DESTINATIONS, destination)) return false;
     if (player.aboard || player.carrier) {
       hud.flash('not while you’re riding something');
       return false;
     }
+    manifest.close();
     if (!shown) show(true);
     dropCapsule();
     built.rocket.visible = true;
@@ -234,8 +248,8 @@ export function installSpaceport(game) {
     wasVisible = player.character.root.visible;
     seatIn(ROCKET_AT.x, ROCKET_AT.z, ROCKET.seat);
     player.aboard = aboard;
-    flight.board();
-    ui.say(`all aboard<small>${NAME.toLowerCase()} · railguns only · one shot each</small>`, 1600);
+    flight.board(destination);
+    ui.say(`all aboard<small>${DESTINATIONS[destination].name}</small>`, 1600);
     return true;
   }
 
@@ -250,6 +264,8 @@ export function installSpaceport(game) {
   });
   flight.on('phase', (phase, was) => {
     document.body.classList.toggle('in-flight', phase !== 'ground');
+    document.body.classList.toggle('in-orbit', phase === 'orbit');
+    document.body.classList.toggle('at-ds9', phase === 'orbit' && flight.destination === 'ds9');
     if (phase === 'boarding') player.character.root.visible = false;
     if (phase === 'orbit') toOrbit();
     if (was === 'orbit') fromOrbit();
@@ -266,14 +282,23 @@ export function installSpaceport(game) {
   });
 
   function toOrbit() {
-    arena = new Arena({ bots: BOTS, seed: (Math.random() * 2 ** 31) | 0 });
-    arena.countdown += ARENA_TITLE;
-    if (!look) look = new ArenaLook(arenaCam);
-    hookArena(arena);
     built.rocket.visible = false;
     seatIn(ROCKET_AT.x, ROCKET_AT.z, 0.2);
-    ui.show(true);
-    ui.say(`${NAME.toLowerCase()}<small>railguns only · one shot each · first to ${RULES.frags}</small>`, 2000);
+    if (flight.destination === 'ds9') {
+      if (station) station.reset();
+      else station = new StationVisit(camera.aspect);
+      ui.quiet();
+      ui.stationDeck(false);
+      ui.station.hidden = false;
+    } else {
+      arena = new Arena({ bots: BOTS, seed: (Math.random() * 2 ** 31) | 0 });
+      arena.countdown += ARENA_TITLE;
+      if (!look) look = new ArenaLook(arenaCam);
+      hookArena(arena);
+      leaveAsked = -Infinity;
+      ui.show(true);
+      ui.say(`${NAME.toLowerCase()}<small>railguns only · one shot each · first to ${RULES.frags}</small>`, 2000);
+    }
     for (const bus of Object.keys(ambience)) {
       ambience[bus] = sound.levels[bus] ?? 1;
       sound.volume(bus, 0);
@@ -284,6 +309,7 @@ export function installSpaceport(game) {
 
   function fromOrbit() {
     arena = null;
+    ui.station.hidden = true;
     ui.show(false);
     ui.quiet();
     for (const [bus, level] of Object.entries(ambience)) sound.volume(bus, level);
@@ -385,7 +411,24 @@ export function installSpaceport(game) {
     });
   }
 
+  function onStation() {
+    return flight.phase === 'orbit' && flight.destination === 'ds9';
+  }
+
+  function changeDeck() {
+    if (!onStation() || input.blocked) return;
+    station.setDeck(!station.inside);
+    ui.stationDeck(station.inside);
+  }
+  ui.station.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') e.stopPropagation(); // activate the focused button once
+  });
+  ui.deckButton.addEventListener('click', () => { ui.deckButton.blur(); changeDeck(); });
+  ui.homeButton.addEventListener('click', () => { if (onStation()) leave(); });
+  ui.launchTouch.addEventListener('click', () => flight.phase === 'ground' ? chooseFlight() : leave());
+
   function leave() {
+    if (onStation()) return flight.comeHome();
     if (!arena) return;
     const now = performance.now() / 1000;
     if (arena.over || now - leaveAsked < AGAIN) {
@@ -407,12 +450,12 @@ export function installSpaceport(game) {
     id: 'rocket',
     keys: ['KeyT'],
     group: 'WANDER',
-    label: 'by the rocket: climb aboard · in orbit: fly home',
+    label: 'by the rocket: choose a destination · in orbit: fly home',
     run() {
       if (flight.phase === 'orbit') return leave();
       if (flight.phase !== 'ground') return;
       if (!site) return hud.flash('there’s no launch site in this world', 2400);
-      if (nearRocket()) return board();
+      if (nearRocket()) return chooseFlight();
       const p = player.pos;
       const d = Math.hypot(site.x - p.x, site.z - p.z);
       if (d < ARRIVE + 6) return hud.flash('walk up to the rocket, then T', 2200);
@@ -420,6 +463,11 @@ export function installSpaceport(game) {
       hud.flash(`the launch site is ${Math.round(d)} m ${WAYS[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8]} · it’s on the map`, 3200);
     },
   });
+  commands.add({
+    id: 'station-deck', keys: ['Enter'], group: 'ORBIT', label: 'Deep Space 9: dock or view the exterior',
+    run: changeDeck,
+  });
+  commands.describe({ group: 'ORBIT', help: 'W A S D · mouse', pad: ['PadLS', 'PadRS'], label: 'Deep Space 9: circle the station or walk the Promenade' });
   commands.describe({ group: 'ORBIT', help: 'W A S D · mouse', pad: ['PadLS', 'PadRS'], label: 'in the arena: run, strafe, look' });
   commands.describe({ group: 'ORBIT', help: 'click', pad: ['PadRT'], label: 'fire the railgun (one hit frags)' });
   commands.describe({ group: 'ORBIT', help: 'space', pad: ['PadA'], label: 'jump · hold to keep hopping' });
@@ -429,23 +477,28 @@ export function installSpaceport(game) {
   game.coverWhen(() => flight.phase === 'orbit');
 
   // ── Each frame ────────────────────────────────────────────────────────────
-  // First, the arena reads the controls, before the forest can: you're up
+  // First, the orbital destination reads the controls: you're up
   // there, not walking about down here.
   const yours = { move: { x: 0, y: 0 }, jump: false, fire: false, turn: { yaw: 0, pitch: 0 } };
   game.addSystem({
     name: 'spaceport-arena',
     phase: 'input',
     update({ dt }) {
-      if (!arena) return;
+      if (flight.phase !== 'orbit') return;
       const looked = input.consumeLook();
       const stick = input.lookRate();
-      input.consumeZoom();
-      if (map.isOpen) return; // the match waits while you look at the map
+      const zoom = input.consumeZoom();
+      if (onStation()) ui.station.hidden = input.blocked || map.isOpen;
+      if (map.isOpen || (onStation() && input.blocked)) return;
       yours.turn.yaw = -looked.x * SENS - stick.x * STICK_TURN.yaw * dt;
       yours.turn.pitch = -looked.y * SENS - stick.y * STICK_TURN.pitch * dt;
       const m = input.moveAxes();
       yours.move.x = m.x;
       yours.move.y = m.y;
+      if (onStation()) {
+        station.update(dt, yours, zoom, input.isDown('run'));
+        return;
+      }
       yours.jump = input.isDown('jump') || input.jumped();
       yours.fire = input.holding('use');
       const before = arena.me.reload;
@@ -483,7 +536,7 @@ export function installSpaceport(game) {
       if (capsule && flight.phase === 'ground' && d > CAPSULE_KEPT) dropCapsule();
       if (!arrived && d < ARRIVE && flight.phase === 'ground') {
         arrived = true;
-        hud.flash(`${SITE_NAME} · walk up to the rocket and press T to go to orbit`, 3600);
+        hud.flash(`${SITE_NAME} · walk up to the rocket and press T to choose a destination`, 3600);
         if (!record.visited) {
           record.visited = true;
           save.touch();
@@ -492,8 +545,10 @@ export function installSpaceport(game) {
       if (d > ARRIVE * 4) arrived = false;
       // T, by the rocket
       const can = flight.phase === 'ground' && nearRocket() && !player.aboard && !player.carrier;
+      ui.launchTouch.hidden = !input.isTouch || input.blocked || !(can || arena);
+      if (!ui.launchTouch.hidden) ui.launchTouch.textContent = can ? 'Choose destination' : 'Fly home';
       if (can) {
-        hud.cue({ html: '<b>T</b> climb aboard the rocket · go to orbit' });
+        hud.cue({ html: '<b>T</b> climb aboard the rocket · choose destination' });
         cued = true;
       } else if (cued) {
         hud.cue(null);
@@ -591,26 +646,29 @@ export function installSpaceport(game) {
     camera.lookAt(_at);
   }
 
-  // Drawing the arena in place of the forest, through the same pipeline,
+  // Drawing the selected destination in place of the forest,
   // with the forest's air (its haze, its cloud, its water) taken out.
   game.addSystem({
     name: 'spaceport-view',
     phase: 'render',
     update({ dt }) {
-      if (!arena || !look) return;
-      look.update(dt, arena);
-      if (map.isOpen) return;
-      if (arenaCam.aspect !== camera.aspect) {
-        arenaCam.aspect = camera.aspect;
-        arenaCam.updateProjectionMatrix();
+      if (flight.phase !== 'orbit') return;
+      const view = onStation() ? station : look;
+      const cam = view.camera;
+      if (cam.aspect !== camera.aspect) {
+        cam.aspect = camera.aspect;
+        cam.updateProjectionMatrix();
+        if (onStation()) station.placeCamera();
       }
+      if (arena) look.update(dt, arena);
+      if (map.isOpen) return;
       const kept = { haze: pipeline.haze, far: pipeline.fogFar, deck: DECK.uDeckCover.value, under: UNDER.uUnder.value };
       pipeline.haze = 0;
       pipeline.fogFar = 1e7;
       DECK.uDeckCover.value = 0;
       UNDER.uUnder.value = 0;
       try {
-        pipeline.render(look.scene, arenaCam, EXPOSURE, 1);
+        pipeline.render(view.scene, cam, EXPOSURE, 1);
       } finally {
         pipeline.haze = kept.haze;
         pipeline.fogFar = kept.far;
@@ -630,6 +688,9 @@ export function installSpaceport(game) {
     },
     get arena() {
       return arena;
+    },
+    get station() {
+      return onStation() ? station : null;
     },
     get look() {
       return look;

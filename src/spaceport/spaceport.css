@@ -82,3 +82,37 @@ body.in-orbit #touch-act #act-alt { display: none !important; }
   #space .ammo { bottom: calc(70px + var(--inset-b)); }
 }
 @media (prefers-reduced-motion: reduce) { #space .big { transition: none; } #space .hurt.on { animation: none; } }
+
+#flight-manifest {
+  box-sizing: border-box; width: min(440px, calc(100vw - 30px)); max-height: calc(100dvh - 24px);
+  background: #141922; color: #f0ece4; font: 13px var(--font); padding: 22px;
+  border: 1px solid #66636a; border-top: 3px solid #d8a773; border-radius: 3px; box-shadow: 0 16px 60px #0008;
+}
+#flight-manifest::backdrop { background: #10141e9e; }
+#flight-manifest header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; }
+#flight-manifest header small, #space .station-place small { color: #ebc49c; text-transform: uppercase; font-size: 10px; letter-spacing: .16em; }
+#flight-manifest h2 { margin: 6px 0 0; font-size: 20px; font-weight: 550; letter-spacing: -.04em; }
+#flight-manifest button, #space .station-actions button, #space .launch-touch {
+  font: inherit; color: inherit; cursor: pointer; background: #20252d; border: 1px solid #51545b; border-radius: 2px;
+}
+#flight-manifest header button { font-size: 20px; line-height: 1; width: 32px; height: 32px; }
+#flight-manifest button[data-destination] { display: flex; width: 100%; gap: 12px; align-items: center; padding: 7px 12px 7px 5px; margin-top: 8px; text-align: left; }
+#flight-manifest button:hover, #space .station-actions button:hover { background: #33343b; }
+#flight-manifest button:focus-visible, #space .station-actions button:focus-visible { outline: 2px solid #e9b781; outline-offset: 2px; }
+#flight-manifest canvas { position: static; flex: none; width: 86px; height: auto; pointer-events: none; }
+#flight-manifest strong { display: block; font-size: 16px; margin-bottom: 5px; }
+#flight-manifest button small { color: #c7c8ca; font-size: 11px; }
+#flight-manifest i { font-size: 17px; color: #b7b4af; margin-left: auto; }
+
+#space .station-place { position: absolute; top: calc(22px + var(--inset-t)); left: calc(20px + var(--inset-l)); padding: 4px 12px; border-left: 2px solid #dcad7d; text-shadow: 0 1px 6px #000; background: linear-gradient(90deg,#0d101ad9,transparent); }
+#space .station-place strong { display: block; color: white; font-weight: 550; font-size: 19px; letter-spacing: -.04em; margin-top: 3px; }
+#space .station-actions { position: absolute; bottom: calc(18px + var(--inset-b)); left: 50%; transform: translateX(-50%); display: flex; width: max-content; max-width: 95vw; gap: 7px; }
+#space .station-actions button, #space .launch-touch { pointer-events: auto; font-size: 12px; padding: 9px 12px; background: #151a23e3; color: #f7eddf; }
+#space .station-actions kbd { color: #f0bb84; font: inherit; margin-right: 5px; }
+#space .launch-touch { position: absolute; bottom: calc(112px + var(--inset-b)); left: 50%; transform: translateX(-50%); }
+body.at-ds9 #touch-act { display: none; }
+@media (max-width: 410px) {
+  #flight-manifest { padding: 16px; }
+  #flight-manifest canvas { width: 65px; }
+  #space .station-actions button { padding: 8px; font-size: 11px; }
+}

@@ -17,7 +17,14 @@ export default async function ({ page, step, key, frames, shot }) {
     await frames(5);
     assert.match(await page.evaluate(() => T.prompt()), /climb aboard/, 'beside the rocket, T would climb aboard');
     await key('KeyT');
-    assert.equal(await page.evaluate(() => world.spaceport.phase), 'boarding', 'T and you climb aboard');
+    const manifest = page.getByRole('dialog', { name: 'Choose a destination' });
+    assert.ok(await manifest.isVisible(), 'the rocket offers both flights');
+    await key('Escape');
+    assert.ok(await manifest.isHidden(), 'you can stay on the pad');
+    assert.equal(await page.evaluate(() => world.spaceport.phase), 'ground');
+    await key('KeyT');
+    await manifest.getByRole('button', { name: /The Orrery/ }).click();
+    assert.equal(await page.evaluate(() => world.spaceport.phase), 'boarding', 'choosing the arena boards the rocket');
     assert.ok(await page.evaluate(() => !!world.player.aboard && getComputedStyle(document.getElementById('hotbar')).display === 'none'), 'carried, and the tools put away');
     // (the play-through hurries the countdown and the climb along)
     await page.evaluate(() => world.spaceport.hurry());
@@ -79,5 +86,36 @@ export default async function ({ page, step, key, frames, shot }) {
     });
     assert.deepEqual(back, { phase: 'ground', aboard: false, onPad: true, hud: true, covered: false, record: true }, 'down on the pad, on your own feet');
     await shot('home');
+  });
+
+  await step('dock at Deep Space 9', async () => {
+    await page.evaluate(() => world.spaceport.go());
+    await key('KeyT');
+    await shot('flight-manifest');
+    await page.getByRole('button', { name: /Deep Space 9/ }).click();
+    const trip = await page.evaluate(() => {
+      const port = world.spaceport;
+      port.hurry(); port.hurry(); port.hurry();
+      return { destination: port.flight.destination, phase: port.phase, match: !!port.arena, station: !!port.station };
+    });
+    assert.deepEqual(trip, { destination: 'ds9', phase: 'orbit', match: false, station: true });
+    await frames(30);
+    await shot('deep-space-9');
+    await key('Enter');
+    assert.ok(await page.evaluate(() => world.spaceport.station.inside), 'docked on the Promenade');
+    await shot('promenade');
+    const before = await page.evaluate(() => world.spaceport.station.pos.toArray());
+    await page.keyboard.down('KeyW');
+    await frames(30);
+    await page.keyboard.up('KeyW');
+    const after = await page.evaluate(() => world.spaceport.station.pos.toArray());
+    assert.ok(Math.hypot(after[0] - before[0], after[2] - before[2]) > 0.3, 'walked along the Promenade');
+    await page.getByRole('button', { name: /View exterior/ }).click();
+    assert.equal(await page.evaluate(() => world.spaceport.station.inside), false, 'back outside');
+    await key('KeyT');
+    assert.equal(await page.evaluate(() => world.spaceport.phase), 'home');
+    await page.evaluate(() => world.spaceport.hurry());
+    await frames(4);
+    assert.ok(await page.evaluate(() => !world.spaceport.station && !world.player.aboard && !world.game.covered && document.querySelector('#space .station').hidden), 'home from the station');
   });
 }

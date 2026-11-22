@@ -28,12 +28,10 @@ import { BOXES, PADS } from './orrery.js';
 import { MOVE } from './mover.js';
 import { RELOAD, aim } from './arena.js';
 import { Mesher } from '../build/geometry.js';
-import { mulberry32 } from '../noise.js';
+import { makeStars, SKY_R } from './stars.js';
 
 const SUN_DIR = new THREE.Vector3(0.55, 0.62, -0.56).normalize();
 const PLANET = { r: 4000, below: 5200 }; // m: its radius, and how far under the arena its middle is
-const STARS = 1800;
-const SKY_R = 3000; // m: how far off the stars are drawn
 const BEAMS = 16; // rails on show at once, at the most
 const HELIX = { r: 0.16, turn: 0.7, most: 1800, fade: 1.1, core: 0.45 }; // m, m a turn, points, s, s
 const MARKS = 24; // scorch marks on show at once
@@ -74,31 +72,7 @@ export class ArenaLook {
 
   // ── The sky ───────────────────────────────────────────────────────────────
   _sky() {
-    const rng = mulberry32(1969);
-    // stars: most anywhere, more along a band across the sky
-    const pos = new Float32Array(STARS * 3);
-    const colors = new Float32Array(STARS * 3);
-    const band = new THREE.Vector3(0.3, 0.5, 0.81).normalize();
-    for (let i = 0; i < STARS; i++) {
-      _v.set(rng() * 2 - 1, rng() * 2 - 1, rng() * 2 - 1);
-      if (_v.lengthSq() > 1 || _v.lengthSq() < 1e-4) {
-        i--;
-        continue;
-      }
-      _v.normalize();
-      if (i % 3 === 0) _v.addScaledVector(band, -_v.dot(band) * (0.85 + rng() * 0.15)).normalize();
-      pos.set([_v.x * SKY_R, _v.y * SKY_R, _v.z * SKY_R], i * 3);
-      const b = 0.08 + Math.pow(rng(), 4) * 2.4; // most faint, a few bright
-      const warm = rng();
-      colors.set([b * (0.85 + warm * 0.25), b * 0.92, b * (1.15 - warm * 0.3)], i * 3);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    const stars = new THREE.Points(geo, new THREE.PointsMaterial({ size: 1, sizeAttenuation: false, vertexColors: true, depthWrite: false }));
-    stars.renderOrder = -2;
-    stars.frustumCulled = false;
-    this.scene.add(stars);
+    this.scene.add(makeStars());
     // the sun: a disc too bright to look at
     const sun = new THREE.Mesh(new THREE.SphereGeometry(70, 16, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(9, 8.2, 7), depthWrite: false }));
     sun.position.copy(SUN_DIR).multiplyScalar(SKY_R * 0.95);

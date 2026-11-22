@@ -1,4 +1,4 @@
-// The trip: climbing in, the countdown, the climb to orbit, the match, and
+// The trip: climbing in, the countdown, the climb to orbit, the visit, and
 // the capsule coming home under its parachute. Where you are in it, and how
 // high the rocket or the capsule is, over time.
 //
@@ -13,6 +13,12 @@
 //   'liftoff' ()
 
 import { Emitter } from '../core/events.js';
+import { NAME } from './orrery.js';
+
+export const DESTINATIONS = {
+  ds9: { name: 'Deep Space 9', trip: 'Dock and explore the Promenade' },
+  orrery: { name: NAME, trip: 'Orbital railgun arena' },
+};
 
 export const FLIGHT = {
   board: 1.4, // s climbing up the tower and in
@@ -30,21 +36,26 @@ export class Flight extends Emitter {
   constructor() {
     super();
     this.phase = 'ground';
+    this.destination = null;
     this.t = 0; // s into the phase
   }
 
   _go(phase) {
     const was = this.phase;
     this.phase = phase;
+    if (phase === 'ground') this.destination = null;
     this.t = 0;
     this.emit('phase', phase, was);
   }
 
-  board() {
-    if (this.phase === 'ground') this._go('boarding');
+  board(destination = 'orrery') {
+    if (this.phase !== 'ground' || !Object.hasOwn(DESTINATIONS, destination)) return false;
+    this.destination = destination;
+    this._go('boarding');
+    return true;
   }
 
-  // Back from the arena: the capsule comes down.
+  // Back from either destination, the capsule comes down.
   comeHome() {
     if (this.phase === 'orbit') this._go('home');
   }

@@ -7,10 +7,23 @@ tank, a blockhouse, floodlights that come on after dark and a beacon blinking
 on the tower. It's on the map as the *Skyhook launch site*, and **T** from
 anywhere says how far it is and which way.
 
-Walk up onto the pad and press **T** beside the rocket, and you climb the
-tower into the capsule. A five-second countdown, the engine lights, and it
+Walk up onto the pad and press **T** beside the rocket. Pick **Deep Space 9**
+or **The Orrery** to board, or press **Esc** to stay on the pad.
+After a five-second countdown the engine lights and the rocket
 lifts off: you watch it go from the corner of the pad, then from below as it
 climbs away, until the sky goes white.
+
+## Deep Space 9
+
+The rocket brings you past the station’s docking ring, six curved pylons and
+central Ops tower. The Bajoran wormhole glows beyond the hull. Move the mouse
+or press **A/D** to circle the station. **W/S** and the scroll wheel change
+your distance. Press **Enter** or click **Dock at Promenade** to go inside.
+
+Walk the Promenade with **W A S D** and look around with the mouse. Stop at
+Quark’s bar, the Replimat or the Bajoran shrine, or watch the docking ring
+through the observation windows. **Enter** takes you back to the exterior
+view. **T** flies you home from either view.
 
 ## The Orrery
 
@@ -45,7 +58,7 @@ with jump held and you're straight off again.
 
 | | |
 |---|---|
-| **T** by the rocket | climb aboard and go to orbit |
+| **T** by the rocket | choose a flight |
 | **W A S D**, mouse | run, strafe, look (in the arena) |
 | **click** | fire the railgun |
 | **space** | jump; hold it to keep hopping |
@@ -81,7 +94,7 @@ From the console:
 ```js
 world.spaceport.site          // where it is
 await world.spaceport.go()    // stand beside the rocket
-world.spaceport.board()       // climb aboard
+world.spaceport.board('ds9')  // fly to Deep Space 9 (default: The Orrery)
 world.spaceport.hurry()       // skip on to the end of this part of the trip
 world.spaceport.arena         // the match, while you're up there
 world.spaceport.leave()       // fly home now
@@ -94,6 +107,11 @@ index.js        plugs it in: the site in the forest, T, the trip, the arena draw
 site.js         where the launch site is, grown from the seed and the land
 launchSite.js   the pad, the tower, the rocket, the capsule and its parachute, the flame and the smoke
 flight.js       the trip: boarding, the countdown, the climb, the way home, over time
+flightPanel.js  the destination picker on the launch pad
+station.js      the exterior approach, wormhole and walk on the station
+stationHull.js  the central core, rings, spokes and docking pylons
+promenade.js    the station’s shopfronts, gallery and windows
+stars.js        the star field shared by the two destinations
 orrery.js       the arena's layout: platforms, jump pads, ways in, the bots' paths
 mover.js        moving in the arena: running, strafe-jumping, jump pads, boxes, rays
 arena.js        a match: the fighters, their railguns, frags, coming back in

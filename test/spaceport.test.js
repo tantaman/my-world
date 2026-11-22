@@ -314,3 +314,19 @@ test('the trip: aboard, a countdown, up to orbit, and home under the chute', () 
   assert.equal(f.phase, 'ground');
   assert.equal(homeHeight(FLIGHT.home), 0);
 });
+
+test('the rocket keeps its chosen destination until it lands', () => {
+  const flight = new Flight();
+  assert.equal(flight.board('unknown'), false);
+  assert.equal(flight.phase, 'ground');
+  assert.equal(flight.board('ds9'), true);
+  assert.equal(flight.board('orrery'), false);
+  for (let i = 0; i < 3; i++) flight.hurry();
+  assert.equal(flight.phase, 'orbit');
+  assert.equal(flight.destination, 'ds9');
+  flight.comeHome();
+  flight.hurry();
+  assert.equal(flight.destination, null);
+  assert.equal(flight.board(), true);
+  assert.equal(flight.destination, 'orrery');
+});
