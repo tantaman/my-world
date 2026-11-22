@@ -476,6 +476,16 @@ export class HuntClubs {
     return out;
   }
 
+  // Whether every club that could overlap a rectangle has been looked for,
+  // queueing for pump() the squares that haven't.
+  known(x0, z0, x1, z1) {
+    let all = true;
+    this._squares(x0, z0, x1, z1, (i, j) => {
+      if (this.peek(i, j) === undefined) all = false;
+    });
+    return all;
+  }
+
   // The club with this id, or null.
   byId(id) {
     const m = /^huntclub:far:(-?\d+):(-?\d+)$/.exec(String(id));

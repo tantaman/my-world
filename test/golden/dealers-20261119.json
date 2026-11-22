@@ -1,0 +1,47 @@
+[
+ {
+  "id": "dealer:town:1:-3",
+  "name": "Ashby & Sons Motors",
+  "road": "road:1:-3:e",
+  "x": 1361.157,
+  "z": -2573.305,
+  "yaw": -2.641,
+  "top": 0.177
+ },
+ {
+  "id": "dealer:town:2:-3",
+  "name": "Hollis Auto Sales",
+  "road": "road:2:-3:s",
+  "x": 2394.019,
+  "z": -2332.477,
+  "yaw": 2.355,
+  "top": -4.436
+ },
+ {
+  "id": "dealer:town:-3:-2",
+  "name": "Ashby Motors",
+  "road": "road:-3:-2:s",
+  "x": -2408.544,
+  "z": -1452.693,
+  "yaw": -2.034,
+  "top": -3.277
+ },
+ {
+  "id": "dealer:town:-2:0",
+  "name": "Hartigan Motors",
+  "road": "road:-2:-1:s",
+  "x": -1674.783,
+  "z": 178.908,
+  "yaw": 0.493,
+  "top": -24.685
+ },
+ {
+  "id": "dealer:town:2:1",
+  "name": "Pike Motors",
+  "road": "road:2:1:s",
+  "x": 2511.678,
+  "z": 1987.336,
+  "yaw": -0.26,
+  "top": -5.925
+ }
+]
