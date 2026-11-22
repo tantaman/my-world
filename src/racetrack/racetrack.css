@@ -1,0 +1,126 @@
+/* The race card at the top of the screen, the speed bottom left and the
+   little map top right, while you race. Uses the colour tokens defined on
+   :root in index.html. */
+
+#race {
+  position: absolute;
+  left: 50%;
+  top: calc(52px + var(--inset-t));
+  transform: translateX(-50%);
+  padding: 6px 12px 7px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  pointer-events: none;
+  min-width: 220px;
+  max-width: calc(100vw - 32px);
+}
+#race[hidden],
+#race .lights[hidden],
+#race .results[hidden],
+#race-gauge[hidden],
+#race-map[hidden] {
+  display: none;
+}
+#race .head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  white-space: nowrap;
+}
+#race .title {
+  color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#race .pos b,
+#race .line b {
+  color: var(--accent);
+  font-weight: 600;
+}
+#race .line {
+  margin-top: 3px;
+  white-space: nowrap;
+}
+#race .lights {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 7px 0 4px;
+}
+#race .lights span {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #2a1414;
+  border: 2px solid #111;
+}
+#race .lights span.on {
+  background: #ff2a1a;
+  box-shadow: 0 0 10px #ff2a1a;
+}
+#race .results {
+  margin: 6px 0 0;
+  padding: 0 0 0 18px;
+}
+#race .results li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  line-height: 1.6;
+  color: var(--ink-dim);
+}
+#race .results li.you {
+  color: var(--ink);
+  font-weight: 600;
+}
+#race .results .num {
+  display: inline-block;
+  min-width: 20px;
+  margin-right: 6px;
+  text-align: center;
+  font-size: 10px;
+  color: #fff;
+  background: var(--c);
+  border-radius: 2px;
+}
+
+#race-gauge {
+  position: absolute;
+  left: calc(16px + var(--inset-l));
+  bottom: calc(52px + var(--inset-b));
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75), 0 0 6px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  pointer-events: none;
+}
+#race-gauge .kmh {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+#race-gauge .unit {
+  margin: 0 10px 0 4px;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+#race-gauge .gear {
+  display: inline-block;
+  min-width: 22px;
+  padding: 1px 4px;
+  font-size: 16px;
+  text-align: center;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+#race-map {
+  position: absolute;
+  right: calc(16px + var(--inset-r));
+  top: calc(96px + var(--inset-t));
+  width: 132px;
+  height: 132px;
+  pointer-events: none;
+}
