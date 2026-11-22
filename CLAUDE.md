@@ -11,7 +11,7 @@ architecture, and is worth reading before adding anything.
 npm run dev          # the game, http://localhost:5173
 npm run api          # the save server (wrangler dev), http://127.0.0.1:8787
 npm run build        # static site in dist/
-npm test             # unit and golden tests, in Node, ~1 s
+npm test             # the type check, then unit and golden tests in Node, a few seconds
 npm run smoke        # builds, then a play-through in headless Chromium, a few minutes
 npm run serve        # built site + save server together on :8787
 npm run together     # two visitors in one world; needs `npm run serve` running
@@ -36,7 +36,7 @@ its keys on the help panel, so name a feature in `after` to follow it there
 too.
 
 Put new behaviour in a new feature, or in the feature that already owns it —
-not in `main.js`, `game/game.js`, `build/builder.js`, `audio/soundscape.js`
+not in `main.js`, `game/game.ts`, `build/builder.js`, `audio/soundscape.js`
 or `save/worldSave.js`. Those are hosts; they should not learn about what
 plugs into them. The table in the README lists what to call for a tool, a
 key, a sound, something saved, an animal, and so on, and each of those files
@@ -70,6 +70,24 @@ starts with the contract.
   must not: the golden tests grow the forest.
 - Import direction: `core` ← `render` ← `world` ← features. `world/` does
   not import from feature folders.
+
+TypeScript is for where things join (`tsconfig.json` says how it is run):
+
+- Write a new engine or host module (`core`, `game`, `render`, and what
+  features plug into) in `.ts`. It is checked strictly.
+- Node and Vite run `.ts` by dropping the types, so use only syntax that can
+  be dropped: no enums, namespaces or parameter properties. Import a `.ts`
+  file by that name, and a type with `import type`.
+- When you work on a feature's `index.js`, make it `index.ts`: that is when
+  its use of every typed contract starts being checked. Say what it provides
+  beside its install function (`declare module '../game/game.ts' { interface
+  Services { … } }`, as `src/fires/index.ts` does) and delete its
+  `services.d.ts`.
+- When a `.ts` feature needs a contract its JavaScript host hasn't typed,
+  type it at the host (a `@typedef` and `@param` beside the method, as in
+  `build/obstacles.js`), not with a cast at the caller.
+- World generation (`world/`, pinned by the golden files) stays as it is
+  until everything round it has been done.
 
 What goes with a feature lives with it, so that two branches adding features
 don't edit the same lines:

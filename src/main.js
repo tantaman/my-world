@@ -1,13 +1,13 @@
 // Where the game is put together.
 //
-// Everything is a feature (see src/game/game.js), and features are found, not
-// listed: every folder beside this file whose index.js exports an install
+// Everything is a feature (see src/game/game.ts), and features are found, not
+// listed: every folder beside this file whose index.js (or index.ts) exports an install
 // function is one, and it says there what it has to come after (see
 // src/game/features.js). Nothing in this file should have to change to add one.
 
 import { CONFIG } from './config.js';
 import { storage, KEYS } from './core/storage.js';
-import { Game } from './game/game.js';
+import { Game } from './game/game.ts';
 import { featuresIn, inOrder } from './game/features.js';
 import { Settings } from './game/settings.js';
 import { installDebug } from './game/debug.js';
@@ -16,7 +16,7 @@ import { SignIn } from './save/signIn.js';
 import { landOf, NEWEST_LAND } from './world/lands.js';
 
 // In order: each can use what the ones before it provide.
-const FEATURES = inOrder(featuresIn(import.meta.glob('./*/index.js', { eager: true })));
+const FEATURES = inOrder(featuresIn(import.meta.glob('./*/index.{js,ts}', { eager: true })));
 
 const loader = {
   bar: document.getElementById('load-bar'),

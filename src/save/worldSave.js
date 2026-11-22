@@ -115,6 +115,7 @@ export class WorldSave extends Emitter {
   }
 
   // A system's share of the save. See domains.js for what a domain is.
+  /** @param {import('./domains.js').SaveDomain} domain */
   register(domain) {
     return this.domains.register(domain);
   }

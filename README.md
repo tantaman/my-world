@@ -140,10 +140,10 @@ adds what it does each frame. A feature lives in a folder of its own under
 `index.js` exports an install function, and each says there which features
 it has to come after:
 
-```js
-// src/fires/index.js
+```ts
+// src/fires/index.ts
 export const after = ['render', 'world', 'audio', 'build'];
-export function installFires(game) { … }
+export function installFires(game: Game) { … }
 ```
 
 They install in an order that puts each after the ones it names, and by name
@@ -160,7 +160,7 @@ are handed what they need, which is what lets most of them be tested in Node
 with nothing else running.
 
 **The frame.** Each frame runs in phases, and within a phase in the order
-features were installed (`src/game/game.js`):
+features were installed (`src/game/game.ts`):
 
 | phase | what happens |
 |---|---|
@@ -197,9 +197,10 @@ place in that order, not at the end:
 | `build/surfaces.js` | what something built is made of: bark, grain, paint, stone, shingles, tin, glass | `mesher.surf = SURF.paint` (and `mesher.wear`), drawn with `createBuildingMaterial()` |
 | `country/index.js` | a layer of cloud of your own over everything, for a while (a flight's) | `game.country.cloud(() => ({ at, cover, x, z }))` |
 | `far/index.js` | land drawn past where the forest is streamed in, to be seen from high ground | `game.far.want(id, x0, z0, x1, z1, step)`, `far.drop(id)` |
+| `game/budget.ts` | work that can wait (a search, a survey), done a little each frame out of one allowance | `game.budget.add({ name, work(ms) })` |
 | `game/commands.js` | a key or a pad's button, and its line on the help panel | `game.commands.add({ keys, run, group, label })` |
 | `game/commands.js` | something to do that needs no key: in your pack, and at hand (first there, a button on a touch screen) while it says what it would do | `game.commands.add({ run, group, label, now: () => 'float' })` |
-| `game/game.js` | something done every frame | `game.addSystem({ name, phase, update })` |
+| `game/game.ts` | something done every frame | `game.addSystem({ name, phase, update })` |
 | `game/settings.js` | a remembered preference | `game.settings.get / set` |
 | `hunting/shot.js` | something else the rifle can hit (a man, a wall that stops a shot) | `game.hunting.targets.add({ aimed, struck?, heard? })` |
 | `map/mapView.js` | something drawn on the map | `map.addLayer((pen) => …)` |
@@ -281,6 +282,17 @@ Each of those files opens with what the thing is and what it is handed.
   the camera, and what that asks of anything that fills a buffer, sets a
   uniform or draws a pattern is in [the look](src/render/README.md) and at
   the top of `render/origin.js`.
+- *Types where things join.* The newer parts of the engine and some features
+  are TypeScript, the rest is JavaScript, and both run as they are: Node and
+  Vite drop the types, so there is still no build step between an edit and a
+  test. `npm test` checks the types first. Only what is written in `.ts` is
+  checked, and it is checked against what the JavaScript it calls really
+  takes; so what features plug into says what it takes even where its host
+  is still JavaScript (a `@typedef` beside it, as in `build/obstacles.js`
+  and `save/domains.js`), and a feature's `index.js` becomes `index.ts` the
+  next time it is worked on, which is when its use of all of that starts
+  being checked. The game's services are typed the same way: each feature
+  says what it provides (the top of `game/game.ts`).
 - *Layers point one way.* `core` knows nothing; `render` knows `core`;
   `world` knows those; the features know the world and, where they must,
   each other — and nothing reaches back down.
@@ -291,11 +303,15 @@ Each of those files opens with what the thing is and what it is handed.
 plain modules (what a fire is and how it burns down, the tool, the look, the
 sound) and an `index.js` that plugs it in:
 
-```js
-// src/fires/index.js, in short
+```ts
+// src/fires/index.ts, in short
 export const after = ['render', 'world', 'audio', 'build'];  // whose things it uses
 
-export function installFires(game) {
+declare module '../game/game.ts' {                           // what game.fires is, for whoever comes after
+  interface Services { fires: Fires }
+}
+
+export function installFires(game: Game) {
   const { scene, camera, solids, sky, builder, sound, save } = game;
   const fires = new Fires({ scene, solids, sky });
   game.provide('fires', fires);                              // world.fires in the console
@@ -363,7 +379,7 @@ slider on the settings panel, `game.hud.setting({ id, group, label, get, set })`
 ### Checking it still works
 
 ```bash
-npm test             # in Node, a second or so
+npm test             # the type check, then the tests in Node: a few seconds
 npm run smoke        # a play-through in a headless browser, four or five minutes
 npm run together     # two visitors in one world (run `npm run serve` first)
 ```
@@ -414,7 +430,8 @@ src/
     geom.js               plan-view geometry, a ray against a box, and chance that several systems share
     format.js             how numbers are written for people
   game/
-    game.js               the Game: what features share, and the frame's phases
+    game.ts               the Game: what features share, and the frame's phases
+    budget.ts             work that can wait, a little each frame, out of one allowance
     features.js           which folders are features, and the order they install in
     commands.js           keys and what they do; the help panel is written from it
     settings.js           the visitor's preferences
@@ -422,6 +439,8 @@ src/
   <a feature>/            one folder each
     README.md             what it is and how it works, and what each file in it is
     index.js              what plugs it into the game, and which features it comes after
+                          (index.ts once it has been worked on since; until then a
+                          services.d.ts beside it says what it provides)
 tools/
   hike.mjs                npm run hike: a photo → a hike in the world
   hike/                   reading photos (EXIF), elevation tiles, OpenStreetMap; building one

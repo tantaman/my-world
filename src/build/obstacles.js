@@ -6,7 +6,7 @@
 // Now whoever owns a kind of thing registers a source, and tools ask one
 // question.
 //
-//   obstacles.addSource((x, z, R, out) => {      // from src/fires/index.js
+//   obstacles.addSource((x, z, R, out) => {      // from src/fires/index.ts
 //     for (const f of fires.list.values()) out.push({ x: f.x, z: f.z, what: 'a fire ring', dig: 1.05, wall: 0.55, footing: 1.15, roof: 0.5 });
 //   });
 //
@@ -26,17 +26,38 @@
 //   grown     true for what the seed grows (a tree, a boulder, an old cabin),
 //             as against what someone has put there since
 
+// The same, for the type check: what a .ts feature's source is held to.
+/**
+ * @typedef {object} Obstacle
+ * @property {number} x
+ * @property {number} z
+ * @property {string} what
+ * @property {number} [dig]
+ * @property {number} [wall]
+ * @property {boolean} [low]
+ * @property {number} [footing]
+ * @property {number} [roof]
+ * @property {string} [roofWhy]
+ * @property {'fell' | 'grub'} [clear]
+ * @property {boolean} [grown]
+ */
+/** @typedef {(x: number, z: number, R: number, out: Obstacle[]) => void} ObstacleSource */
+
 export class Obstacles {
   constructor() {
+    /** @type {ObstacleSource[]} */
     this.sources = [];
   }
 
+  /** @param {ObstacleSource} fn */
   addSource(fn) {
     this.sources.push(fn);
   }
 
   // Everything within R of (x, z).
+  /** @returns {Obstacle[]} */
   near(x, z, R) {
+    /** @type {Obstacle[]} */
     const out = [];
     for (const source of this.sources) source(x, z, R, out);
     return out;

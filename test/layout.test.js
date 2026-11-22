@@ -11,7 +11,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 const ROOT = new URL('../', import.meta.url);
 const readme = readFileSync(new URL('README.md', ROOT), 'utf8');
 const folders = readdirSync(new URL('src/', ROOT), { withFileTypes: true })
-  .filter((d) => d.isDirectory() && existsSync(new URL(`src/${d.name}/index.js`, ROOT)))
+  .filter((d) => d.isDirectory() && ['index.js', 'index.ts'].some((f) => existsSync(new URL(`src/${d.name}/${f}`, ROOT))))
   .map((d) => d.name);
 
 // The first cell of each row of the table under a line starting with `after`.
