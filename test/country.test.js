@@ -329,7 +329,9 @@ test('the weather is the country’s, as far as you are onto it', () => {
   assert.ok(Math.abs(deck - top - (2250 - 1015) * 0.2) < 2, `${Math.round(deck - top)} m over a 1015 m top`);
   assert.ok(Number.isNaN(deckHeight(world([island()]).landforms[0])), 'the forest has none');
   // under it, on the land: its cover, and (cinder desert: shade 0) the sun still out
-  assert.deepEqual(weatherAt(L, ...AT, top), { cover: 0.97, haze: 0.35, overcast: 0 });
+  const { floor, ...weather } = weatherAt(L, ...AT, top);
+  assert.deepEqual(weather, { cover: 0.97, haze: 0.35, overcast: 0 });
+  assert.equal(floor, Math.min(0, L.offset), 'the haze thins out up from its lowest ground, where that is below the forest');
   const C = cloud.landforms[0];
   const under = weatherAt(C, ...AT, deckHeight(C) - 50);
   assert.ok(Math.abs(under.overcast - 0.35 * 0.8) < 1e-9, 'under a cloud forest’s cloud, the light is flat');
@@ -337,8 +339,13 @@ test('the weather is the country’s, as far as you are onto it', () => {
   // it clears as you walk off the land
   const edge = weatherAt(C, AT[0] + 600 + 250, AT[1], 0);
   assert.ok(edge.cover > 0.2 && edge.cover < 0.6 && edge.haze > 1 && edge.haze < 1.5);
-  assert.deepEqual(weatherAt(C, AT[0] + 600 + 600, AT[1], 0), { cover: 0, haze: 1, overcast: 0 });
-  assert.deepEqual(weatherAt(null, 0, 0, 0), { cover: 0, haze: 1, overcast: 0 });
+  assert.deepEqual(weatherAt(C, AT[0] + 600 + 600, AT[1], 0), { cover: 0, haze: 1, overcast: 0, floor: 0 });
+  assert.deepEqual(weatherAt(null, 0, 0, 0), { cover: 0, haze: 1, overcast: 0, floor: 0 });
+  // a canyon cut down into a plateau: down in it, the air is as clear as on
+  // the forest floor, not as thick as it would be that far below it
+  const canyon = Object.assign(Object.create(Object.getPrototypeOf(C)), C, { offset: -180 });
+  assert.equal(weatherAt(canyon, ...AT, -170).floor, -180);
+  assert.ok(weatherAt(canyon, AT[0] + 600 + 250, AT[1], 0).floor > -180, 'and goes back to the forest’s as you walk off it');
 });
 
 test('from far off the land is its own colour too', () => {

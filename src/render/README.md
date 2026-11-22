@@ -35,7 +35,10 @@ eye's) way of turning that into a picture. Pixel art is a setting.
    - with pixel art on, darkens pixels on depth discontinuities, giving soft
      pixel-art outlines around silhouettes
    - adds height fog that takes its colour from the sky behind it, so far
-     hills melt into the horizon and valleys hold more mist; or, with the
+     hills melt into the horizon and valleys hold more mist (measured up
+     from the forest floor, or from the bottom of a real place that goes
+     down below it, a canyon cut into a plateau, so the air down there is
+     as clear as on the forest floor); or, with the
      camera under water, the water's own: reds going first with depth,
      green in a lake and blue in the sea, and light coming down in slanting
      shafts (see [Under the water](../underwater/README.md))

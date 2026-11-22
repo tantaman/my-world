@@ -32,6 +32,11 @@
 //   --middle lat,lon  where to centre the land, if not on the photo: so that
 //                     --radius can take in the whole of a long trail with the
 //                     photo part way along it
+//   --from lat,lon    where the walk starts, if not at the nearest road: the
+//                     point of a path nearest there (a car park the paths
+//                     come down from, past a village with lanes of its own)
+//   --to lat,lon      where the walk ends, if it goes on past the photo: the
+//                     point of a path nearest there
 //   --snow 1200       the height snow lies above, or `none`. Unsaid, it's
 //                     where it would lie in winter if the photo was taken
 //                     then (hike/snow.js), else where its country has it
@@ -52,8 +57,8 @@ import { readPhoto } from './hike/exif.js';
 import { decodePng, encodePng } from './hike/png.js';
 import { localFrame, tileXY, terrarium, metresPerDegree } from './hike/geo.js';
 import { blockOf, blockTiles, missing } from './hike/usgs.js';
-import { parseOsm, mergeOsm, trails, waters, coastlines, roads, beaches, streams, covers, peaks, incompleteWaters } from './hike/osm.js';
-import { buildHike, splitHike, fineBox, DEFAULTS } from './hike/build.js';
+import { parseOsm, mergeOsm, trails, waters, coastlines, roads, beaches, streams, covers, peaks, falls, incompleteWaters } from './hike/osm.js';
+import { buildHike, splitHike, fineTiles, tileBox, DEFAULTS } from './hike/build.js';
 import { placeHike } from './hike/place.js';
 import { winterSnow, snowlineFrom } from './hike/snow.js';
 import { COUNTRY } from '../src/world/country.js';
@@ -107,16 +112,21 @@ if (photo.lat === null || photo.lon === null) {
   process.exit(1);
 }
 console.log(`photo: ${photo.lat.toFixed(5)}, ${photo.lon.toFixed(5)}${photo.bearing !== null ? `, looking ${Math.round(photo.bearing)}°` : ''}${photo.hour !== null ? `, at ${fmtHour(photo.hour)}` : ''}`);
-// where the land is centred: the photo, unless it's said
-let middle = null;
-if (flags.middle) {
-  const [lat, lon] = flags.middle.split(',').map(Number);
+// a place said as lat,lon (--middle, --from, --to), or null if it isn't said
+function latLon(flag) {
+  if (!flags[flag]) return null;
+  const [lat, lon] = flags[flag].split(',').map(Number);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    console.error('--middle wants lat,lon');
+    console.error(`--${flag} wants lat,lon`);
     process.exit(1);
   }
-  middle = { lat, lon };
+  return { lat, lon };
 }
+// where the land is centred: the photo, unless it's said
+const middle = latLon('middle');
+// where the walk starts and ends, if not at the road and the photo
+const from = latLon('from');
+const to = latLon('to');
 
 const DEM = flags.dem || 'terrain';
 if (!DEMS.includes(DEM)) {
@@ -184,20 +194,23 @@ async function usgsTile(z, tx, ty) {
   }
   return decodePng(fs.readFileSync(file));
 }
-// (lat, lon) -> metres, from the tiles at zoom z over [north, west, south,
-// east], fetched first. NaN where the source has nothing.
-async function heightsFrom(source, z, [north, west, south, east], what) {
-  const [tx0, ty0] = tileXY(north, west, z).map(Math.floor);
-  const [tx1, ty1] = tileXY(south, east, z).map(Math.floor);
-  process.stdout.write(`${what}: ${(tx1 - tx0 + 1) * (ty1 - ty0 + 1)} tiles${source === '3dep' ? ' from 3DEP' : ''}`);
+// (lat, lon) -> metres, from the tiles at zoom z over each of `boxes`
+// ([north, west, south, east] each), fetched first. NaN where the source has
+// nothing.
+async function heightsFrom(source, z, boxes, what) {
+  const want = new Map();
+  for (const [north, west, south, east] of boxes) {
+    const [tx0, ty0] = tileXY(north, west, z).map(Math.floor);
+    const [tx1, ty1] = tileXY(south, east, z).map(Math.floor);
+    for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) want.set(`${tx}/${ty}`, [tx, ty]);
+  }
+  process.stdout.write(`${what}: ${want.size} tiles${source === '3dep' ? ' from 3DEP' : ''}`);
   const tiles = new Map();
-  for (let ty = ty0; ty <= ty1; ty++) {
-    for (let tx = tx0; tx <= tx1; tx++) {
-      const key = `${source}/${z}/${tx}/${ty}`;
-      if (!tileCache.has(key)) tileCache.set(key, await (source === '3dep' ? usgsTile : terrainTile)(z, tx, ty));
-      tiles.set(`${tx}/${ty}`, tileCache.get(key));
-      process.stdout.write('.');
-    }
+  for (const [k, [tx, ty]] of [...want].sort((a, b) => a[1][1] - b[1][1] || a[1][0] - b[1][0])) {
+    const key = `${source}/${z}/${tx}/${ty}`;
+    if (!tileCache.has(key)) tileCache.set(key, await (source === '3dep' ? usgsTile : terrainTile)(z, tx, ty));
+    tiles.set(k, tileCache.get(key));
+    process.stdout.write('.');
   }
   console.log();
   const px = (X, Y) => {
@@ -218,16 +231,15 @@ async function heightsFrom(source, z, [north, west, south, east], what) {
     return (px(i, j) * (1 - u) + px(i + 1, j) * u) * (1 - v) + (px(i, j + 1) * (1 - u) + px(i + 1, j + 1) * u) * v;
   };
 }
-// The heights for a grid `cell` real metres apart, over a box (game metres
-// round the land's middle): from 3DEP if asked, with Terrain Tiles where it has none.
-async function elevationFor(cell, [x0, z0, x1, z1], what) {
+// The heights for a grid `cell` real metres apart, over some boxes ([x0, z0,
+// x1, z1], game metres round the land's middle): from 3DEP if asked, with
+// Terrain Tiles where it has none.
+async function elevationFor(cell, boxes, what) {
   const pad = cell * 2;
-  const [north, west] = frame.toLatLon(x0 / opt.scale - pad, -z0 / opt.scale + pad);
-  const [south, east] = frame.toLatLon(x1 / opt.scale + pad, -z1 / opt.scale - pad);
-  const box = [north, west, south, east];
-  const terrain = await heightsFrom('terrain', Math.min(TERRAIN_MAX, zoomFor(cell)), box, what);
+  const ll = boxes.map(([x0, z0, x1, z1]) => [...frame.toLatLon(x0 / opt.scale - pad, -z0 / opt.scale + pad), ...frame.toLatLon(x1 / opt.scale + pad, -z1 / opt.scale - pad)]);
+  const terrain = await heightsFrom('terrain', Math.min(TERRAIN_MAX, zoomFor(cell)), ll, what);
   if (DEM === 'terrain') return terrain;
-  const usgs = await heightsFrom('3dep', zoomFor(cell), box, `${what}, finer`);
+  const usgs = await heightsFrom('3dep', zoomFor(cell), ll, `${what}, finer`);
   return (lat, lon) => {
     const h = usgs(lat, lon);
     return Number.isNaN(h) ? terrain(lat, lon) : h;
@@ -236,7 +248,7 @@ async function elevationFor(cell, [x0, z0, x1, z1], what) {
 const centre = middle || photo;
 const frame = localFrame(centre.lat, centre.lon);
 const reachG = (opt.radius + opt.fade) * opt.scale;
-const elevation = await elevationFor(opt.cell, [-reachG, -reachG, reachG, reachG], 'elevation');
+const elevation = await elevationFor(opt.cell, [[-reachG, -reachG, reachG, reachG]], 'elevation');
 
 // ── OpenStreetMap ────────────────────────────────────────────────────────────
 // The API answers a box with up to 50 000 nodes; a busier box is asked for in
@@ -319,12 +331,20 @@ else {
 }
 
 // ── Build it ─────────────────────────────────────────────────────────────────
-const parts = { id, name, photo, middle, elevation, trails: ts, waters: ws, coast, roads: roads(osm), beaches: beaches(osm), streams: streams(osm), covers: cover, at, datum, ...opt };
-let built = buildHike({ ...parts, fine: null });
+const parts = { id, name, photo, middle, from, to, elevation, trails: ts, waters: ws, coast, roads: roads(osm), beaches: beaches(osm), streams: streams(osm), covers: cover, falls: falls(osm), at, datum, ...opt };
+let built;
+try {
+  built = buildHike({ ...parts, fine: null });
+} catch (err) {
+  console.error(`Can't make the walk: ${err.message}.`);
+  process.exit(1);
+}
 // The finer grid goes where the walk goes, which is known now: its heights
 // are fetched for there, and it is built again with them.
 if (opt.fine) {
-  const fineElevation = await elevationFor(opt.fine.cell, fineBox(built.walk, opt.fine, opt.scale, opt.radius * opt.scale, [built.def.view.x, built.def.view.z]), 'along the walk');
+  const near = [[built.def.view.x, built.def.view.z], ...(built.def.falls || []).map((f) => [f.x, f.z])];
+  const tiles = fineTiles(built.walk, opt.fine, opt.scale, opt.radius * opt.scale, near);
+  const fineElevation = await elevationFor(opt.fine.cell, tiles.map((t) => tileBox(t, opt.fine, opt.scale)), 'along the walk');
   built = buildHike({ ...parts, fineElevation });
 }
 const { def, preview } = built;
@@ -352,16 +372,17 @@ fs.writeFileSync(previewFile, encodePng(preview.width, preview.height, preview.r
 
 console.log(`\n${def.name} → src/world/hikes/${id}.js (${Math.round(module.length / 1024)} kB, fetched when it's needed)`);
 const F = def.ground.fine;
-if (F) console.log(`  along the walk, heights every ${Math.round((F.cell / def.scale) * 10) / 10} m for ${Math.round(((F.w - 1) * F.cell) / def.scale)} × ${Math.round(((F.h - 1) * F.cell) / def.scale)} m${DEM === '3dep' ? ', from 3DEP' : ''}`);
+if (F) console.log(`  along the walk, heights every ${Math.round((F.cell / def.scale) * 10) / 10} m over ${(F.tiles.length * ((F.size * F.cell) / def.scale) ** 2 / 1e6).toFixed(1)} km²${DEM === '3dep' ? ', from 3DEP' : ''}`);
 console.log(`  at ${def.at[0]}, ${def.at[1]} in the world, ${Math.round(Math.hypot(...def.at) / def.scale / 1000)} km from the middle as the crow flies: the real land for ${Math.round(def.radius)} m round ${middle ? 'its middle' : 'the photo'}, at 1 : ${Math.round(1 / def.scale)}`);
 if (placed && placed.near) console.log(`  it meets ${placed.near.name}: placed exactly from it, and standing on the same heights`);
 for (const note of placed ? placed.notes : []) console.log(`  note: ${note}`);
-if (def.trail) console.log(`  the walk: ${def.trail.name || 'a trail'}, ${def.trail.length} m, ${def.trail.climb < 0 ? `going down ${-def.trail.climb}` : `climbing ${def.trail.climb}`} m`);
+if (def.trail) console.log(`  the walk: ${def.trail.name || 'a trail'}, ${def.trail.length} m, ${def.trail.climb < 0 ? `going down ${-def.trail.climb}` : `climbing ${def.trail.climb}`} m${def.end ? ', on past the photo' : ''}`);
 else console.log("  the photo wasn't taken on a trail; you'll arrive where it was taken");
 const flowing = (card.streams || []).map((s) => s.name);
 const unnamed = (def.streams || []).filter((s) => !s.name).length;
 const running = [...flowing, ...(unnamed ? [`${unnamed} unnamed stream${unnamed > 1 ? 's' : ''}`] : [])];
 console.log(`  water: ${[...def.lakes.map((l) => l.name || 'an unnamed lake'), ...running].join(', ') || 'none'}${def.beaches ? `; ${def.beaches.length} beach${def.beaches.length > 1 ? 'es' : ''}` : ''}`);
+if (def.falls) console.log(`  falls: ${def.falls.map((f) => f.name || 'an unnamed fall').join(', ')}`);
 if (def.country) console.log(`  country: ${def.country}`);
 if ('snowline' in def) console.log(`  snow: ${def.snowline === null ? 'none' : `lying from ${def.snowline[0]} m`}${flags.snow === undefined ? ' (the photo was taken in winter: --snow to say otherwise)' : ''}`);
 console.log(`  a picture of it: ${previewFile}`);

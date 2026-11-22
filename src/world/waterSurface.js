@@ -37,6 +37,10 @@
 //     the shore and around your legs, and where it runs past you it opens
 //     into a wake.
 //
+// A real place whose country has water of its own colour (country.js: the
+// milky blue-green of a creek that lays down travertine) has it, as far as
+// the ground there is that country's.
+//
 // The forest's own sea (sea.js) rises and falls in a slow swell and is bluer
 // than a lake; it breaks white along the shore, as a real place's sea does,
 // by the foam it carries. Seen from underneath, any water is a ceiling of
@@ -46,9 +50,9 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL, UNDER_GLSL, PERIOD, wave } from '../render/glsl.js';
-import { SHARED, SKY, WADE, UNDER, BEHIND } from '../render/uniforms.js';
+import { SHARED, SKY, WADE, UNDER, BEHIND, WATERS, MAX_COUNTRIES } from '../render/uniforms.js';
 import { NO_WATER } from './water.js';
-import { WATER_STRIDE as WS } from './chunkGen.js';
+import { WATER_STRIDE as WS, SURFACE_STRIDE as SS } from './chunkGen.js';
 
 
 const UNSET = NO_WATER * 0.5;
@@ -123,7 +127,9 @@ ${WIND_WAVES.map(([turn, len, steep], i) => {
 const MIRROR = { steps: Math.max(0, Math.round(CONFIG.mirror)), first: 0.25, far: 300, refine: CONFIG.mirror < 20 ? 3 : 5 };
 MIRROR.grow = Math.pow(MIRROR.far / MIRROR.first, 1 / Math.max(1, MIRROR.steps - 1));
 const REFRACT = 0.25; // how far the ripples bend what's under them, for each metre of water (n = 1.33)
-const MURK = { still: 0.38, running: 0.22, sea: 0.14 }; // per m: how cloudy it is to see through
+// per m: how cloudy it is to see through; milky, a creek that lays down
+// travertine (country.js `water.milk`)
+const MURK = { still: 0.38, running: 0.22, sea: 0.14, milky: 3 };
 const FAR_SKY = 5.0e4; // m: past this, the copy behind is the sky (render/pipeline.js)
 
 // The sea's swell: a few long, low waves running in from different ways
@@ -174,6 +180,9 @@ export function buildWaterGeometry(ch) {
   const foam = new Float32Array(count);
   const depth = new Float32Array(count);
   const sky = new Float32Array(count * 2); // leaves overhead, how open it is
+  // how far it is a real place's own water, and which country's (country.js)
+  const land = new Float32Array(count * 2);
+  const surface = ch.surface;
   // A corner with no water level of its own (rare: a coarse cell straddling
   // the edge of a stream's valley) borrows the highest one around it.
   const level = (i, j) => {
@@ -216,6 +225,10 @@ export function buildWaterGeometry(ch) {
     // leaves overhead, where the woods close in over narrow water
     sky[m * 2] = ch.forest[k] * (1 - D[k * WS + 4]);
     sky[m * 2 + 1] = D[k * WS + 4];
+    if (surface) {
+      land[m * 2] = surface[k * SS + 2];
+      land[m * 2 + 1] = surface[k * SS + 3];
+    }
   }
   const idx = new Uint16Array(cells.length * 6);
   let w = 0;
@@ -238,6 +251,7 @@ export function buildWaterGeometry(ch) {
   geo.setAttribute('aFoam', new THREE.BufferAttribute(foam, 1));
   geo.setAttribute('aDepth', new THREE.BufferAttribute(depth, 1));
   geo.setAttribute('aSky', new THREE.BufferAttribute(sky, 2));
+  geo.setAttribute('aLand', new THREE.BufferAttribute(land, 2));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.computeBoundingSphere();
   return geo;
@@ -254,7 +268,7 @@ export function createWaterMaterial() {
     side: THREE.DoubleSide, // so it can be seen from under it
   });
   mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, SKY, WADE, UNDER, BEHIND, { uPlayer: SHARED.uPlayer, uWind: SHARED.uWind, uOrigin: SHARED.uOrigin });
+    Object.assign(shader.uniforms, SKY, WADE, UNDER, BEHIND, WATERS, { uPlayer: SHARED.uPlayer, uWind: SHARED.uWind, uOrigin: SHARED.uOrigin });
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -263,6 +277,7 @@ export function createWaterMaterial() {
         attribute float aFoam;
         attribute float aDepth;
         attribute vec2 aSky;
+        attribute vec2 aLand;
         uniform float uTime;
         uniform float uSea;
         varying vec2 vFlow;
@@ -271,6 +286,8 @@ export function createWaterMaterial() {
         varying vec2 vSky;
         varying vec3 vWPos;
         varying float vSea;
+        varying float vOwn;
+        flat varying float vCountry;
         ${WORLD_GLSL}
         ${SWELL_GLSL}`,
       )
@@ -291,6 +308,8 @@ export function createWaterMaterial() {
         vFoam = aFoam;
         vDepth = aDepth;
         vSky = aSky;
+        vOwn = aLand.x;
+        vCountry = aLand.y;
         vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
       );
     shader.fragmentShader = shader.fragmentShader
@@ -314,6 +333,11 @@ export function createWaterMaterial() {
         varying vec2 vSky; // x: leaves overhead, y: how open it is
         varying vec3 vWPos; // as drawn: see worldXZ
         varying float vSea; // 1 on the sea
+        varying float vOwn; // how far it is a real place's own water
+        flat varying float vCountry; // and which country's
+        uniform vec3 uWaterShallow[${MAX_COUNTRIES}];
+        uniform vec3 uWaterDeep[${MAX_COUNTRIES}];
+        uniform float uWaterMilk[${MAX_COUNTRIES}];
         ${NOISE_GLSL}
         ${WORLD_GLSL}
         ${WORLD_NOISE_GLSL}
@@ -490,14 +514,21 @@ export function createWaterMaterial() {
         // the eye (m), from the copy of what's behind: and so how much of what
         // you see of it is the water itself, scattering the light that gets
         // into it. Running water is clearer: it doesn't stand long enough to
-        // silt up; the sea is clearer still.
+        // silt up; the sea is clearer still. A real place's water may be of
+        // its country's own colour, and milky (country.js): milky water hides
+        // what's under it much sooner.
         vec2 suv = gl_FragCoord.xy / uBehindRes;
         float zs = max(vViewPosition.z, 1e-3);
         float sight = max(behindZ(suv) - zs, 0.0) * length(vViewPosition) / zs;
+        int wc = int(vCountry + 0.5);
+        float milk = uWaterMilk[wc] * vOwn;
         float murkK = mix(mix(${MURK.running.toFixed(3)}, ${MURK.still.toFixed(3)}, still), ${MURK.sea.toFixed(3)}, vSea);
+        murkK = mix(murkK, ${MURK.milky.toFixed(3)}, milk);
         float murk = 1.0 - exp(-sight * murkK);
-        // the water's own colour, as it scatters: greener in a lake, bluer in the sea
+        // the water's own colour, as it scatters: greener in a lake, bluer in
+        // the sea, or its country's own
         vec3 body = mix(vec3(0.05, 0.085, 0.06), vec3(0.02, 0.06, 0.07), smoothstep(1.0, 8.0, sight));
+        body = mix(body, mix(uWaterShallow[wc], uWaterDeep[wc], smoothstep(1.0, 8.0, sight)), vOwn);
         body = mix(body, mix(vec3(0.04, 0.1, 0.1), vec3(0.012, 0.05, 0.085), smoothstep(1.0, 12.0, sight)), vSea);
         body = mix(body * murk, vec3(0.5, 0.58, 0.55) * 0.5, cloud);
         diffuseColor.rgb = mix(body, vec3(0.78, 0.8, 0.78), foam);`,
@@ -600,6 +631,6 @@ export function createWaterMaterial() {
         #include <opaque_fragment>`,
       );
   };
-  mat.customProgramCacheKey = () => `water-v7-${MIRROR.steps}`;
+  mat.customProgramCacheKey = () => `water-v8-${MIRROR.steps}`;
   return mat;
 }

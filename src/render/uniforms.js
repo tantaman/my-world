@@ -65,6 +65,17 @@ export const LAND = {
   uRubble: { value: new Array(MAX_COUNTRIES).fill(0) }, // how much of its bare ground is broken stone, 0..1
 };
 
+// What colour each kind of country's streams and lakes are (world/country.js,
+// `water`), by its id, filled in by the country feature: the colour the water
+// itself sends back over a shallow bed and over a deep one, and how milky it
+// is. The water says, vertex by vertex, which country it is in and how far
+// (waterSurface.js). Every country starts with the forest's own.
+export const WATERS = {
+  uWaterShallow: each(0.05, 0.085, 0.06),
+  uWaterDeep: each(0.02, 0.06, 0.07),
+  uWaterMilk: { value: new Array(MAX_COUNTRIES).fill(0) },
+};
+
 // A layer of cloud over the country you're in (world/country.js), drawn by
 // the composite pass (pipeline.js): from under it, a grey sky with the
 // hilltops lost in it; from over it, a sea of cloud. Set by the country

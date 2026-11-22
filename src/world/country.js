@@ -54,6 +54,11 @@
 //   treeline [from, to]: the real heights (m above the sea) over which the
 //            trees thin out to none, and the ground above is thin turf among
 //            stones; or null for none
+//   water    what colour its streams and lakes are, where it isn't the
+//            forest's clear brown-green: { shallow, deep, milk }, the colour
+//            the water itself sends back over a shallow bed and a deep one,
+//            and how milky it is (0..1: how soon it hides the bed). null:
+//            the forest's own. (The sea keeps its own blue.)
 //   frozen   whether its lakes and streams are frozen over and snowed on, to
 //            walk and ski across (not the sea: a place by the sea keeps it all open)
 //   snowline [from, to]: the real heights over which snow comes to lie on all
@@ -92,6 +97,7 @@ const FOREST = {
   tints: {},
   treeline: null,
   snowline: null,
+  water: null,
   frozen: false,
 };
 
@@ -249,6 +255,34 @@ export const COUNTRY = {
     // (all the way down to the sea: it's winter)
     snowline: [-100, 0],
     frozen: true,
+  }),
+
+  // A side canyon of the Grand Canyon, where a creek fed by springs runs
+  // all year (Havasu Canyon): walls of red sandstone in ledges, pale
+  // limestone and sandstone up at the rim, slopes of dry grass, mesquite and
+  // catclaw, and cottonwoods along the water. The springs carry so much lime
+  // that the creek lays it down as travertine, in terraces and in the
+  // drapes the falls pour over, and the water is a milky blue-green that
+  // hides its bed a metre down. Summer: thunderheads build over the rims.
+  'travertine canyon': kind({
+    ground: {
+      tint: [1.25, 1.02, 0.7],
+      dirt: [0.33, 0.15, 0.07],
+      rock: [0.42, 0.13, 0.055],
+      bare: [[0.36, 0.13, 0.06], [0.42, 0.3, 0.17]],
+      sand: [0.44, 0.34, 0.21],
+      barren: 0.45,
+      layers: { upper: [0.5, 0.42, 0.31], at: 1450, bed: 7, varnish: 0.45 },
+    },
+    trees: [['broad', 1]],
+    under: { fern: [['fern', 0.35]], bush: [['bush', 0.9]] },
+    rocks: 0.38,
+    clouds: { deck: 2900, cover: 0.45, shade: 0.12 },
+    haze: 0.65,
+    animals: ['deer', 'cougar', 'bobcat', 'fox', 'rabbit', 'squirrel', 'mouse', 'snake', 'flock', 'flit', 'crows', 'hawk', 'butterflies', 'bees'],
+    names: { broad: ['cottonwood', 'a cottonwood'] },
+    tints: { bush: [0.85, 0.95, 0.62] },
+    water: { shallow: [0.1, 0.42, 0.4], deep: [0.025, 0.25, 0.3], milk: 0.75 },
   }),
 };
 
