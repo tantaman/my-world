@@ -40,6 +40,14 @@ const _b = new THREE.Vector3();
 const _r = new THREE.Vector3();
 const WEAR_MOST = 0.95; // (worn is the fraction of a surface's number: see surfaces.js)
 
+// Which way a flat face's grain runs, for the face's unit normal n: level
+// across it (_t), and up it (_b).
+function level(n) {
+  if (Math.abs(n.y) < 0.95) _t.set(n.z, 0, -n.x).normalize();
+  else _t.set(1, 0, 0);
+  _b.crossVectors(n, _t);
+}
+
 // Accumulates transformed primitives into one vertex-coloured geometry.
 // color(p, n, out) gets the *local* position and normal of each vertex.
 //
@@ -48,7 +56,10 @@ const WEAR_MOST = 0.95; // (worn is the fraction of a surface's number: see surf
 // and where it is along the piece's grain and across it (m), for the
 // material's patterns. A primitive's grain runs along its longest side, and
 // where it is cut across that (the end of a board, of a log) it shows its end
-// grain. A flat face's (tris) runs level across it, unless it is UPRIGHT.
+// grain. A flat face's (tris, vertex) runs level across it, unless it is
+// UPRIGHT. Every vertex goes in through add, tris or vertex, so that it has
+// all of these: a geometry whose aSurf or aUV comes up short of its vertices
+// isn't drawn at all by the building material.
 //
 // Pieces may be added where they are in the world (a cabin's logs are). The
 // geometry mustn't hold numbers that big, though: a vertex is a 32-bit float
@@ -169,23 +180,42 @@ export class Mesher {
       const e1 = new THREE.Vector3().subVectors(b, a);
       const e2 = new THREE.Vector3().subVectors(c, a);
       const nn = new THREE.Vector3().crossVectors(e1, e2).normalize();
-      // level across the face, and up it
-      if (Math.abs(nn.y) < 0.95) _t.set(nn.z, 0, -nn.x).normalize();
-      else _t.set(1, 0, 0);
-      _b.crossVectors(nn, _t);
+      level(nn);
       for (const p of [a, b, c]) {
         const col = color(p, nn, _c);
         this.pos.push(p.x, p.y, p.z);
         this.nor.push(nn.x, nn.y, nn.z);
         this.col.push(col.r, col.g, col.b);
-        _r.subVectors(p, this.ref);
-        const u = _r.dot(_t);
-        const v = _r.dot(_b);
-        this.uv.push(upright ? v : u, upright ? u : v);
+        this._grain(p.x, p.y, p.z, upright);
         this.kind.push(kind);
         this.idx.push(this.n++);
       }
     }
+  }
+
+  // One vertex of a flat face that faces (nx, ny, nz), for code that writes
+  // its faces straight in, a face at a time (railway/track.js: thousands of
+  // ties and planks don't each want a geometry, or the vectors tris takes).
+  // It's of surface `surf`, and its grain runs as a face's does in tris; the
+  // caller pushes the indices. -> its index
+  vertex(x, y, z, nx, ny, nz, color, surf = this.surf) {
+    if (!this.ref) this.ref = new THREE.Vector3(Math.round(x), Math.round(y), Math.round(z));
+    level(_n.set(nx, ny, nz));
+    this.pos.push(x, y, z);
+    this.nor.push(nx, ny, nz);
+    this.col.push(color.r, color.g, color.b);
+    this._grain(x, y, z, (surf & UPRIGHT) !== 0);
+    this.kind.push(this._kind(surf));
+    return this.n++;
+  }
+
+  // Where (x, y, z) is along a flat face's grain and across it, measured from
+  // this.ref: after level() has said which way the face's grain runs.
+  _grain(x, y, z, upright) {
+    _r.set(x - this.ref.x, y - this.ref.y, z - this.ref.z);
+    const u = _r.dot(_t);
+    const v = _r.dot(_b);
+    this.uv.push(upright ? v : u, upright ? u : v);
   }
 
   get empty() {

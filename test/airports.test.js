@@ -201,3 +201,24 @@ test('a flight: boarded, taxied, flown over the clouds, carried across, landed, 
   assert.equal(p.power, 0);
   assert.equal(p.door, 1);
 });
+
+test("a plane and an airfield are drawn whole: every vertex says what it's made of", async () => {
+  const THREE = await import('three');
+  const { Plane } = await import('../src/airports/plane.js');
+  const { buildAirfield } = await import('../src/airports/airfield.js');
+  const { gen, airports } = worldOf(NEWEST_LAND);
+  const material = new THREE.MeshBasicMaterial();
+  const plane = new Plane({ material, glow: material });
+  const field = buildAirfield(airports.site('home'), (x, z) => gen.height(x, z), { body: material, paint: material, lamps: material });
+  for (const [what, object] of [['the plane', plane.object], ['the airfield', field.object]]) {
+    let meshes = 0;
+    object.traverse((o) => {
+      if (!o.isMesh) return;
+      meshes++;
+      // one short of a vertex, and the building material doesn't draw it at all
+      const n = o.geometry.attributes.position.count;
+      for (const [name, a] of Object.entries(o.geometry.attributes)) assert.equal(a.count, n, `${what}: ${name} for every vertex`);
+    });
+    assert.ok(meshes > 0, `${what} is made`);
+  }
+});
