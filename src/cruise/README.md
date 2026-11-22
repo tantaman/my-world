@@ -24,9 +24,11 @@ under a rail, wallpaper, coffered ceilings with their lights let into the
 coffers and a cove of light round the tops of the walls; a claret carpet
 with gold medallions in the dining room and the theatre, a carpet as loud as
 they come in the casino, parquet in the café and the bar, velvet on the
-theatre's walls. Heels click on the marble. The first time you come aboard you're given a key card: one of the
-balcony staterooms is yours, and the HUD leads you to it, by the lifts and
-along the corridors.
+theatre's walls. Heels click on the marble.
+
+The first time you come aboard you're given a key card: one of the balcony
+staterooms is yours, and the HUD leads you to it, by the lifts and along the
+corridors.
 
 | deck | | what's on it |
 |---|---|---|
