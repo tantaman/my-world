@@ -13,6 +13,10 @@
 // a brow over the opening, banks either side, an apron in front.
 //
 //   setCuts([{ ax, az, bx, bz, fa, fb, w, h }, …])   up to MAX_CUTS, nearest first
+//   setCuts([…], owner)     …for someone else who cuts the ground (the gate
+//                           of src/hell/): each owner's list is its own, and
+//                           the ground is cut for the first of every list,
+//                           then the second, as far as there is room
 //
 // The same arch is what a cave's passages are carved with (src/caves/), so
 // the hole in the hillside and the tunnel behind it are one shape.
@@ -63,7 +67,22 @@ export const CUTS = {
   uCutB: { value: Array.from({ length: MAX_CUTS }, () => new THREE.Vector4()) }, // fa, fb, w, h (h 0: none)
 };
 
-export function setCuts(list) {
+const owners = new Map(); // owner -> its cuts
+
+export function setCuts(mine, owner = 'caves') {
+  if (mine && mine.length) owners.set(owner, mine);
+  else owners.delete(owner);
+  // a turn each, so nobody's nearest is crowded out by another's fourth
+  const list = [];
+  for (let n = 0; list.length < MAX_CUTS; n++) {
+    let any = false;
+    for (const cuts of owners.values()) {
+      if (n >= cuts.length) continue;
+      any = true;
+      if (list.length < MAX_CUTS) list.push(cuts[n]);
+    }
+    if (!any) break;
+  }
   for (let i = 0; i < MAX_CUTS; i++) {
     const c = list[i];
     if (c) {

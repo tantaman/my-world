@@ -236,13 +236,13 @@ place in that order, not at the end:
 | `world/basins.js` | water held up in something built (a pool, a tub), to wade and swim in | `game.basins.set(owner, [basin])` |
 | `world/breakers.js` | waves breaking on a shore, for the sea to rise with and anyone to ride | `game.breakers.set(break)`; how high they stand: `breakers.sample(x, z)`, `chunks.waterAt`'s `rise` |
 | `world/country.js` | a kind of country (its ground, plants, sky, animals, what its trees are called) | an entry in `COUNTRY` |
-| `world/cuts.js` | a hole in the ground, for something to stand in for it | `setCuts([{ ax, az, bx, bz, fa, fb, w, h }])` |
+| `world/cuts.js` | a hole in the ground, for something to stand in for it | `setCuts([{ ax, az, bx, bz, fa, fb, w, h }], owner)` |
 | `world/flora.js` | a plant | an entry in `FLORA`, a model, and where it grows (`chunkGen.js`) |
 | `world/grass.js` | somewhere grass doesn't grow | `game.grass.addClearing(fn)` |
 | `world/hikes.js` | a real place, from a photo | `npm run hike -- photo.heic` writes it there |
 | `world/sky.js` | how much daylight reaches the eye (dims it, the eye adjusts) | `game.sky.open = 0..1` |
 | `world/solids.js` | something solid to bump into and stand on | `game.solids.set(owner, [capsule])` (`surface: 'boards'` for its footsteps) |
-| `world/spaces.js` | somewhere under the ground to be in: its floor, walls and roof | `game.spaces.add(space)`, `spaces.onDemand(fn)` |
+| `world/spaces.js` | somewhere under the ground to be in: its floor, walls and roof (and how dark it is, if the lamp should come on there) | `game.spaces.add(space)`, `spaces.onDemand(fn)` |
 
 Each of those files opens with what the thing is and what it is handed.
 

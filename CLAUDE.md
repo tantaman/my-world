@@ -113,7 +113,8 @@ don't edit the same lines:
   have visited or are tracking are saved by id. The caves in `caves/` are
   the same: grown from the seed without changing the land, and pinned in
   `test/golden/caves-*.json`. So are the railways in `railway/`, whose
-  stations are pinned in `test/golden/railway-*.json`.
+  stations are pinned in `test/golden/railway-*.json`, and the gate in
+  `hell/`, pinned in `test/golden/hell-*.json`.
 - **Element spelling is for good**, whatever the lands are doing. Keys and
   values in `test/golden/save-elements.json` are what is on the save server
   and in people's browsers. Add new element kinds; never change existing ones

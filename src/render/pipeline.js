@@ -50,6 +50,7 @@ import { NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, 
 export const OVER = 1;
 
 const FOG_DENSITY = 0.0021; // per metre at the height of the eye, in the forest's air
+const FOG_THIN = 0.03; // per metre of height: how quickly the forest's haze thins upward
 const FOG_TINT = 0.82; // the fog's colour: the sky's behind it, a little dimmed
 const FAR_Z = 6.0e4; // m: how far off the sky is said to be in the copy (as far as half a float holds)
 
@@ -538,6 +539,11 @@ export class Pipeline {
     // plateau), set by the country feature. Thick air is a thing of the
     // valley floor, wherever the floor is.
     this.fogFloor = 0;
+    // How quickly the haze thins with height above that (1/m): under the sky
+    // it is gone in a few tens of metres. Somewhere with no sky over it
+    // (src/hell/), where the air is as thick at any height, makes this next
+    // to nothing.
+    this.fogThin = FOG_THIN;
 
     this.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
@@ -573,7 +579,7 @@ export class Pipeline {
         uCamPos: { value: new THREE.Vector3() },
         uOutline: { value: 0 },
         uFogDensity: { value: FOG_DENSITY },
-        uFogHeight: { value: 0.03 },
+        uFogHeight: { value: FOG_THIN },
         uFogFloor: { value: 0 },
         uFogFar: { value: 250 },
         uFogTint: { value: FOG_TINT },
@@ -767,6 +773,7 @@ export class Pipeline {
     u.uFogFar.value = this.fogFar || (CONFIG.viewRadius - 0.15) * CONFIG.chunkSize;
     u.uFogDensity.value = FOG_DENSITY * this.haze;
     u.uFogFloor.value = this.fogFloor;
+    u.uFogHeight.value = this.fogThin;
     this.draw(this.composite, this.rtHDR);
 
     // the ever smaller copies, which the bloom and the eye both work from

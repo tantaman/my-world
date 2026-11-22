@@ -735,7 +735,7 @@ export class Player extends Emitter {
     const c = this.carrier;
     const radius = c ? c.radius : PLAYER_RADIUS;
     const head = c ? c.height : BODY_H * this.size;
-    sp.walls(this.pos.x, this.pos.z, _wall);
+    sp.walls(this.pos.x, this.pos.z, _wall, this.pos.y);
     if (_wall.d < radius) {
       const push = radius - _wall.d;
       this.pos.x += _wall.nx * push;

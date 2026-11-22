@@ -165,11 +165,11 @@ export function installCaves(game) {
       }
       const eye = camera.position;
 
-      // How much daylight gets to your eye, and the eye getting used to it.
+      // How much daylight gets to your eye, and the eye getting used to it:
+      // in a cave, or any other space that says how much reaches it (light).
       let light = 1;
-      for (const b of caves.built.values()) {
-        const sp = b.result.space;
-        if (sp.air(eye.x, eye.y, eye.z, 0)) light = Math.min(light, sp.light(eye.x, eye.z));
+      for (const sp of spaces.list) {
+        if (sp.light && sp.air(eye.x, eye.y, eye.z, 0)) light = Math.min(light, sp.light(eye.x, eye.z));
       }
       open += (light - open) * (1 - Math.exp(-dt * (light > open ? ADJUST.brighter : ADJUST.darker)));
       sky.open = Math.max(0.02, open);
