@@ -11,6 +11,16 @@ export default async function ({ page, step, shot }) {
     const spot = await page.evaluate(() => {
       const { gen, player } = world;
       const w = gen.water;
+      // The ground you stand on is the land on a 1 m grid, smoothed between
+      // its corners: in a stream narrower than that, it's well above the
+      // very bottom of the bed. So deep enough there, too.
+      const underfoot = (x, z) => {
+        const i = Math.floor(x);
+        const j = Math.floor(z);
+        const u = x - i;
+        const v = z - j;
+        return (gen.height(i, j) * (1 - u) + gen.height(i + 1, j) * u) * (1 - v) + (gen.height(i, j + 1) * (1 - u) + gen.height(i + 1, j + 1) * u) * v;
+      };
       let best = null;
       for (let r = 0; r < 320 && !best; r += 3) {
         for (let a = 0; a < 6.28; a += 3 / Math.max(3, r)) {
@@ -20,7 +30,11 @@ export default async function ({ page, step, shot }) {
           const speed = Math.hypot(w.flowX, w.flowZ);
           const depth = w.level - h;
           if (w.region && w.edge < -0.6 && speed > 0.6 && depth > 0.45 && depth < 1) {
-            best = { x, z, fx: w.flowX / speed, fz: w.flowZ / speed, depth };
+            // (gen.water says the last place asked about: read it before asking about others)
+            const level = w.level;
+            const flow = { x, z, fx: w.flowX / speed, fz: w.flowZ / speed, depth };
+            if (level - underfoot(x, z) <= 0.45) continue;
+            best = flow;
             break;
           }
         }
