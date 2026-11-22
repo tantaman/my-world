@@ -53,7 +53,12 @@
   sand beach and the seabed is sand in ripples, with rock where it's steep.
   Rivers run out into it, and inland no hollow goes below its level, so
   there's no sea but the sea. It rises and falls in a slow swell, bluer than
-  a lake, breaks in lines of surf, and roars along the shore.
+  a lake, breaks in lines of surf, and roars along the shore. And where a
+  break has been found on a beach ([surfing](../surfing/README.md)), sets of
+  real waves come in over it (`breakers.js`): each slows as the water
+  shoals, stands up steeper, breaks first at the peak and peels away along
+  the crest, and rolls in white up the beach. The water rises with them, and
+  says so (`chunks.waterAt`'s `rise`), so whatever is on it rides them.
 - **Deterministic.** The same seed always produces the same hills, paths
   and trees. This matters because structures will be placed at fixed
   coordinates. The HUD shows your `x, z`, your heading and the time.
@@ -239,6 +244,7 @@ chunkGen.js           pure chunk generation (terrain buffers, vegetation lists)
 chunkWorker.js        Web Worker wrapper around chunkGen
 chunks.js             streaming, LOD, meshes, collision + height + water queries
 waterSurface.js       the water's mesh and shader: a window and a mirror, from above; from under it
+breakers.js           waves breaking on a shore at a break: sets coming in, peeling, white water (JS, and the same in GLSL)
 solids.js             built things you bump into and stand on
 spaces.js             places under the ground you can be in (caves): floor, walls, roof
 basins.js             water held up in something built (a pool, a tub), to swim in

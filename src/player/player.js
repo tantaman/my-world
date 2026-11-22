@@ -814,6 +814,7 @@ export class Player extends Emitter {
   // The water at (x, z) for something about y high: held up in a basin
   // there, or the land's. out and the answer as for chunks.waterAt.
   _water(x, z, y, out) {
+    out.rise = 0; // (waves break only on the sea)
     if (this.basins && this.basins.at(x, z, y, out)) return true;
     return this.world.waterAt(x, z, out);
   }
@@ -961,7 +962,7 @@ export class Player extends Emitter {
       // and on the same side of the surface as your head: out of the water
       // while it's out, under while you're under
       if (this._water(cam.position.x, cam.position.z, cam.position.y, _w) && _w.depth > 0) {
-        if (!this.submerged) floor = Math.max(floor, _w.level + 0.3);
+        if (!this.submerged) floor = Math.max(floor, _w.level + _w.rise + 0.3);
         else if (cam.position.y > _w.level - 0.25) cam.position.y = Math.max(floor, _w.level - 0.25);
       }
       if (cam.position.y < floor) cam.position.y = floor;

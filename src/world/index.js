@@ -14,7 +14,8 @@ import { Basins } from './basins.js';
 import { CUTS } from './cuts.js';
 import { createParticles } from './particles.js';
 import { createTerrainMaterial, createTerrainDepthMaterial, createVegetationMaterial, createVegetationDepthMaterial, createGrassMaterial } from './materials.js';
-import { SHARED, UNDER } from '../render/uniforms.js';
+import { SHARED, UNDER, BREAKERS } from '../render/uniforms.js';
+import { Breakers } from './breakers.js';
 import { createWaterMaterial } from './waterSurface.js';
 import { makePine, makeBroadleaf, makeBirch, makeBush, makeFern, makeRock, makeLog } from './models.js';
 import { makePalm, makeIronwood, makeTreeFern, makeSilversword } from './modelsIsland.js';
@@ -83,6 +84,14 @@ export function installWorld(game) {
   game.provide('landforms', landforms);
   // Built things you bump into and stand on. Whoever builds, writes to it.
   game.provide('solids', new Solids());
+  // Waves breaking somewhere on the sea (breakers.js): none until whoever
+  // finds a break hands it one (breakers.set). Its point on the shore is a
+  // place, slid with the scene to be drawn; and the water rises with it for
+  // whoever asks the chunks (waterAt's rise).
+  const breakers = new Breakers(BREAKERS);
+  game.origin.place(BREAKERS.uBreakAt);
+  chunks.breakers = breakers;
+  game.provide('breakers', breakers);
   // Places under the ground you can be in (caves). Whoever makes one, adds it.
   game.provide('spaces', new Spaces());
   // Water held up in something built (a pool, a tub). Whoever builds one, adds it.
@@ -126,6 +135,8 @@ export function installWorld(game) {
       if (flows) sky.hours = wrapHours(sky.hours + dt * (24 / (DAY_MINUTES * 60)));
       SHARED.uTime.value = now / 1000;
       SHARED.uWind.value = 0.85 + Math.sin(now / 9000) * 0.25;
+      // the waves come in on their own clock, before anyone rides them
+      breakers.update(dt);
     },
   });
 
