@@ -59,7 +59,9 @@ real places brought in from a photo, the old places, towns, the mouths of
 caves, the railway, the launch site, the video store, the abandoned
 buildings and the airfields. Its clubhouse is on the side you come from, so
 the shooting is away from you. Everyone in a world finds it in the same
-place, by the same name. **Nothing about the land changes for it**: the
+place, by the same name. It's on the map a moment after the world opens,
+once the airfields it keeps clear of have been found (they're looked for a
+little at a time, so as not to hold up the start). **Nothing about the land changes for it**: the
 clubhouse stands on a deck on posts, the houses and the pads on the ground,
 and the walks follow it; the trees, bushes and stones on the field are
 hidden as it comes into view, and grass doesn't grow under any of it.
