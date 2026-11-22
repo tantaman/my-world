@@ -1,6 +1,9 @@
 // Architecture and furniture share a local frame, in metres. The same blocks
 // that close a passage to the eye close it to a walker and the chase camera.
 import * as THREE from 'three';
+import { makePhantom } from './phantom.js';
+import { bloodTrail } from './traces.js';
+import { FINISH } from './surfaces.js';
 import { Kit } from '../videostore/store.js';
 import { toWorld } from '../landmarks/sites.js';
 import { mulberry32 } from '../noise.js';
@@ -24,6 +27,9 @@ const black = 0x212729,
 export function buildInstitution(site, ground, material, litMaterial) {
   const { w, d, height: h, bays, top } = site;
   const ward = site.kind === 'asylum';
+  const baths = site.kind === 'baths';
+  const furnace = site.kind === 'furnace';
+  const enclosedWings = ward || baths;
   const rnd = mulberry32(site.seed);
   const shell = new Kit(),
     lit = new Kit();
@@ -35,8 +41,11 @@ export function buildInstitution(site, ground, material, litMaterial) {
     blockers = [],
     crossings = [],
     traces = [];
+  const finishes = [];
   function box(x, y, z, width, height, depth, hex, kit = shell) {
+    const start = kit.pos.length / 3;
     kit.box(x - width / 2, y - height / 2, z - depth / 2, x + width / 2, y + height / 2, z + depth / 2, color(hex));
+    if (kit === shell && FINISH.has(hex)) finishes.push([FINISH.get(hex), start, kit.pos.length / 3]);
   }
   function block(x, y, z, width, height, depth, hex, surface) {
     box(x, y, z, width, height, depth, hex);
@@ -72,7 +81,7 @@ export function buildInstitution(site, ground, material, litMaterial) {
 
   // The main doors open onto a long spine. The wings have cross aisles
   // at the far windows and the lobby, and connecting doors along each wing.
-  const wall = ward ? brick : 0x626961;
+  const wall = baths ? plaster : ward || furnace ? brick : 0x626961;
   for (const side of [-1, 1]) {
     block(side * w, h / 2, 0, 0.42, h, 2 * d, wall);
     block((side * (w + 1.45)) / 2, h / 2, d, w - 1.45, h, 0.44, wall);
@@ -120,6 +129,12 @@ export function buildInstitution(site, ground, material, litMaterial) {
       box(x, h + rise, d - 2.5, 6.8, 0.3, 6.3, stone);
       cap(x, h + rise + 0.15, d - 2.5, 7, 6.5, 3.4);
     }
+  } else if (baths) {
+    for (let i = 0; i < 4; i++) box(0, h + 0.36 + i * 0.66, d - 1.3, 18 - i * 3, 0.7, 3.2, stone);
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 4; i++) box(side * (4.8 + i * 3.7), h * 0.57, d + 0.32, 0.54, h * 1.28, 0.7, tile);
+      box(side * (w - 2), h + 0.75, 0, 2.3, 1.5, 2 * d - 3, plaster);
+    }
   } else {
     for (let z = -d + 5; z < d; z += 10) {
       box(0, h + 1, z, 2 * w - 3, 1.6, 2.5, iron);
@@ -127,6 +142,11 @@ export function buildInstitution(site, ground, material, litMaterial) {
     }
     box(w - 3, h + 4, -d + 3, 1.6, 8, 1.6, brick);
     box(w - 3, h + 8, -d + 3, 1.9, 0.35, 1.9, stone);
+    if (furnace)
+      for (const x of [-w + 3, -w + 8, -w + 13]) {
+        box(x, h + 6, -d + 4, 2.2, 12, 2.2, brick);
+        for (let y = h + 2; y < h + 13; y += 2.4) box(x, y, -d + 4, 2.28, 0.18, 2.28, iron);
+      }
   }
   for (let x = -w + 2; x < w; x += 3.8) {
     if (Math.abs(x) < 3.5) continue;
@@ -142,7 +162,7 @@ export function buildInstitution(site, ground, material, litMaterial) {
   box(0, 2.85, d + 1.25, 5.2, 0.23, 2.6, iron);
   for (const x of [-2.25, 2.25]) block(x, 1.4, d + 2.3, 0.22, 2.8, 0.22, rust);
 
-  const aisle = ward ? 2.3 : 3.8;
+  const aisle = enclosedWings ? 2.3 : 3.8;
   const cell = (2 * d - 8) / bays;
   for (let i = 0; i < bays; i++) {
     const z0 = -d + 4 + i * cell,
@@ -152,7 +172,7 @@ export function buildInstitution(site, ground, material, litMaterial) {
         roomX = (side * (aisle + w)) / 2;
       const gap = ward ? 1.9 : 3.2;
       const doorZ = z + (rnd() - 0.5) * 1.1;
-      const sortingFloor = !ward && side < 0;
+      const sortingFloor = !enclosedWings && side < 0;
       if (sortingFloor) {
         // One open hall, roof beams spanning the machinery. The painted
         // bay numbers are high enough to read across the belts.
@@ -166,7 +186,7 @@ export function buildInstitution(site, ground, material, litMaterial) {
           [doorZ + gap / 2, z0 + cell],
         ]) {
           block(x, h / 2, (a + b) / 2, 0.25, h, b - a, plaster);
-          box(x, 0.64, (a + b) / 2, 0.29, 1.28, b - a, ward ? tile : 0x74644b);
+          box(x, 0.64, (a + b) / 2, 0.29, 1.28, b - a, enclosedWings ? tile : 0x74644b);
           box(x, 1.31, (a + b) / 2, 0.31, 0.07, b - a, wood);
           for (let j = 0; j < 4; j++) {
             const streak = 0.2 + rnd() * 0.9;
@@ -176,8 +196,15 @@ export function buildInstitution(site, ground, material, litMaterial) {
         block(x, (2.55 + h) / 2, doorZ, 0.25, h - 2.55, gap, ward ? plaster : stone);
 
         // Leave a passage at the outer windows through every partition.
-        if (ward || i % 2 === 0) block((side * (w + aisle - 3)) / 2, h / 2, z0, w - aisle - 3, h, 0.25, plaster);
-        const label = ward ? ['LINEN', 'OBSERVATION', 'NIGHT WARD', 'RECORDS', 'DAY ROOM', 'BATHS'][i] : ['RETURNS', 'SORTING', 'ARCHIVE', 'DISPATCH'][i];
+        if (enclosedWings || i % 2 === 0) block((side * (w + aisle - 3)) / 2, h / 2, z0, w - aisle - 3, h, 0.25, plaster);
+        const labels = ward
+          ? ['LINEN', 'OBSERVATION', 'NIGHT WARD', 'RECORDS', 'DAY ROOM', 'BATHS']
+          : baths
+            ? ['COLD PLUNGE', 'SHOWERS', 'STEAM', 'DRESSING', 'SALT BATH', 'LAUNDRY', 'PUMP ROOM']
+            : furnace
+              ? ['INTAKE', 'DAMPERS', 'BOILER', 'ASH PIT']
+              : ['RETURNS', 'SORTING', 'ARCHIVE', 'DISPATCH'];
+        const label = labels[i % labels.length];
         shell.words(label, x - side * 0.15, 2.82, doorZ, -side, 0, 0.026, color(black));
       }
       if (!sortingFloor) crossings.push({ x, z: doorZ, side });
@@ -190,7 +217,25 @@ export function buildInstitution(site, ground, material, litMaterial) {
         box(fx + side * face * 0.09, 1.18, z, 0.3, 0.15, 3.6, stone);
         if ((i + side) % 3 === 0) box(fx + side * face * 0.1, 1.9, z, 0.09, 0.38, 3.5, wood);
       }
-      if (sortingFloor) {
+      if (baths) {
+        // Raised plunge tanks with ceramic rims, drain grilles and old
+        // overhead shower feeds. The tiled gallery continues behind them.
+        for (const dx of [-2.45, 2.45]) block(roomX + dx, 0.46, z, 0.27, 0.92, 4.7, tile);
+        for (const dz of [-2.21, 2.21]) block(roomX, 0.46, z + dz, 4.65, 0.92, 0.28, tile);
+        box(roomX, 0.08, z, 4.62, 0.14, 4.13, 0x373f34);
+        for (let k = -3; k <= 3; k++) box(roomX + k * 0.09, 0.16, z, 0.045, 0.02, 0.74, iron);
+        box(roomX + 2.45, 1.6, z - 1, 0.12, 2.4, 0.12, rust);
+        box(roomX + 2.1, 2.75, z - 1, 0.8, 0.12, 0.12, rust);
+        box(roomX + 1.7, 2.64, z - 1, 0.33, 0.14, 0.33, iron);
+      } else if (furnace) {
+        block(roomX, 1.6, z, 3.9, 3.2, 3.4, brick);
+        box(roomX - side * 2, 1.25, z, 0.19, 1.88, 2.28, iron);
+        box(roomX - side * 2.11, 1.19, z, 0.08, 1.35, 1.83, black);
+        for (let k = -3; k <= 3; k++) box(roomX - side * 2.18, 1.19, z + k * 0.23, 0.065, 1.4, 0.064, rust);
+        box(roomX - side * 2.16, 1.31, z, 0.06, 0.07, 1.65, i % 3 === 0 ? 0xb35026 : rust, i % 3 === 0 ? lit : shell);
+        box(roomX, 4.1, z, 1.36, 1.9, 1.6, iron);
+        box(roomX, 5.12, z, 0.8, 0.5, cell + 0.02, rust);
+      } else if (sortingFloor) {
         block(roomX, 0.85, z, 1.9, 0.22, cell - 1.7, iron);
         for (const dx of [-0.84, 0.84]) {
           for (const dz of [-cell / 3, cell / 3]) box(roomX + dx, 0.42, z + dz, 0.14, 0.84, 0.14, rust);
@@ -228,18 +273,41 @@ export function buildInstitution(site, ground, material, litMaterial) {
     box(0, h - 0.32, z, 0.23, 0.045, 2.1, i % 3 === 1 ? light : 0x636759, i % 3 === 1 ? lit : shell);
   }
 
+  for (const x of [-aisle + 0.38, -aisle + 0.68]) {
+    box(x, h - 0.47, 0, 0.13, 0.13, 2 * d - 0.7, rust);
+    for (let z = -d + 2; z < d; z += 3.7) box(x, h - 0.47, z, 0.18, 0.18, 0.11, iron);
+  }
+  // A cracked emergency light over the door casts a red bar across its cage.
+  for (const z of [d - 2.5, -d + 3]) {
+    const x = aisle - 1;
+    box(x, h - 0.28, z, 0.85, 0.21, 0.38, iron);
+    box(x, h - 0.41, z, 0.68, 0.12, 0.24, 0xc66046, lit);
+    for (const dx of [-0.26, 0, 0.26]) box(x + dx, h - 0.4, z, 0.035, 0.17, 0.3, iron);
+  }
   // Visitors left a line of tape, a camera and an abandoned bedroll.
-  const clues = ward
+  const clues = baths
     ? [
-        'Someone wrote “back by four” on the visitor pass. The ink ran where they folded it.',
-        'The disposable camera has one exposure left. Its lens points at the doorway.',
-        'Two enamel cups sit beside a single bedroll. One is still upside down.',
+        'A guest drew seven little doors on the towel ticket. Six have been crossed out.',
+        'There are wet thumbprints inside the camera case.',
+        'The blanket is dry. The footprints beside it are still shining.',
       ]
-    : [
-        'A hiking map lies open on the desk. Someone circled this building twice.',
-        'The camera strap is looped around a shelf. Someone meant to come back for it.',
-        'A sleeping bag lies half rolled. The boots beside it point into the archive.',
-      ];
+    : furnace
+      ? [
+          'The shift card is stamped out twice, twelve minutes apart.',
+          'The camera is wired to the grille. The last frame shows the aisle behind it.',
+          'Someone slept here facing the furnace, with their boots still laced.',
+        ]
+      : ward
+        ? [
+            'Someone wrote “back by four” on the visitor pass. The ink ran where they folded it.',
+            'The disposable camera has one exposure left. Its lens points at the doorway.',
+            'Two enamel cups sit beside a single bedroll. One is still upside down.',
+          ]
+        : [
+            'A hiking map lies open on the desk. Someone circled this building twice.',
+            'The camera strap is looped around a shelf. Someone meant to come back for it.',
+            'A sleeping bag lies half rolled. The boots beside it point into the archive.',
+          ];
   for (const [i, [x, z]] of [
     [-3.8, d - 2],
     [w - 2, -d + cell + 3],
@@ -261,7 +329,6 @@ export function buildInstitution(site, ground, material, litMaterial) {
   // the entrance. A few mud prints break away from the line in mid-hall.
   for (let z = -d + 1; z < d; z += 1.5) {
     box(-aisle + 0.4, 0.012, z, 0.12, 0.02, 1.41, 0x786a4f);
-    if (rnd() < 0.75) box((rnd() - 0.5) * 2, 0.015, z, 0.16, 0.02, 0.29, 0x585448);
   }
   box(0, 3.18, d - 0.25, 1.6, 0.48, 0.1, tile);
   lit.words('EXIT', 0, 3.18, d - 0.32, 0, -1, 0.047, color(light));
@@ -270,25 +337,34 @@ export function buildInstitution(site, ground, material, litMaterial) {
     [shell, material],
     [lit, litMaterial],
   ]) {
-    const mesh = new THREE.Mesh(kit.build(), mat);
+    const geometry = kit.build();
+    if (kit === shell) {
+      const finish = new Float32Array(geometry.attributes.position.count);
+      for (const [id, start, end] of finishes) finish.fill(id, start, end);
+      geometry.setAttribute('finish', new THREE.BufferAttribute(finish, 1));
+      const indoor = new Float32Array(finish.length);
+      for (let i = 0; i < indoor.length; i++) {
+        const k = i * 3,
+          x = kit.pos[k],
+          y = kit.pos[k + 1],
+          z = kit.pos[k + 2];
+        const external = (Math.abs(x) >= w - 0.23 && x * kit.nor[k] > 0) || (Math.abs(z) >= d - 0.23 && z * kit.nor[k + 2] > 0) || y > h + 0.02 || Math.abs(z) > d + 0.25 || y < -0.08;
+        indoor[i] = external ? 0 : 1;
+      }
+      geometry.setAttribute('indoor', new THREE.BufferAttribute(indoor, 1));
+    }
+    const mesh = new THREE.Mesh(geometry, mat);
     mesh.castShadow = mesh.receiveShadow = kit === shell;
     object.add(mesh);
   }
-  // A narrow moving fold seen through a doorway. Geometry and depth testing
-  // keep it behind walls even if the listener is in the next room.
-  const fold = new THREE.Mesh(new THREE.CapsuleGeometry(0.23, 1.05, 2, 5), material);
-  const geom = fold.geometry;
-  const shade = new Float32Array(geom.attributes.position.count * 3).fill(0.016);
-  geom.setAttribute('color', new THREE.BufferAttribute(shade, 3));
-  fold.scale.set(0.8, 1.13, 0.6);
-  fold.rotation.z = 0.12;
-  fold.visible = false;
-  object.add(fold);
+  object.add(bloodTrail(site, crossings, count));
+  const phantom = makePhantom(site.kind === 'post' || site.kind === 'furnace');
+  object.add(phantom);
   const pane = new Kit();
   const windowX = -w + 2;
   pane.panel(windowX - 0.49, 2.72, d + 0.38, 0, 1, 0.78, 0.48, color(0xbaa571));
   const windowLight = new THREE.Mesh(pane.build(), litMaterial);
   windowLight.visible = false;
   object.add(windowLight);
-  return { object, solids, blockers, crossings, traces, fold, windowLight };
+  return { object, solids, blockers, crossings, traces, phantom, windowLight };
 }

@@ -1,13 +1,18 @@
 # Abandoned buildings
 
-Look for **Alder Vale Asylum** or the **Dead Letter Depot** on the map (**M**). Select the building and choose **Go here** to arrive outside, or track it and walk through the woods. The front steps lead into both buildings. Follow the faded floor stripe to return to the entrance. **K** operates your headlamp.
+Open **M → Routes**, select a building and choose **Show on map**. **Go here** takes you to its steps. You can also track it and walk. **K** operates the headlamp. Sound can be switched on in settings.
 
-Alder Vale has an iron bed ward, observation rooms and a visitors’ gallery. The depot has sorting cases and long archive aisles. Gaps at the outer windows connect the rooms. Approach things other visitors left behind to examine them. A place remembers that you went inside.
+Alder Vale Asylum and the Dead Letter Depot are in the woods near the start. Farther out, Mercy Mineral Baths has seven bays of raised plunge tanks and showers. Blackwater Furnace Works has an 86-metre hall lined with boiler grilles and ash passages. Beyond the regional sites, the forest can grow other named institutions on dry ground. They appear on the map as you approach their district.
+
+The tread that starts on the front steps turns into a side room. Watch where it ends. Switch off the lamp and listen for the other set of footsteps. Things previous visitors left can be examined up close. A place remembers that you went inside.
 
 ## Files
 
-- `sites.js` finds dry ground for each building and fixes its layout seed.
-- `building.js` builds the facades, halls, furnishings, visitor traces and collision geometry.
-- `visit.js` responds to walking, pausing, looking and leaving.
-- `sound.js` synthesizes the heating pipes, sorting bell and solitary heel.
+- `sites.js` locates the regional buildings and surveys outlying districts from the world seed.
+- `building.js` builds the rooms, equipment, doors and collision geometry.
+- `surfaces.js` generates the texture used for chipped glaze, peeling paint, masonry joints, rust and grain.
+- `traces.js` draws blood pools, handprints, drag marks and boot treads onto the architecture.
+- `phantom.js` builds the figures with folded garments and articulated hands.
+- `visit.js` handles sightings, pursuit, visitor belongings and the return to the woods.
+- `sound.js` scores the approach and interior and synthesizes each building’s sounds.
 - `index.js` connects the buildings to the forest, lighting, map, save and player.

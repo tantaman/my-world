@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { findBuildings, overlaps } from '../src/abandoned/sites.js';
+import { findBuildings, OutlyingBuildings, overlaps } from '../src/abandoned/sites.js';
 import { buildInstitution } from '../src/abandoned/building.js';
 import { Visit } from '../src/abandoned/visit.js';
 import { Solids } from '../src/world/solids.js';
@@ -15,7 +15,7 @@ const start = { x: 0, z: 0 };
 const sites = findBuildings(land, start, () => false);
 
 test('each institution has a reproducible site on dry, unoccupied ground', () => {
-  assert.equal(sites.length, 2);
+  assert.equal(sites.length, 4);
   assert.deepEqual(
     findBuildings(land, start, () => false),
     sites,
@@ -78,19 +78,23 @@ test('walk from the entrance through every doorway and round to every visitor tr
 
 test('a stopped walker hears a heel at an earlier footfall, and one last sound at a walked exit', () => {
   const site = { ...sites[0], x: 0, z: 0, yaw: 0, door: { x: 0, z: sites[0].d + 9 } };
-  const fold = new THREE.Object3D();
-  const built = { fold, traces: [], crossings: [{ x: 3, z: -5, side: 1 }] };
+  const phantom = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+  const built = { phantom, traces: [], crossings: [{ x: 3, z: -5, side: 1 }] };
   const visit = new Visit(site, built, () => 0);
-  const camera = new THREE.PerspectiveCamera();
-  camera.position.set(0, site.top + 1, 0);
   const heard = [];
   const play = (...args) => heard.push(args);
-  const tick = (dt) => visit.update(dt, start, camera, play, () => {});
+  const camera = new THREE.PerspectiveCamera();
+  camera.position.set(0, site.top + 1.6, site.d);
+  const tick = (dt) => visit.update(dt, { x: 0, z: site.d - 1 }, camera, play, () => {});
   for (let i = 0; i < 41; i++) tick(0.05);
-  assert.ok(fold.visible, 'movement at the edge of sight');
-  camera.lookAt(fold.position.x, site.top + fold.position.y, fold.position.z);
-  tick(0.02);
-  assert.equal(fold.visible, false, 'gone when looked at');
+  assert.ok(phantom.visible && phantom.material.opacity > 0.6, 'a sustained apparition at the entrance');
+  assert.ok(phantom.position.z < site.d - 8, 'visible ahead in the central aisle');
+  const watched = visit.motion.z;
+  tick(0.12);
+  assert.equal(visit.motion.z, watched, 'the figure holds its ground while watched');
+  camera.rotateY(Math.PI);
+  tick(0.12);
+  assert.ok(visit.motion.z > watched + 0.2, 'it advances along the aisle when the walker looks away');
   tick(4);
   for (let x = 1; x <= 4; x++) visit.footstep(x, 2);
   tick(0.2);
@@ -110,4 +114,14 @@ test('a stopped walker hears a heel at an earlier footfall, and one last sound a
   const count = heard.length;
   visit.outside(10, pos, play);
   assert.equal(heard.length, count, 'it happens once');
+});
+
+test('distant districts can be found again by a saved address', () => {
+  const districts = new OutlyingBuildings(land, start, () => false);
+  const site = districts.near(10800, -8400);
+  assert.ok(site && Math.hypot(site.x, site.z) > 12000);
+  assert.equal(districts.near(site.x, site.z), site);
+  assert.deepEqual(new OutlyingBuildings(land, start, () => false).byId(site.id), site);
+  assert.equal(districts.near(start.x, start.z), null);
+  assert.equal(districts.byId('abandoned:district:bad:0'), null);
 });
