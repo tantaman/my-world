@@ -23,9 +23,11 @@ has: down Bayou Barataria, into the old oil-field canals to the south, north
 up a narrow canal through the cypress, where one of the videos it's drawn
 from was taken, and back by the Barataria Waterway. The boat goes fast on the open bayou and
 slower in the narrow canals, slows round the tight bends, and spins round at
-the end of a dead-end canal the way airboats do. Look about as you go: the
-camera turns with the boat. The guide talks on the way: Jean Lafitte the
-pirate, the Spanish moss, the canals, the bald cypress.
+the end of a dead-end canal the way airboats do, leaving a wake behind it:
+white under the propeller, spreading out behind into a V that washes along
+the banks and fades. Look about as you go: the camera turns with the boat.
+The guide talks on the way: Jean Lafitte the pirate, the Spanish moss, the
+canals, the bald cypress.
 
 **The gators.** Four times on the way round the guide throttles back and the
 boat drifts to a stop where there's an alligator to see: up on the bank,
@@ -93,4 +95,5 @@ landing.js      the dock, the ticket shack, the pen with a young gator in it
 guide.js        the guide: how they look, how they sit at the stick, what they say
 sound.js        the engine and the propeller; the starter; ear defenders going on
 others.js       other people here out on the tour, in theirs
+wake.js         the white water it leaves behind it, round the bends and out to the banks
 ```

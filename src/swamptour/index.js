@@ -13,6 +13,7 @@
 //   guide.js      the guide: how they look and sit, and what they say
 //   sound.js      the engine and the propeller, the starter, the ear defenders
 //   others.js     other people here out on it, in theirs
+//   wake.js       the white water it leaves behind it
 //
 // Nothing about the land changes for it: the landing stands on the bank as
 // it is, the plants in the way are hidden as their chunk grows, and the way
@@ -40,6 +41,7 @@ import { buildLanding } from './landing.js';
 import { airboatSound } from './sound.js';
 import { makeGuide, sitDriving, SAYS, gatorLine } from './guide.js';
 import { Riders } from './others.js';
+import { Wake } from './wake.js';
 import { SPECIES } from '../wildlife/species.js';
 import { SEAT_HIPS } from '../player/character.js';
 import { VEG_STRIDE } from '../world/flora.js';
@@ -63,6 +65,7 @@ const EARMUFFS = 0.42; // how much everything is muffled with the ear defenders 
 const LINE_MS = 6500; // how long a line of the guide's stays up
 const MOVED = 20; // m: moved further than this in a frame, by something else, and you're off the boat
 const LOOK_ROUND = 1.2; // 1/s: how quickly the camera comes round to a gator being pointed out, and back
+const LEAN = { most: 0.06, per: 0.08, ease: 4 }; // the boat leans into a turn: at most (rad), by how fast it turns (rad per rad/s at full pace), and comes over this quickly (1/s)
 // 1/s: how firmly the camera swings round behind you to look the way the
 // boat goes, and the way the guide points (player.js: aboard.behind)
 const SWING = { going: 0.35, gator: 1.4 };
@@ -263,15 +266,19 @@ export function installSwamptour(game) {
       const g = boat.seats[boat.seats.length - 1];
       guide.mesh.position.set(g.x, g.y - guide.hips.userData.rest.y, g.z - 0.02);
       boat.object.add(guide.mesh);
+      const wake = new Wake();
       scene.add(t.plan.object);
       scene.add(boat.object);
+      scene.add(wake.object);
       solids.set(t.plan, t.plan.solids);
-      t.built = { boat, guide, spin: 0, bob: Math.random() * 6 };
+      t.built = { boat, guide, wake, spin: 0, bob: Math.random() * 6, lean: 0 };
     } else {
       scene.remove(t.plan.object);
       scene.remove(t.built.boat.object);
+      scene.remove(t.built.wake.object);
       solids.clear(t.plan);
       t.built.guide.dispose();
+      t.built.wake.dispose();
       t.built = null;
     }
   }
@@ -513,6 +520,24 @@ export function installSwamptour(game) {
   }
 
   // ── Each frame ────────────────────────────────────────────────────────────
+  // The boat you're on goes first, before you're sat in it (player.aboard
+  // is asked where you are in the 'update' phase), as a train or a plane
+  // does: otherwise you'd be put where it was the frame before, a little
+  // behind your seat, by however far it went in that frame, and it would
+  // jerk back and forth under you as the frames came quicker and slower.
+  let ridden = null; // the tour whose boat has gone this frame
+  game.addSystem({
+    name: 'airboat ride',
+    phase: 'input',
+    update({ dt }) {
+      heard.boat = null;
+      ridden = ride && ride.t.built ? ride.t : null;
+      if (!ridden) return;
+      drive(dt);
+      steer(ridden, dt);
+    },
+  });
+
   let clock = 0;
   let lastHello = -Infinity;
   let greeted = false;
@@ -523,7 +548,6 @@ export function installSwamptour(game) {
     update({ dt }) {
       clock += dt;
       const f = game.focus;
-      heard.boat = null;
       for (const t of tours) {
         const d = Math.hypot(f.x - t.x, f.z - t.z);
         if (!t.course && !t.failed && d < PREPARE) {
@@ -540,8 +564,7 @@ export function installSwamptour(game) {
         const riding = ride && ride.t === t;
         if (d < SHOW || riding) show(t, true);
         else if (d > HIDE) show(t, false);
-        if (!t.built) continue;
-        if (riding) drive(dt);
+        if (!t.built || t === ridden) continue;
         steer(t, dt);
       }
 
@@ -575,8 +598,8 @@ export function installSwamptour(game) {
 
   // The boat where it is: tied up at the dock, or out on the way round; on
   // the water, bobbing, its bow up when it's going, leaning into the turns;
-  // the propeller turning, the rudders over, the guide at the stick looking
-  // where they're pointing.
+  // its wake behind it; the propeller turning, the rudders over, the guide at
+  // the stick looking where they're pointing.
   function steer(t, dt) {
     const B = t.built;
     const o = B.boat.object;
@@ -599,7 +622,9 @@ export function installSwamptour(game) {
     const k = v / PACE.open;
     o.position.set(p.x, level + Math.sin(B.bob * 1.3) * 0.015 * (1 - k), p.z);
     const turn = r ? wrapAngle(yaw - was) / Math.max(dt, 1e-3) : 0;
-    o.rotation.set(-0.05 * k + Math.sin(B.bob * 0.9) * 0.006, yaw, clamp(-turn * k * 0.08, -0.06, 0.06), 'YXZ');
+    B.lean += (clamp(-turn * k * LEAN.per, -LEAN.most, LEAN.most) - B.lean) * (1 - Math.exp(-dt * LEAN.ease));
+    o.rotation.set(-0.05 * k + Math.sin(B.bob * 0.9) * 0.006, yaw, B.lean, 'YXZ');
+    B.wake.update({ x: p.x, z: p.z, yaw, level, v, room: p.clear }, dt);
     // the engine: idling, or pulling, by how hard it's going
     const running = !!r && r.phase !== 'done';
     const throttle = !running ? 0 : r.phase === 'start' ? 0.05 : r.phase === 'halt' ? 0.05 : clamp(0.18 + 0.75 * k + Math.max(0, (_at.v - v) * 0.1), 0.08, 1);
