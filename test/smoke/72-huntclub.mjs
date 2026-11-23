@@ -133,7 +133,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
       const call = await T.pull();
       out.call = call;
       out.loaded = world.huntclub.shotgun.shells;
-      T.press('alt', true); // mounted
+      await T.tap('alt'); // mounted (and it stays so: right-click again lowers it)
       out.high = await T.shoot(range.throwing.clays[0]);
       await T.frames(4);
       out.highSaid = document.getElementById('toast').textContent;
@@ -158,7 +158,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
       out.pairShells = world.huntclub.shotgun.shells;
       for (const c of [...range.throwing.clays]) out[`pair${c.house}`] = await T.shoot(c);
       await T.thrown();
-      T.press('alt', false);
+      await T.tap('alt');
       out.after = range.card();
       return out;
     });
@@ -187,7 +187,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
       const range = world.huntclub.range;
       const stations = [];
       let guided = 0;
-      T.press('alt', true);
+      await T.tap('alt');
       for (let k = 0; k < 30 && range.round; k++) {
         // walked off the station: an arrow over the next, and the HUD says where
         const next = range.next.station;
@@ -201,7 +201,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
         for (const c of [...range.throwing.clays]) await T.shoot(c);
         await T.thrown();
       }
-      T.press('alt', false);
+      await T.tap('alt');
       await T.frames(6);
       return { stations, guided, card: T.card(), best: world.huntclub.best, rounds: world.huntclub.rounds, round: !!range.round };
     });

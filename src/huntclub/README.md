@@ -42,8 +42,10 @@ before it comes down.
   pattern, the surer the break; dead centre, and it goes to dust. When you
   miss, the HUD says where your shot went: *behind it*, *in front of it*,
   *over it*, *under it*.
-- **Hold right-click** to mount the gun: you look along the rib, a little
-  closer, and the crosshair is where the pattern goes.
+- **Right-click** to mount the gun, and right-click again to lower it: you
+  look along the rib, a little closer, and the crosshair is where the
+  pattern goes. Mounted, it comes down while it's loaded for each throw, and
+  goes back up after.
 - A card at the top of the screen keeps score while you shoot: a box for
   each target, orange for one broken, a ring for one lost, and where to shoot
   from next. An orange arrow hangs over the next station, and the HUD points
@@ -93,7 +95,7 @@ the one that stands.
 | **7** | the shotgun (in the rifle's slot: press again to change) |
 | **click** on a station | call "pull!" for the next targets |
 | **click** | shoot · beside a kill, hold to dress it |
-| **hold right-click** | mount the gun |
+| **right-click** | mount the gun, and again to lower it |
 
 From the console:
 

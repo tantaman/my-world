@@ -3,14 +3,14 @@
 // It goes on the tool bar beside the rifle, in the same slot.
 //
 //   click              shoot · on a skeet station: call "pull!" for the targets
-//   hold right-click   mount it: look along the rib, a little closer
+//   right-click        mount it: look along the rib, a little closer; and again to lower it
 //   hold click         beside a kill: dress it for its meat
 //
 // It's an over-and-under: two shells, one in each barrel, and broken open to
 // load. Away from the skeet field it loads two whenever it's empty. On a
 // station it's loaded for each throw as skeet is shot: one shell for a single
 // target, two for a double, so a target missed with the shell meant for it
-// is lost.
+// is lost. Mounted, it comes down to be loaded and goes up again after.
 //
 // A shot is heard a long way off, and the animals near enough run from it.
 // It takes game too, closer in than the rifle does.
@@ -76,7 +76,8 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 //   prompt then, saying where to get one
 export function shotgunTool({ wildlife, which, carcasses, targets = null, skeet, owned = () => true, notYours = 'not yours' }) {
   let shells = SHELLS;
-  let mounted = false;
+  let mounted = false; // in the shoulder now
+  let shouldered = false; // ...or would be, but for loading (right-click turns it on and off)
   let clock = 0;
   let flash = null;
   let flashT = 0;
@@ -166,8 +167,10 @@ export function shotgunTool({ wildlife, which, carcasses, targets = null, skeet,
       return mounted;
     },
 
-    // Every frame, in hand or not: mounted while right-click is held, the
-    // flash out again, and the barrels down and up again while it's loaded.
+    // Every frame, in hand or not: right-click mounts it, and again lowers it
+    // (not beside a kill, where right-click has work to do); it's down while
+    // it's loaded. The flash out again, and the barrels down and up again
+    // while it's loaded.
     update(b, dt) {
       clock += dt;
       if (flashT > 0) {
@@ -175,7 +178,9 @@ export function shotgunTool({ wildlife, which, carcasses, targets = null, skeet,
         if (flashT <= 0 && flash) flash.visible = false;
       }
       const inHand = b.current === tool && !b.idle;
-      const want = inHand && !loading && owned() && b.input.holding('alt') && (mounted || !(b.tgt && b.tgt.here));
+      if (!inHand || !owned()) shouldered = false;
+      else if (b.input.tapped('alt') && (mounted || !(b.tgt && b.tgt.here))) shouldered = !shouldered;
+      const want = shouldered && !loading;
       if (want !== mounted) mount(b, want);
       let open = 0;
       if (loading) {
@@ -191,6 +196,7 @@ export function shotgunTool({ wildlife, which, carcasses, targets = null, skeet,
     },
 
     put(b) {
+      shouldered = false;
       if (mounted) mount(b, false);
       loading = null;
       if (barrels) barrels.rotation.x = 0;
@@ -205,7 +211,7 @@ export function shotgunTool({ wildlife, which, carcasses, targets = null, skeet,
   return tool;
 
   function mountHint() {
-    return mounted ? '' : ' · <b>hold right-click</b> mount';
+    return mounted ? ' · <b>right-click</b> lower it' : ' · <b>right-click</b> mount';
   }
 
   function mount(b, on) {

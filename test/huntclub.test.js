@@ -25,7 +25,7 @@ import { findSite, candidates, pickSite, clearOf, regionsInTheWay, mayReach, clu
 import { FIELD, STATIONS, HOUSES, CLAY, SHOT, SCHEDULE, TARGETS, Round, fly, launch, pattern, meeting, missedBy, housesOf, validateRecord } from '../src/huntclub/skeet.js';
 import { Range, describe } from '../src/huntclub/range.js';
 import { buildClub, COUNTER, HATCH } from '../src/huntclub/club.js';
-import { shotgunTool, SHELLS } from '../src/huntclub/shotgun.js';
+import { shotgunTool, SHELLS, MOUNT_ZOOM } from '../src/huntclub/shotgun.js';
 import { glyph } from '../src/videostore/font.js';
 import { Solids } from '../src/world/solids.js';
 import { segDist } from '../src/core/geom.js';
@@ -569,14 +569,16 @@ test('a whole round shot clean is 25 of 25, from station 1 round to 8', () => {
 // ── The shotgun ─────────────────────────────────────────────────────────────
 
 // A bench with nothing round it (build/builder.js): flat ground, no animals,
-// the buttons as `io`; and a skeet field that says what it's told to.
+// the buttons as `io` (right-click as `alt`, pressed that frame); and a
+// skeet field that says what it's told to.
 function bench(field) {
   const flashed = [];
+  const taps = new Set();
   const b = {
     aimO: new THREE.Vector3(0, 3, 4),
     aimD: new THREE.Vector3(0, -0.05, -1).normalize(),
     player: { pos: new THREE.Vector3(0, 0, 0), eye: 1.6, sight: null, character: { tools: {}, play() {} } },
-    input: { holding: () => false },
+    input: { holding: () => false, tapped: (w) => taps.has(w) },
     sound: { sfx() {} },
     chips: { burst() {} },
     chunks: { heightAt: () => 0, forEachPlant() {} },
@@ -597,8 +599,10 @@ function bench(field) {
   b.current = tool;
   tool.setup(b);
   // a frame of the bench: a swing runs on, or the tool works the buttons
-  b.frame = (io = {}, dt = 1 / 30) => {
+  b.frame = ({ alt = false, ...io } = {}, dt = 1 / 30) => {
+    if (alt) taps.add('alt');
     tool.update(b, dt);
+    taps.clear();
     if (b.act) {
       const a = b.act;
       a.t += dt;
@@ -610,7 +614,7 @@ function bench(field) {
       return;
     }
     b.tgt = tool.target(b);
-    tool.work(b, b.tgt, { use: false, alt: false, useTap: false, altTap: false, dt, ...io });
+    tool.work(b, b.tgt, { use: false, alt, useTap: false, altTap: alt, dt, ...io });
   };
   b.until = (fn) => {
     for (let i = 0; i < 300 && !fn(); i++) b.frame();
@@ -636,7 +640,7 @@ test('the shotgun is loaded for each throw as skeet is shot: one shell for a sin
   assert.equal(tool.shells, SHELLS);
   assert.equal(tool.kit, 'guns', "in the rifle's slot");
   b.frame();
-  assert.match(b.tgt.prompt, /station 1 · <b>hold right-click<\/b> mount/);
+  assert.match(b.tgt.prompt, /station 1 · <b>right-click<\/b> mount/);
   b.frame({ useTap: true });
   assert.ok(tool.loading, 'broken open to load one');
   assert.ok(b.until(() => calls.length === 1), 'and then the call');
@@ -689,4 +693,32 @@ test("a shotgun that isn't yours does nothing, and says where to get one", () =>
   b.tgt = tool.target(b);
   tool.work(b, b.tgt, { useTap: true, dt: 1 / 30 });
   assert.equal(fired, 1, 'given one: it fires');
+});
+
+test('right-click mounts the shotgun and it stays mounted till right-click again; loaded for a throw, it comes down and back up', () => {
+  let state = 'pull';
+  const field = { status: () => ({ state, need: 1, prompt: 'station 1' }), pull() {}, fired: () => ({ broke: 1, lost: [] }) };
+  const { b, tool } = bench(field);
+  b.frame({ alt: true });
+  assert.ok(tool.mounted, 'mounted');
+  assert.deepEqual(b.player.sight, { zoom: MOUNT_ZOOM });
+  for (let i = 0; i < 20; i++) b.frame();
+  assert.ok(tool.mounted, 'and still, with the button let go');
+  assert.match(b.tgt.prompt, /station 1 · <b>right-click<\/b> lower it/);
+  // the call: loaded with one, down for it, and up again after
+  b.frame({ useTap: true });
+  b.frame();
+  assert.ok(tool.loading && !tool.mounted, 'down to load it');
+  assert.ok(b.until(() => !tool.loading));
+  b.frame();
+  assert.ok(tool.mounted, 'and up again');
+  state = 'flying';
+  b.frame({ alt: true });
+  assert.ok(!tool.mounted, 'right-click again: lowered');
+  assert.equal(b.player.sight, null);
+  // mounted and put away: down, and still down when taken up again
+  b.frame({ alt: true });
+  tool.put(b);
+  b.frame();
+  assert.ok(!tool.mounted);
 });
