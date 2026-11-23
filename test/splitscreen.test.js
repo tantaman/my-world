@@ -68,13 +68,13 @@ test('each hiker on the screen is somebody different, while there is somebody le
   assert.equal(cast(ids, ids, 'oliver'), 'oliver', 'and once everybody is somebody, two can be the same');
   assert.equal(cast(ids, ids), 'hiker');
   assert.equal(cast(ids, ['hiker'], 'someone-from-a-newer-build'), 'oliver', 'someone this build has never heard of is nobody');
-  // a fourth, on another branch: just another line in HIKERS
-  assert.equal(cast([...ids, 'fourth'], ids), 'fourth');
+  // and whoever is added after: just another line in HIKERS
+  assert.equal(cast([...ids, 'fifth'], ids), 'fifth');
 
   assert.equal(next(ids, 'oliver', ['hiker']), 'elliott', 'select: the next one nobody is');
   assert.equal(next(ids, 'elliott', ['oliver']), 'hiker', 'round from the end');
   assert.equal(next(ids, 'oliver', ['hiker', 'elliott']), 'oliver', 'and nobody, if everyone else is taken');
-  assert.ok(HIKERS.length >= 3, 'there are hikers enough for three different people');
+  assert.ok(HIKERS.length >= 4, 'there are hikers enough for four different people');
 });
 
 test('pads shared out: each read only as its own, and every one of them counted', () => {
