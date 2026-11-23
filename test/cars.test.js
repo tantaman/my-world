@@ -87,15 +87,17 @@ test('it turns as tightly as its wheels allow at a crawl, and no tighter than it
   const v = slow.v;
   const yaw0 = slow.yaw;
   drive(slow, 0.5, { throttle: 0, steer: 1 });
-  const rate = (slow.yaw - yaw0) / 0.5;
-  assert.ok(rate > 0, 'steering right turns it right');
+  // facing +z, its right hand is -x (looking along +z with y up)
+  assert.ok(slow.x < -0.01, `steering right turns it right (x ${slow.x.toFixed(2)})`);
+  const rate = (yaw0 - slow.yaw) / 0.5;
+  assert.ok(rate > 0, 'coming round to the right, yaw falls');
   assert.ok(rate <= (v * Math.tan(k.steer)) / k.base + 0.05, 'no tighter than its wheels');
   const fast = new Car('wren', land());
   fast.place(0, 0, 0);
   drive(fast, 20, { throttle: 1 });
   const y1 = fast.yaw;
   drive(fast, 1, { throttle: 1, steer: 1 });
-  const lateral = ((fast.yaw - y1) / 1) * fast.v;
+  const lateral = ((y1 - fast.yaw) / 1) * fast.v;
   assert.ok(lateral <= k.grip * 1.02, `round a bend at ${fast.v.toFixed(0)} m/s: ${lateral.toFixed(1)} m/s² of grip`);
 });
 
