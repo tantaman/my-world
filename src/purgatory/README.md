@@ -129,6 +129,7 @@ space.js              the floor, walls and sky you walk by, and the law of the m
 air.js                the forest's sky lent at the mountain's hour, the sea air, the smoke
 brow.js               the seven P's on your brow, and the fire you see through
 sound.js              the sea, the wind, the birds, the fire, the singing; stone underfoot
+pictures.js           drinking from the stream, on its button
 view.js               what it looks like, fetched the first time it's wanted
 look.js               what the ground, the stone and the waters are drawn with
 models.js             shapes: the souls' poses, rushes, flowers, rocks, angels, Cato, the lady, the serpent, the boat
