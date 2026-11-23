@@ -13,11 +13,12 @@
 //   more: { go: [dirX, dirZ, speed, span], phase, rise, sink, stride, shade,
 //   red, tall, tiltX, tiltZ } (render/shades.js says what the first five do)
 //
-// and a kit says what each kind is: { geo, mat, solid, goes, haze } — its
-// shape, what it is drawn with, how wide and tall it is if it is in the way
-// ({ r, top, step, len }, m at a scale of 1), whether it can walk (its
-// instances say how, so its geometry is its own), and for a flame, the
-// shimmer over it. A kind called 'flame' is drawn over the rest and gives
+// and a kit says what each kind is: { geo, mat, solid, goes, haze, shadow }
+// — its shape, what it is drawn with, how wide and tall it is if it is in
+// the way ({ r, top, step, len }, m at a scale of 1), whether it can walk
+// (its instances say how, so its geometry is its own), for a flame, the
+// shimmer over it, and whether it casts a shadow (the material its shadow
+// is drawn with, if it isn't the one it is: leaves have gaps in them). A kind called 'flame' is drawn over the rest and gives
 // light (render/flame.js, render/lights.js).
 //
 // A land whose circles don't close (Hell's) furnishes a square for a turn of
@@ -178,7 +179,8 @@ export class Strewn {
       // (things walk about in their square and past its edges: cull by the square, generously)
       mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(CELL / 2, (lo + hi) / 2, CELL / 2), CELL * 1.3 + (hi - lo) / 2 + 8);
       mesh.matrixAutoUpdate = false;
-      mesh.castShadow = false;
+      mesh.castShadow = !!k.shadow;
+      if (k.shadow && k.shadow !== true) mesh.customDepthMaterial = k.shadow;
       mesh.receiveShadow = false;
       group.add(mesh);
       // (a flame is drawn over the rest, which it reads: render/flame.js; and

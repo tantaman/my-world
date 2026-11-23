@@ -203,6 +203,7 @@ place in that order, not at the end:
 | `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)` |
 | `build/surfaces.js` | what something built is made of: bark, grain, paint, stone, shingles, tin, glass | `mesher.surf = SURF.paint` (and `mesher.wear`), drawn with `createBuildingMaterial()` |
 | `caves/sites.js` | the mouths of caves, as something grown later keeps clear of | `caveMouths(caves, clear)`, with `keepClear` |
+| `core/card.js` | a place out of a book: its name and lines over the picture as you come into it, and the dark on the way | `new Card({ id, book })`, `card.show({ title, who, lines, canto })`, `await card.darken(on)` |
 | `core/lazy.ts` | code that isn't needed until you get there (what a place looks like), fetched then and once | `const look = lazy(() => import('./look.js'))`, `look.want()` → the module or null, `await look.ready()` |
 | `core/searches.ts` | answers that take a while to work out (where a thing grown from the seed is), each worked out once: outright, or a little at a time | `new Searches({ *grow(key) { …; yield; … } })`, `get`, `peek`, `pump(ms)` |
 | `country/index.js` | a layer of cloud of your own over everything, for a while (a flight's) | `game.country.cloud(() => ({ at, cover, x, z }))` |
@@ -213,6 +214,7 @@ place in that order, not at the end:
 | `game/game.ts` | something done every frame | `game.addSystem({ name, phase, update })` |
 | `game/game.ts` | something that must be here before the hiker is set down where they were left | `game.beforeArrival(look.ready())` |
 | `game/settings.js` | a remembered preference | `game.settings.get / set` |
+| `hell/index.ts` | where the road out of the bottom of Hell comes up, instead of the hillside by the gate | `game.hell.leadOut({ arrive() })` |
 | `hunting/shot.js` | something else the rifle can hit (a man, a wall that stops a shot) | `game.hunting.targets.add({ aimed, struck?, heard? })` |
 | `map/mapView.js` | something drawn on the map | `map.addLayer((pen) => …)` |
 | `map/mapView.js` | a list of somewhere to go, beside the map | `game.map.addTab({ id, label, el, shown })`, `map.open(id)` |
@@ -239,11 +241,14 @@ place in that order, not at the end:
 | `render/flame.js` | a fire, as a volume of burning gas | `createFlameMaterial()` on a `flameBox()`, on the `OVER` layer |
 | `render/haze.js` | the air over something hot shimmering | `createHazeMaterial()` on a `flameBox()`, on the `HEAT` layer; `scene.userData.heat = true` |
 | `render/implicit.js` | a body melted out of balls, bones and skins over a spine | `new Melt({ cell, blend })`, `.ball / .bone / .rings`, `.mesh()` or `.steps()` |
+| `render/landTiles.js` | a land made in code (a pit, a mountain) drawn round you, fine near and coarse far, out to the horizon | `new LandTiles({ land, material, liquid, group, tiles })`, `update(x, y, z, ref, ms)` |
 | `render/lights.js` | light given off by something (a fire, lava, a lantern), and its shadows | `game.lights.add(scene, { x, y, z, color, power, range })`, or `addSource(scene, (eye, out) => …)` |
 | `render/liquid.js` | the surface of a liquid other than the forest's water (blood, pitch, lava) | `createLiquidMaterial(kinds)` on the `OVER` layer |
 | `render/origin.js` | a uniform that says where something is | `game.origin.place(uniform)` |
 | `render/pipeline.js` | something drawn over the water, not seen through it (a splash, a spark), or over what's behind it | `object.layers.set(OVER)`; a light on it: `light.layers.enableAll()` |
 | `render/rig.js` | a creature or a person as one skinned mesh, built from primitives | `new RigBuilder(seed)`, `r.bone(…)`, `r.part(bone, geometry, { color })`, `r.build()` |
+| `render/sculpt.js` | a shape made of simple ones: boxes, drums, balls, limbs, tubes, panels (or melted out of them) | `new Sculpt()`, `s.box / drum / ball / limb / tube / quad`, `s.build()` |
+| `render/shades.js` | the dead, by the hundred: standing, sitting, lying, walking in files without end; and fires | `shade(pose, color, thin)`, `createShadeMaterial({ glow })`, `createFlameMaterial()` |
 | `render/skin.js` | skin: a hide, a horn, a wing, a crust over fire, with its pores, veins and wet | `createSkinMaterial({ hot, baked })` |
 | `roads/index.js` | driving on the roads: the top of the road under a spot, and what it's made of | `game.roads.under(x, z, game.roads.around(x, z, r))` |
 | `save/domains.js` | something that is saved | `game.save.register({ id, collect, restore, … })` |
@@ -266,9 +271,11 @@ place in that order, not at the end:
 | `world/frame.js` | a place laid out on a plan of its own: from its frame to the world and back, and what it covers | `toWorld(site, lx, lz)`, `toLocal`, `onPlan`, `planDiscs`, `boxOf` |
 | `world/grass.js` | somewhere grass doesn't grow | `game.grass.addClearing(fn)` |
 | `world/hikes.js` | a real place, from a photo | `npm run hike -- photo.heic` writes it there |
+| `world/landSpace.js` | a land made in code as somewhere to be: its floor, its walls, its lid | `new LandSpace(land, { id, lid, wade, reach })`, then `game.spaces.add(space)` |
 | `world/sky.js` | how much daylight reaches the eye (dims it, the eye adjusts) | `game.sky.open = 0..1` |
 | `world/solids.js` | something solid to bump into and stand on | `game.solids.set(owner, [capsule])` (`surface: 'boards'` for its footsteps) |
 | `world/spaces.js` | somewhere under the ground to be in: its floor, walls and roof (and how dark it is, if the lamp should come on there) | `game.spaces.add(space)`, `spaces.onDemand(fn)` |
+| `world/strewn.js` | such a land strewn with what stands and walks on it, square by square near you | `new Strewn({ land, space, group, kit, strew })`, `kind(geo, mat, solid, still)` |
 | `world/wind.js` | which way the wind blows | `WIND` |
 
 Each of those files opens with what the thing is and what it is handed.

@@ -6,7 +6,9 @@
 // yourself somewhere new; leave and come back to where you were; and go out
 // by the bottom, to the stars.
 //
-// Needs nothing. Leaves: you on the hillside in front of the gate.
+// Needs nothing. Leaves: you where the road out by the bottom comes up: on
+// the hillside in front of the gate, unless another place has said it comes
+// up there (hell.leadOut).
 
 import assert from 'node:assert/strict';
 
@@ -242,12 +244,17 @@ export default async function ({ page, step, open, shot }) {
       player.steer = null;
       await T.frames(20);
       const g = hell.gate;
-      return { zone, left, out: hell.out, far: Math.hypot(player.pos.x - g.x, player.pos.z - g.z), ground: player.pos.y - world.chunks.heightAt(player.pos.x, player.pos.z), covered: world.game.covered, inScene: player.character.root.parent === world.scene, card: document.getElementById('hell-card').textContent };
+      return { zone, left, out: hell.out, leads: hell.leads, grounded: player.grounded, far: Math.hypot(player.pos.x - g.x, player.pos.z - g.z), ground: player.pos.y - world.chunks.heightAt(player.pos.x, player.pos.z), covered: world.game.covered, inScene: player.character.root.parent === world.scene, outOfHell: player.character.root.parent !== hell.scene, card: document.getElementById('hell-card').textContent };
     });
     assert.match(out.zone, /Cocytus/);
     assert.ok(out.left && out.out, 'came out by the bottom');
-    assert.ok(out.far < 20 && Math.abs(out.ground) < 0.3, `on the hillside by the gate (${out.far.toFixed(0)} m from it)`);
-    assert.ok(!out.covered && out.inScene, 'in the forest again');
+    if (out.leads) {
+      // (somewhere else says where the road comes up: it's that place's to check what's there)
+      assert.ok(out.outOfHell && out.grounded, 'out of Hell, and standing on something');
+    } else {
+      assert.ok(out.far < 20 && Math.abs(out.ground) < 0.3, `on the hillside by the gate (${out.far.toFixed(0)} m from it)`);
+      assert.ok(!out.covered && out.inScene, 'in the forest again');
+    }
     assert.match(out.card, /rebehold the stars/);
     await shot('hell-out');
     return out;
