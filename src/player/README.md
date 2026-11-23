@@ -135,6 +135,10 @@ the d-pad goes from one button to the next (the lists beside the map too) and
 starts sound only after a key or a click, so with a pad alone the forest may
 stay quiet until one.
 
+Plug in two, three or four pads and the screen splits, with someone else on
+each pad after the first ([Split screen](../splitscreen/README.md)). The
+first pad is still yours alone (`game.pads.only`).
+
 A feature gives a command a pad button by listing it with its keys
 (`keys: ['KeyM', 'PadSelect']`); `gamepad.js` has the names.
 
@@ -166,7 +170,7 @@ world are told, so don't change it once someone has played as them; the
 ## Files
 
 ```
-index.js              plugs it into the game: controls, the hiker, who you are, the camera behind you, where you arrive
+index.ts              plugs it into the game: controls, the hiker, who you are, the camera behind you, where you arrive; and the pads, as yours
 player.js             movement, collision, wading, swimming and diving, the camera: behind you (free or locked) or from your eyes
 character.js          the body anyone has: bones, IK gait (forwards or backwards), work poses (played, or held part-way), swimming, things raised to the face, a stance on skis or a board; dressed as one of the hikers, at their size, or as someone else altogether (the fighters in Dry Wells)
 hikers.js             who you can be: the hikers, in the order they're offered

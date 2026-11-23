@@ -12,6 +12,7 @@ import { SEA } from './sea.js';
 import { growRect, cellKey as tileKey } from '../core/geom.js';
 
 const REGROW_EVERY = 0.35; // seconds between regrowing changed ground
+const NOBODY = [];
 
 // Blade shading multipliers (the hue comes from the ground shader).
 const C_ROOT = new THREE.Color(0.5, 0.5, 0.45);
@@ -67,7 +68,9 @@ export class Grass {
     this.clearings.push(fn);
   }
 
-  update(px, pz, budgetMs = 3, dt = 0) {
+  // Grow the grass round (px, pz), and round each of `also` (an array of
+  // { x, z }: the others on a split screen) as well; let it go everywhere else.
+  update(px, pz, budgetMs = 3, dt = 0, also = NOBODY) {
     this.regrowIn -= dt;
     if (this.stale && this.regrowIn <= 0) {
       this.invalidate(...this.stale);
@@ -76,15 +79,17 @@ export class Grass {
     }
     const T = CONFIG.grassTile;
     const R = CONFIG.grassRadius;
-    const tx0 = Math.floor((px - R) / T);
-    const tx1 = Math.floor((px + R) / T);
-    const tz0 = Math.floor((pz - R) / T);
-    const tz1 = Math.floor((pz + R) / T);
+    // how far the middle of tile (tx, tz) is from whoever is nearest it
+    const from = (tx, tz) => {
+      const x = (tx + 0.5) * T;
+      const z = (tz + 0.5) * T;
+      let d = Math.hypot(x - px, z - pz);
+      for (const p of also) d = Math.min(d, Math.hypot(x - p.x, z - p.z));
+      return d;
+    };
 
     for (const [k, tile] of this.tiles) {
-      const cx = (tile.tx + 0.5) * T - px;
-      const cz = (tile.tz + 0.5) * T - pz;
-      if (Math.hypot(cx, cz) > R + T * 1.2) {
+      if (from(tile.tx, tile.tz) > R + T * 1.2) {
         if (tile.mesh) {
           this.scene.remove(tile.mesh);
           tile.mesh.geometry.dispose();
@@ -94,16 +99,25 @@ export class Grass {
     }
 
     const todo = [];
-    for (let tz = tz0; tz <= tz1; tz++) {
-      for (let tx = tx0; tx <= tx1; tx++) {
-        if (this.tiles.has(tileKey(tx, tz))) continue;
-        const cx = (tx + 0.5) * T - px;
-        const cz = (tz + 0.5) * T - pz;
-        const d = Math.hypot(cx, cz);
-        if (d > R + T * 0.72) continue;
-        todo.push({ tx, tz, d });
+    const seen = also.length ? new Set() : null; // (where two are near each other, once)
+    const around = (x, z) => {
+      const tx0 = Math.floor((x - R) / T);
+      const tx1 = Math.floor((x + R) / T);
+      const tz0 = Math.floor((z - R) / T);
+      const tz1 = Math.floor((z + R) / T);
+      for (let tz = tz0; tz <= tz1; tz++) {
+        for (let tx = tx0; tx <= tx1; tx++) {
+          const k = tileKey(tx, tz);
+          if (this.tiles.has(k) || seen?.has(k)) continue;
+          const d = from(tx, tz);
+          if (d > R + T * 0.72) continue;
+          seen?.add(k);
+          todo.push({ tx, tz, d });
+        }
       }
-    }
+    };
+    around(px, pz);
+    for (const p of also) around(p.x, p.z);
     if (!todo.length) return;
     todo.sort((a, b) => a.d - b.d);
     const t0 = performance.now();

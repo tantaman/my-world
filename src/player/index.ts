@@ -2,19 +2,33 @@
 // (hikers.js) is yours to choose on the settings panel, and remembered here,
 // as is whether the camera is locked behind you (player.lockCamera).
 
+import type { Game, Controls } from '../game/game.ts';
 import { Input } from './input.js';
 import { padNames } from './gamepad.js';
+import type { Pads } from './gamepad.js';
 import { Player } from './player.js';
 import { HIKERS, hiker } from './hikers.js';
 import * as pictures from './pictures.js';
 import { SHARED, WADE } from '../render/uniforms.js';
 
-const round = (v, f = 100) => Math.round(v * f) / f;
-const finite = (v, otherwise) => (Number.isFinite(v) ? v : otherwise);
+// What this provides: game.input, the controls (as far as the game itself
+// needs them: see game.ts); game.player, the hiker you are; and game.pads,
+// the game controllers plugged in, which are read as yours (all of them,
+// unless they're shared out: pads.only, as on a split screen).
+declare module '../game/game.ts' {
+  interface Services {
+    input: Controls;
+    player: Player;
+    pads: Pads;
+  }
+}
+
+const round = (v: number, f = 100) => Math.round(v * f) / f;
+const finite = <T>(v: unknown, otherwise: T): number | T => (typeof v === 'number' && Number.isFinite(v) ? v : otherwise);
 
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world'];
-export function installPlayer(game) {
+export function installPlayer(game: Game) {
   const { scene, camera, chunks, gen, solids, spaces, basins, hud, commands, save, settings } = game;
 
   const input = new Input(game.renderer.domElement);
@@ -22,14 +36,15 @@ export function installPlayer(game) {
   player.lockCamera = settings.get('cameraBehind', 'boolean') ?? false;
   game.provide('input', input);
   game.provide('player', player);
+  game.provide('pads', input.pads);
 
   input.on('touch', () => hud.showTouchActions());
   // With a pad in hand the help panel and the prompts call the controls by its
   // buttons, the button the d-pad has gone to in a panel is ringed (body.pad,
   // in index.html), and the first time, it says where to find them.
   let padSeen = false;
-  input.on('pad', (on) => {
-    hud.namePad(on ? (codes) => padNames(codes, input.pads.kind) : null);
+  input.on('pad', (on: boolean) => {
+    hud.namePad(on ? (codes: string[]) => padNames(codes, input.pads.kind) : null);
     document.body.classList.toggle('pad', on);
     if (on && !padSeen) hud.flash(`controller ready · ${input.pads.name('PadStart')} lists its buttons`, 3000);
     padSeen ||= on;
@@ -57,11 +72,11 @@ export function installPlayer(game) {
       camYaw: round(player.camYaw, 1000),
       camPitch: round(player.camPitch, 1000),
     }),
-    validate: (p) => {
-      const at = p && typeof p === 'object' ? p : {};
+    validate: (p: unknown) => {
+      const at = (p && typeof p === 'object' ? p : {}) as Record<string, unknown>;
       return { x: finite(at.x, null), z: finite(at.z, null), y: finite(at.y, undefined), yaw: finite(at.yaw, 0), camYaw: finite(at.camYaw, undefined), camPitch: finite(at.camPitch, undefined) };
     },
-    restore: (p) => {
+    restore: (p: { x: number | null; z: number | null } | null) => {
       if (p && p.x !== null && p.z !== null) player.arrival = p;
     },
   });
@@ -75,7 +90,7 @@ export function installPlayer(game) {
     label: 'who is hiking',
     options: HIKERS.map((h) => ({ value: h.id, label: h.name })),
     get: () => player.character.who.id,
-    set: (id) => {
+    set: (id: string) => {
       player.be(hiker(id));
       settings.set('hiker', player.character.who.id);
     },
@@ -88,13 +103,13 @@ export function installPlayer(game) {
     group: 'YOU',
     label: 'camera locked behind you',
     get: () => player.lockCamera,
-    set(on) {
+    set(on: boolean) {
       player.lockCamera = on;
       settings.set('cameraBehind', on);
     },
   });
 
-  const behind = (locked, free) => () => (player.lockCamera ? locked : free);
+  const behind = (locked: string, free: string) => () => (player.lockCamera ? locked : free);
   commands.describe({ group: 'WANDER', help: 'W A S D', pad: ['PadLS'], label: behind('walk · left and right turn you', 'walk') });
   commands.describe({ group: 'WANDER', help: 'shift', pad: ['PadB'], label: 'run' });
   commands.describe({ group: 'WANDER', help: 'space', pad: ['PadA'], label: 'jump' });
@@ -126,9 +141,7 @@ export function installPlayer(game) {
       if (player.hasMoved) hud.hideHint();
       SHARED.uPlayer.value.copy(player.pos);
       // ripples and froth around your legs, more when you're moving
-      const speed = Math.hypot(player.vel.x, player.vel.z);
-      const wade = player.wade > 0.02 && player.under < 0.8 ? Math.min(1, player.wade * 3) * (0.35 + 0.65 * Math.min(1, speed / 2)) : 0;
-      WADE.uWade.value += (wade - WADE.uWade.value) * (1 - Math.exp(-dt * 4));
+      WADE.uWade.value += (player.ripple - WADE.uWade.value) * (1 - Math.exp(-dt * 4));
       // the water going past your legs: the current, less your own way through it
       WADE.uWadeFlow.value.set(player.current.x - player.vel.x, player.current.z - player.vel.z);
     },

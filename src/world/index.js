@@ -103,6 +103,14 @@ export function installWorld(game) {
   // What the world streams in around: a point that whoever is being followed
   // keeps up to date (the player feature copies the hiker's position into it).
   game.provide('focus', new THREE.Vector3());
+  // ...and anyone else followed at the same time (the others on a split
+  // screen): a point each ({ x, z }, kept up to date), which whoever follows
+  // them adds here and takes out again. The ground and the grass are grown
+  // round each of them as well as round the focus; everything else that
+  // goes by where you are goes by the focus alone.
+  const followed = new Set();
+  game.provide('followed', followed);
+  const others = []; // (the same, as a list, each frame)
 
   // ── The hour ──────────────────────────────────────────────────────────────
   let flows = false;
@@ -180,8 +188,10 @@ export function installWorld(game) {
       const speed = Math.hypot(vel.x, vel.z);
       // (a teleport is not a speed: it would reach off to nowhere)
       const reach = speed > 1e-3 ? Math.min(CONFIG.viewRadius * CONFIG.chunkSize, speed * LEAD_TIME) / speed : 0;
-      chunks.update(at.x, at.z, 5, at.x + vel.x * reach, at.z + vel.z * reach);
-      grass.update(at.x, at.z, 3, dt);
+      others.length = 0;
+      for (const p of followed) others.push(p);
+      chunks.update(at.x, at.z, 5, at.x + vel.x * reach, at.z + vel.z * reach, others);
+      grass.update(at.x, at.z, 3, dt, others);
       sky.update(at, camera.position);
       particles.update(at, at.y, sky.open);
     },

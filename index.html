@@ -36,19 +36,22 @@
       #load-bar { height: 100%; width: 0; background: var(--accent); transition: width 0.2s steps(6); }
       #load-label { margin-top: 10px; font-size: 11px; color: var(--ink-dim); letter-spacing: 0.08em; }
 
-      #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+      /* The HUD is laid out in the box it has: the whole window, or on a split
+         screen, the part of it that is yours (src/splitscreen/). So its widths
+         are of #hud, and where it changes with width, it asks #hud's. */
+      #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; container: hud / size; }
       #coords {
         position: absolute; left: calc(16px + var(--inset-l)); bottom: calc(14px + var(--inset-b)); font-size: 11px; letter-spacing: 0.08em; color: var(--ink-dim);
         text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
       }
       #track {
         position: absolute; left: calc(16px + var(--inset-l)); bottom: calc(32px + var(--inset-b)); font-size: 12px; letter-spacing: 0.06em;
-        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75), 0 0 6px rgba(0, 0, 0, 0.5); max-width: calc(100vw - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75), 0 0 6px rgba(0, 0, 0, 0.5); max-width: calc(100% - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
       #debug { position: absolute; left: calc(16px + var(--inset-l)); top: calc(30px + var(--inset-t)); font-size: 11px; color: var(--ink-dim); text-shadow: 0 1px 0 #000; }
       #inv {
         position: absolute; left: calc(16px + var(--inset-l)); top: calc(12px + var(--inset-t)); font-size: 11px; letter-spacing: 0.06em;
-        color: var(--ink-dim); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7); max-width: calc(100vw - 80px);
+        color: var(--ink-dim); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7); max-width: calc(100% - 80px);
       }
       #crosshair {
         position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; background: var(--ink);
@@ -62,7 +65,7 @@
       #progress i { display: block; height: 100%; width: 0; background: var(--accent); }
       #prompt {
         position: absolute; left: 50%; bottom: calc(62px + var(--inset-b)); transform: translateX(-50%); padding: 6px 12px; font-size: 12px;
-        background: var(--panel); border: 1px solid var(--line); white-space: nowrap; letter-spacing: 0.03em; max-width: calc(100vw - 32px);
+        background: var(--panel); border: 1px solid var(--line); white-space: nowrap; letter-spacing: 0.03em; max-width: calc(100% - 32px);
         overflow: hidden; text-overflow: ellipsis; transition: opacity 0.2s;
       }
       #prompt.gone { opacity: 0; }
@@ -73,7 +76,7 @@
       @keyframes nudge { 25% { transform: translateX(calc(-50% - 5px)); } 75% { transform: translateX(calc(-50% + 5px)); } }
       #hotbar {
         position: absolute; left: 50%; bottom: calc(14px + var(--inset-b)); transform: translateX(-50%); display: flex; gap: 3px; pointer-events: auto;
-        flex-wrap: wrap-reverse; justify-content: center; width: max-content; max-width: calc(100vw - 12px);
+        flex-wrap: wrap-reverse; justify-content: center; width: max-content; max-width: calc(100% - 12px);
       }
       #hotbar .slot {
         font: inherit; font-size: 10.5px; color: var(--ink-dim); background: var(--panel); border: 1px solid var(--line); padding: 4px 7px;
@@ -113,7 +116,7 @@
       #hint {
         position: absolute; left: 50%; bottom: calc(104px + var(--inset-b)); transform: translateX(-50%); padding: 9px 14px; font-size: 12px;
         background: var(--panel); border: 1px solid var(--line); white-space: nowrap; letter-spacing: 0.04em;
-        transition: opacity 1.6s ease 0.6s; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis;
+        transition: opacity 1.6s ease 0.6s; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis;
       }
       #hint.gone { opacity: 0; }
       #hint b { color: var(--accent); font-weight: 600; }
@@ -123,8 +126,8 @@
       }
       #toast.show { opacity: 1; }
       #help {
-        position: absolute; right: calc(16px + var(--inset-r)); top: calc(16px + var(--inset-t)); width: min(300px, calc(100vw - 32px)); padding: 14px 16px; font-size: 11.5px;
-        max-height: calc(100dvh - 76px - var(--inset-t) - var(--inset-b)); overflow-y: auto;
+        position: absolute; right: calc(16px + var(--inset-r)); top: calc(16px + var(--inset-t)); width: min(300px, calc(100% - 32px)); padding: 14px 16px; font-size: 11.5px;
+        max-height: calc(100% - 76px - var(--inset-t) - var(--inset-b)); overflow-y: auto;
         line-height: 1.75; background: var(--panel); border: 1px solid var(--line); opacity: 0; transform: translateY(-6px);
         transition: opacity 0.2s, transform 0.2s; pointer-events: none;
       }
@@ -164,17 +167,17 @@
          still, the corner buttons move up top. On the narrowest screens the
          slots close up, and if it still doesn't fit, it takes a second row.
          (The widths are for seven slots and four corner buttons.) */
-      @media (max-width: 1000px) {
+      @container hud (max-width: 1000px) {
         #hotbar .slot .long { display: none; }
         #hotbar .slot .short { display: inline; }
       }
-      @media (max-width: 900px) {
+      @container hud (max-width: 900px) {
         /* the corner buttons take the top line; what you carry goes under them */
         #corner { bottom: auto; top: calc(10px + var(--inset-t)); }
-        #inv { top: calc(42px + var(--inset-t)); max-width: calc(100vw - 32px); }
+        #inv { top: calc(42px + var(--inset-t)); max-width: calc(100% - 32px); }
         #debug { top: calc(60px + var(--inset-t)); }
       }
-      @media (max-width: 620px) {
+      @container hud (max-width: 620px) {
         #hotbar .slot .long { display: none; }
         #hotbar .slot .short { display: inline; }
         #hotbar { gap: 2px; }
@@ -186,7 +189,7 @@
         #debug { top: calc(78px + var(--inset-t)); }
         #hint { bottom: calc(130px + var(--inset-b)); }
       }
-      @media (max-width: 360px) {
+      @container hud (max-width: 360px) {
         #hotbar { gap: 1px; }
         #hotbar .slot { padding: 6px 2px; font-size: 9.5px; }
       }

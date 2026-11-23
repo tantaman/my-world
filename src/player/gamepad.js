@@ -115,7 +115,8 @@ const axis = (axes, resting, i) => (((resting >> i) & 1) ? 0 : axes[i]);
 const browserPads = () => (typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : []);
 
 // Every pad plugged in, read as one: a button is down if it is down on any of
-// them, and each stick is wherever it is pushed furthest.
+// them, and each stick is wherever it is pushed furthest. Or only some of
+// them (`only`), where each pad is someone's own (a split screen).
 export class Pads {
   // list: () => the pads, as navigator.getGamepads() gives them
   constructor(list = browserPads) {
@@ -125,7 +126,13 @@ export class Pads {
     this.move = { x: 0, y: 0 }; // left stick: x right, y down
     this.look = { x: 0, y: 0 }; // right stick, bent by LOOK_CURVE
     this.kind = 'xbox'; // of the pad touched last (padKind)
-    this.connected = false;
+    this.connected = false; // one of the pads read is there
+    // Which pads to read, by their index (Gamepad.index): every one (null),
+    // or only those in this Set.
+    this.only = null;
+    // Every pad that counts (see below), read or not, by index, in the order
+    // the browser lists them: how many pads there are to share out.
+    this.present = [];
     // A pad that doesn't say it has the standard layout may be anything
     // (some keyboards and wheels say they are pads), so it counts only once
     // one of its buttons has been pressed. Each pad it knows, by index and
@@ -149,29 +156,30 @@ export class Pads {
     let moveM = 0;
     let lookM = 0;
     this.connected = false;
+    this.present.length = 0;
     for (const p of pads) {
       if (!p || !p.connected || !p.buttons) continue;
-      let pressed = false;
+      let held = 0; // a bit for each button down, in PAD_BUTTONS' order
       for (let i = 0; i < PAD_BUTTONS.length && i < p.buttons.length; i++) {
         const b = p.buttons[i];
         const v = typeof b === 'number' ? b : b.value;
-        if (TRIGGERS.has(i) ? v > TRIGGER_DOWN : typeof b === 'number' ? b > 0.5 : b.pressed) {
-          now.add(PAD_BUTTONS[i]);
-          pressed = true;
-        }
+        if (TRIGGERS.has(i) ? v > TRIGGER_DOWN : typeof b === 'number' ? b > 0.5 : b.pressed) held |= 1 << i;
       }
       const key = `${p.index}:${p.id}`;
       let skip = this._woken.get(key);
       if (skip === undefined) {
         if (p.mapping !== 'standard') {
-          if (!pressed) continue;
+          if (!held) continue;
           skip = restingAxes(p.axes); // where they sit now is where they rest
         } else skip = 0;
         this._woken.set(key, skip);
       }
+      this.present.push(p.index);
+      if (this.only && !this.only.has(p.index)) continue; // someone else's
+      for (let i = 0; i < PAD_BUTTONS.length; i++) if ((held >> i) & 1) now.add(PAD_BUTTONS[i]);
       this.connected = true;
       const a = p.axes || [];
-      let touched = pressed;
+      let touched = held !== 0;
       stick(axis(a, skip, 0), axis(a, skip, 1), 1, s);
       let m = Math.hypot(s.x, s.y);
       if (m > moveM) {

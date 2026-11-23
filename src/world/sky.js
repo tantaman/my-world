@@ -170,7 +170,6 @@ export class Sky {
   }
 
   update(focus, cameraPos) {
-    this.dome.position.copy(cameraPos);
     const sd = this.computeSunDir(this.hours, this.sunDir);
     const elevDeg = THREE.MathUtils.radToDeg(Math.asin(sd.y));
     const k = sampleKeys(elevDeg);
@@ -196,7 +195,15 @@ export class Sky {
     this.hemi.color.setRGB(...k.amb);
     this.hemi.groundColor.setRGB(...k.gnd);
     this.hemi.intensity = k.ai * (1 + 0.3 * this.overcast) * this.open;
+    this.aim(focus, cameraPos);
+  }
 
+  // The sky round the camera at cameraPos, and the sun's shadows round focus
+  // (the hiker). Done by update(); again for each part of a split screen,
+  // as it is drawn, for the hiker and camera that part follows.
+  aim(focus, cameraPos) {
+    this.dome.position.copy(cameraPos);
+    const lightDir = this.lightDir;
     // Shadow camera follows the player, snapped to shadow texels to avoid shimmer.
     const S = CONFIG.shadowExtent;
     const texel = (2 * S) / CONFIG.shadowMapSize;

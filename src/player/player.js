@@ -183,6 +183,16 @@ export class Player extends Emitter {
   // spaces: places under the ground you can be in (src/world/spaces.js)
   // basins: water held up in something built (src/world/basins.js)
   // who: which hiker you are (hikers.js), if not the first; be() changes it
+  // input: input.js's Input, or anything that answers what it's asked here
+  // (consumeLook, lookRate, consumeZoom, isDown, moveAxes, running, diving,
+  // jumped): a pad of someone's own (splitscreen/pad.js).
+  /**
+   * @param {{
+   *   scene: import('three').Scene, camera: import('three').PerspectiveCamera, world: any, input: any,
+   *   solids?: import('../world/solids.js').Solids | null, spaces?: import('../world/spaces.js').Spaces | null,
+   *   basins?: import('../world/basins.js').Basins | null, who?: any
+   * }} opts
+   */
   constructor({ scene, camera, world, input, solids = null, spaces = null, basins = null, who }) {
     super();
     this.camera = camera;
@@ -362,6 +372,15 @@ export class Player extends Emitter {
       });
     }
     return g;
+  }
+
+  // How much the water froths round your legs just now (0..1): wading, more
+  // as you go, and none once you're under it. Whoever draws it eases it
+  // (WADE in render/uniforms.js).
+  get ripple() {
+    if (!(this.wade > 0.02 && this.under < 0.8)) return 0;
+    const speed = Math.hypot(this.vel.x, this.vel.z);
+    return Math.min(1, this.wade * 3) * (0.35 + 0.65 * Math.min(1, speed / 2));
   }
 
   // How tall you are, beside the grown-up hiker (1).
