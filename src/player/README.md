@@ -148,8 +148,8 @@ hangs clothes on and has to say back, is at the top of `Character` in
 `character.js`. For a grown-up, `lauren.js` is the one to start from; for a
 child, `oliver.js`. A grown-up's head is built by `head.js` to a look: the
 eggs the skull is made of (each round the middle of the head, or the skin
-has a seam where one ends) and any it's cut back to (for a jawline with an
-edge), the nose, the mouth and how far the face's
+has a seam where one ends) and what those of the face are cut back to (for
+a jawline with an edge), the nose, the mouth and how far the face's
 features stand out, where hair grows and how long and which way it lies (or
 drawn back smooth, for long hair), and the colours. Sunglasses and a cap are built there too, to each one's own
 frames and shape. A child's head is built round the eyes by `child.js`, to
