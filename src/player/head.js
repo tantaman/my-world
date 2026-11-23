@@ -10,7 +10,8 @@
 //
 // The skin is one surface. A ray from the centre in each direction meets the
 // skull, which is a few overlapping egg shapes rounded into one (the cranium,
-// the cheekbones and upper jaw, the jaw, the chin); the face's own relief is
+// the cheekbones and upper jaw, the jaw, the chin), cut back if the look says
+// to a few more (along the jaw, so it has an edge); the face's own relief is
 // then raised from its front: the nose, the brow, the eye sockets, the lips.
 // The rays are packed close across the face, where that relief is, and
 // spread out at the back of the head, where the cap and hair are.
@@ -39,6 +40,11 @@ const TAU = Math.PI * 2;
 //            given) about x, its bottom forward. Each should take in the
 //            middle of the head, which the skin is cast out from: one that
 //            doesn't leaves a seam where it ends
+//   cut      (or none) egg shapes, as the skull's are given, that the skull
+//            is cut back to: none of it is kept outside any of them, and the
+//            edge is rounded over `cutRound` (m). Big enough to take in all
+//            the head but where it cuts: the underside of the jaw, say, so
+//            the jawline is an edge where the side of the face turns under
 //   eyeX     half the distance between the pupils
 //   brow     the brow ridge, above eye level
 //   nose     from the bridge between the eyes (nasion: { y, z }) straight
@@ -173,6 +179,7 @@ function relief(L, x, y, z0) {
 function skinPoint(L, n, out) {
   let r = 0;
   for (const egg of L.skull) r = smax(r, rayToEgg(n, egg), L.round);
+  for (const egg of L.cut ?? []) r = smin(r, rayToEgg(n, egg), L.cutRound);
   out.copy(n).multiplyScalar(r);
   // the face is raised from the front only
   const w = smoothstep(0.01, 0.05, out.z);
