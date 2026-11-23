@@ -52,4 +52,5 @@ rack.js      where the rack stands at the launch site, in the pad's own frame
 model.js     the jetpack, its flames, its vapour, and the rack
 others.js    other people's jetpacks: on their backs, and how high they fly
 sound.js     the jets' roar; the buckles, lighting up, cutting out
+pictures.js  what the jetpack looks like in your pack
 ```

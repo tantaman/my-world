@@ -1,4 +1,5 @@
-// Your pack: everything there is to do, and what's yours, in one place.
+// Your pack: everything there is to do, and what's yours, in one place, each
+// in its picture.
 //
 // Every feature binds its own keys, and there are more things to do than
 // keys to do them with: the letters are all taken, a pad's buttons too, and a
@@ -22,25 +23,35 @@
 // materials are read off the builder's stock; a feature with something else
 // to have says so:
 //
-//   game.pack.have(() => (worn ? [{ label: 'a jetpack', note: 'on your back' }] : null));
+//   game.pack.have(() => (worn ? [{ label: 'a jetpack', note: 'on your back', icon: JETPACK }] : null));
 //
 // It is a list to look at, not a store: each feature keeps and saves what it
 // gave you, as before (things.js).
 //
+// Everything in it is drawn in pixel art, in the pack's colours (picture.js):
+// each feature draws what is its own, in a pictures.js of its own, and hands
+// it over with what it is (a command's `icon`, a thing's, a material's, an
+// act offer's).
+//
 //   book.js      the list, laid out: at hand, then the rest under their headings
 //   things.js    what's yours: who says so, and the materials
+//   picture.js   pixel art in the pack's colours
+//   pictures.js  the pack's own: itself, and what stands in for a picture
 //   panel.js     the pack on the screen
 //   buttons.js   the buttons on a touch screen
 //
 // From the console:
 //   world.pack.open() / close()
 //   world.pack.list()     -> { hand: [{ id, word, label, help }], yours: [{ label, note }], rest: [{ group, rows }] }
+//                         in words: the pictures are on the screen
 //   world.pack.do(id)     as picking its row would
 
 import { pages, shown } from './book.js';
 import { Things, told, materials } from './things.js';
 import { PackPanel } from './panel.js';
 import { HandButtons } from './buttons.js';
+import { url } from './picture.js';
+import { BACKPACK } from './pictures.js';
 import './pack.css';
 
 const KEY = 'Tab';
@@ -76,7 +87,7 @@ export function installPack(game) {
     panel.toggle();
   };
   game.on('panel', (which) => which !== 'pack' && panel.close());
-  commands.add({ id: 'pack', keys: [KEY, PAD], group: 'WANDER', label: 'your pack · everything there is to do, and what’s yours', run: toggle });
+  commands.add({ id: 'pack', keys: [KEY, PAD], group: 'WANDER', label: 'your pack · everything there is to do, and what’s yours', icon: BACKPACK, run: toggle });
 
   // Tab is the browser's key for going from button to button. While the game
   // has the keyboard it is the pack's instead (an open panel keeps its own).
@@ -91,10 +102,12 @@ export function installPack(game) {
   addEventListener('blur', () => (panel.shutByKey = false));
 
   // For a mouse or a finger, the line at the top that says what you carry is
-  // the pack's handle (pack.css marks it as one). Not a button in the corner
-  // with the others: along the bottom the tool bar has left no room for one.
+  // the pack's handle (pack.css marks it as one, with the pack's picture).
+  // Not a button in the corner with the others: along the bottom the tool
+  // bar has left no room for one.
   const line = document.getElementById('inv');
   if (line) {
+    line.style.setProperty('--pack-pic', `url("${url(BACKPACK)}")`);
     line.setAttribute('role', 'button');
     line.setAttribute('aria-label', 'Your pack: everything there is to do, and what’s yours');
     hud.button('inv', toggle);
@@ -134,9 +147,13 @@ export function installPack(game) {
     get isOpen() {
       return panel.isOpen;
     },
-    list: () => ({ ...book(), yours: things.list() }),
+    list: () => {
+      const { hand, rest } = book();
+      const words = ({ icon, ...row }) => row;
+      return { hand: hand.map(words), rest: rest.map((g) => ({ group: g.group, rows: g.rows.map(words) })), yours: things.list().map(({ label, note }) => ({ label, note })) };
+    },
     do: (id) => commands.run(id),
-    // something you have, listed under what's yours: () => [{ label, note }] (things.js)
+    // something you have, listed under what's yours: () => [{ label, note, icon }] (things.js)
     have: (source) => things.add(source),
   });
 

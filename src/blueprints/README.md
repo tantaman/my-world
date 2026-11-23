@@ -113,4 +113,5 @@ library.js            those, and the ones you copied, kept in this browser
 foreman.js            clearing, levelling, gathering for and building a site
 ghost.js              what's still to go up, drawn where it will stand
 tool.js               the plan tool (6)
+pictures.js           what a blueprint looks like in your pack
 ```

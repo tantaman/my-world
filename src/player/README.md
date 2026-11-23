@@ -157,4 +157,5 @@ head.js               the hiker's face, ears, hair and beard (strands in layers)
 input.js              keyboard, mouse, touch, and a pad's buttons as keys
 gamepad.js            game controllers: reading them, what their buttons are called, typing into panels
 peers.js              everyone else, drawn as whoever they are and eased between messages
+pictures.js           what going back to the start looks like in your pack
 ```

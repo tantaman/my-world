@@ -34,6 +34,7 @@ import { Course } from './course.js';
 import { makeTube } from './model.js';
 import { tubeSounds } from './sound.js';
 import { Tubers } from './others.js';
+import * as pictures from './pictures.js';
 import './tubing.css';
 import { SEAT_HIPS } from '../player/character.js';
 import { segDist, waterSample, wrapAngle as wrap } from '../core/geom.js';
@@ -465,10 +466,10 @@ export function installTubing(game) {
   act.offer({
     id: 'tube',
     at() {
-      if (active) return { d: 0, word: 'get out', run: getOut };
+      if (active) return { d: 0, word: 'get out', run: getOut, icon: pictures.TUBE };
       if (!player.rides.free || player.space) return null;
       const spot = waterBy(player.pos.x, player.pos.z);
-      return spot ? { d: FLOAT_AT, word: 'float', run: () => getIn(spot) } : null;
+      return spot ? { d: FLOAT_AT, word: 'float', run: () => getIn(spot), icon: pictures.TUBE } : null;
     },
   });
 
@@ -492,7 +493,7 @@ export function installTubing(game) {
     hud.flash(`no water deep enough to float in here · the nearest ${r.river ? 'river' : 'stream'} to float down is ${formatDistance(r.d)} ${way(r.x - p.x, r.z - p.z)}, and runs ${formatDistance(r.far)} from there`, SAY);
     return false;
   }
-  commands.add({ id: 'tube', keys: ['KeyV', 'PadR3'], group: 'WANDER', label: 'inner tube: where the nearest river to float down is', run: whereToFloat });
+  commands.add({ id: 'tube', keys: ['KeyV', 'PadR3'], group: 'WANDER', label: 'inner tube: where the nearest river to float down is', icon: pictures.TUBE, run: whereToFloat });
   commands.describe({ group: 'WANDER', help: 'F', pad: ['PadY'], label: 'beside water deep enough: float off in your inner tube · in it: get out' });
   commands.describe({ group: 'WANDER', help: 'in the tube', label: 'W A S D paddle with your hands · shift paddle hard' });
 

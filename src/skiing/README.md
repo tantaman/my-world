@@ -114,4 +114,5 @@ runs.js               the forest's ski runs, a square at a time, for the map and
 sound.js              the snow and the wind as you go; bindings, landings, falls
 others.js             what other people here are on
 skiing.css            the readout
+pictures.js           what skis and a snowboard look like in your pack
 ```

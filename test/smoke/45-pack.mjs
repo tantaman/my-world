@@ -1,7 +1,7 @@
 // Your pack: Tab opens the list of everything there is to do, a row does
 // what its key would, something at hand heads the list and (on a touch
-// screen) has a button of its own, what's yours is listed in it, and a pad
-// opens it with L3.
+// screen) has a button of its own, what's yours is listed in it, everything
+// in it has its picture, and a pad opens it with L3.
 //
 // Needs nothing of the parts before it, and takes whatever else they have
 // left at hand (something to eat, say) as it finds it. Uses the stand-in pad
@@ -20,11 +20,16 @@ export default async function ({ page, step, key, frames, shot }) {
       rows: [...document.querySelectorAll('#pack [data-do]')].map((b) => b.dataset.do),
       focus: document.activeElement?.dataset?.do ?? null,
     }));
+  // A row: its word (if at hand), what it is and the rest of what it says, its key, and its heading.
   const row = (id) =>
     page.evaluate((i) => {
       const b = [...document.querySelectorAll('#pack [data-do]')].find((el) => el.dataset.do === i);
-      return b ? { word: b.querySelector('b')?.textContent ?? '', label: b.querySelector('span').textContent, key: b.querySelector('kbd')?.textContent ?? '', under: b.closest('ol').previousElementSibling.textContent } : null;
+      const text = (sel) => b.querySelector(sel)?.textContent ?? '';
+      return b ? { word: text('b'), name: text('.name'), more: text('small'), key: text('kbd'), under: b.closest('ol').previousElementSibling.textContent } : null;
     }, id);
+  // Pictures in the pack as drawn: [what it is of, whether it stands in for one it hasn't, drawn at what size].
+  const pictures = (within) =>
+    page.evaluate((sel) => [...document.querySelectorAll(`${sel} .pic`)].map((img) => [img.closest('[data-do]')?.dataset.do ?? img.closest('li')?.querySelector('span')?.textContent ?? 'pack', img.classList.contains('stand-in'), img.complete && img.naturalWidth > 0 ? img.width : 0]), within);
   const mapOpen = () => page.evaluate(() => document.getElementById('map').getAttribute('aria-hidden') === 'false');
   // What is at hand: as the pack lists it on the screen, and as the game says.
   const hand = () => page.evaluate(() => [...document.querySelectorAll('#pack .pack-hand [data-do]')].map((b) => b.dataset.do));
@@ -44,7 +49,14 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.equal(new Set(p.rows).size, p.rows.length, 'each once');
     assert.equal(p.focus, p.rows[0], 'the first is ready to be done');
     const map = await row('map');
-    assert.deepEqual({ under: map.under, key: map.key, label: map.label }, { under: 'WANDER', key: 'M', label: 'map · mark places · where to go' }, 'a row says what it is and its key, under its heading');
+    assert.deepEqual({ under: map.under, key: map.key, name: map.name, more: map.more }, { under: 'WANDER', key: 'M', name: 'map', more: 'mark places · where to go' }, 'a row says what it is, the rest of what it does and its key, under its heading');
+    // everything there is to do in its picture, drawn by the feature it's from
+    const drawn = await pictures('#pack .pack-body [data-do]');
+    assert.equal(drawn.length, p.rows.length, 'each row has a picture');
+    assert.deepEqual(drawn.filter(([, , size]) => size !== 32 && size !== 48), [], 'each is drawn, at twice its size or (at hand) three times');
+    assert.deepEqual(drawn.filter(([, standIn]) => standIn).map(([id]) => id), [], 'and each is its own: a command with none wants an `icon` (src/pack/picture.js)');
+    assert.equal((await pictures('#pack .pack-head'))[0][2], 32, 'the pack has its own');
+    assert.ok(await page.evaluate(() => getComputedStyle(document.getElementById('inv'), '::before').backgroundImage.startsWith('url("data:image/svg')), 'and so does its handle on the line at the top');
     await shot('pack');
     // the pack has the keyboard: the arrows go from row to row, and walk nobody anywhere
     const at = () => page.evaluate(() => [world.player.pos.x, world.player.pos.z]);
@@ -101,12 +113,14 @@ export default async function ({ page, step, key, frames, shot }) {
 
     await key('Tab');
     let wave = await row('wave');
-    assert.deepEqual(wave, { word: '', label: 'wave to whoever is about', key: '', under: 'WANDER' }, 'but it is in the pack, under its heading');
+    assert.deepEqual(wave, { word: '', name: 'wave to whoever is about', more: '', key: '', under: 'WANDER' }, 'but it is in the pack, under its heading');
+    assert.deepEqual((await pictures('#pack .pack-body [data-do]')).filter(([, standIn]) => standIn).map(([id]) => id), ['wave'], 'with something standing in for the picture it has none of');
     // somebody comes by while the pack is open
     await page.evaluate(() => (window.wave.near = true));
     await frames(3);
     wave = await row('wave');
     assert.deepEqual({ word: wave.word, under: wave.under }, { word: 'wave', under: 'AT HAND' }, 'at hand, it is named for what it would do');
+    assert.deepEqual((await pictures('#pack .pack-hand')).find(([id]) => id === 'wave'), ['wave', true, 48], 'and drawn big');
     const listed = await hand();
     const p = await pack();
     assert.deepEqual(p.rows.slice(0, listed.length), listed, 'what is at hand heads the list');
@@ -137,6 +151,7 @@ export default async function ({ page, step, key, frames, shot }) {
     const carried = await page.evaluate(() => ({ creative: world.builder.creative, line: document.getElementById('inv').textContent }));
     if (carried.creative) assert.deepEqual(had.rows[0], ['materials', 'unlimited']);
     else assert.equal(had.rows.map(([label, note]) => `${label} ${note}`).join(' · ').slice(0, carried.line.length), carried.line, 'the materials you carry come first');
+    assert.deepEqual((await pictures('#pack .pack-yours')).filter(([, standIn, size]) => standIn || size !== 32), [], 'each in its picture');
     assert.deepEqual(await page.evaluate(() => world.pack.list().yours.map((t) => [t.label, t.note])), had.rows, 'the console sees the same list');
     const order = await page.evaluate(() => [...document.querySelectorAll('#pack h3')].map((h) => h.textContent));
     assert.ok(order.indexOf('YOURS') < order.indexOf('WANDER'), 'above the rest of what there is to do');
@@ -154,6 +169,7 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.evaluate(() => (window.flag.planted = true));
     await frames(3);
     assert.deepEqual((await yours()).rows, [...had.rows, ['a flag', 'planted by the path']], 'come by while the pack is open, it is listed with how it stands');
+    assert.deepEqual((await pictures('#pack .pack-yours')).at(-1), ['a flag', true, 32], 'and something stands in for the picture it has none of');
     await shot('yours');
     await page.evaluate(() => (window.flag.planted = false));
     await frames(3);

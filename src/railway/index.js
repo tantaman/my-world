@@ -40,6 +40,7 @@ import { Train, Smoke, COACHES, SEATS, CAR_BOX } from './trains.js';
 import { trainSounds } from './sound.js';
 import { railLayer, STATION_GLYPH } from './onMap.js';
 import { StationPanel } from './panel.js';
+import * as pictures from './pictures.js';
 import { onPlan, planDiscs, toWorld } from '../world/frame.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { SEAT_HIPS } from '../player/character.js';
@@ -446,16 +447,16 @@ export function installRailway(game) {
   });
   // Y: the stations to go to. (Getting on and off is the act key's, F, as
   // with everything else you get into.)
-  commands.add({ id: 'railway', keys: ['KeyY'], group: 'WANDER', label: 'railway: the stations to go to', run: () => map.open('rail') });
+  commands.add({ id: 'railway', keys: ['KeyY'], group: 'WANDER', label: 'railway: the stations to go to', icon: pictures.TRAIN, run: () => map.open('rail') });
   commands.describe({ group: 'WANDER', help: 'F', pad: ['PadY'], label: 'beside a standing train: get on · at a station: get off' });
   act.offer({
     id: 'train',
     at() {
-      if (aboard) return { d: 0, word: 'get off', run: () => leave() };
+      if (aboard) return { d: 0, word: 'get off', run: () => leave(), icon: pictures.TRAIN };
       if (!player.rides.free) return null;
       const c = coachNear();
       if (!c) return null;
-      return { d: c.d, word: 'get on', run: () => (c.e.w.v < STOOD ? board(c.e, c.car, c.seat) : hud.flash('wait for it to stop at a station')) };
+      return { d: c.d, word: 'get on', run: () => (c.e.w.v < STOOD ? board(c.e, c.car, c.seat) : hud.flash('wait for it to stop at a station')), icon: pictures.TRAIN };
     },
   });
 

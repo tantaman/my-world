@@ -6,6 +6,7 @@ import { Input } from './input.js';
 import { padNames } from './gamepad.js';
 import { Player } from './player.js';
 import { HIKERS, hiker } from './hikers.js';
+import * as pictures from './pictures.js';
 import { SHARED, WADE } from '../render/uniforms.js';
 
 const round = (v, f = 100) => Math.round(v * f) / f;
@@ -106,6 +107,7 @@ export function installPlayer(game) {
     keys: ['KeyR'],
     group: 'WANDER',
     label: 'back to the start',
+    icon: pictures.HOME,
     run() {
       const s = player.start;
       player.spawn(s.x, s.z, s.yaw);

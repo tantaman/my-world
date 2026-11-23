@@ -125,4 +125,5 @@ models.js       the shotgun, its barrels hinged to break it open, and a clay tar
 scorecard.js    the card at the top of the screen while you shoot a round
 huntclub.css    ...and how it looks
 sound.js        the shot, breaking the gun open and loading it, "pull!", the trap, a target breaking
+pictures.js     what the club gives you looks like in your pack
 ```

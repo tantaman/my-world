@@ -27,6 +27,7 @@ import { rodTool } from './rod.js';
 import { Caught } from './models.js';
 import { BITE, CATCHABLE, biteRate, whatBites, describe, nameOf } from './catch.js';
 import './sound.js';
+import * as pictures from './pictures.js';
 import { waterSample } from '../core/geom.js';
 import { FISH } from '../underwater/fish.js';
 
@@ -43,7 +44,7 @@ export function installFishing(game) {
   const { scene, chunks, player, hud, commands, save, sound, builder, sky, splashes, underwater } = game;
 
   // ── What you carry ────────────────────────────────────────────────────────
-  builder.stock.define({ id: 'fish', label: 'fish', optional: true });
+  builder.stock.define({ id: 'fish', label: 'fish', optional: true, icon: pictures.FISH });
 
   // ── The water, and what bites in it ───────────────────────────────────────
   const here = { level: 0, depth: 0 };

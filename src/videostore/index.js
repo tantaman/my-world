@@ -55,6 +55,7 @@ import { SKY } from '../render/uniforms.js';
 import { rayBox, wrapAngle } from '../core/geom.js';
 import { mulberry32 } from '../noise.js';
 import { Branches, hasBranch } from './branches.js';
+import * as pictures from './pictures.js';
 import { GridNearest, ListNearest, MergeNearest } from '../core/nearest.js';
 import { airfieldsOver } from '../airports/airports.js';
 
@@ -160,13 +161,13 @@ export function installVideostore(game) {
   pack.have(() => {
     const mine = [];
     const now = Date.now();
-    if (counter.card) mine.push({ label: `a ${STORE.name} card`, note: `no. ${counter.card.number}` });
+    if (counter.card) mine.push({ label: `a ${STORE.name} card`, note: `no. ${counter.card.number}`, icon: pictures.CARD });
     for (const o of counter.out.slice(0, TAPES_LISTED)) {
       const due = daysLate(o.due, now) ? 'overdue' : `due back ${new Date(o.due).toLocaleDateString(undefined, { weekday: 'long' })}`;
-      mine.push({ label: o.title, note: `rented · ${due}` });
+      mine.push({ label: o.title, note: `rented · ${due}`, icon: pictures.TAPE });
     }
-    if (counter.out.length > TAPES_LISTED) mine.push({ label: 'more rented tapes', note: `${counter.out.length - TAPES_LISTED}` });
-    if (counter.owned.length) mine.push({ label: 'tapes of your own', note: `${counter.owned.length}` });
+    if (counter.out.length > TAPES_LISTED) mine.push({ label: 'more rented tapes', note: `${counter.out.length - TAPES_LISTED}`, icon: pictures.TAPE });
+    if (counter.owned.length) mine.push({ label: 'tapes of your own', note: `${counter.owned.length}`, icon: pictures.TAPE });
     return mine;
   });
 
@@ -751,7 +752,7 @@ export function installVideostore(game) {
   // at the counter and returning at the counter or the drop box are the act
   // key's (F): what's at hand, as everywhere.
   let deedHere = null; // { word, run }: what the act key would do here now
-  act.offer({ id: 'videostore', at: () => (deedHere ? { d: 0.5, word: deedHere.word, run: deedHere.run } : null) });
+  act.offer({ id: 'videostore', at: () => (deedHere ? { d: 0.5, word: deedHere.word, run: deedHere.run, icon: pictures.TAPE } : null) });
   function browse() {
     if (!where.inside) mark(null);
     const n = counter.hands.length;

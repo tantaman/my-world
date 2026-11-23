@@ -41,6 +41,7 @@ import { avalanche } from './avalanche.js';
 import { bear, lion } from './hunted.js';
 import { stronghold } from './stronghold.js';
 import { dungeon } from './dungeon.js';
+import * as pictures from './pictures.js';
 
 const EASE = 0.8; // per second: how fast the sky follows what an adventure makes of it
 const FAR = (CONFIG.viewRadius - 0.15) * CONFIG.chunkSize; // m: how far you see on a clear day
@@ -143,7 +144,7 @@ export function installAdventures(game) {
     board.toggle();
   };
   game.on('panel', (which) => which !== 'adventures' && board.close());
-  commands.add({ id: 'adventures', keys: ['KeyN'], group: 'ADVENTURE', label: 'adventures · start one, or give it up', run: toggle });
+  commands.add({ id: 'adventures', keys: ['KeyN'], group: 'ADVENTURE', label: 'adventures · start one, or give it up', icon: pictures.COMPASS, run: toggle });
 
   // A button for it in the corner, beside the map's.
   const btn = document.createElement('button');

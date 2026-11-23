@@ -27,7 +27,9 @@ A feature offers what it would do (`game.act.offer({ id, at })`, where `at()`
 says how far you are from it, what it's called and what doing it does, and,
 for something done by holding the key down, what each moment of that does),
 and the key does the nearest. It writes the key in its prompt with
-`game.act.key(word)`.
+`game.act.key(word)`. What `at()` returns can say what it would be done to in
+a picture (`icon`: see [your pack](../pack/README.md)): at hand in the pack
+and on a touch screen's button, the act key is pictured as that.
 
 From the console:
 
@@ -41,4 +43,5 @@ world.act.press()    // do it
 ```
 index.js              plugs it into the game: F and the pad's Y, what it would do (for the pack), the help panel
 offers.js             what could be done, and which of it the key does: the nearest
+pictures.js           a hand put out: the pack's picture for what is at hand with none of its own
 ```

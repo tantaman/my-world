@@ -110,4 +110,5 @@ aim.js                rays against ground and trunks
 geometry.js           logs, timbers, chinking, piers, roofs, stumps, tools; the Mesher that puts them together
 surfaces.js           what built things are made of, and the material that draws it: bark, grain, paint, stone, shingles, tin, glass
 constants.js          dimensions: course height, overhang, pier range, reach…
+pictures.js           what the materials and the grade stake look like in your pack
 ```

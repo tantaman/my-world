@@ -42,6 +42,7 @@ import { airboatSound } from './sound.js';
 import { makeGuide, sitDriving, SAYS, gatorLine } from './guide.js';
 import { Riders } from './others.js';
 import { Wake } from './wake.js';
+import * as pictures from './pictures.js';
 import { SPECIES } from '../wildlife/species.js';
 import { SEAT_HIPS } from '../player/character.js';
 import { VEG_STRIDE } from '../world/flora.js';
@@ -337,16 +338,16 @@ export function installSwamptour(game) {
     if (near) hud.flash(near.d < HIDE ? `the airboat waits at the end of the dock, at ${near.q.def.name}` : `the airboat tour leaves from ${near.q.def.name}, at ${near.q.card.name} in Louisiana, ${formatDistance(near.d)} off · it’s on the map, under swamp tours`, LINE_MS);
     return false;
   }
-  commands.add({ id: 'swamptour', group: 'SWAMP TOUR', label: 'airboat tour: where it leaves from, at the landing in Jean Lafitte', run: press });
+  commands.add({ id: 'swamptour', group: 'SWAMP TOUR', label: 'airboat tour: where it leaves from, at the landing in Jean Lafitte', icon: pictures.AIRBOAT, run: press });
   commands.describe({ group: 'SWAMP TOUR', help: 'F', pad: ['PadY'], label: 'by the airboat at the landing in Jean Lafitte: take the tour · on it: back to the landing' });
   act.offer({
     id: 'swamptour',
     at() {
-      if (ride) return ride.phase === 'done' ? null : { d: 0, word: 'back to the landing', run: press };
+      if (ride) return ride.phase === 'done' ? null : { d: 0, word: 'back to the landing', run: press, icon: pictures.AIRBOAT };
       const t = nearBoat();
       if (!t) return null;
       const o = t.built.boat.object.position;
-      return { d: Math.hypot(player.pos.x - o.x, player.pos.z - o.z), word: 'get in', run: () => board(t) };
+      return { d: Math.hypot(player.pos.x - o.x, player.pos.z - o.z), word: 'get in', run: () => board(t), icon: pictures.AIRBOAT };
     },
   });
   let ride = null; // { t, s, v, phase, timer, halt, said, gators: [], pointed, seen, biggest }

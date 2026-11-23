@@ -78,4 +78,5 @@ models.js             what a car looks like: its body pressed out from its side 
 dealers.js            where the dealerships are, grown from the seed beside a town's road
 lot.js                what a dealership looks like: the lot, the showroom, the bunting, the sign
 sound.js              the engine, the tyres, the door, the starter, the horn, a bump, a splash
+pictures.js           what a car looks like in your pack
 ```

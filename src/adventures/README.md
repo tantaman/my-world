@@ -118,4 +118,5 @@ stronghold.js   the outlaws' camp, taken: their shots, and the streaks of them
 camp.js         the camp: stockade, watchtowers, tents, crates, fire, flag; walls that stop a shot
 guards.js       the men: posts, rounds and towers; seeing you, shouting, shooting
 dungeon.js      the cave: the strongbox, the bats, the falling rock, what sleeps there
+pictures.js     what adventures look like in your pack
 ```

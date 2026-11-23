@@ -31,6 +31,7 @@ import { rackAt } from './rack.js';
 import { makeJetpack, makeRack, makePuffs, PUFFS } from './model.js';
 import { Jetpackers } from './others.js';
 import { jetSounds } from './sound.js';
+import * as pictures from './pictures.js';
 
 const SHOW = 300; // m from the rack that it's stood up...
 const HIDE = 380; // ...and taken down past this
@@ -104,7 +105,7 @@ export function installJetpack(game) {
 
   // Listed with what's yours while you have it. (game.pack is your pack, the
   // list; `pack` here is the thing on your back.)
-  game.pack.have(() => (jets.worn ? [{ label: 'a jetpack', note: 'on your back' }] : null));
+  game.pack.have(() => (jets.worn ? [{ label: 'a jetpack', note: 'on your back', icon: pictures.JETPACK }] : null));
 
   // On your back (from the rack), or off it (back onto the rack).
   // byHand: you did it, here and now (not a save being opened).
@@ -221,7 +222,7 @@ export function installJetpack(game) {
     id: 'jetpack',
     at() {
       if (!atRack()) return null;
-      return { d: Math.hypot(player.pos.x - rack.x, player.pos.z - rack.z), word: jets.worn ? 'hang up' : 'strap on', run: () => wear(!jets.worn, true) };
+      return { d: Math.hypot(player.pos.x - rack.x, player.pos.z - rack.z), word: jets.worn ? 'hang up' : 'strap on', run: () => wear(!jets.worn, true), icon: pictures.JETPACK };
     },
   });
   commands.describe({ group: 'JETPACK', help: 'F', pad: ['PadY'], label: 'at the launch site’s rack: strap on the jetpack · hang it back up' });

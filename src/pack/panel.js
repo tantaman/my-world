@@ -1,13 +1,15 @@
 // Your pack, on the screen: everything there is to do, each a button that
-// does it, and what's yours. What is at hand comes first, named for what it
-// would do here; then what you have; then the rest of what there is to do,
-// under the headings the help panel uses.
+// does it, and what's yours, each with its picture. What is at hand comes
+// first, big, named for what it would do here; then what you have, laid out
+// to look at; then the rest of what there is to do, under the headings the
+// help panel uses: its picture, what it is, the rest of what it says, its
+// key.
 //
 // Handed what to list and what to do when one is picked, so it knows nothing
 // about the world:
 //
 //   book     () => { hand, rest }   the rows (book.js)
-//   yours    () => [{ label, note }]   what you have (things.js)
+//   yours    () => [{ label, note, icon, empty }]   what you have (things.js)
 //   keyOf    (row) => how its key is written for whoever is playing ('' for none)
 //   onDo     (id) => void           a row was picked (the panel has closed)
 //   input    the controls, blocked while the panel is up
@@ -16,6 +18,10 @@
 // Emits nothing: `shutByKey` is true from when its own key closed it until
 // someone sets it false again (the key coming up), so that the same press,
 // still held, isn't taken for a new one.
+
+import { parts } from './book.js';
+import { url } from './picture.js';
+import { BACKPACK, DO, SOMETHING } from './pictures.js';
 
 const HAND = 'AT HAND';
 const YOURS = 'YOURS';
@@ -38,7 +44,7 @@ export class PackPanel {
     root.setAttribute('aria-hidden', 'true');
     root.innerHTML = `
       <div class="pack-head">
-        <h2>YOUR PACK</h2>
+        <h2><img class="pic" alt="" src="${url(BACKPACK)}">YOUR PACK</h2>
         <button type="button" data-act="close" aria-label="Close">✕</button>
       </div>
       <div class="pack-body"><div></div><div class="pack-yours"></div><div></div></div>`;
@@ -62,48 +68,47 @@ export class PackPanel {
     if (at) this._row(at)?.focus({ preventScroll: true });
   }
 
-  // ...and what's yours: each thing, and how much of it or how it stands.
+  // ...and what's yours: each thing in its picture, and how much of it or
+  // how it stands. What you've none of just now is there, greyed.
   renderYours() {
     const things = this.yours();
     this.yoursEl.replaceChildren();
     if (!things.length) return;
-    const h = document.createElement('h3');
-    h.textContent = YOURS;
     const list = document.createElement('ul');
+    list.className = 'pack-things';
     for (const t of things) {
       const li = list.appendChild(document.createElement('li'));
+      if (t.empty) li.className = 'empty';
+      li.appendChild(picture(t.icon, SOMETHING));
       li.appendChild(document.createElement('span')).textContent = t.label;
       if (t.note) li.appendChild(document.createElement('i')).textContent = t.note;
     }
-    this.yoursEl.append(h, list);
+    this.yoursEl.append(heading(YOURS), list);
   }
 
+  // A row: its picture; the word for what it would do, if it is at hand;
+  // what it is, and the rest of what its label says; its key.
   _section(into, title, rows, hand) {
-    const h = document.createElement('h3');
-    h.textContent = title;
     const list = document.createElement('ol');
     if (hand) list.className = 'pack-hand';
     for (const r of rows) {
       const b = document.createElement('button');
       b.type = 'button';
       b.dataset.do = r.id;
-      if (r.word) {
-        const word = document.createElement('b');
-        word.textContent = r.word;
-        b.appendChild(word);
-      }
-      const label = document.createElement('span');
-      label.textContent = r.label;
-      b.appendChild(label);
+      b.appendChild(picture(r.icon, DO));
+      const what = b.appendChild(document.createElement('span'));
+      what.className = 'what';
+      if (r.word) what.appendChild(document.createElement('b')).textContent = r.word;
+      const [name, more] = parts(r.label);
+      const n = what.appendChild(document.createElement('span'));
+      n.className = 'name';
+      n.textContent = name;
+      if (more) what.appendChild(document.createElement('small')).textContent = more;
       const keys = this.keyOf(r);
-      if (keys) {
-        const k = document.createElement('kbd');
-        k.textContent = keys;
-        b.appendChild(k);
-      }
+      if (keys) b.appendChild(document.createElement('kbd')).textContent = keys;
       list.appendChild(document.createElement('li')).appendChild(b);
     }
-    into.append(h, list);
+    into.append(heading(title), list);
   }
 
   _row(id) {
@@ -173,4 +178,22 @@ export class PackPanel {
     const next = rows[Math.max(0, Math.min(rows.length - 1, i + move))];
     if (next) next.focus();
   }
+}
+
+function heading(title) {
+  const h = document.createElement('h3');
+  h.textContent = title;
+  return h;
+}
+
+// Pixel art, drawn square at a whole number of screen pixels to the pixel
+// (pack.css says how big); for something with none, what stands in for one,
+// marked as standing in.
+function picture(art, standIn) {
+  const img = document.createElement('img');
+  img.className = art ? 'pic' : 'pic stand-in';
+  img.alt = '';
+  img.draggable = false;
+  img.src = url(art || standIn);
+  return img;
 }

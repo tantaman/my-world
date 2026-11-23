@@ -5,13 +5,16 @@
 // and the HUD line and the save pick it up. One that is `optional` is only
 // on the line while you have some: what most people never carry stays off it.
 
+import * as pictures from './pictures.js';
+
 const tenths = (m) => (Math.round(m * 10) / 10).toString();
 
+// icon: what it looks like in your pack (src/pack/picture.js)
 export const MATERIALS = [
-  { id: 'log', label: 'logs', format: (v) => `${tenths(v)} m` },
-  { id: 'timber', label: 'timber', format: (v) => `${tenths(v)} m` },
-  { id: 'stone', label: 'stone', format: (v) => `${v}` },
-  { id: 'soil', label: 'soil', format: (v) => `${v.toFixed(1)} m³` },
+  { id: 'log', label: 'logs', format: (v) => `${tenths(v)} m`, icon: pictures.LOG },
+  { id: 'timber', label: 'timber', format: (v) => `${tenths(v)} m`, icon: pictures.TIMBER },
+  { id: 'stone', label: 'stone', format: (v) => `${v}`, icon: pictures.STONE },
+  { id: 'soil', label: 'soil', format: (v) => `${v.toFixed(1)} m³`, icon: pictures.SOIL },
 ];
 
 export class Inventory {

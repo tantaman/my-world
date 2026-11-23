@@ -131,4 +131,5 @@ browse.js       the rules: what's in your hands, renting, due dates, returning, 
 card.js         the box in your hands, its TMDB details, and the till receipt
 sound.js        the music from the ceiling and the strip lights' hum, the chime, the till, the gate, carpet underfoot
 videostore.css  the card and the receipt
+pictures.js     what your card and tapes look like in your pack
 ```

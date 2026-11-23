@@ -33,6 +33,7 @@ import { skiSounds } from './sound.js';
 import { Skiers } from './others.js';
 import { descent, findRunTop } from './descent.js';
 import { SkiRuns, RUNS } from './runs.js';
+import * as pictures from './pictures.js';
 import { GridNearest, ListNearest, MergeNearest } from '../core/nearest.js';
 import './skiing.css';
 import { segDist, waterSample } from '../core/geom.js';
@@ -358,9 +359,9 @@ export function installSkiing(game) {
   // On the adventures board: sent to the top of a run, and timed down it.
   adventures.define(descent(() => active));
 
-  commands.add({ id: 'skis', keys: ['KeyI'], group: 'WANDER', label: 'skis on · off (they go on by themselves heading down steep snow)', run: toggle });
+  commands.add({ id: 'skis', keys: ['KeyI'], group: 'WANDER', label: 'skis · on or off (they go on by themselves heading down steep snow)', icon: pictures.SKIS, run: toggle });
   // (at hand while you ski: in the pack, and a button on a touch screen, named for the other one)
-  commands.add({ id: 'snowboard', keys: ['Backquote'], help: '`', group: 'WANDER', label: 'skis or a snowboard', run: swap, now: () => (active ? (kind === 'skis' ? 'board' : 'skis') : '') });
+  commands.add({ id: 'snowboard', keys: ['Backquote'], help: '`', group: 'WANDER', label: 'skis or a snowboard', icon: () => (kind === 'skis' ? pictures.SNOWBOARD : pictures.SKIS), run: swap, now: () => (active ? (kind === 'skis' ? 'board' : 'skis') : '') });
   commands.describe({ group: 'WANDER', help: 'on skis', label: 'A D turn · W tuck · S brake · space jump' });
   commands.describe({ group: 'WANDER', help: 'in the air', label: 'A D spin · W S flip · shift grab' });
 
