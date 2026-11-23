@@ -7,8 +7,8 @@ world see you as them.
 - **The hiker** wears an orange rain shell with the hood gathered at the
   collar, a loaded daypack with a hydration hose, tan trousers, a brown
   snapback with a maroon brim, white sunglasses and a beard.
-- **Lauren** is about 1.6 m tall, slim, with narrower shoulders than the
-  hiker's and a slim waist. She wears a royal-blue ribbed tank top with a
+- **Lauren** is about 1.6 m tall, slim and long-legged, with narrower
+  shoulders than the hiker's and a slim waist. She wears a royal-blue ribbed tank top with a
   fine gold chain at her neck, black leggings, grey wool socks and trim
   charcoal hiking boots with mint at the heel. She carries a black
   packable daypack, its blue hydration hose looped across her chest, and has
@@ -142,8 +142,8 @@ A feature gives a command a pad button by listing it with its keys
 
 A hiker is a file in `hikers/` and a line in `HIKERS` (`hikers.js`), which
 is also the order they're offered in. The file exports
-`{ id, name, size, dress(body) }`, and `shoulders` if theirs aren't the
-grown-up's: what each of those is, and what `dress`
+`{ id, name, size, dress(body) }`, and `shoulders` and `legs` if theirs
+aren't the grown-up's: what each of those is, and what `dress`
 hangs clothes on and has to say back, is at the top of `Character` in
 `character.js`. For a grown-up, `lauren.js` is the one to start from; for a
 child, `oliver.js`. A grown-up's head is built by `head.js` to a look: the

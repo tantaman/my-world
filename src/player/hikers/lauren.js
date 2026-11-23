@@ -19,13 +19,15 @@ import { smoothstep, lerp, clamp } from '../../noise.js';
 import { tailored, sleeve, trouserLeg, handShape, textile, material as M, piece, cord, group, limb } from '../clothing.js';
 import { buildHead, buildGlasses, buildCap, lensMaterial, bareSkin } from '../head.js';
 
-// How tall she is beside the grown-up: about 1.62 m to 1.8. Her shoulders
-// are narrower than his, for her size (the shoulder joints this far either
+// How tall she is beside the grown-up: about 1.62 m to 1.8. Her legs are
+// longer for her height than his, a tenth (so the rest of her is that much
+// smaller), and her shoulders narrower (the shoulder joints this far either
 // side of the middle of her chest, before she's made smaller).
 const SIZE = 0.9;
+const LEGS = 1.1;
 const SHOULDERS = 0.18;
 // Her head, a little smaller than the grown-up's is on him, for her.
-const HEAD = 0.94;
+const HEAD = 0.98;
 
 // ── Colours (as in the photographs, out of the snow's glare) ─────────────────
 const SKIN = 0xd6ae94;
@@ -490,7 +492,8 @@ const ARM = [
   [0.02, 0.045, 0.042], [0.048, 0.032, 0.032], [0.061, 0.012, 0.014],
 ];
 
-// ── Her legs (the hip's frame: the knee at -0.42, the ankle at -0.85) ───────
+// ── Her legs (the hip's frame: the knee at -0.42, the ankle at -0.85, ─────
+// on the grown-up's leg: hers are longer, LEGS) ───────────────────────────────
 // Leggings, close all the way down: round over her seat, her thighs
 // tapering to the knee, the calf full behind and slim at the ankle.
 const LEGGINGS_ROWS = [
@@ -500,6 +503,9 @@ const LEGGINGS_ROWS = [
   [-0.2, 0.063, 0.07, 0.001], [-0.1, 0.075, 0.084, -0.008], [-0.02, 0.088, 0.1, -0.016],
   [0.025, 0.094, 0.1, -0.02], [0.07, 0.08, 0.084, -0.014], [0.12, 0.064, 0.074, -0.004],
 ];
+// Rows cut for the grown-up's leg, drawn out down hers (below the joint).
+const longer = (rows) => rows.map(([y, ...rest]) => [y < 0 ? y * LEGS : y, ...rest]);
+
 // Her socks, in the knee's frame (the ankle at -0.43): up out of her boots,
 // over the leggings, the cuff turned at the top.
 const SOCK_ROWS = [
@@ -535,7 +541,7 @@ const PACK_DEPTH = 0.13; // from her back to its face
 const TIE_Y = 0.06; // where it's tied
 const SPINE = 0.06; // her chest's frame is this far above her hips'
 const SKIRT_ROUND = 1.72; // radians either side of the middle of her back it comes round
-const SKIRT_LONG = [0.33, 0.22]; // how far it hangs at the back, and at her hips
+const SKIRT_LONG = [0.35, 0.235]; // how far it hangs at the back, and at her hips
 const SKIRT_TOP = [0.19, 0.132, -0.012]; // half width, half depth and middle at the tie
 const SKIRT_HEM = [0.206, 0.144, -0.014]; // ...and at the hem
 const SKIRT_CHANNEL = 0.068; // between its lines of stitching
@@ -640,6 +646,7 @@ export const LAUREN = {
   id: 'lauren',
   name: 'Lauren',
   size: SIZE,
+  legs: LEGS,
   shoulders: SHOULDERS,
   dress(body) {
     const skin = bareSkin(SKIN, 0.5);
@@ -703,9 +710,9 @@ export const LAUREN = {
       limb(L.hip, L.knee, trouserLeg(L.side, (x, y) => {
         const band = y > 0.085 ? 0.8 : 1; // the waistband
         return [band, band, band];
-      }, 0.095, LEGGINGS_ROWS), M(LEGGINGS, 0.7, { vertexColors: true, ...textile('twill') }), 0.087, -0.18);
+      }, 0.095, longer(LEGGINGS_ROWS)), M(LEGGINGS, 0.7, { vertexColors: true, ...textile('twill') }), 0.087, -0.18);
       // the socks go with her shins, and with her feet low down
-      limb(L.knee, L.ankle, tailored(SOCK_ROWS, { segments: 20, surface: (x, y) => rgb(SOCK).map((c) => c * (y > CUFF ? 0.85 : 1)) }), sock, 0.03, 0);
+      limb(L.knee, L.ankle, tailored(longer(SOCK_ROWS), { segments: 20, surface: (x, y) => rgb(SOCK).map((c) => c * (y > CUFF * LEGS ? 0.85 : 1)) }), sock, 0.03, 0);
       // charcoal suede with lighter mesh panels, mint round the heel and the
       // collar, a dark rubber toe; a pale midsole over a dark tread
       piece(L.ankle, tailored(BOOT_UPPER, { squareness: 0.76, segments: 24, surface: (x, y, front) => {
