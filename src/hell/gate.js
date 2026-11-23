@@ -16,7 +16,7 @@ import * as THREE from 'three';
 import { buildCave, step, finish } from '../caves/build.js';
 import { caveObject, disposeCave } from '../caves/look.js';
 import { setCuts } from '../world/cuts.js';
-import { Sculpt, vary } from './sculpt.js';
+import { Sculpt, vary } from '../render/sculpt.js';
 import { createHellStone } from './look.js';
 import { INSCRIPTION } from './words.js';
 import { GATE } from './site.js';

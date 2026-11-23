@@ -32,6 +32,7 @@
 // door at the end of it.
 
 import * as THREE from 'three';
+import type { Game } from '../game/game.ts';
 import { SHARED } from '../render/uniforms.js';
 import { PERIOD } from '../render/glsl.js';
 import { HellLand, DOOR } from './land.js';
@@ -49,11 +50,50 @@ import { createSkinMaterial } from '../render/skin.js';
 import { makeCreature, meltSome, CREATURE_NAMES } from './creatures.js';
 import { findGate } from './site.js';
 import { Gate, doorFrame, DOORWAY } from './gate.js';
-import { Card } from './card.js';
+import { Card } from '../core/card.js';
 import { R, TAU, STEPS, regionAt, bolgiaAt, zoneAt } from './plan.js';
 import { WORDS, INSCRIPTION, SAID, DITCHES, ZONE_WORDS } from './words.js';
 import { VEG_KINDS } from '../world/chunkGen.js';
 import { segDist } from '../core/geom.js';
+
+// What this provides: game.hell, for the features that come after it (and
+// world.hell in the console: see the end of the file).
+declare module '../game/game.ts' {
+  interface Services {
+    hell: Hell;
+  }
+}
+
+// Where the road out by the bottom of Hell comes up, if not on the hillside
+// by the gate: another place, which sets the hiker down at its end of the
+// road (arrive(), while the screen is dark; the dark lifts when it returns).
+export interface Onward {
+  arrive(): void | Promise<void>;
+}
+
+// What Hell is to whoever comes after it.
+export interface Hell {
+  gate: NonNullable<ReturnType<typeof findGate>>;
+  land: HellLand;
+  space: HellSpace;
+  card: Card;
+  scene: THREE.Scene;
+  readonly inside: boolean;
+  readonly region: string | null;
+  readonly here: { r: number; th: number; turn: number };
+  readonly passing: boolean;
+  readonly been: boolean;
+  readonly out: boolean;
+  // Go through the door: down (true), back up (false), or out by the bottom
+  // ('stars').
+  pass(down: boolean | 'stars'): Promise<void>;
+  // Stand inside the door; or at radius r, angle th (land.js).
+  enter(): void;
+  go(r: number, th: number, yaw?: number): void;
+  // Say where the road out by the bottom comes up instead of the hillside.
+  leadOut(onward: Onward): void;
+  [more: string]: unknown;
+}
 
 // The gate's badge on the map: a doorway, and the dark in it.
 const GLYPH = ['#######', '#.....#', '#.###.#', '#.###.#', '#.###.#', '#.###.#', '#.###.#'];
@@ -77,12 +117,13 @@ const _seg = { d: 0, t: 0, nx: 0, nz: 0 };
 // (caves: for the lamp, and because its frame's work sets how shut in you
 // are, which down here is this feature's to say.)
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'caves', 'map'];
-export function installHell(game) {
+export function installHell(game: Game) {
   const { scene, camera, gen, landforms, chunks, spaces, player, pipeline, origin, sound, save, map, builder, hud } = game;
 
-  const gate = findGate(gen, (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1));
+  const site = findGate(gen, (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1));
   // (a world with no hillside that will take the gate has no way down)
-  if (!gate) return;
+  if (!site) return;
+  const gate = site;
   const land = new HellLand({ seed: gen.seed, ...gate.hell });
   const space = new HellSpace(land);
   spaces.add(space);
@@ -96,42 +137,42 @@ export function installHell(game) {
   const built = new Structures({ land, group: under, stone: createHellStone({ hot: true }), fire: furniture.kit.flame.mat });
   // the light the fires give, from those near where you look from
   // (render/lights.js picks the few that matter most)
-  game.lights.addSource(under, (eye, out) => {
+  game.lights.addSource(under, (eye: THREE.Vector3, out: object[]) => {
     furniture.lightsNear(eye, out);
     built.lightsNear(eye, out);
   });
   const air = new HellAir(under);
   origin.keep(air.hemi);
   const weather = new HellWeather(under);
-  const card = new Card();
+  const card = new Card({ id: 'hell', book: 'Inferno' });
   // the keepers and monsters, and whatever carries you
   const flesh = createSkinMaterial({ hot: true, baked: true });
-  const make = (name) => makeCreature(CREATURE_NAMES.includes(name) ? name : 'figure', flesh);
+  const make = (name: string) => makeCreature(CREATURE_NAMES.includes(name) ? name : 'figure', flesh);
   const rides = new Rides({ land, group: under, make });
   const denizens = new Denizens({ land, group: under, make });
   const heard = { inside: 0, region: '', falls: 0 };
   sound.addLayer(hellSounds(heard));
 
   // ── The gate, in the forest ───────────────────────────────────────────────
-  const way = new Gate({ scene, gen, spaces, kit: game.caves.kit, site: gate, terrain: (x, z) => chunks.heightAt(x, z) });
-  spaces.onDemand((x, z) => way.ensure(x, z));
+  const way = new Gate({ scene, gen, spaces, kit: game.caves.kit, site: gate, terrain: (x: number, z: number) => chunks.heightAt(x, z) });
+  spaces.onDemand((x: number, z: number) => way.ensure(x, z));
   // the cutting at its mouth, and a little in front: a segment and how far either side
   const mouth = { ax: gate.x - gate.ux * 4, az: gate.z - gate.uz * 4, bx: gate.x + gate.ux * (gate.portal + 3), bz: gate.z + gate.uz * (gate.portal + 3), r: gate.w + CLEAR };
   // No trees or undergrowth in it or round the gateway.
-  chunks.on('vegetation', (ch) => {
+  chunks.on('vegetation', (ch: { x0: number; z0: number }) => {
     const s = chunks.size;
     const cx = (mouth.ax + mouth.bx) / 2;
     const cz = (mouth.az + mouth.bz) / 2;
     const reach = Math.hypot(mouth.bx - mouth.ax, mouth.bz - mouth.az) / 2 + mouth.r + 1;
     if (cx < ch.x0 - reach || cz < ch.z0 - reach || cx > ch.x0 + s + reach || cz > ch.z0 + s + reach) return;
-    chunks.forEachPlant(cx, cz, reach, VEG_KINDS, (pc, kind, k, px, py, pz, sc) => {
+    chunks.forEachPlant(cx, cz, reach, VEG_KINDS, (pc: unknown, kind: string, k: number, px: number, py: number, pz: number, sc: number) => {
       if (pc !== ch) return;
       segDist(px, pz, mouth.ax, mouth.az, mouth.bx, mouth.bz, _seg);
       if (_seg.d < mouth.r + (kind === 'rock' ? sc : 0)) chunks.hideInstance(ch, kind, k);
     });
   });
   // No digging into it, nor building over it.
-  builder.obstacles.addSource((x, z, reach, out) => {
+  builder.obstacles.addSource((x: number, z: number, reach: number, out: object[]) => {
     if (Math.hypot(x - gate.x, z - gate.z) > reach + 40) return;
     for (let t = -2; t <= 22; t += 1.5) {
       const px = gate.x + gate.ux * t;
@@ -153,8 +194,8 @@ export function installHell(game) {
   let found = false; // to the gate
   const asPlace = () => ({ id: gate.id, x: gate.x - gate.ux * 5, z: gate.z - gate.uz * 5, name: gate.name, kind: 'gate', note: INSCRIPTION[0], words: SEARCH_WORDS, glyph: GLYPH, visited: been, yaw: Math.atan2(gate.ux, gate.uz) });
   map.places.addSource({
-    within: (x0, z0, x1, z1) => (gate.x >= x0 && gate.x <= x1 && gate.z >= z0 && gate.z <= z1 ? [asPlace()] : []),
-    get: (id) => (id === gate.id ? asPlace() : null),
+    within: (x0: number, z0: number, x1: number, z1: number) => (gate.x >= x0 && gate.x <= x1 && gate.z >= z0 && gate.z <= z1 ? [asPlace()] : []),
+    get: (id: string) => (id === gate.id ? asPlace() : null),
     destinations: () => [asPlace()],
   });
 
@@ -166,8 +207,9 @@ export function installHell(game) {
   let out = false; // climbed out past Lucifer, ever
   // down: true through the door into Hell, false back up through it;
   // 'stars': out by the hidden road from the bottom, to the hillside before
-  // the gate
-  async function pass(down) {
+  // the gate, or wherever another place says it comes up (leadOut)
+  let onward: Onward | null = null;
+  async function pass(down: boolean | 'stars') {
     if (passing) return;
     passing = true;
     armed = false;
@@ -179,9 +221,12 @@ export function installHell(game) {
     } else if (down === 'stars') {
       out = true;
       save.touch();
-      const yaw = Math.atan2(-gate.ux, -gate.uz);
-      player.spawn(gate.x - gate.ux * 9, gate.z - gate.uz * 9, yaw, yaw + Math.PI);
-      card.show({ lines: [SAID.stars], canto: 'XXXIV' }, 12000);
+      if (onward) await onward.arrive();
+      else {
+        const yaw = Math.atan2(-gate.ux, -gate.uz);
+        player.spawn(gate.x - gate.ux * 9, gate.z - gate.uz * 9, yaw, yaw + Math.PI);
+        card.show({ lines: [SAID.stars], canto: 'XXXIV' }, 12000);
+      }
     } else {
       const d = way.doorAt;
       const back = d.yaw + Math.PI;
@@ -194,14 +239,14 @@ export function installHell(game) {
   // ── Being there ───────────────────────────────────────────────────────────
   // Whether the hiker is in Hell; and with them, what they bring.
   let inside = false;
-  let region = null;
+  let region: ReturnType<typeof regionAt> | null = null;
   let ditch = -1; // which ditch of Malebolge you're over, and which zone of the ice
   let zone = -1;
   let fell = 0; // how fast you were falling, last frame
   const brought = () => [player.character.root, ...(game.headlamp ? [game.headlamp.beam, game.headlamp.beam.target, game.headlamp.glow] : [])];
-  const isIn = (p) => p.y < space.lid && Math.hypot(p.x - land.cx, p.z - land.cz) < land.reach;
+  const isIn = (p: THREE.Vector3) => p.y < space.lid && Math.hypot(p.x - land.cx, p.z - land.cz) < land.reach;
   let ready = false; // every creature's shape asked for, to be melted in the background
-  function cross(now) {
+  function cross(now: boolean) {
     inside = now;
     if (now && !ready) {
       ready = true;
@@ -220,7 +265,7 @@ export function installHell(game) {
 
   // Stand somewhere in Hell: at radius r, angle th (land.js), facing the
   // middle unless told otherwise.
-  function standAt(r, th, yaw) {
+  function standAt(r: number, th: number, yaw?: number) {
     space.ref = th;
     air.fresh = true;
     weather.fresh = true;
@@ -242,8 +287,8 @@ export function installHell(game) {
     scope: 'yours',
     local: 'marks',
     collect: () => ({ turn, found, been, out }),
-    validate: (raw) => ({ turn: raw && Number.isInteger(raw.turn) ? raw.turn : 0, found: !!(raw && raw.found), been: !!(raw && raw.been), out: !!(raw && raw.out) }),
-    restore: (kept) => {
+    validate: (raw: { turn?: unknown; found?: unknown; been?: unknown; out?: unknown } | null) => ({ turn: raw && Number.isInteger(raw.turn) ? raw.turn : 0, found: !!(raw && raw.found), been: !!(raw && raw.been), out: !!(raw && raw.out) }),
+    restore: (kept: { turn: number; found: boolean; been: boolean; out: boolean }) => {
       turn = kept.turn;
       // (the angle nearest this is the one you were at)
       space.ref = turn * TAU;
@@ -257,7 +302,7 @@ export function installHell(game) {
   game.addSystem({
     name: 'hell',
     phase: 'world',
-    update({ dt }) {
+    update({ dt }: { dt: number }) {
       const p = player.pos;
       const now = isIn(p);
       if (now !== inside) cross(now);
@@ -299,8 +344,8 @@ export function installHell(game) {
       const here = regionAt(_p.r);
       if (here !== region) {
         region = here;
-        card.show(WORDS[here.id]);
-        space.surface = UNDERFOOT[here.id] || 'rock';
+        card.show(WORDS[here.id as keyof typeof WORDS]);
+        space.surface = UNDERFOOT[here.id as keyof typeof UNDERFOOT] || 'rock';
         save.touch();
       }
       // each ditch of Malebolge as you come over it, and each zone of the ice
@@ -352,14 +397,14 @@ export function installHell(game) {
     const r = _p.r;
     const th = _p.th;
     const sec = land.sector(land.sectorOf(th));
-    const to = (label, rr, a) => {
+    const to = (label: string, rr: number, a: number) => {
       land.place(rr, a, _at);
       way_.label = label;
       way_.x = _at.x;
       way_.z = _at.z;
       return way_;
     };
-    const top = (i) => STEPS[i].at + STEPS[i].pass.back + 2;
+    const top = (i: number) => STEPS[i].at + (STEPS[i].pass?.back ?? 0) + 2;
     switch (region.id) {
       case 'vestibule':
       case 'acheron':
@@ -402,7 +447,7 @@ export function installHell(game) {
   game.addSystem({
     name: 'hell-view',
     phase: 'render',
-    update({ dt }) {
+    update({ dt }: { dt: number }) {
       if (!inside || map.isOpen) return;
       const exposure = air.lend(pipeline, camera);
       origin.follow(camera.position.x, camera.position.z);
@@ -418,8 +463,8 @@ export function installHell(game) {
   });
 
   // ── From the console ──────────────────────────────────────────────────────
-  let staged = null;
-  game.provide('hell', {
+  let staged: THREE.Object3D | null = null;
+  const api: Hell = {
     gate,
     way,
     land,
@@ -450,18 +495,19 @@ export function installHell(game) {
     // world.hell.stage('minos', 12) stands one of its creatures in front of
     // you, 12 m off, to be looked at; stage() takes it away again
     creatures: CREATURE_NAMES,
-    stage(name, off = 8, turn = 0) {
+    stage(name: string | null, off = 8, turn = 0) {
       if (staged) under.remove(staged);
       staged = null;
       if (!name) return null;
-      staged = makeCreature(name, flesh);
+      const one = makeCreature(name, flesh);
       const yaw = player.yaw;
       const x = player.pos.x + Math.sin(yaw) * off;
       const z = player.pos.z + Math.cos(yaw) * off;
-      staged.position.set(x, land.height(x, z, space.ref), z);
-      staged.rotation.y = yaw + Math.PI + turn;
-      under.add(staged);
-      return staged.userData;
+      one.position.set(x, land.height(x, z, space.ref), z);
+      one.rotation.y = yaw + Math.PI + turn;
+      under.add(one);
+      staged = one;
+      return one.userData;
     },
     // through the door, as walking into it does: pass(true) down, pass(false) up
     pass,
@@ -476,5 +522,9 @@ export function installHell(game) {
     get out() {
       return out;
     },
-  });
+    leadOut(to: Onward) {
+      onward = to;
+    },
+  };
+  game.provide('hell', api);
 }

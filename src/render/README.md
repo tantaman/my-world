@@ -179,4 +179,7 @@ haze.js               the shimmer of the air over something hot
 skin.js               skin: hides, horn, iron, a wing, a crust over fire; lit as skin is
 implicit.js           bodies melted together out of balls, bones and skins, and meshed
 liquid.js             the surface of a liquid by what it does to light: blood, pitch, a marsh, lava
+sculpt.js             shapes made of simple ones (boxes, drums, balls, limbs), or melted out of them
+shades.js             the shades of the dead, walking in files without end, and the fires; how a shade holds itself
+landTiles.js          a land made in code (Hell's, Purgatory's), drawn as tiles round you, fine near and coarse far
 ```

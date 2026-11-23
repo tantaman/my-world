@@ -51,6 +51,10 @@ export const TOP = -3000;
 
 const SALT = 0x1ef1;
 
+/**
+ * @param {any} gen  the world's land (world/lands.js)
+ * @param {(x0: number, z0: number, x1: number, z1: number) => boolean} [keepOff]  whether a box must be kept clear of
+ */
 export function findGate(gen, keepOff = () => false) {
   const rng = mulberry32((gen.seed ^ SALT) | 0);
   const found = [];

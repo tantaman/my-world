@@ -462,6 +462,7 @@ src/
     names.js              names several kinds of thing draw on
     nearest.js            places listed nearest first, without end
     searches.ts           answers that take a while to work out, each worked out once
+    card.js               a place out of a book, over the picture: its name and lines as you come in, the dark on the way
   people/
     body.js               someone who isn't a hiker: what they're made of, how they walk and wave
   game/

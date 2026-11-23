@@ -39,7 +39,7 @@
 // creatures, one maker each.
 
 import * as THREE from 'three';
-import { Sculpt } from './sculpt.js';
+import { Sculpt } from '../render/sculpt.js';
 import { SURF } from '../render/skin.js';
 
 const TAU = Math.PI * 2;

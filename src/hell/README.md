@@ -86,12 +86,12 @@ has a turn to it, which is kept with your save.
 
 **What is drawn**: the ground as a quadtree of tiles, a metre to the vertex
 underfoot and sixty-four at two kilometres, so the whole of Malebolge can be
-seen from the brink (`terrain.js`); rivers, marsh, blood and pitch in the
+seen from the brink (`terrain.js`, by `render/landTiles.js`, which draws any land made in code); rivers, marsh, blood and pitch in the
 same mesh, the shore falling where the bed comes up through the surface
 (`look.js`). The ground is strewn square by square from the seed with rocks,
-thorn trees, tombs and fires, and with the shades of each circle (`furnish.js`):
+thorn trees, tombs and fires, and with the shades of each circle (`furnish.js`, by `world/strewn.js`):
 drawn as instances, and where they go in procession each walks a stretch of
-its own and fades at the ends, so a file of them never runs out (`shades.js`).
+its own and fades at the ends, so a file of them never runs out (`render/shades.js`).
 What was built stands where the land says: bridges, the wall of Dis in
 lengths, a castle, a tower, the falls (`structures.js`).
 
@@ -115,7 +115,7 @@ nothing of it Hell's own but what it's made of:
   mirror, thick and slow. The ground under them is their bed. Where the sand
   burns hottest it has run and cooled into a crust of black plates, with fire
   in the cracks.
-- The keepers and monsters are melted (`sculpt.js`, `render/implicit.js`):
+- The keepers and monsters are melted (`render/sculpt.js`, `render/implicit.js`):
   their bodies run together into one skin, a muscle swelling smoothly out of
   the next, rather than pieces stuck together; and drawn as skin
   (`render/skin.js`), with creases, veins, pores and a wet sheen, horn and
@@ -145,25 +145,22 @@ world.hell.melt()                // melt every creature now, not a little each f
 ## Files
 
 ```
-index.js              plugs it into the game: the gate, the door, Hell's scene, the frame's work down there
+index.ts              plugs it into the game: the gate, the door, Hell's scene, the frame's work down there
 plan.js               the plan, as the poem gives it: radii, depths, the drops between circles, each region's air
 words.js              the poem's lines for each place, and the inscription
 site.js               where the gate is, from the seed
 gate.js               the gate: its stonework and tablet, its passage and chamber, the door
 land.js               Hell's ground: heights, liquids, the ways down, what was built across the way
-space.js              the floor, walls and roof you walk by
-terrain.js            the ground, drawn: tiles round you, fine near and coarse far
+space.js              the floor, walls and roof you walk by (world/landSpace.js)
+terrain.js            the ground, drawn: tiles for a turn of the circles, and none over the brink seen from the pit
 look.js               what the ground, the stone and the liquids are drawn with, and what each liquid does to light
 air.js                the dark overhead, the light from the pit, how far you can see
 weather.js            what falls and blows: rain, flakes of fire, the wind
-furnish.js            what the ground is strewn with, and who is on it, square by square
-models.js             their shapes: rocks, the trees of the wood, tombs, shades
-shades.js             what shades and fires are drawn with, and how they go (and the shimmer over a fire)
+furnish.js            what the ground is strewn with, and who is on it, square by square (world/strewn.js)
+models.js             their shapes: rocks, the trees of the wood, tombs (the shades are render/shades.js's)
 structures.js         what was built: the bridges, the wall of Dis, a castle, a tower, the falls
 creatures.js          the keepers and monsters, as shapes, melted into one a little at a time
 denizens.js           where they stand, and what little they do
 rides.js              what carries you: Charon's boat, Phlegyas's, Geryon, Antaeus
-sculpt.js             shapes made of simple ones, or melted out of them
 sound.js              what it sounds like
-card.js               the dark at the door, and the name of each place
 ```

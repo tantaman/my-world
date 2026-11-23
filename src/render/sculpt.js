@@ -1,8 +1,8 @@
 // Making shapes out of simple ones: boxes, drums, balls and limbs, each
 // placed, turned and coloured, all run together into one geometry with a
 // colour at every vertex (and how hot it is: aHot, for stone that glows).
-// The gate, the walls and towers, the tombs and the creatures are all made
-// with it.
+// Whatever is built or alive in a place made in code is made with it: Hell's
+// gate, walls, tombs and creatures, Purgatory's angels and its carved stone.
 //
 //   const s = new Sculpt();
 //   s.box(0, 1, 0, 2, 2, 1, STONE);                 // centre, size, colour
@@ -29,8 +29,8 @@
 // added from then on; or s.surfOf(color), if set, says it by colour.
 
 import * as THREE from 'three';
-import { Melt } from '../render/implicit.js';
-import { SURF } from '../render/skin.js';
+import { Melt } from './implicit.js';
+import { SURF } from './skin.js';
 
 const _m = new THREE.Matrix4();
 const _n = new THREE.Matrix3();
