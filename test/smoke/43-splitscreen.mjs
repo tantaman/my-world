@@ -4,8 +4,10 @@
 // select makes them someone else, and they come along when you're set down
 // somewhere new. Unplugged, they go, and the screen is whole again.
 //
-// Needs nothing of the parts before it. Leaves every pad unplugged, the
-// screen whole and the picture off.
+// Needs nothing of the parts before it. Leaves you where it found you, every
+// pad unplugged, the screen whole and the picture off. (Where you are is
+// where the next part starts: somewhere new, its searches would start
+// afresh.)
 
 import assert from 'node:assert/strict';
 
@@ -62,6 +64,8 @@ export default async function ({ page, step, frames, shot }) {
       };
     });
   const apart = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+  // where you were when the part began, to be put back at the end
+  const home = await run(() => ({ x: world.player.pos.x, z: world.player.pos.z, yaw: world.player.yaw }));
 
   await step('a second pad splits the screen', async () => {
     await run(() => T.split.plug(2));
@@ -154,10 +158,10 @@ export default async function ({ page, step, frames, shot }) {
       T.split.drawn(false);
       T.picture(false);
     });
-    // set down somewhere new: they come along
+    // set down somewhere new (further than anyone walks in a frame): they come along
     await run(async () => {
       const p = world.player.pos;
-      await world.teleport(p.x + 300, p.z + 40, 0);
+      await world.teleport(p.x + 100, p.z + 20, 0);
       await T.frames(5);
     });
     s = await state();
@@ -174,5 +178,8 @@ export default async function ({ page, step, frames, shot }) {
     assert.equal(s.followed, 0, 'and the world grows round you alone');
     assert.equal(s.hud, '', 'your HUD has the whole screen');
     assert.equal(await run(() => document.getElementById('split').hidden), true);
+    // and back where the part found you
+    await run((h) => world.teleport(h.x, h.z, h.yaw), home);
+    assert.ok(apart(await run(() => ({ x: world.player.pos.x, z: world.player.pos.z })), home) < 0.5, 'back where you were');
   });
 }
