@@ -494,15 +494,49 @@ const ARM = [
 
 // ── Her legs (the hip's frame: the knee at -0.42, the ankle at -0.85, ─────
 // on the grown-up's leg: hers are longer, LEGS) ───────────────────────────────
-// Leggings, close all the way down: round over her seat, her thighs
+// Leggings, close all the way down: round over her seat, strong thighs
 // tapering to the knee, the calf full behind and slim at the ankle.
 const LEGGINGS_ROWS = [
-  [-0.775, 0.033, 0.036], [-0.74, 0.035, 0.038], [-0.68, 0.04, 0.046, -0.006],
-  [-0.61, 0.046, 0.054, -0.012], [-0.54, 0.045, 0.052, -0.01], [-0.48, 0.041, 0.046, -0.003],
-  [-0.43, 0.042, 0.046, 0.004], [-0.38, 0.046, 0.05, 0.004], [-0.3, 0.054, 0.06, 0.003],
-  [-0.2, 0.063, 0.07, 0.001], [-0.1, 0.075, 0.084, -0.008], [-0.02, 0.088, 0.1, -0.016],
-  [0.025, 0.094, 0.1, -0.02], [0.07, 0.08, 0.084, -0.014], [0.12, 0.064, 0.074, -0.004],
+  [-0.775, 0.033, 0.036], [-0.74, 0.035, 0.038], [-0.68, 0.041, 0.047, -0.006],
+  [-0.61, 0.048, 0.056, -0.013], [-0.54, 0.047, 0.054, -0.011], [-0.48, 0.042, 0.047, -0.003],
+  [-0.43, 0.044, 0.048, 0.004], [-0.38, 0.051, 0.055, 0.006], [-0.3, 0.063, 0.067, 0.005],
+  [-0.2, 0.079, 0.083, 0.002], [-0.1, 0.088, 0.094, -0.006], [-0.02, 0.093, 0.103, -0.016],
+  [0.025, 0.095, 0.102, -0.02], [0.07, 0.08, 0.084, -0.014], [0.12, 0.064, 0.074, -0.004],
 ];
+// The muscles of her thighs and calves, standing out of those rows (the
+// leg's frame, on the grown-up's leg; side: +1 out from her middle):
+//   [how far out (m), where down the leg, how long, round from the front
+//   (radians, out to her side positive), how wide round]
+const MUSCLES = [
+  [0.012, -0.22, 0.09, 1.25, 0.6], // the outer sweep of the thigh
+  [0.01, -0.35, 0.05, -0.75, 0.42], // the teardrop just inside, above the knee
+  [0.007, -0.2, 0.1, 0, 0.55], // down the front of the thigh
+  [0.005, -0.2, 0.09, Math.PI, 0.7], // behind
+  [0.004, -0.58, 0.05, Math.PI - 0.45, 0.45], // the calf, its inner head lower
+  [0.004, -0.55, 0.05, Math.PI + 0.45, 0.45],
+];
+// A leg's cloth with the muscles under it standing out of it (round the
+// bone, before it's skinned).
+function muscled(geometry, side) {
+  const p = geometry.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i) / LEGS;
+    const z = p.getZ(i);
+    if (y > -0.08) continue; // the seat and waist are as cut
+    const r = Math.hypot(x, z);
+    if (r < 1e-6) continue;
+    const round = Math.atan2(side * x, z); // 0 ahead, + out to her side
+    let out = 0;
+    for (const [far, at, long, about, wide] of MUSCLES) {
+      const d = Math.atan2(Math.sin(round - about), Math.cos(round - about));
+      out += far * Math.exp(-(((y - at) / long) ** 2) - ((d / wide) ** 2));
+    }
+    p.setXYZ(i, x + (x / r) * out, p.getY(i), z + (z / r) * out);
+  }
+  geometry.computeVertexNormals();
+  return geometry;
+}
 // Rows cut for the grown-up's leg, drawn out down hers (below the joint).
 const longer = (rows) => rows.map(([y, ...rest]) => [y < 0 ? y * LEGS : y, ...rest]);
 
@@ -543,7 +577,7 @@ const SPINE = 0.06; // her chest's frame is this far above her hips'
 const SKIRT_ROUND = 1.72; // radians either side of the middle of her back it comes round
 const SKIRT_LONG = [0.35, 0.235]; // how far it hangs at the back, and at her hips
 const SKIRT_TOP = [0.19, 0.132, -0.012]; // half width, half depth and middle at the tie
-const SKIRT_HEM = [0.206, 0.144, -0.014]; // ...and at the hem
+const SKIRT_HEM = [0.224, 0.156, -0.016]; // ...and at the hem
 const SKIRT_CHANNEL = 0.068; // between its lines of stitching
 const SKIRT_LOFT = 0.007;
 const SKIRT_LEGS = 0.6; // how much the bottom of it goes with the thigh behind it
@@ -707,10 +741,10 @@ export const LAUREN = {
     const boot = M(0xffffff, 0.75, { vertexColors: true, ...textile('canvas') });
     const sole = M(0xffffff, 0.9, { vertexColors: true });
     for (const L of [body.legL, body.legR]) {
-      limb(L.hip, L.knee, trouserLeg(L.side, (x, y) => {
+      limb(L.hip, L.knee, muscled(trouserLeg(L.side, (x, y) => {
         const band = y > 0.085 ? 0.8 : 1; // the waistband
         return [band, band, band];
-      }, 0.095, longer(LEGGINGS_ROWS)), M(LEGGINGS, 0.7, { vertexColors: true, ...textile('twill') }), 0.087, -0.18);
+      }, 0.095, longer(LEGGINGS_ROWS)), L.side), M(LEGGINGS, 0.7, { vertexColors: true, ...textile('twill') }), 0.087, -0.18);
       // the socks go with her shins, and with her feet low down
       limb(L.knee, L.ankle, tailored(longer(SOCK_ROWS), { segments: 20, surface: (x, y) => rgb(SOCK).map((c) => c * (y > CUFF * LEGS ? 0.85 : 1)) }), sock, 0.03, 0);
       // charcoal suede with lighter mesh panels, mint round the heel and the
