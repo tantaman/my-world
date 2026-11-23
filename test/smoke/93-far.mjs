@@ -1,5 +1,6 @@
-// The far view: in the high country you can see a long way, and in the forest
-// the air closes in as it always has.
+// The far view: in the high country you can see a long way, and down in the
+// forest (the Hoh's valley, where everyone starts) the air closes in as it
+// always has.
 //
 // Needs: nothing of what came before. Leaves: you where it found you.
 
@@ -12,7 +13,7 @@ export default async function ({ page, step, shot }) {
       drawn: world.far.list().drawn,
       fogFar: world.game.pipeline.fogFar,
     }));
-    assert.equal(got.worthIt, false, 'no high country round the start');
+    assert.equal(got.worthIt, false, 'no high country round the start, down in the valley');
     assert.deepEqual(got.drawn, [], 'so nothing is drawn far off');
     assert.equal(got.fogFar, 0, 'and the fog is where the chunks end, as ever');
     return got;
@@ -20,12 +21,12 @@ export default async function ({ page, step, shot }) {
 
   await step('from a massif you can see a long way', async () => {
     const was = await page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z, yaw: world.player.yaw }));
-    // find the high country, from the country field alone (cheap: no water)
+    // find the highest ground round the start, from the broad height alone
+    // (cheap: no water): on the real Earth, the Cascades' volcanoes
     const at = await page.evaluate(() => {
       let best = null;
-      for (let x = -45000; x <= 45000; x += 1000) {
-        for (let z = -45000; z <= 45000; z += 1000) {
-          if (world.gen.country(x, z).alp < 0.95) continue;
+      for (let x = -45000; x <= 45000; x += 1500) {
+        for (let z = -45000; z <= 45000; z += 1500) {
           const h = world.gen.broadHeight(x, z, 0);
           if (!best || h > best[2]) best = [x, z, h];
         }

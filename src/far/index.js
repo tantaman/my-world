@@ -26,6 +26,7 @@
 import { FarView, FAR_CLIP } from './view.js';
 import { sampleFar } from './grid.js';
 import { CONFIG } from '../config.js';
+import { isNotYet } from '../core/notYet.ts';
 
 // m: the fog closes in this far short of the far view's edge, and follows at
 // this rate (1/s), so it opens out as the land comes rather than jumping.
@@ -39,7 +40,9 @@ const FOG_EASE = 1.2;
 // of small ones would hold the fog in at the first edge it met.
 //
 // Only where there is something to see: in the high country (worldgen.js),
-// where the land stands a kilometre and more over its valleys. Everywhere
+// where the land stands a kilometre and more over its valleys, or on the real
+// Earth (world/earth.js), where it stands 1,500 real metres over the sea (so
+// on the Olympics' summits, not down in the Hoh under them). Everywhere
 // else the trees close in long before the chunks do, the fog stays where it
 // has always been, and nothing here is sampled, meshed or drawn at all. A
 // massif anywhere in the square counts, not only under your feet, so walking
@@ -49,7 +52,9 @@ const FOREST = {
   half: 1100, // m: half the square drawn round you
   step: 22, // m between its heights
   move: 300, // m you may walk off its middle before it is re-made
+  again: 100, // m you may walk off where it was judged not worth it, before it's judged again
   alpine: 0.15, // how much high country in the square makes it worth drawing
+  high: 300, // game m over the sea, on the Earth, that make it worth drawing
   look: 5, // points each way the square is judged over
 };
 
@@ -69,8 +74,10 @@ export function installFar(game) {
   landforms.on('land', (def) => {
     if (worker) worker.postMessage({ type: 'land', def });
   });
+  let lowAt = null; // where the forest's square was last judged not worth it, while that holds
   landforms.on('earth', (tile) => {
     if (worker) worker.postMessage({ type: 'earth', tile });
+    lowAt = null; // (there may be more to see now)
   });
 
   function start() {
@@ -129,16 +136,26 @@ export function installFar(game) {
   }
 
   // Is there high country in the square round (x, z) — something worth
-  // drawing a long view of? Read from the country field alone, which is cheap
-  // and needs no water worked out.
+  // drawing a long view of? Read from the country field, or on the Earth the
+  // broad height, which are cheap and need no water worked out. (Earth not
+  // come yet counts as nothing to see, until it has.)
   function worthIt(x, z) {
     for (let i = 0; i < FOREST.look; i++) {
       for (let j = 0; j < FOREST.look; j++) {
         const f = (k) => ((2 * k) / (FOREST.look - 1) - 1) * FOREST.half;
-        if (gen.country(x + f(i), z + f(j)).alp >= FOREST.alpine) return true;
+        if (high(x + f(i), z + f(j))) return true;
       }
     }
     return false;
+  }
+  function high(x, z) {
+    try {
+      if (gen.earthAt(x, z)) return gen.broadHeight(x, z, 0) - gen.sea.level >= FOREST.high;
+      return gen.country(x, z).alp >= FOREST.alpine;
+    } catch (err) {
+      if (isNotYet(err)) return false;
+      throw err;
+    }
   }
 
   let forestAt = null; // the middle of the square asked for, while it stands
@@ -155,13 +172,16 @@ export function installFar(game) {
     }
     const { x, z } = focus;
     if (forestAt && Math.hypot(x - forestAt[0], z - forestAt[1]) < FOREST.move) return;
+    if (lowAt && Math.hypot(x - lowAt[0], z - lowAt[1]) < FOREST.again) return;
     if (!worthIt(x, z)) {
+      lowAt = [x, z];
       if (forestAt) {
         drop(FOREST.id);
         forestAt = null;
       }
       return;
     }
+    lowAt = null;
     forestAt = [x, z];
     // Snapped to its own step, so that walking about doesn't shift every
     // height in it by a metre or two and shimmer the whole view.

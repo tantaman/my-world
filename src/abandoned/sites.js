@@ -56,10 +56,21 @@ export function overlaps(a, b) {
   return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
 }
 
+// Where its own ring has no ground flat and clear enough (a narrow valley,
+// its floor the town's), a building is looked for again out to this many
+// times as far, but no further than FURTHEST m from the start (the furnace's
+// own ring's edge), inside the districts round them (OutlyingBuildings). The
+// first look is as it was, so a site it finds stays put.
+const WIDEN = 3;
+const FURTHEST = 5400;
+const RING = [290, 510]; // m from the start, where a building doesn't say
+
 export function findBuildings(gen, start, keepOff) {
   const sites = [];
   for (const [i, type] of BUILDINGS.entries()) {
-    const s = survey(gen, start, keepOff, type, hash2i(i, 5741, gen.seed), sites);
+    const seed = hash2i(i, 5741, gen.seed);
+    const [min, max] = type.ring || RING;
+    const s = survey(gen, start, keepOff, type, seed, sites) || survey(gen, start, keepOff, { ...type, ring: [min, Math.min(max * WIDEN, FURTHEST)] }, seed ^ 0x9e37, sites);
     if (s) sites.push(s);
   }
   return sites;
@@ -72,7 +83,7 @@ function survey(gen, start, keepOff, type, seed, others, tries = 420) {
     [-w - 1, -d - 1, w + 1, d + 1],
     [-3, d, 3, d + 11],
   ];
-  const [min, max] = type.ring || [290, 510];
+  const [min, max] = type.ring || RING;
   for (let k = 0; k < tries; k++) {
     const angle = random() * 2 * Math.PI;
     const r = min + random() * (max - min);
