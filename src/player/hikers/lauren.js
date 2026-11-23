@@ -67,7 +67,7 @@ const CAP_SPEC = {
   rx: 0.084, rz: 0.104, z: -0.008,
   front: 0.094, back: 0.083,
   square: 2.4,
-  y: 0.022, tilt: 0.05,
+  y: 0.029, tilt: 0.05,
   colour: CAP, seam: CAP_SEAM,
   brim: { w: 0.085, l: 0.068, attach: 1.2, colour: CAP, curve: 7, rows: 5 },
   segments: [72, 18],

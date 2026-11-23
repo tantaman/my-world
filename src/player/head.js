@@ -916,8 +916,9 @@ export function buildGlasses(head, { y, z, r, frame, lens, hinge, temple, arm: [
 //   brim        { w, l, attach, colour, curve, rows }: half its width, how
 //               far it reaches past the front of the crown, how far round the
 //               band from the front (radians) it's sewn to, its colour, how
-//               much it bends down at the sides (1/m), and the rows of
-//               stitching round its edge
+//               much it bends down at the sides (1/m: x across, its edge is
+//               curve·x² lower; less nearer the band, which it stays sewn
+//               to), and the rows of stitching round its edge
 //   segments    [round, up] the crown is cut into
 //   opening     (or none) { across, up }: a gap at the back over the band,
 //               radians either side of the middle and as high as `up` of the
@@ -1020,15 +1021,25 @@ export function buildCap(head, C) {
       for (let i = 0; i <= N; i++) path.push(edge(((i / N) * 2 - 1) * 0.96, 0.006 + k * 0.0055, new THREE.Vector3()).setY(0.0042));
       rows.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(path), 48, 0.0006, 3));
     }
-    // bent down at the sides
+    // bent down at the sides, the further out from the band the more, so
+    // where it's sewn on it follows the band; cut fine first so it bends
+    // smoothly across, rather than along the edges of its big triangles
     const bend = (g) => {
       if (!B.curve) return g;
       const p = g.attributes.position;
-      for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) - B.curve * p.getX(i) ** 2);
+      const a = C.rx * 0.96;
+      const b = C.rz * 0.96;
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i);
+        const dz = p.getZ(i) - C.z;
+        // how far out it is from the band, straight out from the middle
+        const out = Math.hypot(x, dz) * (1 - 1 / Math.hypot(x / a, dz / b));
+        p.setY(i, p.getY(i) - B.curve * x * x * smoothstep(0, B.l, out));
+      }
       g.computeVertexNormals();
       return g;
     };
-    hat.add(cast(new THREE.Mesh(bend(brimGeo), M(B.colour, 0.88))));
+    hat.add(cast(new THREE.Mesh(bend(B.curve ? fine(brimGeo) : brimGeo), M(B.colour, 0.88))));
     if (rows.length) hat.add(new THREE.Mesh(bend(mergeGeometries(rows)), seam));
   }
   // a stitched hole high on each panel
