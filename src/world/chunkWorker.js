@@ -1,6 +1,7 @@
 // Web Worker: generates chunk terrain + vegetation off the main thread.
 
 import { growWorld } from './lands.js';
+import { Earth } from './earth.js';
 import { generateTerrain, generateSurface, generateVegetation, VEG_KINDS } from './chunkGen.js';
 
 let gen = null;
@@ -10,13 +11,18 @@ let trunkRadius = {};
 self.onmessage = (e) => {
   const m = e.data;
   if (m.type === 'init') {
-    gen = growWorld(m.seed, m.structures, m.land, m.hikes);
+    gen = growWorld(m.seed, m.structures, m.land, m.hikes, m.earth ? new Earth(m.earth.meta) : null);
+    for (const t of m.earth ? m.earth.got : []) gen.addEarth(t);
     size = m.chunkSize;
     trunkRadius = m.trunkRadius;
     return;
   }
   if (m.type === 'hike') {
     gen.addHike(m.def);
+    return;
+  }
+  if (m.type === 'earth') {
+    gen.addEarth(m.tile);
     return;
   }
   if (m.type === 'chunk') {

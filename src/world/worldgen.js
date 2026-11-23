@@ -58,6 +58,12 @@ const MOUNTAINS = [0.12, 0.5];
 const MASSIF = 45;
 const RIDGE_WAVE = 1100;
 const RIDGE_HIGH = 170;
+// What the ridging (_ridges, to the 1.25) comes to on average, and how high
+// (m) the land strays from its average in lake country, the hills and the
+// mountains, one standard deviation (measured over a few hundred thousand
+// points: they're for whoever reshapes the land, realPlaces.js).
+const RIDGE_MEAN = 0.2495;
+const SPREAD = { low: 6.2, hills: 17.1, mtn: 34.5 };
 // The high country: whole massifs, a thousand metres and more over the
 // valleys, far enough apart that one is a day's walk from the next. Over this
 // many metres, and where on its own field the forest gives way to them.
@@ -304,7 +310,7 @@ export class WorldGen {
   // minWavelength metres: for drawing relief from far away (the map), where
   // finer detail would only alias into noise.
   broadHeight(x, z, minWavelength = 0) {
-    return this.sea.shape(this._landHeight(x, z, minWavelength), x, z);
+    return this.bySea(this.ownLand(x, z, minWavelength), this.ownDrop(x, z));
   }
 
   // 0..~1: ridged noise, sharp along the crests (rounded off just enough to
@@ -337,9 +343,11 @@ export class WorldGen {
   _baseHeight(x, z) {
     const a = this._at;
     if (a.x !== x || a.z !== z) {
+      // (worked out before it's kept: something it asks may not be here yet)
+      const h = this.forestHeight(x, z, 0);
       a.x = x;
       a.z = z;
-      a.h = this.forestHeight(x, z, 0);
+      a.h = h;
     }
     return a.h;
   }
@@ -395,10 +403,43 @@ export class WorldGen {
   //                          country: here nothing, and null
   //   countryAt(x, z)        the country a plant there grows in, or null in
   //                          the forest
+  //   countryIn(x0, z0, x1, z1)  whether surface() or countryAt() may say
+  //                          anything but the forest anywhere in that square
+  //   apart(ax, az, bx, bz)  whether water running from b to a is lost on the
+  //                          way (drainage.js): here, never
+  //   earthAt(x, z)          where the real Earth is under the land (earth.js):
+  //                          { country, w }, its kind of country there and how
+  //                          much of (x, z) is the Earth's; here, null
   //   thicket(x, z)          0..1 how much of a thicket of shrubs it is (a
   //                          real place's willows): here none
   //   talus(x, z)            0..1 how thickly strewn with boulders (a real
   //                          place's screes): here none
+  // And what a real place that reshapes the land itself (the real Earth:
+  // realPlaces.js) asks of a land, to lay its own over the land's:
+  //   ownLand(x, z, mw)      the land's own shape, before the sea is laid over it
+  //   ownDrop(x, z)          how far (m) it falls away there toward the sea (sea.js)
+  //   bySea(h, D, floor, soft)  land h, falling away D, as it lies by the
+  //                          sea; with its floor inland that high over the sea
+  //                          (m), eased in over `soft` m, if not the sea's own
+  //   ownMean(c), ownSpread(c)  how high the land stands on average where the
+  //                          country (as country() says) is c, and how far
+  //                          (m, one standard deviation) it strays from that
+  ownLand(x, z, minWavelength = 0) {
+    return this._landHeight(x, z, minWavelength);
+  }
+  ownDrop(x, z) {
+    return this.sea.drop(x, z);
+  }
+  bySea(h, D, floor, soft) {
+    return this.sea.shapeBy(h, D, floor, soft);
+  }
+  ownMean(c) {
+    return -c.low * 6 + c.mtn * (c.mtn * MASSIF + RIDGE_MEAN * RIDGE_HIGH - 12);
+  }
+  ownSpread(c) {
+    const hills = SPREAD.hills + (SPREAD.low - SPREAD.hills) * c.low;
+    return hills + (SPREAD.mtn - hills) * c.mtn;
+  }
   forestHeight(x, z, minWavelength = 0) {
     return this.broadHeight(x, z, minWavelength);
   }
@@ -417,6 +458,15 @@ export class WorldGen {
   }
   countryAt() {
     return null;
+  }
+  countryIn() {
+    return false;
+  }
+  earthAt() {
+    return null;
+  }
+  apart() {
+    return false;
   }
   thicket() {
     return 0;

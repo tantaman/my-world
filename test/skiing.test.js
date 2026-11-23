@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { Skier, GRAVITY } from '../src/skiing/skier.js';
 import { counts, fall, nameOf, score, LAND } from '../src/skiing/tricks.js';
 import { Run, COMBO } from '../src/skiing/run.js';
+import { earthAtFirst } from './helpers/earth.js';
 
 // A plane falling away to +z at `slope` (rise over run), all snow, nothing on it.
 const plane = (slope, extra = {}) => ({
@@ -216,7 +217,7 @@ test('ski runs are wherever the high country holds snow, a square at a time, and
   const { SkiRuns, RUNS } = await import('../src/skiing/runs.js');
   const { matchesGolden } = await import('./helpers/golden.js');
   const SEED = 20261119;
-  const gen = growWorld(SEED, [], LANDS[0]);
+  const gen = growWorld(SEED, [], LANDS[0], [], await earthAtFirst());
   const start = gen.findSpawn(0, 0);
   const landforms = new Landforms(HIKES);
   const home = findRunTop(gen, landforms, start, 30000, 750);

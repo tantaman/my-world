@@ -32,8 +32,9 @@ export function installMap(game) {
   // One panel at a time: opening the map, on whichever tab, closes whatever
   // else is up.
   const onOpen = () => game.emit('panel', 'map');
-  const map = new MapView({ seed: gen.seed, land: gen.land, structures, hikes: gen.hikes, ready: (x0, z0, x1, z1, ask) => landforms.ready(x0, z0, x1, z1, ask), marks, player, input, places, onOpen, travel });
+  const map = new MapView({ seed: gen.seed, land: gen.land, structures, hikes: gen.hikes, earth: gen.earthCopy, ready: (x0, z0, x1, z1, ask) => landforms.ready(x0, z0, x1, z1, ask), marks, player, input, places, onOpen, travel });
   landforms.on('land', (def) => map.addHike(def));
+  landforms.on('earth', (tile) => map.addEarth(tile));
   game.provide('marks', marks);
   game.provide('map', map);
 

@@ -26,6 +26,7 @@ import { formatDistance } from '../core/format.js';
 import { hash2i } from '../noise.js';
 import { makeCairn, makeSignpost, makeChains } from './waymarks.js';
 import { HikesPanel } from './hikesPanel.js';
+import { isNotYet } from '../core/notYet.ts';
 
 const FAR_MARGIN = 700; // m of the forest round a hike that its far view takes in
 const FAR_STEP = 16; // m between the far view's heights
@@ -89,8 +90,18 @@ export function installHikes(game) {
 
   // ── What stands there ────────────────────────────────────────────────────
   const waymarks = [];
+  // (where the real Earth under it hasn't come yet, it's stood up at 0 for
+  // now, and on the ground once you come near: see the system below)
+  const ground = (x, z) => {
+    try {
+      return chunks.heightAt(x, z);
+    } catch (err) {
+      if (isNotYet(err)) return 0;
+      throw err;
+    }
+  };
   const stand = (object, x, z) => {
-    object.position.set(x, chunks.heightAt(x, z), z);
+    object.position.set(x, ground(x, z), z);
     scene.add(object);
     waymarks.push({ object, x, z });
   };

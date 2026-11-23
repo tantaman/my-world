@@ -34,7 +34,9 @@ for as far out as you scroll: the High Country ski run, the top with the
 most snow below it within 30 km of the start, and then one in every ten
 kilometres square of the forest where the high country holds snow enough
 (*Raven Bowl*, *Tarn Face*, *Granite Couloir*), with how many metres of snow
-lie below its top, and the snowy real places among them. Pick one for
+lie below its top, and the snowy real places among them. Out on the real
+Earth, past the forest round the middle, the high country is the Earth's own
+mountains, wherever they stand that far over its snow line. Pick one for
 directions, or *go here* to stand on its top. They're on the map too.
 
 Or go to a snowy real place: the hikes tab beside the map, and *the view*,

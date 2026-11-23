@@ -171,15 +171,13 @@ export function generateTerrain(gen, cx, cz, step, size) {
 // for each vertex of the terrain generateTerrain() makes for the same chunk,
 // in the same order (the grid, then the skirts): how bare the ground is, how
 // sandy, how far it is that country's ground at all, and which country's
-// (WorldGen.surface). null for a chunk that is all forest, which is nearly
-// all of them.
+// (WorldGen.surface). null for a chunk that is all forest, which in the
+// forest round the middle of the world is nearly all of them.
 export const SURFACE_STRIDE = 4;
 export function generateSurface(gen, cx, cz, step, size) {
   const x0 = cx * size;
   const z0 = cz * size;
-  const mid = size / 2;
-  // (corner to corner, a chunk reaches 0.71 of its side from its middle)
-  if (!gen.landforms.some((L) => L.clearance(x0 + mid, z0 + mid) < size * 0.75)) return null;
+  if (!gen.countryIn(x0, z0, x0 + size, z0 + size)) return null;
   const n = Math.round(size / step);
   const N = n + 1;
   const S = SURFACE_STRIDE;

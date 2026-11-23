@@ -3,6 +3,7 @@
 // is the land you will walk on.
 
 import { growWorld } from '../world/lands.js';
+import { Earth } from '../world/earth.js';
 import { sampleFar } from './grid.js';
 
 let gen = null;
@@ -10,13 +11,19 @@ let gen = null;
 self.onmessage = (e) => {
   const m = e.data;
   if (m.type === 'init') {
-    gen = growWorld(m.seed, m.structures, m.land, m.hikes);
+    gen = growWorld(m.seed, m.structures, m.land, m.hikes, m.earth ? new Earth(m.earth.meta) : null);
+    for (const t of m.earth ? m.earth.got : []) gen.addEarth(t);
     return;
   }
   // a real place's land has been fetched: this world needs it too, or the
   // far view would draw the forest where the real land now is
   if (m.type === 'land') {
     gen.addHike(m.def);
+    return;
+  }
+  // and a tile of the real Earth, likewise
+  if (m.type === 'earth') {
+    gen.addEarth(m.tile);
     return;
   }
   if (m.type === 'far') {

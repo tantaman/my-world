@@ -24,10 +24,17 @@
 // `patient`, which it is in pump() and is not in get(): wanted outright, it
 // has what it needs found there and then (the owner reads searches.patient).
 //
+// A search that asks about something sent for and not here yet (the real
+// Earth under a part of the world, before its tile has come: core/notYet.ts)
+// is dropped and started over from the beginning once it's in line again:
+// searches answer from the seed alone, so starting over finds the same.
+//
 // Every such registry used to carry its own copy of this, and its own
 // allowance of the frame. Now they are jobs sharing one (game/budget.ts):
 //
 //   game.budget.add({ name: 'tracks', work: (ms) => tracks.pump(ms) });
+
+import { isNotYet } from './notYet.ts';
 
 export type Search<T> = Generator<unknown, T, unknown>;
 
@@ -129,24 +136,29 @@ export class Searches<T, A = undefined> {
   pump(ms: number): number {
     const t0 = this.clock();
     for (const [key, arg] of this.line) {
-      let run = this.growing.get(key);
-      if (!run) {
-        const begun = this.grow(key, arg);
-        if (!isSearch(begun)) {
-          this.set(key, begun);
-          if (this.clock() - t0 > ms) break;
-          continue;
+      try {
+        let run = this.growing.get(key);
+        if (!run) {
+          const begun = this.grow(key, arg);
+          if (!isSearch(begun)) {
+            this.set(key, begun);
+            if (this.clock() - t0 > ms) break;
+            continue;
+          }
+          this.growing.set(key, (run = begun));
         }
-        this.growing.set(key, (run = begun));
-      }
-      for (;;) {
-        const r = run.next();
-        if (r.done) {
-          this.set(key, r.value);
-          break;
+        for (;;) {
+          const r = run.next();
+          if (r.done) {
+            this.set(key, r.value);
+            break;
+          }
+          if (r.value === 'wait') break; // on with the next: this one can't get further yet
+          if (this.clock() - t0 > ms) return this.line.size;
         }
-        if (r.value === 'wait') break; // on with the next: this one can't get further yet
-        if (this.clock() - t0 > ms) return this.line.size;
+      } catch (err) {
+        if (!isNotYet(err)) throw err;
+        this.growing.delete(key); // to start over when what it asked about is here
       }
       if (this.clock() - t0 > ms) break;
     }

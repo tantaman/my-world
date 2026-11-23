@@ -193,6 +193,7 @@ export class ChunkManager extends Emitter {
           chunkSize: this.size,
           structures: structures.map((s) => ({ x: s.x, z: s.z, radius: s.radius })),
           hikes: gen.hikes,
+          earth: gen.earthCopy,
           trunkRadius: this.trunkRadius,
         });
         this.workers.push(w);
@@ -209,6 +210,11 @@ export class ChunkManager extends Emitter {
   // (The main thread's gen is told by whoever owns it.)
   addHike(def) {
     for (const w of this.workers) w.postMessage({ type: 'hike', def });
+  }
+
+  // A tile of the real Earth has arrived (landforms.js): the same.
+  addEarth(tile) {
+    for (const w of this.workers) w.postMessage({ type: 'earth', tile });
   }
 
   disableWorkers() {
@@ -717,8 +723,9 @@ export class ChunkManager extends Emitter {
   applyVegetation(ch, veg) {
     ch.colliders = veg.colliders;
     ch.vegLists = veg.lists;
-    // (only a chunk on a real place can be anything but the forest's own)
-    const real = this.gen.landformClearance(ch.x0 + this.size / 2, ch.z0 + this.size / 2) < this.size;
+    // (only a chunk on a real place, or on the real Earth, can be anything
+    // but the forest's own)
+    const real = this.gen.countryIn(ch.x0, ch.z0, ch.x0 + this.size, ch.z0 + this.size);
     for (const kind of VEG_KINDS) {
       const list = veg.lists[kind];
       if (!list || !list.length) continue;

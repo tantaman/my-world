@@ -41,6 +41,7 @@
 import { Emitter } from '../core/events.js';
 import { Commands } from './commands.js';
 import { Budget } from './budget.ts';
+import { isNotYet } from '../core/notYet.ts';
 
 export const PHASES = ['input', 'update', 'world', 'audio', 'render', 'late'] as const;
 export type Phase = (typeof PHASES)[number];
@@ -103,6 +104,7 @@ export class Game extends Emitter {
   arrivals: Promise<unknown>[];
   running: boolean;
   private _covers: Array<() => boolean>;
+  private _before: Promise<unknown> | null = null;
   private _last: number;
   private _raf: number;
   private _tick: (now: number) => void;
@@ -130,9 +132,21 @@ export class Game extends Emitter {
   // ── Putting the game together ─────────────────────────────────────────────
 
   // Install a feature. Order matters: a feature can use what earlier ones provided.
-  use(install: (game: Game) => void): this {
-    install(this);
+  // One that has to fetch something before the features after it can use it
+  // (the ground round the start, which they look about on as they install)
+  // returns the promise of it, and whoever installs them waits: settled().
+  use(install: (game: Game) => unknown): this {
+    const r = install(this);
+    if (r && typeof (r as Promise<unknown>).then === 'function') this._before = (r as Promise<unknown>).catch(() => {});
     return this;
+  }
+
+  // → a promise of what the feature last installed has to have before the
+  // next is installed (see use()): at once, for nearly all of them.
+  settled(): Promise<unknown> {
+    const p = this._before || Promise.resolve();
+    this._before = null;
+    return p;
   }
 
   // Make something available to later features as game.<name>, and to the
@@ -204,7 +218,9 @@ export class Game extends Emitter {
           s.update(f);
           s.faults = 0;
         } catch (err) {
-          this._fault(s, err);
+          // (asking about what's been sent for and isn't here yet is no
+          // fault: it's asked again next frame)
+          if (!isNotYet(err)) this._fault(s, err);
         }
       }
       // What can wait is done once the world has caught up with where you

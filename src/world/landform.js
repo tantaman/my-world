@@ -121,6 +121,12 @@ export function seaSurf(u) {
 // m in from the land's edge that tells whether the sea runs on past it
 // (inside the bank the importer leaves round the sea: tools/hike/build.js)
 const SEA_EDGE = 40;
+// Where its sea opens onto a real sea beyond (openToSea), it gives way over
+// this far in from its edge (m), from the first to the second: inside the
+// bank, which is no nearer the edge than SEA_EDGE. Worked out for this many
+// directions round it.
+const OPEN_RIM = [SEA_EDGE + 40, SEA_EDGE + 8];
+const RIM_BINS = 256;
 // Streams. A real stream is handed to the same code that shapes the forest's
 // own (water.js), as pieces of channel; these say how one is made from the
 // line on the map.
@@ -604,8 +610,41 @@ export class Landform {
     const dz = z - this.cz;
     const r2 = dx * dx + dz * dz;
     if (r2 >= this.outer * this.outer) return 0;
+    const rim = this.rim;
+    if (rim && r2 > (this.radius - OPEN_RIM[0]) ** 2) {
+      // where its sea opens onto a real sea beyond it, it gives way before
+      // the bank the importer left there (see openToSea)
+      const r = Math.sqrt(r2);
+      const a = Math.floor(((Math.atan2(dz, dx) / (2 * Math.PI) + 1) % 1) * rim.length);
+      const own = r <= this.radius ? 1 : 1 - smoothstep(this.radius, this.outer, r);
+      return own * (1 - rim[a] * smoothstep(this.radius - OPEN_RIM[0], this.radius - OPEN_RIM[1], r));
+    }
     if (r2 <= this.radius * this.radius) return 1;
     return 1 - smoothstep(this.radius, this.outer, Math.sqrt(r2));
+  }
+
+  // Set into a world whose own sea is the real one round it (the real Earth:
+  // realPlaces.js), its sea needn't stop at a bank short of its edge (as
+  // the importer left it, for the forest to begin): where its sea runs on
+  // past its edge, it gives way to the world's sea from just inside the bank.
+  // Which way round it does is worked out once, for RIM_BINS directions.
+  openToSea() {
+    if (!this.lakes.some((l) => l.sea)) return;
+    const rim = new Float32Array(RIM_BINS);
+    for (let k = 0; k < RIM_BINS; k++) {
+      const a = ((k + 0.5) / RIM_BINS) * 2 * Math.PI;
+      const x = this.cx + Math.cos(a) * (this.radius + this.fade);
+      const z = this.cz + Math.sin(a) * (this.radius + this.fade);
+      rim[k] = this.openSea(x, z) ? 1 : 0;
+    }
+    // (and eased in and out round it, a few bins either way)
+    const out = new Float32Array(RIM_BINS);
+    for (let k = 0; k < RIM_BINS; k++) {
+      let s = 0;
+      for (let d = -3; d <= 3; d++) s += rim[(k + d + RIM_BINS) % RIM_BINS];
+      out[k] = s / 7;
+    }
+    this.rim = out;
   }
 
   // Metres past the outer edge (negative inside).

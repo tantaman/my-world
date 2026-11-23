@@ -174,7 +174,8 @@ export function createTerrainMaterial() {
         `#include <color_fragment>
         vec2 wp = worldXZ(vWorldPos);
         diffuseColor.rgb = groundColor(wp, vWorldPos.y, vGround.x, vGround.y, 1.0 - vWorldNormal.y, vLand, vCountry);
-        // by the sea: a beach of pale sand, up from the waterline
+        // by the sea: a beach of pale sand, up from the waterline (the forest's:
+        // a real place's own country, or the real Earth's, lays its own)
         float seaY = vWorldPos.y - uSea;
         bool seaWater = uSea > -1000.0 && abs(vWater.x - uSea) < 0.05; // the water here is the sea's
         bool bySea = seaY < ${(SEA.sand + 1).toFixed(1)} && seaY > -400.0 && (seaWater || vWater.y < 0.01);
@@ -184,6 +185,7 @@ export function createTerrainMaterial() {
           vec3 sand = mix(vec3(0.36, 0.31, 0.22), vec3(0.3, 0.26, 0.19), smoothstep(0.3, 0.75, s2)) * (0.9 + 0.2 * s1);
           float onSand = 1.0 - smoothstep(${(SEA.sand * 0.75).toFixed(2)}, ${(SEA.sand * 1.2).toFixed(2)}, seaY + (s1 - 0.5) * 0.8);
           onSand *= 1.0 - smoothstep(0.42, 0.6, 1.0 - vWorldNormal.y); // not on a cliff
+          onSand *= 1.0 - vLand.z;
           diffuseColor.rgb = mix(diffuseColor.rgb, sand, onSand);
         }
         // high ground, and snow where it lies (over a beach too, in winter)

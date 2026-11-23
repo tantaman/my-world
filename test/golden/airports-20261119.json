@@ -9,72 +9,72 @@
   "mid": 10.121,
   "clear": [
    true,
-   false
+   true
   ]
  },
  {
-  "id": "airfield:-684529:471914",
+  "id": "airfield:-688609:472394",
   "region": "waihee-ridge",
   "name": "Burke Airstrip",
-  "x": -684529.5,
-  "z": 471914.1,
-  "yaw": 1.047,
-  "mid": -3.813,
+  "x": -688609.5,
+  "z": 472394.1,
+  "yaw": 0.262,
+  "mid": -21.326,
   "clear": [
-   false,
+   true,
    true
   ]
  },
  {
-  "id": "airfield:192917:222791",
+  "id": "airfield:197117:222311",
   "region": "angels-landing",
   "name": "Rourke Strip",
-  "x": 192916.5,
-  "z": 222790.9,
+  "x": 197116.5,
+  "z": 222310.9,
   "yaw": 2.88,
-  "mid": -5.884,
+  "mid": 352.119,
   "clear": [
    true,
-   false
+   true
   ]
  },
  {
-  "id": "airfield:206385:73871",
+  "id": "airfield:212265:71471",
   "region": "cascade-canyon",
   "name": "Iverson Field",
-  "x": 206385.3,
-  "z": 73870.8,
-  "yaw": 1.309,
-  "mid": 7.052,
+  "x": 212265.3,
+  "z": 71470.8,
+  "yaw": 0.524,
+  "mid": 380.935,
   "clear": [
    true,
    true
   ]
  },
  {
-  "id": "airfield:938052:-1442806",
+  "id": "airfield:938292:-1440286",
   "region": "tignes",
   "name": "Vickery Strip",
-  "x": 938052.2,
-  "z": -1442805.7,
-  "yaw": 1.047,
-  "mid": 0.538,
+  "x": 938292.2,
+  "z": -1440285.7,
+  "yaw": 0.524,
+  "mid": 597.465,
   "clear": [
-   false,
+   true,
    true
   ]
  },
  {
-  "id": "airfield:647805:269166",
+  "id": "airfield:648525:269526",
   "region": "jean-lafitte",
   "name": "Tolliver Strip",
-  "x": 647805.4,
-  "z": 269165.9,
+  "x": 648525.4,
+  "z": 269525.9,
   "yaw": 0,
-  "mid": -6.711,
+  "mid": -29.991,
   "clear": [
    true,
-   false
+   true
   ]
  }
 ]

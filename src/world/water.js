@@ -258,8 +258,10 @@ export class Water {
         hit.trough = smoothstep(0, TROUGH.from, over) * hit.flow * alp;
       }
     }
-    // a stream fades in at its spring, valley and all
-    hit.g = smoothstep(0, 0.35, cw);
+    // a stream fades in at its spring, valley and all; and where one of the
+    // forest's gives way to real land, its valley fades out with it, as
+    // deep as it's cut
+    hit.g = smoothstep(0, 0.35, cw) * keep;
     hit.size = size;
     hit.river = acc >= NET.riverAcc;
     hit.region = mix(SMALL.region, BIG.region, size);
