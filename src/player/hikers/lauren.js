@@ -80,18 +80,55 @@ const PONY_ROOT = new THREE.Vector3(0, 0.016, -0.097);
 const PONY_LENGTH = 0.26;
 const HAIR_COLOUR = new THREE.Color(HAIR);
 
+// Her jawline: the skull is cut back (`cut` in head.js) to a ball either
+// side, so the side of her face turns under at an edge. Each ball's surface
+// runs from where her chin's broad underside turns up at the side (JAW_CHIN)
+// back to the angle of her jaw under her ear (JAW_ANGLE), facing down and
+// out at JAW_TURN from straight down, and is big enough (JAW_BALL) to be all
+// but flat along her jaw. Under her chin it's cut flat by a bigger one,
+// rising back gently from CHIN_UNDER to her throat.
+const JAW_CHIN = [0.026, -0.101, 0.06]; // m: x either side of the middle, y, z
+const JAW_ANGLE = [0.045, -0.08, -0.008];
+const JAW_TURN = 0.75; // radians
+const JAW_BALL = 0.3; // m, radius
+const CHIN_UNDER = [-0.103, 0.06]; // m: y, z in the middle
+const CHIN_RISE = 0.15; // radians, back from it
+const CHIN_BALL = 0.6; // m, radius
+
+// A ball of radius r (as a skull's egg) whose surface goes through `from` and
+// `to`, facing down and out at `turn` from straight down; on her left (side
+// 1) or right (-1).
+function jawSide(from, to, turn, r, side) {
+  const d = to.map((v, i) => v - from[i]);
+  const out = Math.sin(turn);
+  const down = Math.cos(turn);
+  // the way it faces has no part along the jaw
+  const n = new THREE.Vector3(out, -down, (d[1] * down - d[0] * out) / d[2]).normalize();
+  return [[side * (from[0] - n.x * r), from[1] - n.y * r, from[2] - n.z * r], [r, r, r]];
+}
+
+// A ball of radius r whose surface goes under (0, y, z), rising back at `rise`.
+const underside = ([y, z], rise, r) => [[0, y + r * Math.cos(rise), z + r * Math.sin(rise)], [r, r, r]];
+
 const LOOK = {
   // an oval face: the cranium, cheekbones high and wide, the jaw narrower
-  // and softly round, the cheeks full, and a small, rounded chin: the end of
-  // an egg tilted forward down through her mouth
+  // and softly round, the cheeks full, and a broad, rounded chin: the end of
+  // an egg tilted forward down through her mouth, cut along her jawline and
+  // flat underneath
   skull: [
     [[0, 0.018, -0.01], [0.074, 0.09, 0.095]],
     [[0, -0.02, 0.012], [0.07, 0.052, 0.076]],
     [[0, -0.044, 0.01], [0.058, 0.054, 0.076]],
     [[0, -0.034, 0.016], [0.064, 0.04, 0.072]],
-    [[0, -0.046, 0.037], [0.031, 0.066, 0.042], 0.66],
+    [[0, -0.046, 0.037], [0.05, 0.066, 0.042], 0.66],
   ],
   round: 0.016,
+  cut: [
+    jawSide(JAW_CHIN, JAW_ANGLE, JAW_TURN, JAW_BALL, 1),
+    jawSide(JAW_CHIN, JAW_ANGLE, JAW_TURN, JAW_BALL, -1),
+    underside(CHIN_UNDER, CHIN_RISE, CHIN_BALL),
+  ],
+  cutRound: 0.012,
   eyeX: 0.031,
   brow: 0.026,
   // a small, straight nose, a low bridge and a neat, soft tip

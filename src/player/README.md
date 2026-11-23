@@ -43,8 +43,8 @@ The grown-ups' faces are drawn from photos of them. The hiker has a
 real-sized head with a lean face and a long, straight nose, smiling, a full
 dark beard and short dark hair at the sides, and square white frames with
 dark lenses that catch the sky. Lauren has an oval face with high
-cheekbones, a small straight nose, a neat chin and full lips parted in a
-smile. Beard, short hair and eyebrows are layers of strands you can make out
+cheekbones, a small straight nose, a clean jawline tapering from under her
+ears to a broad, rounded chin, and full lips parted in a smile. Beard, short hair and eyebrows are layers of strands you can make out
 up close, which become a solid mass of hair further off. Lauren's long hair
 is drawn back smooth and glossy behind her ears. Her ponytail hangs
 from where it's gathered: it falls, trails and bobs as she goes, swings
@@ -148,7 +148,8 @@ hangs clothes on and has to say back, is at the top of `Character` in
 `character.js`. For a grown-up, `lauren.js` is the one to start from; for a
 child, `oliver.js`. A grown-up's head is built by `head.js` to a look: the
 eggs the skull is made of (each round the middle of the head, or the skin
-has a seam where one ends), the nose, the mouth and how far the face's
+has a seam where one ends) and any it's cut back to (for a jawline with an
+edge), the nose, the mouth and how far the face's
 features stand out, where hair grows and how long and which way it lies (or
 drawn back smooth, for long hair), and the colours. Sunglasses and a cap are built there too, to each one's own
 frames and shape. A child's head is built round the eyes by `child.js`, to
