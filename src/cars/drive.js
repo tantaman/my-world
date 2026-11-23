@@ -197,11 +197,13 @@ export class Car extends Emitter {
     const want = c.steer * most;
     this.steer += (want - this.steer) * (1 - Math.exp(-STEER_RATE * 2 * dt));
     if (on !== 'air') {
+      // how fast it comes round to the right: its right hand is (-cos, sin),
+      // the way (sin, cos) goes as yaw falls
       let rate = (this.v * Math.tan(this.steer)) / k.base;
       // no tighter than the tyres can hold it round
       const lat = Math.abs(rate * this.v);
       if (lat > grip) rate *= grip / lat;
-      this.yaw += rate * dt;
+      this.yaw -= rate * dt;
     }
 
     // ── moving ──

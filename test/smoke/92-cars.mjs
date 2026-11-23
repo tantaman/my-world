@@ -30,6 +30,13 @@ export default async function ({ page, step, key, frames, shot }) {
     const went = Math.hypot(going.x - from.x, going.z - from.z);
     assert.ok(went > 5 && going.v > 1, `W drives it (${went.toFixed(1)} m, ${going.v.toFixed(1)} m/s)`);
     await shot('driving');
+    // D swings it round to its right: its right hand, pointing (sin yaw, cos yaw), is (-cos yaw, sin yaw)
+    await page.keyboard.down('KeyD');
+    await frames(30);
+    await page.keyboard.up('KeyD');
+    const turned = await page.evaluate(() => world.cars.mine.yaw);
+    const right = -Math.cos(going.yaw) * Math.sin(turned) + Math.sin(going.yaw) * Math.cos(turned);
+    assert.ok(right > 0, `D steers it right (yaw ${going.yaw.toFixed(2)} to ${turned.toFixed(2)})`);
     // S brings it to a stop, and F gets you out beside it
     await page.keyboard.down('KeyS');
     await page.waitForFunction(() => world.cars.car.speed < 0.5, null, { timeout: 60000 });
