@@ -23,7 +23,7 @@ import * as THREE from 'three';
 import { Mesher, WOOD, alongMatrix, addRoundLog, addRoof } from '../build/geometry.js';
 import { SURF } from '../build/surfaces.js';
 import { mulberry32, phash } from '../noise.js';
-import { toWorld } from './sites.js';
+import { toWorld } from '../world/frame.js';
 
 const lin = (hex) => new THREE.Color(hex);
 export const PAL = {

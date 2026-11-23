@@ -184,17 +184,26 @@ place in that order, not at the end:
 |---|---|---|
 | `act/index.js` | something at hand that the act key (F) does: get in or out, on or off, buy, ask | `game.act.offer({ id, at })`, and `game.act.key(word)` in its prompt |
 | `adventures/adventures.js` | an adventure to start from the board | `game.adventures.define({ id, title, blurb, where?, start })` |
+| `airports/airports.js` | the airfields, as something grown later keeps clear of | `airfieldsOver(airports)`, with `keepClear` (`world/claims.ts`) |
 | `audio/calls.js` | an animal's voice | `defineCall(kind, reach, play)` |
 | `audio/footsteps.js` | a kind of ground underfoot | `defineSurface(name, { thump, step })` |
+| `audio/kit.js` | what a sound is made from: noise, an envelope on a gain, somewhere in the world to come from | `makeNoise`, `envelope(param, …)`, `setPos(panner, x, y, z)`, `SILENT` |
 | `audio/sfx.js` | a one-off sound | `defineSfx(kind, play)` |
 | `audio/soundscape.js` | a sound that plays all the time | `game.sound.addLayer({ build, update })` |
 | `audio/soundscape.js` | being shut in: the open air muffled, the rest echoing | `game.sound.setEnclosed(0..1)` |
 | `audio/soundscape.js` | everything heard as if through something | `game.sound.muffle(amount)` |
 | `build/builder.js` | a tool, in a slot of its own or a kit it shares | `game.builder.register(tool)`, with `tool.kit` |
 | `build/builder.js` | hands too full for tools | `builder.idleWhile(fn)` |
+| `build/faces.js` | geometry written a face at a time into a mesher (ties, planks, panels) | `quad(m, a, b, c, d, color)`, `beam(m, from, to, w, h, color)`, `box(m, …)` |
+| `build/font.js` | words made of little squares | `layout(text)` → `{ width, height, dots }`, or `kit.words(…)` |
+| `build/forestry.js` | what a kind of tree is called, and what felling one yields | `SPECIES[kind]`, `treeName(kind)` |
+| `build/geometry.js` | whole geometries welded into one mesh, each saying what it's made of | `new Mesher()`, `m.add(geometry, matrix, color)`, `m.build()` |
 | `build/inventory.js` | a material to carry (`optional`: on the HUD only while you have some) | `game.builder.stock.define({ id, label, optional })` |
+| `build/kit.js` | flat-sided things from quads, boxes and panels, for a plain vertex-coloured material | `new Kit()`, `k.box(…, skip)`, `k.panel(…)`, `k.build()` |
 | `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)` |
 | `build/surfaces.js` | what something built is made of: bark, grain, paint, stone, shingles, tin, glass | `mesher.surf = SURF.paint` (and `mesher.wear`), drawn with `createBuildingMaterial()` |
+| `caves/sites.js` | the mouths of caves, as something grown later keeps clear of | `caveMouths(caves, clear)`, with `keepClear` |
+| `core/searches.ts` | answers that take a while to work out (where a thing grown from the seed is), each worked out once: outright, or a little at a time | `new Searches({ *grow(key) { …; yield; … } })`, `get`, `peek`, `pump(ms)` |
 | `country/index.js` | a layer of cloud of your own over everything, for a while (a flight's) | `game.country.cloud(() => ({ at, cover, x, z }))` |
 | `far/index.js` | land drawn past where the forest is streamed in, to be seen from high ground | `game.far.want(id, x0, z0, x1, z1, step)`, `far.drop(id)` |
 | `game/budget.ts` | work that can wait (a search, a survey), done a little each frame out of one allowance | `game.budget.add({ name, work(ms) })` |
@@ -209,6 +218,7 @@ place in that order, not at the end:
 | `map/places.js` | a place on the map, to look up and track | `game.map.places.addSource({ within, get })` |
 | `map/places.js` | a kind of place in Routes, listed nearest first without end | `addSource({ list, nearest(x, z) })` with a `GridNearest` (`core/nearest.js`), or `destinations()` for a few |
 | `pack/things.js` | something you have, listed in your pack with what else is yours | `game.pack.have(() => [{ label, note }])` |
+| `people/body.js` | someone who isn't a hiker: a clerk, a steward, a guard | `new Body(lookOf(style, rnd), seed)`, `body.pose(…)` |
 | `player/character.js` | something the hiker holds up to the face | `character.addRaised(name, object, { stowed })`, `raise(name)` |
 | `player/character.js` | sitting astride what carries you, or in it with your arms over the sides | `character.seat({ spread, hang, lean, rest, stroke })` |
 | `player/character.js` | standing on something that slides (skis, a board) | `character.stance({ feet, crouch, lean, arms, shod, board, … })` |
@@ -218,10 +228,12 @@ place in that order, not at the end:
 | `player/character.js` | a way of standing to the work (a rifle shouldered) | `definePose(kind, keyframes)`, `character.play(kind, dur)` |
 | `player/hikers.js` | someone to hike as: their clothes, face and size | a file in `player/hikers/` (`{ id, name, size, dress }`), listed in `HIKERS` |
 | `player/player.js` | walking the hiker somewhere | `player.steer = { x, z, run }` |
-| `player/player.js` | something that carries you (how fast, how deep, whether it flies or floats) | `player.carrier = { walk, run, swim, depth, fly, keel, … }` |
-| `player/player.js` | something that moves you itself (a train you sit in, skis you steer, a tube the river carries) | `player.aboard = { place(out, dt) }` |
 | `player/player.js` | a floor that moves, carrying whoever's on it (a ship under way) | `player.deck = { still, at }`, `player.spawnOnDeck(…)` |
 | `player/player.js` | something held to the eye: look through it, magnified | `player.sight = { zoom }` |
+| `player/rides.ts` | something that carries you (how fast, how deep, whether it flies or floats): one ride has you at a time | `player.rides.take({ by, what, carrier: { walk, run, swim, depth, fly, keel, … }, lost })`, then `hold.release()` |
+| `player/rides.ts` | something that moves you itself (a train you sit in, skis you steer, a tube the river carries) | `player.rides.take({ by, what, aboard: { place(out, dt), slack }, lost })` |
+| `player/rides.ts` | whether something has you, and what to say to whoever must get off it first | `player.rides.free`, `player.rides.why()` |
+| `railway/lines.js` | the railway, as something grown later keeps clear of (and waits to have surveyed) | `railsNear(lines, NEAR.corner)`, with `keepClear` |
 | `render/flame.js` | a fire, as a volume of burning gas | `createFlameMaterial()` on a `flameBox()`, on the `OVER` layer |
 | `render/haze.js` | the air over something hot shimmering | `createHazeMaterial()` on a `flameBox()`, on the `HEAT` layer; `scene.userData.heat = true` |
 | `render/implicit.js` | a body melted out of balls, bones and skins over a spine | `new Melt({ cell, blend })`, `.ball / .bone / .rings`, `.mesh()` or `.steps()` |
@@ -229,12 +241,15 @@ place in that order, not at the end:
 | `render/liquid.js` | the surface of a liquid other than the forest's water (blood, pitch, lava) | `createLiquidMaterial(kinds)` on the `OVER` layer |
 | `render/origin.js` | a uniform that says where something is | `game.origin.place(uniform)` |
 | `render/pipeline.js` | something drawn over the water, not seen through it (a splash, a spark), or over what's behind it | `object.layers.set(OVER)`; a light on it: `light.layers.enableAll()` |
+| `render/rig.js` | a creature or a person as one skinned mesh, built from primitives | `new RigBuilder(seed)`, `r.bone(…)`, `r.part(bone, geometry, { color })`, `r.build()` |
 | `render/skin.js` | skin: a hide, a horn, a wing, a crust over fire, with its pores, veins and wet | `createSkinMaterial({ hot, baked })` |
 | `roads/index.js` | driving on the roads: the top of the road under a spot, and what it's made of | `game.roads.under(x, z, game.roads.around(x, z, r))` |
 | `save/domains.js` | something that is saved | `game.save.register({ id, collect, restore, … })` |
+| `save/regions.js` | which square of the world a saved thing is filed under | `regionOf(x, z)`, `LOOSE` |
 | `save/worldSave.js` | a word to the others here, never stored | `game.save.say(ch, body, to)`, `game.save.on('message', fn)` |
+| `towns/perTown.ts` | one of something beside some of the towns (a shop, a track), found when it's wanted | `class Shops extends PerTown`, with `has(town)` and `*grow(town, square, patient)` |
 | `ui/hud.js` | a button on the HUD | `game.hud.button(id, fn)` |
-| `ui/hud.js` | what a key would do here, whatever tool is in hand | `hud.cue({ html, progress })` |
+| `ui/hud.js` | what a key would do here, whatever tool is in hand (yours to put up and take down, whoever else has one up) | `hud.cue({ html, progress }, 'yours')`, `hud.cue(null, 'yours')` |
 | `ui/hud.js` | somewhere the HUD points you to | `game.hud.guide(() => target)` |
 | `ui/hud.js` | a setting: a switch or a slider on the settings panel | `game.hud.setting({ id, group, label, get, set })` |
 | `wildlife/species.js` | a species | `defineSpecies(kind, def)` |
@@ -242,14 +257,17 @@ place in that order, not at the end:
 | `wildlife/wildlife.js` | shooting at the animals, or startling them with a loud noise | `wildlife.aimed(o, d, far)`, `kill(hit)`, `startle(x, z, reach)` |
 | `world/basins.js` | water held up in something built (a pool, a tub), to wade and swim in | `game.basins.set(owner, [basin])` |
 | `world/breakers.js` | waves breaking on a shore, for the sea to rise with and anyone to ride | `game.breakers.set(break)`; how high they stand: `breakers.sample(x, z)`, `chunks.waterAt`'s `rise` |
+| `world/claims.ts` | what a search for somewhere to put a thing keeps clear of, from what was there first | `keepClear([landOf(landforms), placesOf(sites), …])` → `keepOff(x0, z0, x1, z1)`, `keepOff.ready` |
 | `world/country.js` | a kind of country (its ground, plants, sky, animals, what its trees are called) | an entry in `COUNTRY` |
 | `world/cuts.js` | a hole in the ground, for something to stand in for it | `setCuts([{ ax, az, bx, bz, fa, fb, w, h }], owner)` |
 | `world/flora.js` | a plant | an entry in `FLORA`, a model, and where it grows (`chunkGen.js`) |
+| `world/frame.js` | a place laid out on a plan of its own: from its frame to the world and back, and what it covers | `toWorld(site, lx, lz)`, `toLocal`, `onPlan`, `planDiscs`, `boxOf` |
 | `world/grass.js` | somewhere grass doesn't grow | `game.grass.addClearing(fn)` |
 | `world/hikes.js` | a real place, from a photo | `npm run hike -- photo.heic` writes it there |
 | `world/sky.js` | how much daylight reaches the eye (dims it, the eye adjusts) | `game.sky.open = 0..1` |
 | `world/solids.js` | something solid to bump into and stand on | `game.solids.set(owner, [capsule])` (`surface: 'boards'` for its footsteps) |
 | `world/spaces.js` | somewhere under the ground to be in: its floor, walls and roof (and how dark it is, if the lamp should come on there) | `game.spaces.add(space)`, `spaces.onDemand(fn)` |
+| `world/wind.js` | which way the wind blows | `WIND` |
 
 Each of those files opens with what the thing is and what it is handed.
 
@@ -427,8 +445,13 @@ src/
   core/
     events.js             Emitter: on / emit, in place of single callback slots
     storage.js            this browser's memory, and every key kept in it
-    geom.js               plan-view geometry, a ray against a box, and chance that several systems share
+    geom.js               plan-view geometry, a ray against a box or a capsule, and chance that several systems share
     format.js             how numbers are written for people
+    names.js              names several kinds of thing draw on
+    nearest.js            places listed nearest first, without end
+    searches.ts           answers that take a while to work out, each worked out once
+  people/
+    body.js               someone who isn't a hiker: what they're made of, how they walk and wave
   game/
     game.ts               the Game: what features share, and the frame's phases
     budget.ts             work that can wait, a little each frame, out of one allowance

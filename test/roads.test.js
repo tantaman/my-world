@@ -11,7 +11,7 @@ import { LANDS } from '../src/world/lands.js';
 import { gateOf, pointAt, nearest, topAt, tightest, envelope, GRADE, BED, WIDE, DS } from '../src/roads/roads.js';
 import { footprint, pieceCount, pieceRange, buildPiece, buildGate } from '../src/roads/pavement.js';
 import { createBuildingMaterial } from '../src/build/surfaces.js';
-import { onPlan } from '../src/landmarks/sites.js';
+import { onPlan } from '../src/world/frame.js';
 import { roadsWorld } from './helpers/roadsWorld.js';
 import { matchesGolden } from './helpers/golden.js';
 

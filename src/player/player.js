@@ -35,7 +35,8 @@ import { CONFIG } from '../config.js';
 import { Character } from './character.js';
 import { lerp, clamp, smoothstep } from '../noise.js';
 import { Emitter } from '../core/events.js';
-import { segDist, waterSample } from '../core/geom.js';
+import { segDist, waterSample, wrapAngle as wrap } from '../core/geom.js';
+import { Rides } from './rides.ts';
 
 // The heights and depths here are the grown-up hiker's; someone smaller
 // (character.size) has them that much smaller: their eyes, their head room,
@@ -139,8 +140,6 @@ export function standHeight(world, x, z, depth = SWIM_DEPTH, y = Infinity, space
   return g;
 }
 
-// An angle brought round to between -π and π.
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 // The walking axes with a stick pushed on the slant, all the way, counted as
 // both all the way, as W and A together are: so turning while you walk with
@@ -236,6 +235,10 @@ export class Player extends Emitter {
     // `manual` says whether they moved you this frame.
     this.steer = null;
     this.manual = false;
+    // What carries you (carrier) and what moves you (aboard), below, are one
+    // at a time and somebody's: a ride asks for you with rides.take(), and
+    // these two are set for it (rides.ts). Nothing else sets them.
+    this.rides = new Rides(this);
     // Something carrying you, or null on your own two feet. Player only
     // needs to know how it moves, not what it is (its owner draws it):
     //   walk, run      m/s on the ground (run: with shift)
@@ -266,6 +269,9 @@ export class Player extends Emitter {
     // says where you are, and the camera comes along and turns as it turns.
     //   posesCharacter  true while the ride places and animates the hiker
     //                   in a separate scene
+    //   slack           put further than this (m) from where it last had
+    //                   you (a teleport), you're out of it: its ride is told
+    //                   ('moved'). Left out, that's the ride's own business
     //   place(out, dt)  fills out.x, out.y, out.z (where your feet are),
     //                   out.yaw (which way you face), and if it likes:
     //     heading    which way you're going, for the camera to turn with,
@@ -285,7 +291,7 @@ export class Player extends Emitter {
     this._looked = 0; // s since you last looked about, while aboard
     // Something you stand on that moves, or null:
     //   still      { x, z, yaw }: where what's solid of it is (its own
-    //              frame there, as landmarks/sites.js's toWorld has it)
+    //              frame there, as world/frame.js's toWorld has it)
     //   at         { x, z, yaw }: where it is now, and drawn
     // While it's set, you move about against what's solid of it at `still`,
     // and are put where that is on it `at` now. Who sets it sets it while
@@ -482,6 +488,7 @@ export class Player extends Emitter {
     if (zoomHeld && (!atNearest || this._intoEyes >= INTO_EYES)) this._zoom(Math.pow(ZOOM_HOLD, zoomHeld * dt));
     if (input.isDown('turnLeft')) this.camYaw += dt * 1.8;
     if (input.isDown('turnRight')) this.camYaw -= dt * 1.8;
+    this.rides.check(); // (whatever had you may find it has lost you)
     if (this.aboard) return this._ride(dt, look.x || look.y || stick.x || stick.y || input.isDown('turnLeft') || input.isDown('turnRight'));
     this._rode = false;
 
@@ -915,6 +922,7 @@ export class Player extends Emitter {
     const k = this._rode && Math.hypot(dx, dz) < 5 ? 1 / Math.max(dt, 1e-4) : 0;
     this.vel.set(dx * k, dy * k, dz * k);
     this.pos.set(at.x, at.y, at.z);
+    this.rides.placed(at.x, at.y, at.z);
     this.yaw = at.yaw;
     this._rode = true;
     this.turnRate = 0;

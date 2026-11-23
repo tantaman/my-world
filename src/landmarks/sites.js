@@ -30,8 +30,11 @@
 //   ...and what its kind needs: a dock's length, the level of its water
 
 import { mulberry32, hash2i } from '../noise.js';
+import { Searches } from '../core/searches.ts';
+import { toWorld, boxOf } from '../world/frame.js';
 import { NET } from '../world/drainage.js';
-import { KINDS, KIND_IDS, SURNAMES } from './kinds.js';
+import { KINDS, KIND_IDS } from './kinds.js';
+import { SURNAMES } from '../core/names.js';
 
 export const CELL = 300; // m, the side of the square each site has to itself
 const CHANCE = 0.55; // that a cell has something in it at all
@@ -48,92 +51,45 @@ const TAU = Math.PI * 2;
 
 const key = (ci, cj) => `${ci}:${cj}`;
 
-// ── A site's own frame ───────────────────────────────────────────────────────
-export function toWorld(s, lx, lz, out = {}) {
-  const c = Math.cos(s.yaw);
-  const n = Math.sin(s.yaw);
-  out.x = s.x + lx * c + lz * n;
-  out.z = s.z - lx * n + lz * c;
-  return out;
-}
-
-export function toLocal(s, x, z, out = {}) {
-  const c = Math.cos(s.yaw);
-  const n = Math.sin(s.yaw);
-  const dx = x - s.x;
-  const dz = z - s.z;
-  out.x = dx * c - dz * n;
-  out.z = dx * n + dz * c;
-  return out;
-}
-
-const _l = { x: 0, z: 0 };
-// Is the world point (x, z) on one of the site's rectangles, grown by margin?
-// (Anything with x, z, yaw and a box round its rectangles will do: a town, a
-// building in it.)
-export function onPlan(s, x, z, margin = 0, rects = s.plan) {
-  if (x < s.box[0] - margin || x > s.box[2] + margin || z < s.box[1] - margin || z > s.box[3] + margin) return false;
-  toLocal(s, x, z, _l);
-  for (const [x0, z0, x1, z1] of rects) {
-    if (_l.x >= x0 - margin && _l.x <= x1 + margin && _l.z >= z0 - margin && _l.z <= z1 + margin) return true;
-  }
-  return false;
-}
-
-// The plan as discs ({ x, z, r } in the world) that cover it: how building
-// tools, which think in circles, are told to keep off it.
-export function planDiscs(s, spacing = 1.5) {
-  const out = [];
-  for (const [x0, z0, x1, z1] of s.plan) {
-    const nx = Math.max(1, Math.ceil((x1 - x0) / spacing));
-    const nz = Math.max(1, Math.ceil((z1 - z0) / spacing));
-    const dx = (x1 - x0) / nx;
-    const dz = (z1 - z0) / nz;
-    const r = Math.hypot(dx, dz) / 2;
-    for (let j = 0; j < nz; j++) {
-      for (let i = 0; i < nx; i++) {
-        const p = toWorld(s, x0 + (i + 0.5) * dx, z0 + (j + 0.5) * dz);
-        out.push({ x: p.x, z: p.z, r });
-      }
-    }
-  }
-  return out;
-}
-
 // ── The sites ────────────────────────────────────────────────────────────────
 export class Sites {
   // start: where people first arrive, kept clear (the start of the path)
   constructor(gen, { start = gen.findSpawn(0, 0) } = {}) {
     this.gen = gen;
     this.start = start;
-    this.cells = new Map(); // "ci:cj" -> site or null
-    this.queue = new Set(); // cells asked about and not yet looked at
+    // looked at outright (cell) or a few a frame (peek, then pump): core/searches.ts
+    this.search = new Searches({
+      grow: (k) => {
+        const [ci, cj] = k.split(':').map(Number);
+        return this._grow(ci, cj);
+      },
+    });
+    this.cells = this.search.known; // "ci:cj" -> site or null
     // the side of a cell, and how far (m) a site may reach out of its own:
     // something grown on bigger cells (a town) says otherwise
     this.size = CELL;
     this.spill = SPILL;
   }
 
+  // Cells asked about and not yet looked at.
+  get queue() {
+    return this.search.queue;
+  }
+
   // The site in cell (ci, cj), or null.
   cell(ci, cj) {
     const k = key(ci, cj);
-    let s = this.cells.get(k);
+    const s = this.cells.get(k);
     if (s !== undefined) return s;
     if (this.cells.size > 40000) this.cells.clear();
-    s = this._grow(ci, cj);
-    this.cells.set(k, s);
-    this.queue.delete(k);
-    return s;
+    return this.search.get(k);
   }
 
   // The site in cell (ci, cj) if the cell has been looked at (null: nothing
   // there), or undefined if not yet, and then it's queued for pump(): for
   // lists that would rather wait a frame than stall.
   peek(ci, cj) {
-    const k = key(ci, cj);
-    const s = this.cells.get(k);
-    if (s === undefined) this.queue.add(k);
-    return s;
+    return this.search.peek(key(ci, cj));
   }
 
   // Sites whose plan comes within r of (x, z).
@@ -169,13 +125,7 @@ export class Sites {
 
   // Look at queued cells for up to `ms` milliseconds. -> how many are left.
   pump(ms) {
-    const t0 = performance.now();
-    for (const k of this.queue) {
-      if (performance.now() - t0 > ms) break;
-      const [ci, cj] = k.split(':').map(Number);
-      this.cell(ci, cj);
-    }
-    return this.queue.size;
+    return this.search.pump(ms);
   }
 
   // Ask for the cells within r of (x, z) to be looked at in the background.
@@ -375,24 +325,6 @@ export class Sites {
     }
     return null;
   }
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-export function boxOf(s) {
-  let x0 = Infinity;
-  let z0 = Infinity;
-  let x1 = -Infinity;
-  let z1 = -Infinity;
-  for (const [a, b, c, d] of s.plan) {
-    for (const [lx, lz] of [[a, b], [c, b], [a, d], [c, d]]) {
-      const p = toWorld(s, lx, lz);
-      x0 = Math.min(x0, p.x);
-      z0 = Math.min(z0, p.z);
-      x1 = Math.max(x1, p.x);
-      z1 = Math.max(z1, p.z);
-    }
-  }
-  return [x0, z0, x1, z1];
 }
 
 function boxDist(b, x, z) {

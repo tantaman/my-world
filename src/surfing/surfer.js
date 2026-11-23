@@ -56,6 +56,7 @@
 
 import { Emitter } from '../core/events.js';
 import { clamp, smoothstep } from '../noise.js';
+import { wrapAngle as wrap } from '../core/geom.js';
 
 export const SURFER = {
   gravity: 9.8, // m/s²
@@ -100,7 +101,6 @@ export const SURFER = {
   turn: { least: 1.1, speed: 3.5, after: 1.2 },
 };
 
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const _s = { rise: 0, gx: 0, gz: 0, fx: 0, fz: 0, wave: null };
 
 export class Surfer extends Emitter {

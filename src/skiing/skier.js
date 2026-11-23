@@ -47,6 +47,7 @@
 import { Emitter } from '../core/events.js';
 import { smoothstep } from '../noise.js';
 import { counts, fall, nameOf, score } from './tricks.js';
+import { wrapAngle as wrap } from '../core/geom.js';
 
 // m/s²: a little less than the hiker's own (CONFIG.gravity), so airs float a
 // little and the slopes don't run away with you.
@@ -96,7 +97,6 @@ const ROCK = { steep: 0.22, speed: 8 };
 // stopped (or this long after anyway).
 const TUMBLE = { friction: 9, more: 0.3, roll: 1.6, up: 2.2, most: 6 };
 
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const _n = { x: 0, y: 1, z: 0 };
 const _hit = { nx: 0, nz: 0, depth: 0, what: '' };
 

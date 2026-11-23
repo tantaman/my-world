@@ -42,21 +42,19 @@ import { Board, clock, ordinal } from './board.js';
 import { raceSounds } from './sound.js';
 import { Drivers } from './others.js';
 import { RING as CLUB_RING, PLAN as CLUB_PLAN } from '../huntclub/site.js';
-import { toWorld, toLocal, planDiscs } from '../landmarks/sites.js';
+import { toWorld, toLocal, planDiscs } from '../world/frame.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { SEAT_HIPS } from '../player/character.js';
 import { GridNearest } from '../core/nearest.js';
 import { formatDistance } from '../core/format.js';
 import { rayBox } from '../core/geom.js';
+import { airfieldsOver } from '../airports/airports.js';
 
 const SHOW = 650; // m: the nearest track is stood up this close...
 const HIDE = 800; // ...and taken down past this
 const NEAREST_AFTER = 0.5; // s between looks for the nearest track
 const SWAP_NEARER = 150; // m nearer another track must be to take the place of one that's stood up
 const PREFETCH = 2500; // m round you within which tracks are looked for ahead of time
-const PUMP_MS = [1.5, 6]; // ms a frame spent looking for them: about, and while the map is open
-const FIELD_NEAR = 170; // m in from an airfield's region's ring, and...
-const FIELD_FAR = 4200; // ...out past it, within which a track asks where the airfield is
 // The hunt club is somewhere in a ring round the start: a track keeps out of
 // all of it, wherever the club turned out to be.
 const CLUB_CLEAR = CLUB_RING[1] + Math.hypot(...CLUB_PLAN.slice(2)) + 20;
@@ -89,7 +87,6 @@ const _wall = { nx: 0, nz: 0, depth: 0 };
 const _them = { x: 0, z: 0, yaw: 0, vx: 0, vz: 0, push: 0 };
 const _v = new THREE.Vector3();
 const _e = new THREE.Euler(0, 0, 0, 'YXZ');
-const overlaps = (a, b) => a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
 const WAYS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 const way = (dx, dz) => WAYS[Math.round((((Math.atan2(dx, -dz) * 180) / Math.PI + 360) % 360) / 45) % 8];
 
@@ -104,17 +101,9 @@ export function installRacetrack(game) {
 
   // ── Where they are ────────────────────────────────────────────────────────
   const fields = airports.airports;
-  function onAirfield(box) {
-    const x = (box[0] + box[2]) / 2;
-    const z = (box[1] + box[3]) / 2;
-    for (const region of fields.regions) {
-      const d = Math.hypot(x - region.x, z - region.z);
-      if (d < region.r0 - FIELD_NEAR || d > region.r1 + FIELD_FAR) continue;
-      const field = fields.site(region.id);
-      if (field && overlaps(box, field.box)) return true;
-    }
-    return false;
-  }
+  // (asked about by the middle of the box, as it always has been: airports.js)
+  const airfieldIn = airfieldsOver(fields, { wide: false });
+  const onAirfield = (box) => airfieldIn.holds(...box);
   const keepOff = clearOf({
     landforms,
     sites: landmarks.sites,
@@ -383,7 +372,7 @@ export function installRacetrack(game) {
   let driving = false;
   let race = null;
   let hint = null; // where round the lap the car was last frame
-  const last = { x: 0, z: 0 }; // where the car put you last frame
+  let hold = null; // what you're held by while you drive (player/rides.ts)
   // What's under the car, in the track's frame: the racing surface, its
   // kerbs, or the run-off (the bank, or the ground); and the barrier.
   const world = {
@@ -433,23 +422,15 @@ export function installRacetrack(game) {
   }
   // You, in it: the car moves you, wherever it goes.
   const mover = {
+    slack: MOVED,
     place(out, dt) {
-      // moved by something else (R, a teleport, the map): that's the end of it
-      if (Math.hypot(player.pos.x - last.x, player.pos.z - last.z) > MOVED) {
-        out.x = player.pos.x;
-        out.y = player.pos.y;
-        out.z = player.pos.z;
-        out.yaw = player.yaw;
-        moved = true;
-        return;
-      }
       readControls();
       car.held = !race || race.state === 'lights';
       car.step(Math.min(dt, 1 / 30), controls, world);
       if (dt > 1 / 30) car.step(dt - 1 / 30, controls, world);
       toWorld(site, car.x, car.z, _w);
-      out.x = last.x = _w.x;
-      out.z = last.z = _w.z;
+      out.x = _w.x;
+      out.z = _w.z;
       out.y = car.y;
       out.yaw = car.yaw + site.yaw;
       out.heading = Math.hypot(car.vx, car.vz) > 2 ? Math.atan2(car.vx, car.vz) + site.yaw : out.yaw;
@@ -458,16 +439,18 @@ export function installRacetrack(game) {
       out.grounded = !car.airborne;
     },
   };
-  let moved = false;
   let camWas = null;
   builder.idleWhile(() => driving);
 
   function getIn() {
     if (driving || !built) return false;
-    if (player.carrier || player.aboard) {
-      hud.flash('get down first: you can’t get into the car from here');
+    if (!player.rides.free) {
+      hud.flash(`${player.rides.why()}: you can’t get into the car from here`);
       return false;
     }
+    // (something else has you, or has put you somewhere, R, a teleport, the map: that's the end of it)
+    hold = player.rides.take({ by: 'racetrack', what: 'your car', aboard: mover, lost: () => stow() });
+    if (!hold) return false;
     const { c } = built.frame;
     race = new Race(c, { surface: LAYOUTS[site.layout].surface, seed: (Math.random() * 2 ** 31) >>> 0 });
     hookRace(race);
@@ -478,13 +461,9 @@ export function installRacetrack(game) {
     hint = c.wrap(g.run);
     car.place(_p.x, _p.z, Math.atan2(_p.tx, _p.tz), world);
     driving = true;
-    moved = false;
     toWorld(site, car.x, car.z, _w);
-    last.x = _w.x;
-    last.z = _w.z;
     player.pos.set(_w.x, car.y, _w.z);
     player.vel.set(0, 0, 0);
-    player.aboard = mover;
     player.character.seat(SEAT);
     camWas = { dist: player.camDist, pitch: player.camPitch };
     player.camDist = CAM.dist;
@@ -518,7 +497,8 @@ export function installRacetrack(game) {
   function stow() {
     if (!driving) return;
     driving = false;
-    if (player.aboard === mover) player.aboard = null;
+    if (hold) hold.release();
+    hold = null;
     const ch = player.character;
     ch.seat(null);
     ch.root.rotation.x = 0;
@@ -533,10 +513,7 @@ export function installRacetrack(game) {
     heard.you = null;
     heard.others = [];
     board.hide();
-    if (cued) {
-      hud.cue(null);
-      cued = false;
-    }
+    cue(null);
     setLamps(0);
     park();
     tell();
@@ -611,7 +588,7 @@ export function installRacetrack(game) {
   // By your car, F gets you in; stopped in it, out. A key-less command in
   // the pack says where your car is, and races again after a race.
   const nearCar = () => {
-    if (!shown || driving || player.carrier || player.aboard) return false;
+    if (!shown || driving || !player.rides.free) return false;
     const a = apronSpot();
     const p = toWorld(site, a.x, a.z);
     return Math.hypot(player.pos.x - p.x, player.pos.z - p.z) < REACH && Math.abs(player.pos.y - built.apron) < 2;
@@ -678,20 +655,16 @@ export function installRacetrack(game) {
   }
   sound.addLayer(raceSounds(heard));
   let cheer = 0;
-  let cued = false;
   function cue(html) {
-    if (html) {
-      hud.cue({ html });
-      cued = true;
-    } else if (cued) {
-      hud.cue(null);
-      cued = false;
-    }
+    hud.cue(html ? { html } : null, 'racetrack');
   }
 
   // ── Each frame ────────────────────────────────────────────────────────────
   let arrived = false;
   let lookIn = 0;
+  // Where the tracks are further off is looked for a little at a time, out of
+  // what the frame can spare (game/budget.ts).
+  game.budget.add({ name: 'racetrack', work: (ms) => tracks.pump(ms) });
   game.addSystem({
     name: 'racetrack',
     phase: 'world',
@@ -699,7 +672,6 @@ export function installRacetrack(game) {
       const f = game.focus;
       // the tracks round about looked for ahead of time, and, out of the
       // car, the nearest stood up in place of the last
-      if (tracks.queue.size) tracks.pump(map.isOpen ? PUMP_MS[1] : PUMP_MS[0]);
       lookIn -= dt;
       if (lookIn <= 0) {
         lookIn = NEAREST_AFTER;
@@ -746,8 +718,7 @@ export function installRacetrack(game) {
         } else cue(null);
         return;
       }
-      // something else has you now, or has put you somewhere
-      if (player.aboard !== mover || player.carrier || moved || !built) {
+      if (!built) {
         stow();
         return;
       }

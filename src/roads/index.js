@@ -42,7 +42,6 @@ const HIDE = 400; // ...and taken down again past this
 const LOOK_EVERY = 0.5; // s between looks round for road to stand up
 const BUILD_MS = 4; // ms a frame spent standing road up, when there's some to do
 const REACH = 3000; // m round you whose roads are surveyed, nearest first
-const PUMP_MS = [1.6, 6]; // ms a frame surveying roads: usually, and with the map open
 const PREFETCH_EVERY = 2; // s between asking for the roads round you
 const MAP_MOST = 16000; // m across the map, past which only roads already known are drawn
 const JUNCTION = WIDE + 1.6; // m across the round where a town's roads meet (pavement.js)
@@ -290,6 +289,9 @@ export function installRoads(game) {
   // ── Every frame ───────────────────────────────────────────────────────────
   let lookIn = 0;
   let prefetchIn = 0;
+  // The roads further off are surveyed a little at a time, out of what the
+  // frame can spare (game/budget.ts).
+  game.budget.add({ name: 'roads', work: (ms) => roads.pump(ms) });
   game.addSystem({
     name: 'roads',
     phase: 'world',
@@ -310,7 +312,6 @@ export function installRoads(game) {
         prefetchIn = PREFETCH_EVERY;
         roads.prefetch(at.x, at.z, REACH);
       }
-      if (roads.queue.size) roads.pump(map.isOpen ? PUMP_MS[1] : PUMP_MS[0]);
     },
   });
 

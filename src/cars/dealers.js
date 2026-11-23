@@ -32,12 +32,13 @@
 //   paints    the colour of each kind of car on its lot (kinds.js)
 
 import { mulberry32 } from '../noise.js';
-import { toWorld, onPlan } from '../landmarks/sites.js';
-import { SURNAMES } from '../landmarks/kinds.js';
+import { toWorld, onPlan } from '../world/frame.js';
+import { SURNAMES } from '../core/names.js';
 import { KINDS as TOWN_KINDS } from '../towns/kinds.js';
 import { pointAt, nearest, gateOf, WIDE } from '../roads/roads.js';
 import { segDist } from '../core/geom.js';
 import { KINDS, KIND_IDS } from './kinds.js';
+import { PerTown } from '../towns/perTown.ts';
 
 export const DEALER = {
   chance: 0.9, // that a western town or a village, with a road, has one
@@ -58,7 +59,7 @@ const SALT = 0x5ca7e;
 export const DOOR_AT = { x: 0, z: 13 };
 export const NAMES = ['{s} Motors', '{s} Motor Co.', '{s} & Sons Motors', '{s} Auto Sales', '{s} Motors'];
 // What a yield says: waiting for something else to be found.
-export const WAIT = Symbol('wait');
+export const WAIT = 'wait'; // (what a search yields while it waits: core/searches.ts goes on with the others)
 
 const lived = (t) => !TOWN_KINDS[t.kind].abandoned && TOWN_KINDS[t.kind].style !== 'creepy';
 
@@ -86,19 +87,32 @@ function namesOf(t, seed) {
 // a road is there (roads/index.js); keepOff(x0, z0, x1, z1): whether that
 // rectangle is somewhere a lot may not be (what the roads keep clear of);
 // ready(x0, z0, x1, z1): whether all of that is known there (asking for what isn't)
-export class Dealers {
+export class Dealers extends PerTown {
   constructor(gen, { towns, roads, stands = () => true, keepOff = () => false, ready = () => true }) {
+    // What it can be asked is PerTown's (towns/perTown.ts): forTown, peek,
+    // pump, prefetch, byId ('dealer:town:<i>:<j>').
+    super({
+      towns,
+      prefix: 'dealer',
+      reach: OUT_OF_TOWN,
+      has: (t) => hasDealer(t, gen.seed),
+      grow: (t) => this._grow(t),
+      found: (site) => {
+        if (site) for (const fn of this.listeners) fn(site);
+      },
+    });
     this.gen = gen;
-    this.towns = towns;
     this.roads = roads;
     this.stands = stands;
     this.keepOff = keepOff;
     this.ready = ready;
-    this.sites = new Map(); // town id -> dealership, or null
-    this.growing = new Map(); // town id -> a search under way
-    this.queue = new Map(); // town id -> town, asked about and not yet looked for
-    this.patient = true;
     this.listeners = [];
+  }
+
+  // A search may wait for the roads and what it keeps clear of (not when a
+  // dealership is wanted outright).
+  get patient() {
+    return this.search.patient;
   }
 
   // fn(site) whenever a dealership has been found.
@@ -106,55 +120,9 @@ export class Dealers {
     this.listeners.push(fn);
   }
 
-  // The dealership beside town t, or null; looked for now if it hasn't been.
-  forTown(t) {
-    const known = this.peek(t, false);
-    if (known !== undefined) return known;
-    const run = this.growing.get(t.id) || this._grow(t);
-    this.growing.set(t.id, run);
-    const was = this.patient;
-    this.patient = false;
-    try {
-      let r;
-      do r = run.next();
-      while (!r.done);
-      return this._done(t, r.value);
-    } finally {
-      this.patient = was;
-    }
-  }
-
-  // ...or undefined if it hasn't been, and then (if ask) it's queued for pump().
-  peek(t, ask = true) {
-    const known = this.sites.get(t.id);
-    if (known !== undefined) return known;
-    if (!hasDealer(t, this.gen.seed)) return this._done(t, null);
-    if (ask) this.queue.set(t.id, t);
-    return undefined;
-  }
-
-  // Look for queued dealerships for up to `ms` milliseconds. -> how many are left.
-  pump(ms) {
-    const t0 = performance.now();
-    for (const [id, t] of this.queue) {
-      let run = this.growing.get(id);
-      if (!run) this.growing.set(id, (run = this._grow(t)));
-      for (;;) {
-        const r = run.next();
-        if (r.done) {
-          this._done(t, r.value);
-          break;
-        }
-        if (performance.now() - t0 > ms) return this.queue.size;
-        if (r.value === WAIT) break;
-      }
-      if (performance.now() - t0 > ms) break;
-    }
-    return this.queue.size;
-  }
-
   // Dealerships whose box overlaps a rectangle of the world. With wait =
-  // false, only those already found (and the towns already known).
+  // false, only those already found (and the towns already known); the rest
+  // are asked for.
   within(x0, z0, x1, z1, wait = true) {
     const out = [];
     const m = OUT_OF_TOWN;
@@ -163,27 +131,6 @@ export class Dealers {
       if (d && d.box[0] <= x1 && d.box[2] >= x0 && d.box[1] <= z1 && d.box[3] >= z0) out.push(d);
     }
     return out;
-  }
-
-  // Ask for the dealerships of the towns known within r of (x, z) to be
-  // looked for in the background.
-  prefetch(x, z, r) {
-    for (const t of this.towns.within(x - r, z - r, x + r, z + r, false)) this.peek(t);
-  }
-
-  // The dealership with this id ('dealer:town:<i>:<j>'), or null.
-  byId(id) {
-    const m = /^dealer:(town:-?\d+:-?\d+)$/.exec(String(id));
-    const t = m && this.towns.byId(m[1]);
-    return t ? this.forTown(t) : null;
-  }
-
-  _done(t, site) {
-    this.growing.delete(t.id);
-    this.queue.delete(t.id);
-    this.sites.set(t.id, site);
-    if (site) for (const fn of this.listeners) fn(site);
-    return site;
   }
 
   *_grow(t) {

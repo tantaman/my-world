@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { Player } from '../src/player/player.js';
 import { Solids } from '../src/world/solids.js';
-import { toLocal } from '../src/landmarks/sites.js';
+import { toLocal } from '../src/world/frame.js';
 
 const FLOOR = 10; // m: the deck's top, over the water
 function aboard() {

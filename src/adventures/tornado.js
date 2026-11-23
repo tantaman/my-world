@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { Storm } from './storm.js';
 import { Puffs } from './fx.js';
-import { WIND } from '../fires/look.js';
+import { WIND } from '../world/wind.js';
 import { NOISE_GLSL } from '../render/glsl.js';
 import { SHARED } from '../render/uniforms.js';
 import { TREE_KINDS } from '../world/flora.js';

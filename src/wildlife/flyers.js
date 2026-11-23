@@ -8,7 +8,7 @@
 //   Owl    a great horned owl ghosting across a clearing after dark
 
 import { buildBird, BirdAnim } from './birds.js';
-import { disposeAnimal } from './rig.js';
+import { disposeAnimal } from '../render/rig.js';
 import { clamp, lerp } from '../noise.js';
 import { rand, pick, wrapAngle as wrap } from '../core/geom.js';
 

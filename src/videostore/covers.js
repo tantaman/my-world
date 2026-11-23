@@ -25,7 +25,7 @@
 //   Atlas        all of them in one image, for the shelves (below)
 
 import { mulberry32 } from '../noise.js';
-import { layout } from './font.js';
+import { layout } from '../build/font.js';
 
 export const COVER = { w: 24, h: 36 };
 

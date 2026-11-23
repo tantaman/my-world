@@ -12,7 +12,7 @@
 //   gatorLine(gator, side, n) the words for one, by how big it is and where
 
 import * as THREE from 'three';
-import { Body } from '../towns/people.js';
+import { Body } from '../people/body.js';
 import { mulberry32 } from '../noise.js';
 import { clamp, lerp } from '../noise.js';
 

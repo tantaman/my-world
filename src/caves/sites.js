@@ -326,3 +326,17 @@ function segSeg(s, o) {
   }
   return Math.min(pointSeg(s.ax, s.az, o), pointSeg(s.bx, s.bz, o), pointSeg(o.ax, o.az, s), pointSeg(o.bx, o.bz, s));
 }
+
+// The mouths of caves, as something for what's grown later to keep clear of
+// (world/claims.ts): a box holds one if a mouth is in it, or within `clear`
+// metres of it. caves: whatever answers inBox(x0, z0, x1, z1) with the
+// caves whose mouths could be (the Caves, or a stand-in).
+export const caveMouths = (caves, clear) => ({
+  holds(x0, z0, x1, z1) {
+    for (const c of caves.inBox(x0, z0, x1, z1)) {
+      const m = c.mouth;
+      if (m.x > x0 - clear && m.x < x1 + clear && m.z > z0 - clear && m.z < z1 + clear) return true;
+    }
+    return false;
+  },
+});

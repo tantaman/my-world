@@ -32,7 +32,7 @@
 
 import * as THREE from 'three';
 import { ShipKit } from './kit.js';
-import { layout } from '../videostore/font.js';
+import { layout } from '../build/font.js';
 import { halfBeam, deckY, layout as deckLayout, walls, cabinsOn, CORES, DECK_H, SLAB, HALF_BEAM, BOW, STERN, DRAFT, HULL_T, FUNNEL, SHIP, WINDOW } from './plan.js';
 
 const col = (hex) => new THREE.Color(hex);

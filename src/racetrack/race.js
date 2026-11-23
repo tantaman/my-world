@@ -33,7 +33,7 @@
 import { Emitter } from '../core/events.js';
 import { mulberry32 } from '../noise.js';
 import { CAR, GROUND } from './car.js';
-import { SURNAMES } from '../landmarks/kinds.js';
+import { SURNAMES } from '../core/names.js';
 
 export const RACE = {
   laps: 3,

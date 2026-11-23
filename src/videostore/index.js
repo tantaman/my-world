@@ -48,22 +48,20 @@ import { buildStore, makeHeldBox, DROP_BOX } from './store.js';
 import { Counter, HANDS, termsOf, money, sameCopy, daysLate } from './browse.js';
 import { Card, receiptHtml } from './card.js';
 import { shopSounds } from './sound.js';
-import { Body } from '../towns/people.js';
-import { onPlan, planDiscs, toWorld, toLocal } from '../landmarks/sites.js';
+import { Body } from '../people/body.js';
+import { onPlan, planDiscs, toWorld, toLocal } from '../world/frame.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { SKY } from '../render/uniforms.js';
 import { rayBox, wrapAngle } from '../core/geom.js';
 import { mulberry32 } from '../noise.js';
 import { Branches, hasBranch } from './branches.js';
 import { GridNearest, ListNearest, MergeNearest } from '../core/nearest.js';
+import { airfieldsOver } from '../airports/airports.js';
 
 const BEEN_KEPT = 500; // branches you've been to, the most remembered
 const NEAREST_AFTER = 0.5; // s between looks for the nearest store
 const SWAP_NEARER = 120; // m nearer another store must be to take the place of one that's stood up
 const PREFETCH = 2500; // m round you within which branches are looked for ahead of time
-const PUMP_MS = [1.5, 6]; // ms a frame spent looking for them: about, and while the map is open
-const FIELD_NEAR = 170; // m in from an airfield's region's ring, and...
-const FIELD_FAR = 4200; // ...out past it, within which a branch asks where the airfield is
 const SHOW = 430; // m: the store is stood up this close...
 const HIDE = 560; // ...and taken down past this
 const PREPARE = 700; // m: its covers start being painted this close, a slice a frame
@@ -115,17 +113,9 @@ export function installVideostore(game) {
   const keepOff = clearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, spaceport: spaceport.sites });
   const home = findSite(gen, player.start, keepOff);
   const fields = airports.airports;
-  function onAirfield(box) {
-    const x = (box[0] + box[2]) / 2;
-    const z = (box[1] + box[3]) / 2;
-    for (const region of fields.regions) {
-      const d = Math.hypot(x - region.x, z - region.z);
-      if (d < region.r0 - FIELD_NEAR || d > region.r1 + FIELD_FAR) continue;
-      const field = fields.site(region.id);
-      if (field && overlaps(box, field.box)) return true;
-    }
-    return false;
-  }
+  // (asked about by the middle of the box, as it always has been: airports.js)
+  const airfieldIn = airfieldsOver(fields, { wide: false });
+  const onAirfield = (box) => airfieldIn.holds(...box);
   const branches = new Branches(gen, { towns: towns.towns, keepOff, also: (...box) => (home && overlaps(box, home.box)) || onAirfield(box) });
   // every store whose box overlaps a rectangle (wait = false: only those found already)
   const stores = (x0, z0, x1, z1, wait = true) => {
@@ -614,7 +604,6 @@ export function installVideostore(game) {
   // ── Each frame ────────────────────────────────────────────────────────────
   let arrived = false;
   let wasInside = false;
-  let cued = false;
   let doorsOpen = 0;
   let camBefore = null;
   let screenCut = 0;
@@ -641,6 +630,9 @@ export function installVideostore(game) {
     arrived = false;
     doorsOpen = 0;
   }
+  // Where the branches are further off is looked for a little at a time, out of
+  // what the frame can spare (game/budget.ts).
+  game.budget.add({ name: 'videostore', work: (ms) => branches.pump(ms) });
   game.addSystem({
     name: 'videostore',
     phase: 'world',
@@ -648,7 +640,6 @@ export function installVideostore(game) {
       const f = game.focus;
       // the branches round about looked for ahead of time, and, outside, the
       // nearest stood up in place of the last
-      if (branches.queue.size) branches.pump(map.isOpen ? PUMP_MS[1] : PUMP_MS[0]);
       lookIn -= dt;
       if (lookIn <= 0) {
         lookIn = NEAREST_AFTER;
@@ -676,10 +667,7 @@ export function installVideostore(game) {
         where.inside = wasInside = false;
         heard.inside = heard.near = 0;
         overhead.intensity = 0;
-        if (cued) {
-          hud.cue(null);
-          cued = false;
-        }
+        hud.cue(null, 'videostore');
         card.hide();
         return;
       }
@@ -793,13 +781,7 @@ export function installVideostore(game) {
       deedHere = { word: 'return', run: () => giveBack(false) };
       cue = `<b>${act.key('return')}</b> drop ${counter.out.length === 1 ? 'your movie' : `your ${counter.out.length} movies`} in the returns`;
     }
-    if (cue) {
-      hud.cue({ html: cue });
-      cued = true;
-    } else if (cued) {
-      hud.cue(null);
-      cued = false;
-    }
+    hud.cue(cue ? { html: cue } : null, 'videostore');
     if (deed && input.tapped('use')) deed();
     else if (where.inside && n && input.tapped('alt')) putBack();
 

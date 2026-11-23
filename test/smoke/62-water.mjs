@@ -22,8 +22,10 @@ export default async function ({ page, step, shot }) {
         return (gen.height(i, j) * (1 - u) + gen.height(i + 1, j) * u) * (1 - v) + (gen.height(i, j + 1) * (1 - u) + gen.height(i + 1, j + 1) * u) * v;
       };
       let best = null;
-      for (let r = 0; r < 320 && !best; r += 3) {
-        for (let a = 0; a < 6.28; a += 3 / Math.max(3, r)) {
+      // Near where we are, if there is any: and if not (it depends where the
+      // parts before this left us), further off, looked for more coarsely.
+      for (let r = 0; r < 1600 && !best; r += r < 320 ? 3 : 8) {
+        for (let a = 0; a < 6.28; a += (r < 320 ? 3 : 8) / Math.max(3, r)) {
           const x = player.pos.x + Math.cos(a) * r;
           const z = player.pos.z + Math.sin(a) * r;
           const h = gen.height(x, z);

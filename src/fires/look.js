@@ -10,9 +10,9 @@ import { anchor } from '../render/origin.js';
 import { OVER } from '../render/pipeline.js';
 import { NOISE_GLSL, POINT_GLSL, POINT_DISC_GLSL } from '../render/glsl.js';
 import { createFlameMaterial as createFlame } from '../render/flame.js';
+import { WIND } from '../world/wind.js';
 
 // Which way smoke drifts and flames lean, as the trees sway.
-export const WIND = new THREE.Vector2(1, 0.45).normalize();
 
 const smooth = (t) => t * t * (3 - 2 * t);
 

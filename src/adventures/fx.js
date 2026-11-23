@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { SHARED, SKY } from '../render/uniforms.js';
 import { anchor } from '../render/origin.js';
 import { NOISE_GLSL } from '../render/glsl.js';
-import { WIND } from '../fires/look.js';
+import { WIND } from '../world/wind.js';
 
 const mod = (a, n) => ((a % n) + n) % n;
 const _m = new THREE.Matrix4();

@@ -11,6 +11,7 @@
 import { BOARD } from './gear.js';
 import { GRAVITY } from './skier.js';
 import { clamp } from '../noise.js';
+import { wrapAngle as wrap } from '../core/geom.js';
 
 // Leaning into a turn: as far as the turn pulls (rad), at most this far.
 const LEAN_MOST = 0.8;
@@ -23,7 +24,6 @@ const PLANT = { time: 0.35, turn: 3 };
 const LIE = -1.45;
 const SPRING = 7;
 
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 // What each stands like. face: how far the body is turned from the way the
 // skis point (a board is stood across).

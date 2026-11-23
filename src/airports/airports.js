@@ -45,7 +45,7 @@
 //   scale     game metres to a real metre there (a hike's: 1:5)
 //
 // An airfield (a site, laid out in its own frame as an old place is:
-// landmarks/sites.js's toWorld, toLocal, onPlan):
+// world/frame.js's toWorld, toLocal, onPlan):
 //   id        `airfield:<x>:<z>`: a place on the map
 //   region    its region's id; name: 'Hollis Field'
 //   x, z, yaw the middle of the strip; its frame's +z runs along the strip,
@@ -61,7 +61,8 @@
 
 import { hash2i } from '../noise.js';
 import { Emitter } from '../core/events.js';
-import { SURNAMES } from '../landmarks/kinds.js';
+import { Searches } from '../core/searches.ts';
+import { SURNAMES } from '../core/names.js';
 import { reachOf } from '../world/landforms.js';
 
 export const STRIP = { length: 240, width: 16 }; // m
@@ -489,9 +490,17 @@ export class Airports extends Emitter {
     this.gen = gen;
     this.keepOff = keepOff;
     this.regions = regionsOf(cards, start, gen.seed);
-    this.sites = new Map(); // region id -> airfield, or null where there's none
-    this.running = new Map(); // region id -> a survey under way
-    this.queue = new Set(); // region ids asked about and not yet surveyed
+    // surveyed outright or a little at a time (site, pump): core/searches.ts
+    this.search = new Searches({
+      grow: (id) => survey(this.gen, this.region(id), this.keepOff),
+      found: (id, site) => site && this.emit('site', site),
+    });
+    this.sites = this.search.known; // region id -> airfield, or null where there's none
+  }
+
+  // Region ids asked about and not yet surveyed.
+  get queue() {
+    return this.search.queue;
   }
 
   region(id) {
@@ -517,34 +526,8 @@ export class Airports extends Emitter {
   // been; with wait = false, undefined until it has, and queued for pump().
   site(id, wait = true) {
     if (this.sites.has(id)) return this.sites.get(id);
-    if (!wait) {
-      if (this.region(id)) this.queue.add(id);
-      return undefined;
-    }
-    const run = this._run(id);
-    if (!run) return null;
-    let r;
-    do r = run.next();
-    while (!r.done);
-    return this._done(id, r.value);
-  }
-
-  _run(id) {
-    let run = this.running.get(id);
-    if (run) return run;
-    const g = this.region(id);
-    if (!g) return null;
-    run = survey(this.gen, g, this.keepOff);
-    this.running.set(id, run);
-    return run;
-  }
-
-  _done(id, site) {
-    this.running.delete(id);
-    this.queue.delete(id);
-    this.sites.set(id, site);
-    if (site) this.emit('site', site);
-    return site;
+    if (!this.region(id)) return wait ? null : undefined;
+    return wait ? this.search.get(id) : this.search.peek(id);
   }
 
   // The airfields found so far.
@@ -565,24 +548,7 @@ export class Airports extends Emitter {
 
   // Survey queued regions for up to `ms` milliseconds. -> how many are left.
   pump(ms) {
-    const t0 = performance.now();
-    for (const id of this.queue) {
-      const run = this._run(id);
-      if (!run) {
-        this.queue.delete(id);
-        continue;
-      }
-      for (;;) {
-        const r = run.next();
-        if (r.done) {
-          this._done(id, r.value);
-          break;
-        }
-        if (performance.now() - t0 > ms) return this.queue.size;
-      }
-      if (performance.now() - t0 > ms) break;
-    }
-    return this.queue.size;
+    return this.search.pump(ms);
   }
 }
 
@@ -590,3 +556,42 @@ export class Airports extends Emitter {
 // (degrees from north, which is -z) of a yaw.
 export const yawTo = (ax, az, bx, bz) => Math.atan2(bx - ax, bz - az);
 export const bearingOf = (yaw) => ((((180 - (yaw * 180) / Math.PI) % 360) + 360) % 360);
+
+// ── For what's grown after the airfields ────────────────────────────────────
+// Whether a region's airfield might reach somewhere `d` metres from the
+// middle of the region and `half` metres across either way: an airfield
+// stands in its region's ring (r0 to r1 from its middle), and its box
+// reaches this far further in, or out.
+const FIELD_REACH = { inside: 170, outside: 4200 };
+export function mayReach(g, d, half) {
+  return d + half >= g.r0 - FIELD_REACH.inside && d - half <= g.r1 + FIELD_REACH.outside;
+}
+
+// The airfields, as something to keep clear of (world/claims.ts): a box
+// holds one if the airfield of a region that might reach it overlaps it.
+// Those airfields are found then and there if they haven't been (dear: so
+// ask ready() first, which says whether they have and sends for them if
+// not). `wide: false` asks only about regions that might reach the box's
+// middle, not any of it: what the first searches to ask did, and still do.
+export const airfieldsOver = (airfields, { wide = true } = {}) => {
+  const reaching = (x0, z0, x1, z1) => {
+    const x = (x0 + x1) / 2;
+    const z = (z0 + z1) / 2;
+    const half = wide ? Math.hypot(x1 - x0, z1 - z0) / 2 : 0;
+    return airfields.regions.filter((g) => mayReach(g, Math.hypot(x - g.x, z - g.z), half));
+  };
+  return {
+    holds(x0, z0, x1, z1) {
+      for (const g of reaching(x0, z0, x1, z1)) {
+        const b = airfields.site(g.id)?.box;
+        if (b && b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0) return true;
+      }
+      return false;
+    },
+    ready(x0, z0, x1, z1) {
+      let known = true;
+      for (const g of reaching(x0, z0, x1, z1)) if (airfields.site(g.id, false) === undefined) known = false;
+      return known;
+    },
+  };
+};

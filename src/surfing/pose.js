@@ -14,6 +14,7 @@
 
 import * as THREE from 'three';
 import { clamp } from '../noise.js';
+import { wrapAngle as wrap } from '../core/geom.js';
 
 // Standing across the board, left foot forward (m, the body's frame: +x is
 // the hiker's left, which faces the nose; +z ahead, which faces off the
@@ -40,7 +41,6 @@ const _p = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 export class SurfPose {
   // board: the board (board.js), which this puts on the water

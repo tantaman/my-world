@@ -1,7 +1,7 @@
 // The original two addresses keep their seeds and search rings. The larger
 // institutions are farther out. Beyond them, districts are surveyed on approach.
 import { hash2i, mulberry32 } from '../noise.js';
-import { boxOf, toWorld } from '../landmarks/sites.js';
+import { boxOf, toWorld } from '../world/frame.js';
 
 const BUILDINGS = [
   {

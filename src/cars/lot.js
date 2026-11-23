@@ -21,8 +21,8 @@
 import * as THREE from 'three';
 import { Mesher } from '../build/geometry.js';
 import { SURF } from '../build/surfaces.js';
-import { toWorld } from '../landmarks/sites.js';
-import { layout } from '../videostore/font.js';
+import { toWorld } from '../world/frame.js';
+import { layout } from '../build/font.js';
 import { LOT, SKIRT } from './dealers.js';
 import { KIND_IDS } from './kinds.js';
 

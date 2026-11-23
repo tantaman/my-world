@@ -4,8 +4,8 @@ import * as THREE from 'three';
 import { makePhantom } from './phantom.js';
 import { bloodTrail } from './traces.js';
 import { FINISH } from './surfaces.js';
-import { Kit } from '../videostore/store.js';
-import { toWorld } from '../landmarks/sites.js';
+import { Kit } from '../build/kit.js';
+import { toWorld } from '../world/frame.js';
 import { mulberry32 } from '../noise.js';
 
 const colors = new Map();

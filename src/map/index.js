@@ -62,8 +62,8 @@ export function installMap(game) {
   // Not while something is carrying you or moving you: get off it first, or
   // it would be left behind with you still sitting on it.
   async function travel(x, z, label, yaw) {
-    if (player.carrier || player.aboard) {
-      hud.flash('get off first');
+    if (!player.rides.free) {
+      hud.flash(player.rides.why());
       return false;
     }
     map.close();

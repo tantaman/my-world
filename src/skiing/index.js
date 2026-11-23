@@ -49,6 +49,10 @@ const CLIP_IN = { snow: 0.6, steep: 0.32, down: 0.8 };
 const CLIP_OUT = { still: 0.6, time: 1.2, steep: 0.2, bare: 2, water: 0.3 };
 // After you take them off yourself, they stay off this long (s).
 const LEFT_OFF = 4;
+// Put somewhere else by something else (R, a teleport), further than this (m)
+// from where the skis had you: that's the end of the run (the mover's slack:
+// player/rides.ts).
+const MOVED = 2;
 // Where a key does nothing, how much snow there must be to put them on (0..1).
 const ANY_SNOW = 0.45;
 // Snow lies on slopes gentler than this (1 - up: from about 42° it thins
@@ -139,30 +143,21 @@ export function installSkiing(game) {
   let still = 0; // s stopped
   let sprayed = 0; // grains owed
   let best = null; // { points, top (km/h), trick } your best in this world
-  let last = { x: 0, z: 0 }; // where the skis last put you
+  let hold = null; // what you're held by while they're on (player/rides.ts)
   let heading = 0; // which way you were going, for the camera to keep to while you're down
-  let cued = false; // whether the prompt is ours
   const c = { steer: 0, tuck: 0, brake: 0, pop: false, grab: false, flip: 0 };
   builder.idleWhile(() => active);
 
   const mover = {
+    slack: MOVED,
     place(out, dt) {
-      // moved by something else (R, a teleport): that's the end of the run
-      if (Math.hypot(player.pos.x - last.x, player.pos.z - last.z) > 2) {
-        out.x = player.pos.x;
-        out.y = player.pos.y;
-        out.z = player.pos.z;
-        out.yaw = player.yaw;
-        stepOut(true);
-        return;
-      }
       readControls();
       skier.step(dt, c);
       normalAt(height, skier.x, skier.z, _up);
       pose.update(dt, skier, c, _up);
-      out.x = last.x = skier.x;
+      out.x = skier.x;
       out.y = skier.y;
-      out.z = last.z = skier.z;
+      out.z = skier.z;
       out.yaw = pose.yaw;
       if (skier.down < 0) heading = skier.heading;
       out.heading = heading;
@@ -192,6 +187,9 @@ export function installSkiing(game) {
 
   function clipIn(k = kind, byHand = false) {
     if (active) return;
+    // (taken off them by something else, or put somewhere else, R or a teleport: that's the end of the run)
+    hold = player.rides.take({ by: 'skiing', what: () => `your ${kind === 'board' ? 'snowboard' : 'skis'}`, aboard: mover, lost: () => stepOut(true) });
+    if (!hold) return;
     const v = player.vel;
     const s = Math.hypot(v.x, v.z);
     kind = k;
@@ -200,8 +198,6 @@ export function installSkiing(game) {
     player.character.stance(pose.use(kind));
     pose.up.x = pose.up.z = 0;
     pose.up.y = 1;
-    last = { x: player.pos.x, z: player.pos.z };
-    player.aboard = mover;
     active = true;
     manual = byHand;
     still = 0;
@@ -216,7 +212,8 @@ export function installSkiing(game) {
   function stepOut(moved = false, word = null) {
     if (!active) return;
     active = false;
-    if (player.aboard === mover) player.aboard = null;
+    if (hold) hold.release();
+    hold = null;
     const root = player.character.root;
     player.character.stance(null);
     root.rotation.x = 0;
@@ -391,38 +388,23 @@ export function installSkiing(game) {
   // What the keys do now, in place of the tool's prompt.
   function cue() {
     const touch = input.isTouch;
-    if (!active) {
-      if (cued) hud.cue(null);
-      cued = false;
-      return;
-    }
-    cued = true;
+    if (!active) return hud.cue(null, 'skiing');
     let html;
     if (skier.down >= 0) html = 'down in the snow…';
     else if (skier.flying) html = touch ? 'stick: spin, flip · hold <b>use</b>: grab' : '<b>A D</b> spin · <b>W S</b> flip · <b>shift</b> grab';
     else html = touch ? 'stick: turn, tuck, brake · tap: jump' : '<b>A D</b> turn · <b>W</b> tuck · <b>S</b> brake · <b>space</b> jump · <b>I</b> off';
-    hud.cue({ html });
+    hud.cue({ html }, 'skiing');
   }
 
   // ── Every frame ───────────────────────────────────────────────────────────
   // On foot, out under the sky, and nothing else moving you.
-  const onFoot = () => !player.carrier && !player.aboard && !player.space && !player.swimming && player.wade < 0.05;
+  const onFoot = () => player.rides.free && !player.space && !player.swimming && player.wade < 0.05;
 
   game.addSystem({
     name: 'skiing',
     phase: 'update',
     update({ dt }) {
       leftOff = Math.max(0, leftOff - dt);
-      // something else has you now (a horse, a train)
-      if (active && (player.aboard !== mover || player.carrier)) {
-        active = false;
-        if (player.aboard === mover) player.aboard = null;
-        player.character.stance(null);
-        player.character.root.rotation.x = 0;
-        heard.on = false;
-        tell();
-        finish();
-      }
       if (!active) {
         // heading down steep snow: on they go
         if (leftOff <= 0 && onFoot() && player.grounded) {

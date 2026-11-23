@@ -14,7 +14,7 @@
 //     front     { x, z, yaw }: where to stand to take it, facing it
 //   }
 
-import { toWorld } from '../landmarks/sites.js';
+import { toWorld } from '../world/frame.js';
 import { PAD } from '../spaceport/site.js';
 
 // Where it is on the pad (m, the pad's frame), how wide and high it is, and

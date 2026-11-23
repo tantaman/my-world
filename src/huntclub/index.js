@@ -46,8 +46,8 @@ import { Scorecard } from './scorecard.js';
 import './sound.js';
 import { clearOf as storeClearOf } from '../videostore/site.js';
 import { isGame } from '../hunting/quarry.js';
-import { Body } from '../towns/people.js';
-import { onPlan, planDiscs, toWorld, toLocal } from '../landmarks/sites.js';
+import { Body } from '../people/body.js';
+import { onPlan, planDiscs, toWorld, toLocal } from '../world/frame.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { rayBox, wrapAngle } from '../core/geom.js';
 import { hash2i, mulberry32 } from '../noise.js';
@@ -57,7 +57,6 @@ const BEEN_KEPT = 500; // far clubs you've been to, the most remembered
 const NEAREST_AFTER = 0.5; // s between looks for the nearest club
 const SWAP_NEARER = 120; // m nearer another club must be to take the place of one that's stood up
 const PREFETCH = 2500; // m round you within which clubs are looked for ahead of time
-const PUMP_MS = [1.5, 6]; // ms a frame spent looking for them: about, and while the map is open
 const SHOW = 450; // m: the club is stood up this close...
 const HIDE = 560; // ...and taken down past this
 const ARRIVE = 40; // m from the foot of the steps that counts as there
@@ -511,7 +510,6 @@ export function installHuntclub(game) {
 
   // ── Each frame ────────────────────────────────────────────────────────────
   let arrived = false;
-  let cued = false;
   let greeted = false;
   let lookIn = 0;
   // The nearest club found so far, and how far: the first, or one of the
@@ -525,6 +523,9 @@ export function installHuntclub(game) {
     }
     return best && { site: best, d: bd };
   }
+  // Where the clubs are further off is looked for a little at a time, out of
+  // what the frame can spare (game/budget.ts).
+  game.budget.add({ name: 'huntclub', work: (ms) => clubs.pump(ms) });
   game.addSystem({
     name: 'huntclub',
     phase: 'world',
@@ -533,7 +534,6 @@ export function installHuntclub(game) {
       const f = game.focus;
       // the clubs round about looked for ahead of time, and the nearest
       // stood up in place of the last (not while a round's under way there)
-      if (clubs.queue.size) clubs.pump(map.isOpen ? PUMP_MS[1] : PUMP_MS[0]);
       lookIn -= dt;
       if (lookIn <= 0) {
         lookIn = NEAREST_AFTER;
@@ -550,10 +550,7 @@ export function installHuntclub(game) {
       const P = player.pos;
       range.update(dt, P.x, P.z);
       if (!shown) {
-        if (cued) {
-          hud.cue(null);
-          cued = false;
-        }
+        hud.cue(null, 'huntclub');
         if (built) built.marker.visible = false;
         card.hide();
         return;
@@ -589,13 +586,7 @@ export function installHuntclub(game) {
       // at the hatch, without a gun: ask for one (the act key: see ask)
       let cue = null;
       if (!owned && atCounter()) cue = `<b>${act.key('ask')}</b> ask the steward for a shotgun`;
-      if (cue) {
-        hud.cue({ html: cue });
-        cued = true;
-      } else if (cued) {
-        hud.cue(null);
-        cued = false;
-      }
+      hud.cue(cue ? { html: cue } : null, 'huntclub');
 
       // the arrow over the station the next targets are shot from, while
       // you've a shotgun in hand and are out on the field

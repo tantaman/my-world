@@ -47,7 +47,8 @@ export class Hud {
     // What the tool in hand has to say, and something at hand that a key
     // would do (cue), which is said in its place while there is one.
     this._tool = { html: '', bad: false, progress: null };
-    this._cue = null;
+    this._cues = new Map(); // whose -> { html, bad?, progress?, n }: every cue that is up
+    this._cueN = 0; // counts them as they're put up: the last one up is the one said
     this._inv = '';
     this.settings = settings;
     this.saveBtn = document.getElementById('save-btn');
@@ -347,10 +348,22 @@ export class Hud {
   // Something at hand that a key would do, whatever tool is in hand: calm an
   // animal, climb on. Said in place of the tool's prompt while it is set.
   //   { html, bad?, progress? (0..1, for press-and-hold) }, or null
-  cue(c) {
-    this._cue = c && c.html ? c : null;
+  // `by` says whose it is ('boats'). Each feature has a cue of its own to
+  // put up and take down, so taking yours down never takes down someone
+  // else's, and nobody has to remember whether the one showing is theirs.
+  // When more than one is up, the one put up last is the one said.
+  cue(c, by = '') {
+    if (c && c.html) this._cues.set(by, { ...c, n: ++this._cueN });
+    else if (!this._cues.delete(by)) return; // (it wasn't up: nothing to redraw)
     this._showPrompt();
     this._showProgress();
+  }
+
+  // The cue being said: the last one put up of those still up.
+  get _cue() {
+    let top = null;
+    for (const c of this._cues.values()) if (!top || c.n > top.n) top = c;
+    return top;
   }
 
   _showPrompt() {

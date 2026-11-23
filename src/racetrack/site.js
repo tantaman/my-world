@@ -34,8 +34,8 @@
 //   door      where `go here` sets you down: at the paddock gate, facing the
 //             track ({ x, z, yaw })
 
-import { toWorld, toLocal } from '../landmarks/sites.js';
-import { samplesNear, CELL as LINE_CELL } from '../railway/lines.js';
+import { toWorld, toLocal } from '../world/frame.js';
+import { samplesNear, surveyed } from '../railway/lines.js';
 import { circuitOf, LAYOUTS, KERB } from './layouts.js';
 
 // The paddock, in the track's frame: x from the start line, z out from the
@@ -247,7 +247,7 @@ export function* trackSite(gen, town, layout, cell, keepOff = () => false, patie
     }
   }
   const R = reach + RING[1] + Math.hypot(c.box[2] - c.box[0], c.box[3] - c.box[1]);
-  while (patient() && keepOff.ready && !keepOff.ready(town.x - R, town.z - R, town.x + R, town.z + R)) yield;
+  while (patient() && keepOff.ready && !keepOff.ready(town.x - R, town.z - R, town.x + R, town.z + R)) yield 'wait'; // (not gone round and round on: core/searches.ts)
   // the best of them that nothing else is in the way of (asked last, and of
   // as few as can be: it can be dear)
   found.sort((a, b) => a.score - b.score);
@@ -416,13 +416,7 @@ export function clearOf({ landforms, sites, towns, caves, lines, spaceport = nul
   };
   // whether the railway there has been surveyed (asking for it if not), so
   // a search can wait for it rather than stall
-  keepOff.ready = (x0, z0, x1, z1) => {
-    let known = true;
-    for (let j = Math.floor(z0 / LINE_CELL); j <= Math.floor(z1 / LINE_CELL); j++) {
-      for (let i = Math.floor(x0 / LINE_CELL); i <= Math.floor(x1 / LINE_CELL); i++) if (lines.peek(i, j) === undefined) known = false;
-    }
-    return known;
-  };
+  keepOff.ready = surveyed(lines);
   return keepOff;
 }
 

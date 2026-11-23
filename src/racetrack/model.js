@@ -18,7 +18,7 @@
 //            has you in it)
 
 import * as THREE from 'three';
-import { Kit } from '../videostore/store.js';
+import { Kit } from '../build/kit.js';
 
 const WHEELS = {
   front: { z: 1.25, x: 0.78, r: 0.3, w: 0.26 },

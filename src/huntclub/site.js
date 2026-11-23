@@ -36,13 +36,16 @@
 //   base    the height of the ground at station 8
 //   lo, hi  the lowest and highest ground looked at over the plan
 //   plan    [[x0, z0, x1, z1]]: the field and the clubhouse, in the club's
-//           frame (landmarks/sites.js's toWorld, onPlan); all of it cleared
+//           frame (world/frame.js's toWorld, onPlan); all of it cleared
 //   box     [x0, z0, x1, z1] in the world, round the plan
 //   door    where `go here` sets you down: at the foot of the porch steps,
 //           facing the clubhouse ({ x, z, yaw })
 
-import { toWorld, boxOf } from '../landmarks/sites.js';
+import { toWorld, boxOf } from '../world/frame.js';
 import { hash2i, mulberry32 } from '../noise.js';
+import { Searches } from '../core/searches.ts';
+import { mayReach, airfieldsOver } from '../airports/airports.js';
+import { keepClear, claimOf, boxesOf } from '../world/claims.ts';
 import { STATIONS, HOUSES, FIELD } from './skeet.js';
 
 // The field and the clubhouse behind it, in the club's frame: the houses,
@@ -283,15 +286,6 @@ export function layout(site, ground) {
   return { deck, low, steps, pads, houses, mouths, cross };
 }
 
-// Whether a region's airfield (airports/airports.js) might reach somewhere
-// `d` metres from the middle of the region and `half` metres across either
-// way: an airfield stands in its region's ring (r0 to r1 from its middle),
-// and its box reaches this far further in, or out.
-const FIELD_REACH = { inside: 170, outside: 4200 };
-export function mayReach(g, d, half) {
-  return d + half >= g.r0 - FIELD_REACH.inside && d - half <= g.r1 + FIELD_REACH.outside;
-}
-
 // The airfields' regions whose airfield might be in the way of a club
 // anywhere it may be (from `start`): the ones whose airfield findSite will ask
 // about. (regions: the Airports' regions.)
@@ -315,29 +309,11 @@ export function regionsInTheWay(regions, start) {
 // airfields), and asks for what isn't, so a search far out can wait for it
 // rather than stall.
 export function clearOf({ reserved = () => false, boxes = () => [], airfields = null }) {
-  const over = (b, x0, z0, x1, z1) => b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0;
-  // the airfields' regions whose airfield might reach a square
-  const reaching = (x0, z0, x1, z1) => {
-    if (!airfields) return [];
-    const x = (x0 + x1) / 2;
-    const z = (z0 + z1) / 2;
-    const half = Math.hypot(x1 - x0, z1 - z0) / 2;
-    return airfields.regions.filter((g) => mayReach(g, Math.hypot(x - g.x, z - g.z), half));
-  };
-  const keepOff = (x0, z0, x1, z1) => {
-    if (reserved(x0, z0, x1, z1)) return true;
-    for (const b of boxes()) if (over(b, x0, z0, x1, z1)) return true;
-    for (const g of reaching(x0, z0, x1, z1)) {
-      const field = airfields.site(g.id);
-      if (field && over(field.box, x0, z0, x1, z1)) return true;
-    }
-    return false;
-  };
-  keepOff.ready = (x0, z0, x1, z1) => {
-    let known = !reserved.ready || reserved.ready(x0, z0, x1, z1);
-    for (const g of reaching(x0, z0, x1, z1)) if (airfields.site(g.id, false) === undefined) known = false;
-    return known;
-  };
+  const claims = [claimOf(reserved), boxesOf(() => boxes())];
+  if (airfields) claims.push(airfieldsOver(airfields));
+  const keepOff = keepClear(claims);
+  // (always there to ask, though with nothing dear to know it only says yes)
+  keepOff.ready ??= () => true;
   return keepOff;
 }
 
@@ -382,7 +358,7 @@ export function farSpot(seed, i, j) {
 export function* farSite(gen, spot, keepOff = () => false, patient = () => false) {
   const found = yield* flats(gen, spot, FAR.ring, FAR.step, () => spot.yaw, FAR_NEARER, FAR.turns);
   const r = FAR_REACH + CLEAR;
-  while (patient() && keepOff.ready && !keepOff.ready(spot.x - r, spot.z - r, spot.x + r, spot.z + r)) yield;
+  while (patient() && keepOff.ready && !keepOff.ready(spot.x - r, spot.z - r, spot.x + r, spot.z + r)) yield 'wait'; // (not gone round and round on: core/searches.ts)
   const s = choose(found, keepOff);
   return s && siteOf(gen, s, `huntclub:far:${spot.i}:${spot.j}`, spot.name, spot.seed);
 }
@@ -399,10 +375,24 @@ export class HuntClubs {
     this.start = start;
     this.keepOff = keepOff;
     this.away = away;
-    this.cells = new Map(); // "i:j" -> site or null
-    this.growing = new Map(); // "i:j" -> a search under way
-    this.queue = new Set(); // squares asked about and not yet looked over
-    this.patient = true; // a search may wait for what's dear to know (not when one's wanted outright)
+    // looked for outright (cell) or a little at a time (peek, then pump): core/searches.ts
+    this.search = new Searches({
+      grow: (k) => {
+        const [i, j] = k.split(':').map(Number);
+        return this._grow(i, j);
+      },
+    });
+    this.cells = this.search.known; // "i:j" -> site or null
+  }
+
+  // Squares asked about and not yet looked over.
+  get queue() {
+    return this.search.queue;
+  }
+
+  // A search may wait for what's dear to know (not when one's wanted outright).
+  get patient() {
+    return this.search.patient;
   }
 
   // The spot square (i, j) is looked for round, or null if it has none.
@@ -416,16 +406,7 @@ export class HuntClubs {
 
   // The club in square (i, j), or null; looked for now if it hasn't been.
   cell(i, j) {
-    const k = `${i}:${j}`;
-    const known = this.cells.get(k);
-    if (known !== undefined) return known;
-    const run = this.growing.get(k) || this._grow(i, j);
-    this.patient = false;
-    try {
-      return this._done(k, finish(run));
-    } finally {
-      this.patient = true;
-    }
+    return this.search.get(`${i}:${j}`);
   }
 
   // ...or undefined if it hasn't been, and it's queued for pump().
@@ -433,30 +414,13 @@ export class HuntClubs {
     const k = `${i}:${j}`;
     const known = this.cells.get(k);
     if (known !== undefined) return known;
-    if (!this.spot(i, j)) return this._done(k, null);
-    this.queue.add(k);
-    return undefined;
+    if (!this.spot(i, j)) return this.search.set(k, null);
+    return this.search.peek(k);
   }
 
   // Look over queued squares for up to `ms` milliseconds. -> how many are left.
   pump(ms) {
-    const t0 = performance.now();
-    for (const k of this.queue) {
-      let run = this.growing.get(k);
-      if (!run) {
-        const [i, j] = k.split(':').map(Number);
-        this.growing.set(k, (run = this._grow(i, j)));
-      }
-      for (;;) {
-        const r = run.next();
-        if (r.done) {
-          this._done(k, r.value);
-          break;
-        }
-        if (performance.now() - t0 > ms) return this.queue.size;
-      }
-    }
-    return this.queue.size;
+    return this.search.pump(ms);
   }
 
   // Ask for the squares whose clubs could be within r of (x, z) to be looked
@@ -508,12 +472,5 @@ export class HuntClubs {
   *_grow(i, j) {
     const spot = this.spot(i, j);
     return spot ? yield* farSite(this.gen, spot, this.keepOff, () => this.patient) : null;
-  }
-
-  _done(k, site) {
-    this.growing.delete(k);
-    this.queue.delete(k);
-    this.cells.set(k, site);
-    return site;
   }
 }

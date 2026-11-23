@@ -17,7 +17,7 @@ import { Flock, Flit, Soar, Owl } from './flyers.js';
 import { buildSnake, buildSalamander, Crawler } from './crawlers.js';
 import { Gator } from './gators.js';
 import { BeeSwarm, buildButterfly, Butterfly } from './insects.js';
-import { disposeAnimal } from './rig.js';
+import { disposeAnimal } from '../render/rig.js';
 import { smoothstep, clamp } from '../noise.js';
 import { rand, pick, wrapAngle as wrap, segDist, waterSample } from '../core/geom.js';
 import { TREE_KINDS as TREES } from '../world/flora.js';

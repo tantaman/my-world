@@ -33,7 +33,7 @@
 //   'afloat'  ()                  and off again
 
 import { Emitter } from '../core/events.js';
-import { waterSample } from '../core/geom.js';
+import { waterSample, wrapAngle as wrap } from '../core/geom.js';
 import { clamp, mulberry32, smoothstep } from '../noise.js';
 
 // The tube: its outer radius and the radius of the tube itself (m), how
@@ -84,7 +84,6 @@ const ROCK = { calm: 0.025, churn: 0.14 };
 const FASTEST = 7;
 
 const TAU = Math.PI * 2;
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 export class Tube extends Emitter {
   constructor(world, seed = 1) {

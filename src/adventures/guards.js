@@ -25,10 +25,10 @@
 //   call(kind, x, y, z)
 
 import * as THREE from 'three';
-import { Body } from '../towns/people.js';
-import { lin } from '../wildlife/rig.js';
+import { Body } from '../people/body.js';
+import { lin } from '../render/rig.js';
 import { makeRifle } from '../hunting/models.js';
-import { rayCapsule } from '../wildlife/beasts.js';
+import { rayCapsule } from '../core/geom.js';
 import { rand, wrapAngle } from '../core/geom.js';
 
 const SIGHT = { ground: 70, tower: 115, fov: 0.25 }; // m he sees you at, and the cos of how far round he sees

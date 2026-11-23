@@ -1,7 +1,7 @@
 // A visit ends at the door. Only a walk back out can carry a sound into
 // the woods. Teleports, flying away and re-entry interrupt that last beat.
 import * as THREE from 'three';
-import { toWorld } from '../landmarks/sites.js';
+import { toWorld } from '../world/frame.js';
 
 const _look = new THREE.Vector3();
 const _toward = new THREE.Vector3();

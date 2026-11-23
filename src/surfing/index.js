@@ -64,6 +64,10 @@ const SPRAY = { speed: 0.5, carve: 0.5 };
 const COMING = { far: 14, high: 0.5 };
 // How long (ms) a word stays on the screen.
 const SAY = 2600;
+// Put somewhere else by something else (R, a teleport), further than this (m)
+// from where the board had you: you're off it (the mover's slack:
+// player/rides.ts).
+const MOVED = 3;
 const QUIPS = ['wipeout!', 'over the falls!', 'rag-dolled!', 'eaten!', 'pounded!', 'held under!'];
 const GLYPH = ['.......', '...###.', '..#...#', '.#..#..', '#..##..', '#######', '.......'];
 const fmt = (n) => Math.round(n).toLocaleString('en');
@@ -177,8 +181,7 @@ export function installSurfing(game) {
   sound.addLayer(surfSounds(heard));
   let active = false;
   let best = null; // { points, time (s, the longest ride), tube (s, the longest barrel) }
-  let last = { x: 0, z: 0 };
-  let cued = false;
+  let hold = null; // what you're held by while you're on it (player/rides.ts)
   let sprayed = 0;
   let stroke = 0;
   let ducked = false;
@@ -186,22 +189,14 @@ export function installSurfing(game) {
   builder.idleWhile(() => active);
 
   const mover = {
+    slack: MOVED,
     place(out, dt) {
-      // moved by something else (R, a teleport): that's the end of it
-      if (Math.hypot(player.pos.x - last.x, player.pos.z - last.z) > 3) {
-        out.x = player.pos.x;
-        out.y = player.pos.y;
-        out.z = player.pos.z;
-        out.yaw = player.yaw;
-        off(true);
-        return;
-      }
       readControls();
       surfer.step(dt, c);
       const standing = surfer.mode === 'riding';
-      out.x = last.x = surfer.x;
+      out.x = surfer.x;
       out.y = standing ? surfer.y : surfer.y - 0.65;
-      out.z = last.z = surfer.z;
+      out.z = surfer.z;
       out.yaw = pose.yaw;
       out.heading = surfer.mode === 'down' ? surfer.yaw : surfer.heading;
       out.grounded = !surfer.flying;
@@ -237,7 +232,7 @@ export function installSurfing(game) {
   // In the sea at a break, deep enough to lie on a board.
   function canSurf() {
     if (active || level === null || !near) return false;
-    if (player.carrier || player.aboard || player.space) return false;
+    if (!player.rides.free || player.space) return false;
     const { x, z } = player.pos;
     if (Math.hypot(x - near.x, z - near.z) > OUT_THERE) return false;
     if (!chunks.waterAt(x, z, _w) || Math.abs(_w.level - level) > 0.05) return false;
@@ -246,13 +241,14 @@ export function installSurfing(game) {
 
   function on(at = null) {
     if (active) return;
+    // (taken off it by something else, or put somewhere else, R or a teleport: that's the end of it)
+    hold = player.rides.take({ by: 'surfing', what: 'your surfboard', aboard: mover, lost: () => off(true) });
+    if (!hold) return;
     const p = at || player.pos;
     // lying down, pointing out to sea (or the way you were going)
     const yaw = at ? at.yaw : near ? Math.atan2(near.nx, near.nz) : player.yaw;
     surfer.reset(p.x, p.z, yaw);
     if (at) player.pos.set(p.x, level, p.z);
-    last = { x: p.x, z: p.z };
-    player.aboard = mover;
     board.visible = true;
     active = true;
     ride.reset();
@@ -264,7 +260,8 @@ export function installSurfing(game) {
   function off(moved = false, word = null) {
     if (!active) return;
     active = false;
-    if (player.aboard === mover) player.aboard = null;
+    if (hold) hold.release();
+    hold = null;
     SurfPose.clear(player.character);
     board.visible = false;
     if (!moved) {
@@ -393,12 +390,7 @@ export function installSurfing(game) {
   // What the keys do now, in place of the tool's prompt.
   function cue() {
     const touch = input.isTouch;
-    if (!active) {
-      if (cued) hud.cue(null);
-      cued = false;
-      return;
-    }
-    cued = true;
+    if (!active) return hud.cue(null, 'surfing');
     let html;
     if (surfer.mode === 'down') html = 'under…';
     else if (surfer.mode === 'riding') {
@@ -408,7 +400,7 @@ export function installSurfing(game) {
     } else if (surfer.caught) html = touch ? 'it has you: <b>tap</b> to stand up!' : 'it has you: <b>space</b> to stand up!';
     else if (coming()) html = touch ? 'a wave! point at the beach and paddle' : 'a wave! point at the beach and paddle: <b>W</b>';
     else html = touch ? 'stick: paddle, turn · hold <b>use</b>: duck under' : '<b>W</b> paddle · <b>A D</b> turn · <b>shift</b> duck under';
-    hud.cue({ html });
+    hud.cue({ html }, 'surfing');
   }
   // a wave standing up out to sea of you, to be caught
   function coming() {
@@ -423,15 +415,6 @@ export function installSurfing(game) {
     name: 'surfing',
     phase: 'update',
     update({ dt }) {
-      // something else has you now (a horse, a train)
-      if (active && (player.aboard !== mover || player.carrier)) {
-        active = false;
-        if (player.aboard === mover) player.aboard = null;
-        SurfPose.clear(player.character);
-        board.visible = false;
-        heard.on = heard.riding = false;
-        endRide();
-      }
       if (!active) {
         cue();
         show();

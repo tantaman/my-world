@@ -345,11 +345,13 @@ export function installSwamptour(game) {
   let ride = null; // { t, s, v, phase, timer, halt, said, gators: [], pointed, seen, biggest }
   builder.idleWhile(() => ride !== null);
   const mover = {
+    // (moved further than this by something else, R or the map, you're off
+    // the boat: player/rides.ts tells us, and getOff puts it away)
+    slack: MOVED,
     place(out, dt) {
       const t = ride && ride.t;
-      // moved by something else (R, the map): that's the end of it
-      const was = ride && ride.last;
-      if (!t || !t.built || (was && Math.hypot(player.pos.x - was.x, player.pos.z - was.z) > MOVED)) {
+      // (its boat taken down under you: that's the end of it too)
+      if (!t || !t.built) {
         if (ride) ride.moved = true;
         out.x = player.pos.x;
         out.y = player.pos.y;
@@ -371,7 +373,6 @@ export function installSwamptour(game) {
       const want = g ? Math.atan2(g.x - out.x, g.z - out.z) : out.yaw;
       ride.look = ride.look === undefined ? out.yaw : ride.look + wrapAngle(want - ride.look) * (1 - Math.exp(-dt * LOOK_ROUND));
       out.heading = ride.look;
-      ride.last = { x: out.x, z: out.z };
       // and swings round to look that way, when you aren't looking about:
       // gently while it's going, more firmly when there's a gator to see
       out.behind = g ? SWING.gator : ride.v > 1 ? SWING.going : 0;
@@ -389,7 +390,7 @@ export function installSwamptour(game) {
 
   // the tour whose boat you're beside, ready to go
   function nearBoat() {
-    if (ride || player.aboard || player.carrier) return null;
+    if (ride || !player.rides.free) return null;
     for (const t of tours) {
       if (!t.built || !t.course) continue;
       const o = t.built.boat.object.position;
@@ -400,8 +401,9 @@ export function installSwamptour(game) {
 
   function board(t) {
     if (!t || !t.course || !t.built || ride) return false;
-    ride = { t, s: 0, v: 0, phase: 'start', timer: START, halt: 0, said: new Set(), gators: [], pointed: -1, seen: 0, biggest: 0 };
-    player.aboard = mover;
+    const hold = player.rides.take({ by: 'swamptour', what: 'the airboat', aboard: mover, lost: () => getOff(false, true) });
+    if (!hold) return false;
+    ride = { t, hold, s: 0, v: 0, phase: 'start', timer: START, halt: 0, said: new Set(), gators: [], pointed: -1, seen: 0, biggest: 0 };
     player.vel.set(0, 0, 0);
     player.character.seat(PASSENGER);
     muffs.visible = true;
@@ -420,7 +422,7 @@ export function installSwamptour(game) {
     if (!r) return;
     ride = null;
     const t = r.t;
-    if (player.aboard === mover) player.aboard = null;
+    r.hold.release();
     if (!moved) {
       const d = t.lay.dock;
       const yaw = t.lay.at.yaw + Math.PI;
@@ -449,7 +451,7 @@ export function installSwamptour(game) {
     const C = t.course;
     // taken somewhere else all at once (back to the start, say): out of the
     // boat where you are, and it goes back to its mooring
-    if (player.aboard !== mover || r.moved) return void getOff(false, true);
+    if (r.moved) return void getOff(false, true);
     // a gator put where it'll be pointed out, well before you get there
     for (let i = r.halt; i < t.halts.length; i++) {
       const h = t.halts[i];
@@ -516,7 +518,6 @@ export function installSwamptour(game) {
   let clock = 0;
   let lastHello = -Infinity;
   let greeted = false;
-  let cued = false;
   game.addSystem({
     name: 'swamptour',
     phase: 'world',
@@ -563,13 +564,7 @@ export function installSwamptour(game) {
       if (ride) {
         cue = `on the airboat · ${ride.seen} gator${ride.seen === 1 ? '' : 's'}${ride.phase === 'done' ? '' : ` · <b>${act.key('back to the landing')}</b>${input.isTouch ? '' : ' back to the landing'}`}`;
       }
-      if (cue) {
-        hud.cue({ html: cue });
-        cued = true;
-      } else if (cued) {
-        hud.cue(null);
-        cued = false;
-      }
+      hud.cue(cue ? { html: cue } : null, 'swamptour');
     },
   });
 

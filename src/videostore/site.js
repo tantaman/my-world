@@ -25,14 +25,16 @@
 //   top     the height of the slab (the car park and the shop floor)
 //   low     the lowest ground under its skirt
 //   plan    [[x0, z0, x1, z1]]: the slab's top in its own frame
-//           (landmarks/sites.js's toWorld, onPlan); cleared, that and its
+//           (world/frame.js's toWorld, onPlan); cleared, that and its
 //           sloping sides
 //   box     [x0, z0, x1, z1] in the world, round the slab and its skirt
 //   door    where `go here` sets you down: on the pavement outside the
 //           doors, facing them ({ x, z, yaw })
 
-import { samplesNear, CELL as LINE_CELL } from '../railway/lines.js';
-import { toWorld } from '../landmarks/sites.js';
+import { railsNear, NEAR } from '../railway/lines.js';
+import { caveMouths } from '../caves/sites.js';
+import { keepClear, landOf, placesOf, boxesOf } from '../world/claims.ts';
+import { toWorld } from '../world/frame.js';
 import { STORE } from './catalog.js';
 
 const STORE_NAME = STORE.name;
@@ -78,7 +80,7 @@ export function* branchSite(gen, town, cell, keepOff = () => false, patient = ()
   const inside = (b) => b[0] >= cell[0] && b[1] >= cell[1] && b[2] <= cell[2] && b[3] <= cell[3];
   const mine = found.filter((f) => inside(boxOf(f)));
   const r = reach + BRANCH_RING[1] + 60;
-  while (patient() && keepOff.ready && !keepOff.ready(town.x - r, town.z - r, town.x + r, town.z + r)) yield;
+  while (patient() && keepOff.ready && !keepOff.ready(town.x - r, town.z - r, town.x + r, town.z + r)) yield 'wait'; // (not gone round and round on: core/searches.ts)
   const best = choose(mine, keepOff);
   return best && siteAt(best, `videostore:${town.id}`, `${STORE_NAME}, ${town.name}`);
 }
@@ -223,33 +225,7 @@ function siteAt(best, id, name) {
 // all of them, LaunchSites). -> keepOff for findSite.
 const MOUTH_CLEAR = 30; // m from a cave's mouth
 export function clearOf({ landforms, sites, towns, caves, lines, spaceport = null }) {
-  const keepOff = (x0, z0, x1, z1) => {
-    if (landforms.reaches(x0, z0, x1, z1)) return true;
-    const pads = !spaceport ? [] : spaceport.within ? spaceport.within(x0, z0, x1, z1) : [spaceport];
-    for (const { box: b } of pads) if (b[0] < x1 && b[2] > x0 && b[1] < z1 && b[3] > z0) return true;
-    if (sites.within(x0, z0, x1, z1).length) return true;
-    if (towns.within(x0, z0, x1, z1).length) return true;
-    for (const c of caves.inBox(x0, z0, x1, z1)) {
-      const m = c.mouth;
-      if (m.x > x0 - MOUTH_CLEAR && m.x < x1 + MOUTH_CLEAR && m.z > z0 - MOUTH_CLEAR && m.z < z1 + MOUTH_CLEAR) return true;
-    }
-    const cx = (x0 + x1) / 2;
-    const cz = (z0 + z1) / 2;
-    for (const line of lines.within(x0, z0, x1, z1)) {
-      let near = false;
-      samplesNear(line, cx, cz, Math.max(x1 - x0, z1 - z0) / 2, () => (near = true));
-      if (near) return true;
-    }
-    return false;
-  };
-  // whether the railway there has been surveyed (asking for it if not), so
-  // a search can wait for it rather than stall
-  keepOff.ready = (x0, z0, x1, z1) => {
-    let known = true;
-    for (let j = Math.floor(z0 / LINE_CELL); j <= Math.floor(z1 / LINE_CELL); j++) {
-      for (let i = Math.floor(x0 / LINE_CELL); i <= Math.floor(x1 / LINE_CELL); i++) if (lines.peek(i, j) === undefined) known = false;
-    }
-    return known;
-  };
-  return keepOff;
+  // (a launch site's box touching doesn't count: only overlapping)
+  const pads = boxesOf((x0, z0, x1, z1) => (!spaceport ? [] : spaceport.within ? spaceport.within(x0, z0, x1, z1) : [spaceport]).map((s) => s.box), { touching: false });
+  return keepClear([landOf(landforms), pads, placesOf(sites), placesOf(towns), caveMouths(caves, MOUTH_CLEAR), railsNear(lines, NEAR.longer)]);
 }

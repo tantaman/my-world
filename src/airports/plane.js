@@ -21,7 +21,7 @@
 
 import * as THREE from 'three';
 import { Mesher } from '../build/geometry.js';
-import { quad, beam } from '../railway/track.js';
+import { quad, beam } from '../build/faces.js';
 
 const col = (hex) => new THREE.Color(hex);
 export const PAL = {

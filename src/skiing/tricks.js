@@ -17,6 +17,8 @@
 //   impact   how fast you meet the snow, square to it (m/s)
 //   grabbing whether you still have hold of them
 
+import { wrapAngle as wrap } from '../core/geom.js';
+
 // Coming down this far (radians) off the way you're going, or this far off
 // upright, or this hard (m/s into the snow) is a fall.
 export const LAND = { skew: 0.62, upright: 0.8, impact: 15 };
@@ -34,7 +36,6 @@ const GRABS = {
 };
 const FLIPS = ['', '', 'double ', 'triple ', 'quad '];
 
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 // Was it an air at all, or just a skip over a bump?
 export const counts = (air) => air.popped || air.time >= AIR.time || air.height >= AIR.height;

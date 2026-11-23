@@ -41,7 +41,7 @@
 import * as THREE from 'three';
 import { Mesher, WOOD, addRoundLog } from '../build/geometry.js';
 import { mulberry32, phash } from '../noise.js';
-import { toWorld } from '../landmarks/sites.js';
+import { toWorld } from '../world/frame.js';
 import { Builder, PAL as OLD, BUILD as OLD_PLACES, MADE_OF, madeOf, box, rod, stone, weather, stepsUp, floor, tone } from '../landmarks/models.js';
 import { SURF, UPRIGHT } from '../build/surfaces.js';
 import { bodyOf } from './towns.js';
