@@ -136,14 +136,14 @@ export function installHell(game: Game) {
   under.userData.heat = true;
   const terrain = new HellTerrain({ land, material: createHellGround(), liquid: createHellLiquid(), haze: createHellLiquidHaze(), group: under });
   const furniture = new Furniture({ land, space, group: under });
-  const built = new Structures({ land, group: under, stone: createHellStone({ hot: true }), fire: furniture.kit.flame.mat });
+  const built = new Structures({ land, group: under, stone: createHellStone({ hot: true, masonry: true }), fire: furniture.kit.flame.mat });
   // the light the fires give, from those near where you look from
   // (render/lights.js picks the few that matter most)
   game.lights.addSource(under, (eye: THREE.Vector3, out: object[]) => {
     furniture.lightsNear(eye, out);
     built.lightsNear(eye, out);
   });
-  const air = new HellAir(under);
+  const air = new HellAir(under, land.top);
   origin.keep(air.hemi);
   const weather = new HellWeather(under);
   const card = new Card({ id: 'hell', book: 'Inferno' });

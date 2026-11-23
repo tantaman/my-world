@@ -12,7 +12,7 @@
 
 import { mulberry32 } from '../noise.js';
 import { R, ONE, BOLGE, LIQUID, TAU, bankTop, zoneAt } from './plan.js';
-import { boulder, crag, thornTree, bareTree, reeds, tomb, hole, iceHead, cloaked, weight } from './models.js';
+import { boulder, crag, thornTree, bareTree, cypress, reeds, tomb, hole, iceHead, cloaked, weight } from './models.js';
 import { createHellStone } from './look.js';
 import { shade, createShadeMaterial, createFlameMaterial, createFlameHaze, flameGeometry } from '../render/shades.js';
 import { makeCreature } from './creatures.js';
@@ -38,9 +38,10 @@ function shapeOf(name) {
 function makeKit() {
   const stone = createHellStone({ hot: true });
   const body = createShadeMaterial();
+  const iron = createShadeMaterial({ rolling: true });
   const legs = createShadeMaterial({ hip: 0.05 });
   const fire = createFlameMaterial();
-  const K = (geo, mat, solid = null) => kind(geo, mat, solid, stone);
+  const K = (geo, mat, solid = null) => ({ ...kind(geo, mat, solid, stone), shadow: !!solid, receiveShadow: true });
   return {
     boulder: K(boulder(1), stone, { r: 0.6, top: 0.6, step: 0.7 }),
     boulder2: K(boulder(9), stone, { r: 0.6, top: 0.6, step: 0.7 }),
@@ -50,9 +51,10 @@ function makeKit() {
     thorn2: K(thornTree(31), stone, { r: 0.3, top: 3 }),
     thorn3: K(thornTree(57), stone, { r: 0.3, top: 3 }),
     bare: K(bareTree(5), stone, { r: 0.28, top: 4 }),
+    cypress: K(cypress(), stone, { r: 0.26, top: 9 }),
     reeds: K(reeds(7), stone),
     tomb: K(tomb(11), stone, { r: 0.8, top: 1.15, len: 0.85 }),
-    weight: K(weight(13), body),
+    weight: K(weight(13), iron),
     hole: K(hole(), legs),
     head: K(iceHead(0), body),
     headBowed: K(iceHead(1), body),
@@ -65,7 +67,7 @@ function makeKit() {
     supine: K(shade('supine'), body),
     prone: K(shade('prone'), body),
     cloaked: K(cloaked(), body),
-    flame: { ...K(flameGeometry(), fire), haze: createFlameHaze() },
+    flame: { ...kind(flameGeometry(), fire), haze: createFlameHaze() },
     serpent: K(shapeOf('serpent'), stone),
   };
 }
@@ -134,7 +136,7 @@ export function strew(land, ref, x0, z0, seed, put) {
         // ── Limbo: they stand about, and sigh
         const slope = rr > R.limboFoot;
         if (u < (slope ? 0.03 : 0.06) && level()) body(v < 0.3 ? 'bowed' : 'stand');
-        else if (u < 0.085 && level() && depth === 0) put('bare', x, y, z, w * TAU, 0.8 + v * 0.7);
+        else if (u < 0.085 && level() && depth === 0) put(slope ? 'bare' : 'cypress', x, y, z, w * TAU, 0.8 + v * 0.7);
         else if (u < 0.1 && level()) put('boulder2', x, y, z, w * TAU, 0.6 + v);
       } else if (rr >= R.c2 + 10) {
         // ── The second circle: nothing on the ground but the rock (they are in the air)
@@ -162,7 +164,7 @@ export function strew(land, ref, x0, z0, seed, put) {
           const y1 = at(x + dx * 24, z + dz * 24).h;
           const go = { go: [dx, dz, speed, 48], phase: v, rise: y1 - y0 };
           put('push', x, (y0 + y1) / 2, z, Math.atan2(dx, dz), 1, { ...go, stride: 1, shade: shadeOf });
-          put('weight', x + dx * 1.15, (y0 + y1) / 2, z + dz * 1.15, v * TAU, 0.8 + w * 0.35, go);
+          put('weight', x + dx * 1.15, (y0 + y1) / 2, z + dz * 1.15, Math.atan2(dx, dz), 0.8 + w * 0.35, { ...go, shade: shadeOf });
         }
       } else if (rr >= R.dis) {
         // ── Styx: the wrathful, in the mire to the waist; reeds at its edges

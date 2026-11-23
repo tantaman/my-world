@@ -42,6 +42,22 @@ const _v = new THREE.Vector3();
 const _s = new THREE.Vector3(1, 1, 1);
 const _e = new THREE.Euler();
 
+// Arch stones, cut as wedges. One arch can also stop short where it broke.
+function stoneArch(s, x, spring, half, rise, thick, depth, color, { last = 12, hot = 0 } = {}) {
+  const band = (i, r, z) => {
+    const a = i * Math.PI / 12;
+    return [x + Math.cos(a) * (half + r), spring + Math.sin(a) * (rise + r), z];
+  };
+  for (let i = 0; i < last; i++) {
+    const a = i + 0.025;
+    const b = i + 0.975;
+    const stone = vary(color, (i * 0.37) % 1, 0.21);
+    for (const z of [-depth / 2, depth / 2]) s.quad(band(a, 0, z), band(b, 0, z), band(b, thick, z), band(a, thick, z), stone, hot);
+    for (const r of [0, thick]) s.quad(band(a, r, -depth / 2), band(b, r, -depth / 2), band(b, r, depth / 2), band(a, r, depth / 2), stone, hot);
+    for (const e of [a, b]) s.quad(band(e, 0, -depth / 2), band(e, thick, -depth / 2), band(e, thick, depth / 2), band(e, 0, depth / 2), stone, hot);
+  }
+}
+
 // ── Shapes ──────────────────────────────────────────────────────────────────
 // One bridge over one ditch: its outer springing at the origin, running +z
 // (inward) BOLGE.ditch m, its far end lower by the field's tilt. The top is
@@ -66,7 +82,21 @@ function bridge() {
     // the roadway, the soffit, and the two faces
     s.quad([-a[3], a[1], a[0]], [a[3], a[1], a[0]], [b[3], b[1], b[0]], [-b[3], b[1], b[0]], c);
     s.quad([-a[3], a[2], a[0]], [a[3], a[2], a[0]], [b[3], b[2], b[0]], [-b[3], b[2], b[0]], vary(IRON, 1 - t, 0.22));
-    for (const k of [-1, 1]) s.quad([k * a[3], a[2], a[0]], [k * a[3], a[1], a[0]], [k * b[3], b[1], b[0]], [k * b[3], b[2], b[0]], vary(IRON, (t + 0.5) % 1, 0.22));
+    for (const k of [-1, 1]) {
+      s.quad([k * a[3], a[2], a[0]], [k * a[3], a[1], a[0]], [k * b[3], b[1], b[0]], [k * b[3], b[2], b[0]], vary(IRON, (t + 0.5) % 1, 0.22));
+      // Stone ribs below the roadway trace the opening from either bank.
+      const x0 = k * (a[3] + 0.15);
+      const x1 = k * (b[3] + 0.15);
+      s.quad([x0, a[2], a[0]], [x0, a[2] + 0.65, a[0]], [x1, b[2] + 0.65, b[0]], [x1, b[2], b[0]], vary(IRON, t, 0.28));
+    }
+  }
+  // Raised iron braziers on the abutments, outside the walkable span.
+  for (const z of [0.8, span - 0.8]) for (const side of [-1, 1]) {
+    const x = side * (half + 0.52);
+    const y = top(z / span);
+    s.box(x, y - 0.4, z, 0.9, 2.5, 1.2, IRON);
+    s.drum(x, y + 0.8, z, 0.35, 0.18, 0.22, [0.06, 0.045, 0.03], { sides: 8 });
+    s.ball(x, y + 1.15, z, 0.22, [0.48, 0.11, 0.016], { sy: 1.5, hot: 1 });
   }
   return s.build();
 }
@@ -81,6 +111,11 @@ function wallLength() {
     const hot = 0.34 - 0.2 * (c / courses);
     s.box(0, h * (c + 0.5), 0, LENGTH + 0.05, h - 0.06, WALL.thick - (c % 2) * 0.12, vary(DIS, (c * 0.31) % 1), { hot: hot * HEAT });
   }
+  for (const x of [-5.4, 5.4]) {
+    s.box(x, WALL.h * 0.48, 0, 1.25, WALL.h * 0.96, WALL.thick + 0.7, vary(DIS, 0.15), { hot: 0.055 });
+    s.box(x, 0.9, 0, 1.8, 1.8, WALL.thick + 1.4, vary(DIS, 0.3));
+  }
+  s.box(0, WALL.h - 0.28, 0, LENGTH + 0.05, 0.56, WALL.thick + 0.55, vary(DIS, 0.48), { hot: 0.025 });
   for (let i = 0; i < 6; i++) s.box(-LENGTH / 2 + (i + 0.5) * (LENGTH / 6), WALL.h + 0.7, -(WALL.thick / 2 - 0.4), LENGTH / 12, 1.4, 0.8, [0.03, 0.026, 0.026]);
   s.box(0, -2, 0, LENGTH + 0.05, 4, WALL.thick + 0.6, vary(DIS, 0.2));
   return s.build();
@@ -115,10 +150,7 @@ function gateOfDis() {
   }
   // the arch over the way, and the wall above it
   const spring = 6.2;
-  for (let i = 0; i < 7; i++) {
-    const a = ((i + 0.5) / 7) * Math.PI;
-    s.box(-Math.cos(a) * (WALL.gate / 2 + 0.2), spring + Math.sin(a) * (WALL.gate / 2 + 0.2), 0, 1.5, 1.3, WALL.thick + 1.8, vary(DIS, (i * 0.23) % 1), { rz: Math.PI / 2 - a, hot: 0.4 * HEAT });
-  }
+  stoneArch(s, 0, spring, WALL.gate / 2, 3.3, 1.3, WALL.thick + 2.4, [0.14, 0.073, 0.049], { hot: 0.16 });
   s.box(0, spring + WALL.gate / 2 + (WALL.h * 1.25 - spring - WALL.gate / 2) / 2 + 0.6, 0, WALL.gate + 1, WALL.h * 1.25 - spring - WALL.gate / 2 - 0.6, WALL.thick + 1.6, vary(DIS, 0.5), { hot: 0.2 * HEAT });
   // the high tower over it, where the Furies stand, its top burning
   const th = 38;
@@ -176,22 +208,77 @@ function castle() {
       const len = (2 * Math.PI * ring) / n + 0.08;
       s.box(x, y0 + h / 2 - 1, z, len, h + 2, CASTLE.thick, vary(GREY, (i * 0.37 + w * 0.13) % 1, 0.14), { ry: -a });
       if (i % 2 === 0) s.box(x, y0 + h + 0.45, z, len * 0.5, 0.9, CASTLE.thick, vary(GREY, (i * 0.11) % 1, 0.14), { ry: -a });
+      if ((i + w * 2) % 9 === 4) {
+        const tall = h + 2.5 + (6 - w) * 0.48;
+        s.box(x, y0 + tall / 2 - 0.9, z, 3.5, tall + 1.8, 3.1, vary(GREY, 0.24), { ry: -a });
+        s.box(x, y0 + tall, z, 3.86, 0.55, 3.46, vary(GREY, 0.65), { ry: -a });
+        s.box(x, y0 + tall + 0.51, z, 2.6, 0.65, 2.5, vary(GREY, 0.42), { ry: -a });
+      }
     }
-    // the gate's posts and its lintel
-    for (const k of [-1, 1]) s.box(k * (CASTLE.gate / 2 + 0.5), y0 + h / 2 + 0.4, -ring, 1, h + 2.8, CASTLE.thick + 0.5, vary(GREY, 0.8, 0.1));
-    s.box(0, y0 + h + 1.3, -ring, CASTLE.gate + 2, 0.9, CASTLE.thick + 0.5, vary(GREY, 0.3, 0.1));
+    // Build the arch at its own origin and put its opening on the gate line.
+    s.frame = new THREE.Matrix4().makeTranslation(0, y0, -ring);
+    for (const side of [-1, 1]) {
+      const x = side * (CASTLE.gate / 2 + 0.69);
+      s.box(x, h / 2, 0, 1.35, h + 3, CASTLE.thick + 1.1, vary(GREY, 0.7));
+      s.box(x, h + 1.54, 0, 1.59, 0.48, CASTLE.thick + 1.44, vary(GREY, 0.5));
+    }
+    stoneArch(s, 0, 3.3, CASTLE.gate / 2, 2.25, 0.55, CASTLE.thick + 0.87, GREY);
+    s.box(0, h + 0.29, 0, CASTLE.gate + 0.8, 0.62, CASTLE.thick + 0.6, vary(GREY, 0.4));
+    s.frame = null;
   });
-  // the keep
-  const kh = 24;
-  for (let c = 0; c < 8; c++) s.drum(0, (kh / 8) * c - (c ? 0 : 1), 0, 7 - c * 0.12, 7.1 - c * 0.12, kh / 8 + (c ? 0 : 1), vary(GREY, (c * 0.29) % 1, 0.14), { sides: 12 });
-  s.drum(0, kh, 0, 7.6, 6.2, 1.1, vary(GREY, 0.4, 0.1), { sides: 12 });
-  // its lantern: eight posts, a cap, and the light in it
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    s.box(Math.cos(a) * 3.2, kh + 3, Math.sin(a) * 3.2, 0.5, 4, 0.5, vary(GREY, 0.6, 0.1), { ry: -a });
+  // The keep rises in three stone terraces to an open colonnade.
+  for (let i = 0; i < 3; i++) {
+    const base = i * 7;
+    const width = 37 - i * 7;
+    const depth = 31 - i * 5.2;
+    s.box(0, base + 2.8, 0, width, 8.6, depth, vary(GREY, 0.28 + i * 0.16));
+    s.box(0, base + 6.8, 0, width + 0.9, 0.56, depth + 0.8, vary(GREY, 0.64));
+    for (const side of [-1, 1]) {
+      for (let j = -2; j <= 2; j++) {
+        s.box(j * width * 0.16, base + 3.6, side * depth / 2, 1.3, 6.2, 0.75, vary(GREY, 0.46));
+      }
+    }
   }
-  s.drum(0, kh + 5, 0, 0.3, 4.2, 3.2, vary(GREY, 0.2, 0.1), { sides: 8 });
-  s.ball(0, kh + 3, 0, 1.6, [1, 0.86, 0.6], { hot: 1 });
+  s.box(0, 22, 0, 20, 2.1, 16, GREY);
+  for (const z of [-7, 7]) for (let x = -8; x <= 8; x += 3.2) {
+    s.drum(x, 23, z, 0.43, 0.6, 7.6, vary(GREY, 0.74), { sides: 10 });
+    s.box(x, 30.3, z, 1.17, 0.48, 1.12, GREY);
+  }
+  s.box(0, 31.2, 0, 20, 1, 16, vary(GREY, 0.6));
+  for (const side of [-1, 1]) {
+    s.quad([side * 10.1, 31.7, -8.1], [0, 35.3, -8.1], [0, 35.3, 8.1], [side * 10.1, 31.7, 8.1], vary(GREY, 0.24));
+    for (const z of [-8, 8]) s.quad([side * 10, 31.7, z], [0, 31.7, z], [0, 35.3, z], [side * 0.01, 35.29, z], GREY);
+  }
+  s.ball(0, 27, 0, 1.6, [1, 0.86, 0.6], { hot: 1 });
+  return s.build();
+}
+
+// Carved arches in the scarp above the outer edge of the three upper rings.
+// At ground level the piers are sunk into the existing cliff face.
+function arcade(kind) {
+  const s = new Sculpt();
+  const broken = kind === 'lustful';
+  const colour = broken ? [0.092, 0.09, 0.104] : kind === 'gluttons' ? [0.075, 0.084, 0.087] : [0.16, 0.126, 0.086];
+  const span = 14;
+  const spring = broken ? 18 : 21;
+  for (let i = -3; i <= 3; i++) {
+    const x = (i + 0.5) * span;
+    const height = spring * (broken && (i === -2 || i === 2) ? 0.58 : 1);
+    s.box(x, height / 2 - 2.5, 0, 2.45, height + 5, 5.2, vary(colour, 0.4));
+    s.box(x, height - 0.4, 0, 3.65, 1.15, 5.85, vary(colour, 0.63));
+    s.drum(x, -4, 2.45, 0.43, 0.82, height + 4, vary(colour, 0.72), { sides: 7 });
+  }
+  for (let i = -2; i <= 3; i++) {
+    const x = i * span;
+    if (broken && (i === -1 || i === 2 || i === 3)) continue;
+    const last = broken && i === -2 ? 4 : 12;
+    stoneArch(s, x, spring, span / 2 - 1.2, 9.5, 1.18, 4.8, colour, { last });
+    if (!broken) stoneArch(s, x, spring, span / 2 - 1.2, 9.5, 0.32, 5.75, vary(colour, 0.74));
+  }
+  if (!broken) {
+    s.box(7, 33.1, -0.52, 85, 1.6, 6.1, vary(colour, 0.61));
+    s.box(7, 35.1, -0.52, 84, 2.7, 4.9, vary(colour, 0.27));
+  }
   return s.build();
 }
 
@@ -307,6 +394,8 @@ export class Structures {
       m.visible = false;
       group.add(m);
     }
+    this.wall.castShadow = this.wall.receiveShadow = true;
+    this.towers.castShadow = this.towers.receiveShadow = true;
     // the air over the towers' fires shimmering
     this.towerHaze = hazeOver(this.towerFires, this.haze);
     this.towerHaze.visible = false;
@@ -385,6 +474,7 @@ export class Structures {
       }
     }
     mesh.frustumCulled = false;
+    mesh.castShadow = mesh.receiveShadow = true;
     this.group.add(mesh);
     this.bridges = mesh;
   }
@@ -440,11 +530,20 @@ export class Structures {
       this._at(r, th, h, mesh.position);
       mesh.rotation.y = yaw;
       mesh.userData.own = own;
+      mesh.castShadow = mesh.receiveShadow = mat === this.stone;
       g.add(mesh);
       return mesh;
     };
     const fires = [];
     const fire = (r, th, h, size, tall) => fires.push([this._at(r, th, h).clone(), size, tall]);
+
+    // Rock-cut ruins beside each descent, clear of the ramp itself.
+    const arcades = ['lustful', 'gluttons', 'avaricious'];
+    arcades.forEach((kind, i) => {
+      const step = STEPS[i];
+      const a = s.pass[i] - 105 / step.at;
+      add(this._shape(kind, () => arcade(kind)), this.stone, step.at - 3, a, step.lo + 5, this._inward(a));
+    });
 
     // the gate of Dis, the mosques behind the wall either side of it
     add(this._shape('gate', gateOfDis), this.stone, WALL.r, s.quay, H.dis, this._inward(s.quay));

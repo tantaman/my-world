@@ -18,7 +18,7 @@
 
 import * as THREE from 'three';
 import { SHARED, SKY } from '../render/uniforms.js';
-import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, RELIEF_GLSL } from '../render/glsl.js';
+import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, RELIEF_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL } from '../render/glsl.js';
 import { LIQUID } from './plan.js';
 import { createLiquidMaterial } from '../render/liquid.js';
 import { createSurfaceHaze } from '../render/haze.js';
@@ -36,7 +36,7 @@ LIQUIDS[LIQUID.none] = {};
 // Acheron: black, and still
 LIQUIDS[LIQUID.acheron] = { absorb: [1.6, 1.2, 1.0], murk: 1.2, tint: [0.012, 0.013, 0.016], rough: 0.05, slow: 1 };
 // the marsh of Styx: muddy, slow, the sullen under it sighing up bubbles
-LIQUIDS[LIQUID.styx] = { absorb: [3, 2.6, 3.2], murk: 4, tint: [0.03, 0.03, 0.015], rough: 0.22, slow: 1.6, boil: 0.6 };
+LIQUIDS[LIQUID.styx] = { absorb: [3, 2.6, 3.2], murk: 4, tint: [0.024, 0.026, 0.024], rough: 0.12, slow: 1.6, boil: 0.6 };
 // Phlegethon: blood, boiling, with a skin on it that the boiling breaks,
 // and a dull light of its own, brighter where it heaves
 LIQUIDS[LIQUID.blood] = { absorb: [0.9, 25, 30], murk: 6, tint: [0.1, 0.006, 0.004], rough: 0.14, slow: 2.4, boil: 1, glow: [0.32, 0.02, 0.007], crust: 0.3 };
@@ -65,18 +65,15 @@ export function createHellLiquidHaze() {
 export function createHellGround() {
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
   mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uTime = SHARED.uTime;
+    Object.assign(shader.uniforms, SKY);
     shader.uniforms.uOrigin = SHARED.uOrigin;
-    shader.uniforms.uHorizon = SKY.uHorizon;
     shader.uniforms.uSeeFar = SEEN.uSeeFar;
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
         `#include <common>
         attribute vec4 aFx;
-        attribute float aKind;
         varying vec4 vFx;
-        varying float vKind;
         varying vec3 vDrawn;
         varying vec3 vUp;`,
       )
@@ -84,7 +81,6 @@ export function createHellGround() {
         '#include <fog_vertex>',
         `#include <fog_vertex>
         vFx = aFx;
-        vKind = aKind;
         vDrawn = (modelMatrix * vec4(transformed, 1.0)).xyz;
         vUp = normalize(mat3(modelMatrix) * objectNormal);`,
       );
@@ -92,21 +88,27 @@ export function createHellGround() {
       .replace(
         '#include <common>',
         `#include <common>
-        uniform float uTime;
-        uniform vec3 uHorizon;
         uniform float uSeeFar;
         varying vec4 vFx;
-        varying float vKind;
         varying vec3 vDrawn;
         varying vec3 vUp;
         ${NOISE_GLSL}
         ${WORLD_GLSL}
         ${WORLD_NOISE_GLSL}
         ${RELIEF_GLSL}
+        ${SKY_UNIFORMS_GLSL}
+        ${SKY_GLSL}
         float gRough;
         vec3 gEmit;
-        vec2 gTilt;
-        float gH; // the ground's small shape: how far this pixel stands up from the mesh, m`,
+        float gH; // the ground's small shape: how far this pixel stands up from the mesh, m
+        float gGlaze;
+
+        float fracture(vec2 p, float scale, float width) {
+          vec3 cell = wcells(p, scale);
+          float edge = cell.y - cell.x;
+          float aa = max(fwidth(edge), 0.002);
+          return (1.0 - smoothstep(max(0.0, width - aa), width + aa, edge)) * width / max(aa, width);
+        }`,
       )
       .replace(
         '#include <color_fragment>',
@@ -120,40 +122,51 @@ export function createHellGround() {
           float n2 = mix(0.5, wnoise(wp, 2.3, vec2(5.0)), near);
           float n3 = wnoise(wp, 0.07, vec2(-9.0));
           float slope = 1.0 - normalize(vUp).y;
-          vec3 base = diffuseColor.rgb * (0.78 + 0.3 * n2 + 0.16 * (n3 - 0.5));
+          vec3 base = diffuseColor.rgb * (0.74 + 0.5 * n2 + 0.46 * (n3 - 0.5));
           gRough = 1.0;
           gEmit = vec3(0.0);
-          gTilt = vec2(0.0);
+          gGlaze = 0.0;
           // lumps and grit underfoot
           float grit = wnoise(wp, 9.0, vec2(-3.0, 7.0));
-          gH = (n1 - 0.5) * 0.05 + (n2 - 0.5) * 0.02 * near + (grit - 0.5) * 0.006 * near;
+          float aggregate = smoothstep(0.48, 0.79, grit + (n2 - 0.5) * 0.45);
+          gH = (n1 - 0.5) * 0.042 + (n2 - 0.5) * 0.013 * near + aggregate * 0.006 * near;
+          base *= mix(1.0, 0.88 + 0.29 * aggregate, near);
 
           // bare rock where it's steep, in beds
           float rocky = smoothstep(0.2, 0.42, slope + (n1 - 0.5) * 0.12);
-          float bed = vnoise(vec2(vDrawn.y * 0.45 + n3 * 3.0, 3.7)) * 0.6 + vnoise(vec2(vDrawn.y * 2.1 + n1 * 1.5, 9.1)) * 0.4;
-          vec3 rock = mix(vec3(0.036, 0.034, 0.034), vec3(0.085, 0.076, 0.07), bed) * (0.75 + 0.5 * n2);
-          rock = mix(rock, diffuseColor.rgb * 0.8, 0.3);
-          base = mix(base, rock, rocky * (1.0 - vFx.z));
-          // the beds stand out in ledges, each a little proud of the one under it
-          float ledge = fract(vDrawn.y * 0.45 + n3 * 3.0);
-          gH += rocky * (1.0 - vFx.z) * ((smoothstep(0.0, 0.15, ledge) - ledge) * 0.12 + (bed - 0.5) * 0.05) * (0.4 + 0.6 * near);
+          if (rocky > 0.0 && vFx.z < 0.999) {
+            float veins = wnoise(wp, 0.16, vec2(7.7, 21.1));
+            vec2 strata = vec2(vDrawn.y * 0.38 + n3 * 2.1 + n1 * 0.42, n3 * 6.7 + veins * 0.35);
+            float bed = vnoise(strata) * 0.68 + vnoise(strata * vec2(3.6, 1.6) + 8.1) * 0.32;
+            float seam = smoothstep(0.62, 0.86, vnoise(strata * vec2(1.13, 0.7) + 2.3));
+            float fissure = smoothstep(0.67, 0.94, veins + (bed - 0.5) * 0.26);
+            vec3 rock = mix(vec3(0.026, 0.027, 0.029), vec3(0.138, 0.125, 0.11), bed);
+            rock *= (0.72 + 0.58 * n2) * (1.0 - 0.4 * fissure - 0.22 * seam);
+            rock = mix(rock, diffuseColor.rgb * 0.76, 0.25);
+            base = mix(base, rock, rocky * (1.0 - vFx.z));
+            gH += rocky * (1.0 - vFx.z) * (bed * 0.15 - seam * 0.06 - fissure * 0.15 + (n1 - 0.5) * 0.16);
+          }
 
           // ice: hard and blue, cracked, with the dark of what is frozen under it
           if (vFx.z > 0.01) {
-            float crack = abs(wnoise(wp, 0.22, vec2(3.0)) - 0.5) * 2.0;
-            float hair = abs(wnoise(wp, 0.9, vec2(-6.0)) - 0.5) * 2.0;
-            float under = smoothstep(0.52, 0.8, wnoise(wp, 0.45, vec2(31.0)));
-            vec3 ice = base * (0.75 + 0.35 * n1);
-            ice = mix(ice, vec3(0.03, 0.045, 0.07), under * 0.6);
-            ice = mix(ice, vec3(0.55, 0.66, 0.74), (1.0 - smoothstep(0.0, 0.035, crack)) * 0.7 + (1.0 - smoothstep(0.0, 0.04, hair)) * 0.3 * near);
+            vec2 plates = wp + vec2(n1, wnoise(wp, 0.43, vec2(11.2))) * 0.38;
+            float crack = fracture(plates, 0.13, 0.025);
+            float ghost = fracture(plates + vec2(0.13, 0.21), 0.13, 0.045);
+            float hair = fracture(plates + vec2(8.0, -3.0), 0.59, 0.028) * near;
+            float snow = smoothstep(0.58, 0.8, 0.55 * n3 + 0.32 * n1 + 0.13 * n2);
+            vec3 ice = mix(vec3(0.021, 0.039, 0.064), vec3(0.10, 0.17, 0.23), n3);
+            ice += vec3(0.06, 0.12, 0.20) * ghost * (0.4 + 0.6 * n1);
+            ice = mix(ice, vec3(0.44, 0.57, 0.64), max(crack * 0.84 + hair * 0.38, snow * 0.75));
             base = mix(base, ice, vFx.z);
-            gRough = mix(gRough, 0.16 + 0.2 * n2, vFx.z);
-            // smooth ice, cut by its cracks
-            gH = mix(gH, -(1.0 - smoothstep(0.0, 0.04, crack)) * 0.01 - (1.0 - smoothstep(0.0, 0.05, hair)) * 0.003 * near, vFx.z);
+            gRough = mix(gRough, 0.08 + 0.13 * n2 + 0.6 * snow, vFx.z);
+            gGlaze = vFx.z * (1.0 - snow) * 0.78;
+            gH = mix(gH, (n1 - 0.5) * 0.016 - crack * 0.01 - hair * 0.003, vFx.z);
           }
 
-          // wet ground shines
-          gRough = mix(gRough, 0.5, vFx.x * (0.6 + 0.4 * n1));
+          // Wet ground has patches of standing film between exposed grains.
+          float wetFilm = clamp(vFx.x * (0.45 + 0.85 * n1), 0.0, 1.0) * (1.0 - 0.78 * rocky);
+          gRough = mix(gRough, mix(0.11, 0.47, n2), wetFilm);
+          gGlaze = max(gGlaze, wetFilm * (0.36 + 0.36 * n3));
           base *= 1.0 - 0.3 * vFx.x;
           // hot ground gives a dull light of its own; where it is hottest it
           // has run, and cooled to a crust of black plates with the fire in
@@ -192,22 +205,22 @@ export function createHellGround() {
         '#include <normal_fragment_begin>',
         `#include <normal_fragment_begin>
         // its small shape: lumps, grit, the ledges of the beds, cracks in the ice
-        normal = relief(normal, -vViewPosition, gH);
-        // what moves on a liquid tips its light about
-        normal = normalize(normal + (viewMatrix * vec4(gTilt.x, 0.0, gTilt.y, 0.0)).xyz * 0.22);`,
+        normal = relief(normal, -vViewPosition, gH);`,
       )
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         totalEmissiveRadiance += gEmit;
-        // smooth things mirror the murk they lie under
-        {
-          float fres = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 4.0);
-          totalEmissiveRadiance += uHorizon * fres * (1.0 - gRough) * 0.9;
+        if (gGlaze > 0.0) {
+          vec3 eye = normalize(vViewPosition);
+          float fres = 0.02 + 0.98 * pow(1.0 - clamp(dot(normal, eye), 0.0, 1.0), 5.0);
+          vec3 reflected = reflect(-eye, normal) * mat3(viewMatrix);
+          reflected.y = max(reflected.y, 0.0);
+          totalEmissiveRadiance += skyGradient(reflected) * fres * gGlaze * (1.0 - gRough);
         }`,
       );
   };
-  mat.customProgramCacheKey = () => 'hell-ground-2';
+  mat.customProgramCacheKey = () => 'hell-ground-3';
   return mat;
 }
 
@@ -218,7 +231,7 @@ export function createHellGround() {
 //
 // { flesh: true } is for what is alive, or was: smoother, with only a little
 // mottle, and a slow breath in it (the whole body swells and settles).
-export function createHellStone({ hot = false, flesh = false } = {}) {
+export function createHellStone({ hot = false, flesh = false, masonry = false } = {}) {
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: flesh ? 0.78 : 0.92, metalness: 0 });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = SHARED.uTime;
@@ -228,13 +241,15 @@ export function createHellStone({ hot = false, flesh = false } = {}) {
         '#include <common>',
         `#include <common>
         ${hot ? 'attribute float aHot; varying float vHot;' : ''}
+        ${masonry ? 'varying vec3 vFace;' : ''}
         varying vec3 vAt;`,
       )
       .replace(
         '#include <fog_vertex>',
         `#include <fog_vertex>
         ${hot ? 'vHot = aHot;' : ''}
-        #ifdef USE_INSTANCING
+        ${masonry ? 'vFace = objectNormal;' : ''}
+        #if defined(USE_INSTANCING) && ${masonry ? '0' : '1'}
           vAt = (instanceMatrix * vec4(transformed, 1.0)).xyz;
         #else
           vAt = transformed;
@@ -247,10 +262,21 @@ export function createHellStone({ hot = false, flesh = false } = {}) {
         uniform float uTime;
         uniform float uSeeFar;
         ${hot ? 'varying float vHot;' : ''}
+        ${masonry ? 'varying vec3 vFace;' : ''}
         varying vec3 vAt;
         ${NOISE_GLSL}
         ${RELIEF_GLSL}
-        float gH;`,
+        float gH;
+        ${masonry ? `
+        // Staggered courses with eroded joints. Each stone has its own tint.
+        vec2 courses(vec2 p, float chip) {
+          p.y *= 1.55;
+          float row = floor(p.y);
+          p.x = p.x * 0.86 + mod(row, 2.0) * 0.5;
+          vec2 edge = abs(fract(p) - 0.5);
+          float joint = 1.0 - smoothstep(0.012, 0.052 + 0.037 * chip, 0.5 - max(edge.x, edge.y));
+          return vec2(joint, hash12(floor(p)));
+        }` : ''}`,
       )
       .replace(
         '#include <clipping_planes_fragment>',
@@ -261,12 +287,23 @@ export function createHellStone({ hot = false, flesh = false } = {}) {
         '#include <color_fragment>',
         `#include <color_fragment>
         float sg = vnoise(vAt.xz * 2.3 + vAt.y * 1.7) * 0.55 + vnoise(vAt.zy * 7.1 - vAt.x * 3.3) * 0.45;
-        diffuseColor.rgb *= ${flesh ? '0.88 + 0.24 * sg' : '0.72 + 0.56 * sg'};
+        float weathered = vnoise(vAt.xz * 0.28 + vAt.y * 0.09) * 0.6 + vnoise(vAt.zy * vec2(1.12, 0.17) - vAt.x * 0.46) * 0.4;
+        diffuseColor.rgb *= ${flesh ? '0.88 + 0.24 * sg' : '(0.64 + 0.64 * sg) * (0.68 + 0.60 * weathered)'};
+        ${masonry ? `
+        vec3 axis = abs(normalize(vFace));
+        vec2 blockX = courses(vAt.zy + vec2(13.7, 0.0), sg);
+        vec2 blockZ = courses(vAt.xy, sg);
+        vec2 block = mix(blockX, blockZ, axis.z / max(axis.x + axis.z, 0.001));
+        float masonryMask = (1.0 - smoothstep(0.45, 0.9, axis.y)) * fine(vAt, 0.9);
+        diffuseColor.rgb *= mix(1.0, (0.77 + block.y * 0.45) * (1.0 - block.x * 0.48), masonryMask);
+        ` : ''}
         // its grain and its pits, and the odd chip out of it
         {
           float grain = vnoise(vAt.xz * 31.0 + vAt.y * 23.0) * 0.5 + vnoise(vAt.zy * 37.0 - vAt.x * 29.0) * 0.5;
           float pit = smoothstep(0.8, 0.95, vnoise(vAt.xy * 9.0 + vAt.z * 7.0));
           gH = (sg - 0.5) * 0.02 + (grain - 0.5) * 0.003 * fine(vAt, 0.03) - pit * 0.004 * fine(vAt, 0.06);
+          gH += (weathered - 0.5) * 0.045;
+          ${masonry ? 'gH -= block.x * masonryMask * 0.033;' : ''}
           diffuseColor.rgb *= 1.0 - 0.08 * pit;
         }`,
       )
@@ -282,12 +319,12 @@ export function createHellStone({ hot = false, flesh = false } = {}) {
           hot
             ? `{
           float flick = 0.75 + 0.25 * vnoise(vec2(uTime * 1.7 + vAt.x * 0.3, vAt.z * 0.3 + vAt.y));
-          totalEmissiveRadiance += vec3(1.0, 0.16, 0.03) * vHot * flick * (0.5 + sg);
+          totalEmissiveRadiance += vec3(1.0, 0.23, 0.057) * vHot * flick * (0.36 + 1.25 * smoothstep(0.26, 0.75, weathered));
         }`
             : ''
         }`,
       );
   };
-  mat.customProgramCacheKey = () => `hell-stone-${hot ? 1 : 0}${flesh ? 1 : 0}`;
+  mat.customProgramCacheKey = () => `hell-stone-${hot ? 1 : 0}${flesh ? 1 : 0}${masonry ? 1 : 0}`;
   return mat;
 }
