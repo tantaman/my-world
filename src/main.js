@@ -56,7 +56,7 @@ save.begin({ seed: CONFIG.seed, land: CONFIG.land, fresh: CONFIG.reset, clear: C
 const game = new Game({ config: CONFIG, storage });
 game.provide('save', save);
 game.provide('settings', new Settings(storage, KEYS.settings, { fresh: CONFIG.reset }));
-for (const feature of FEATURES) game.use(feature.install);
+for (const feature of FEATURES) await game.use(feature.install).settled();
 game.use(installDebug); // the game's own, last: the stats line, and the console's helpers
 
 // Everything that saves has registered by now; hand back what was kept. This

@@ -133,7 +133,10 @@ export function channelMargin(acc) {
 }
 
 export class Drainage {
-  // gen: the WorldGen (forestHeight, forestNaturalHeight, padClearance).
+  // gen: the WorldGen (forestHeight, forestNaturalHeight, padClearance,
+  // apart: whether water that runs from one node to another is lost on the
+  // way, which on a land with the real Earth round it is water running into
+  // the forest's own middle from the Earth: realPlaces.js).
   //
   // The network is worked out over the forest's own land, as if no real
   // place (landform.js) had been set into it: a hike can't reroute a river
@@ -290,13 +293,13 @@ export class Drainage {
         const m = this.node(i, j);
         if (this.down(m)) continue;
         const o = this.outlet(m);
-        if (o) (o.over || (o.over = [])).push(m);
+        if (o && !this.gen.apart(o.x, o.z, m.x, m.z)) (o.over || (o.over = [])).push(m);
       }
     }
     const up = [];
     for (const [di, dj] of OFFS) {
       const m = this.node(n.i + di, n.j + dj);
-      if (this.down(m) === n) up.push(m);
+      if (this.down(m) === n && !this.gen.apart(n.x, n.z, m.x, m.z)) up.push(m);
     }
     if (n.over) for (const m of n.over) up.push(m);
     up.sort((a, b) => a.k - b.k);

@@ -95,6 +95,7 @@ const LAT = 60;
 const EVERY = 2;
 const HEADINGS = 12;
 const LOOKS = 40;
+const MORE_LOOKS = 8;
 const APART = { d: 100, a: 0.35 }; // closer than this (m, rad) to one already looked at is the same spot
 const ROUGH = { ds: 24, wet: 46 }; // judged on the lattice: m between samples; edge (m) the lattice must show
 const CLOSE = { ds: 10, across: [-W2 - 1, -4, 0, 4, W2 + 1], apron: [15, 22, 29, 35, APRON[2] + 1] };
@@ -339,12 +340,14 @@ function close(gen, x, z, yaw, ds = CLOSE.ds, across = CLOSE.across, apron = CLO
   }
   const j = judge(g, lo, step);
   if (!j) return null;
-  // the air off each end: clear of the ground, climbing out at OUT.grade
+  // the air off each end: clear of the ground, climbing out at OUT.grade,
+  // and OUT.over above it once it has climbed that high (until then, as far
+  // over it as half its climb: off level ground it's away)
   const clear = [-1, 1].map((end) => {
     const top = j.h[end < 0 ? 0 : n - 1];
     for (let t = OUT.step; t <= OUT.far; t += OUT.step) {
       const d = HALF + t;
-      if (gen.height(x + fx * d * end, z + fz * d * end) + OUT.over > top + t * OUT.grade) return false;
+      if (gen.height(x + fx * d * end, z + fz * d * end) + Math.min(OUT.over, t * OUT.grade * 0.5) > top + t * OUT.grade) return false;
     }
     return true;
   });
@@ -424,15 +427,21 @@ function* ring(gen, region, r0, r1, keepOff) {
     }
   }
   found.sort((a, b) => a.score - b.score);
-  // the best few, looked at closely
+  // the best few, looked at closely; and if none of those will do (the
+  // flattest ground all in one hollow among mountains, with no way out over
+  // them), the next few, and so on, up to MORE_LOOKS times as many
   const looked = [];
-  for (const f of found) {
-    if (looked.length >= LOOKS) break;
-    if (looked.some((l) => Math.hypot(l.x - f.x, l.z - f.z) < APART.d && Math.abs(Math.atan2(Math.sin(2 * (l.yaw - f.yaw)), Math.cos(2 * (l.yaw - f.yaw)))) < APART.a * 2)) continue;
-    const e = close(gen, f.x, f.z, f.yaw);
-    looked.push(f);
-    yield;
-    if (e) f.close = { ...e, score: e.max + e.mean + f.r * NEARER + (e.clear[0] && e.clear[1] ? 0 : ONE_WAY) };
+  let next = 0;
+  for (let batch = 0; batch < MORE_LOOKS && !looked.some((f) => f.close); batch++) {
+    const most = looked.length + LOOKS;
+    for (; next < found.length && looked.length < most; next++) {
+      const f = found[next];
+      if (looked.some((l) => Math.hypot(l.x - f.x, l.z - f.z) < APART.d && Math.abs(Math.atan2(Math.sin(2 * (l.yaw - f.yaw)), Math.cos(2 * (l.yaw - f.yaw)))) < APART.a * 2)) continue;
+      const e = close(gen, f.x, f.z, f.yaw);
+      looked.push(f);
+      yield;
+      if (e) f.close = { ...e, score: e.max + e.mean + f.r * NEARER + (e.clear[0] && e.clear[1] ? 0 : ONE_WAY) };
+    }
   }
   const best = looked.filter((f) => f.close).sort((a, b) => a.close.score - b.close.score);
   // ...and of those, the best that nothing else was there first

@@ -121,7 +121,7 @@ const TEMPLATE = /* html */ `
 export class MapView {
   // onOpen(): it's about to open (so whatever else is up can close first)
   // travel(x, z, label, yaw): take the player to somewhere chosen on the map
-  constructor({ seed, land = 1, structures = [], hikes = [], ready, marks, player, input, places = new Places(), onOpen = () => {}, travel = () => false }) {
+  constructor({ seed, land = 1, structures = [], hikes = [], earth = null, ready, marks, player, input, places = new Places(), onOpen = () => {}, travel = () => false }) {
     this.marks = marks;
     this.onOpen = onOpen;
     this.travel = travel;
@@ -132,7 +132,7 @@ export class MapView {
     this.player = player;
     this.input = input;
     this.structures = structures;
-    this.tiles = new MapTiles(seed, structures, land, hikes, ready);
+    this.tiles = new MapTiles(seed, structures, land, hikes, ready, earth);
     this.isOpen = false;
 
     this.stop = DEFAULT_STOP;
@@ -665,6 +665,11 @@ export class MapView {
 
   // A hike's land has arrived: draw with it, and ask again for the tiles
   // that were waiting for it.
+  addEarth(tile) {
+    this.tiles.addEarth(tile);
+    this.viewKey = '';
+  }
+
   addHike(def) {
     this.tiles.addHike(def);
     this.viewKey = '';

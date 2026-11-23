@@ -23,7 +23,9 @@
 
 import { LAND, WATERS, DECK, MAX_COUNTRIES } from '../render/uniforms.js';
 import { COUNTRY, COUNTRIES } from '../world/country.js';
-import { nearestLandform, deckHeight, seaLevel, weatherAt } from './here.js';
+import { nearestLandform, seaLevel, weatherAt, deckAt, earthWeather, CLEARS_IN } from './here.js';
+import { SEA } from '../world/sea.js';
+import { EARTH } from '../world/earth.js';
 import { surf } from './surf.js';
 
 const EASE = 1.6; // 1/s: how quickly the weather comes over you
@@ -69,19 +71,26 @@ export function installCountry(game) {
     update({ dt }) {
       const at = game.focus;
       const land = nearestLandform(gen.landforms, at.x, at.z);
-      if (land !== state.land) {
+      // Off a hike, out on the real Earth, its country's weather (asking may
+      // find the Earth's tile there hasn't come yet: then this is run again
+      // next frame, core/notYet.ts).
+      const onLand = !!land && land.clearance(at.x, at.z) < CLEARS_IN;
+      const earth = gen.earthAt(at.x, at.z);
+      const under = earth ? earthWeather(earth.country, earth.w, at.x, at.z, camera.position.y) : undefined;
+      const here = onLand ? land.country : earth ? earth.country : COUNTRY.forest;
+      if (land !== state.land || here !== state.here) {
         state.land = land;
-        state.here = land ? land.country : COUNTRY.forest;
-        state.name = names.get(state.here) || 'forest';
-        DECK.uDeckCover.value = 0;
-        if (land) {
-          DECK.uDeck.value = deckHeight(land);
-          DECK.uDeckMid.value.set(land.cx, land.cz);
+        state.here = here;
+        state.name = names.get(here) || 'forest';
+        if (onLand) {
           LAND.uRealY.value.set(seaLevel(land), land.def.scale);
-        }
+        } else if (earth) LAND.uRealY.value.set(SEA.level, EARTH.scale);
       }
       // its weather, as far as you are onto it
-      const w = weatherAt(land, at.x, at.z, camera.position.y);
+      const w = weatherAt(land, at.x, at.z, camera.position.y, under);
+      const lies = deckAt(land, at.x, at.z, under);
+      if (!Number.isNaN(lies.deck)) DECK.uDeck.value = lies.deck;
+      if (lies.mid) DECK.uDeckMid.value.set(lies.mid[0], lies.mid[1]);
       const k = 1 - Math.exp(-dt * EASE);
       let own = null;
       for (const fn of clouds) if ((own = fn())) break;

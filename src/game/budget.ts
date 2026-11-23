@@ -22,6 +22,8 @@
 // in on allowances of their own (world/index.js), because they are not work
 // that can wait.
 
+import { isNotYet } from '../core/notYet.ts';
+
 const USUAL_MS = 4; // ms a frame for all of it, while the world is being drawn
 const ROOMY_MS = 12; // ...and while it isn't (the map is over it): the frame has time to spare
 const LEAST_MS = 0.5; // a job's slice is never cut finer than this
@@ -94,7 +96,8 @@ export class Budget {
           job.faults = 0;
         } catch (err) {
           more = false;
-          this._fault(job, err);
+          // (what it asked about isn't here yet: no fault, it's asked again)
+          if (!isNotYet(err)) this._fault(job, err);
         }
         const took = this.clock() - before;
         if (took > 0) this.by[job.name] = (this.by[job.name] || 0) + took;

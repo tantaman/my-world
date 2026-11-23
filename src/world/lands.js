@@ -50,7 +50,8 @@ export function landOf(v, otherwise = 1) {
 }
 
 // -> the WorldGen for this seed, grown on this land, with these real places
-// (hikes: see landform.js) set into it.
-export function growWorld(seed, structures = [], land = 1, hikes = []) {
-  return new PLACED[landOf(land)](seed, structures, hikes);
+// set into it: hikes (see landform.js), and the real Earth (earth.js) out past
+// the forest round the middle, or null for the forest going on for ever.
+export function growWorld(seed, structures = [], land = 1, hikes = [], earth = null) {
+  return new PLACED[landOf(land)](seed, structures, hikes, earth);
 }

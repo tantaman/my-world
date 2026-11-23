@@ -76,6 +76,7 @@ import { VEG_STRIDE } from '../world/flora.js';
 import { SEA } from '../world/sea.js';
 import { SKY } from '../render/uniforms.js';
 import { mulberry32 } from '../noise.js';
+import { isNotYet } from '../core/notYet.ts';
 
 const SHOW = 3200; // m: she's stood up this close (her outside, her open decks), and a pier...
 const HIDE = 3600; // ...and taken down past this
@@ -167,7 +168,17 @@ export function installCruise(game) {
       const sr = searches[i];
       if (!sr || sr === 'done') continue;
       while (performance.now() < until) {
-        const r = sr.steps.next();
+        let r;
+        try {
+          r = sr.steps.next();
+        } catch (err) {
+          // (the real Earth there hasn't come yet: looked for again from the
+          // start, once it has: core/notYet.ts)
+          if (!isNotYet(err)) throw err;
+          searches[i] = null;
+          search(i);
+          break;
+        }
         if (!r.done) continue;
         searches[i] = 'done';
         found(i, r.value);

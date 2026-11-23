@@ -36,15 +36,18 @@ import { LiftRide, LIFT, travelTime, moveAt, moveTime } from '../src/cruise/lift
 import { SLIDES, path, Ride, RIDE } from '../src/cruise/slides.js';
 import { glyph } from '../src/build/font.js';
 import { matchesGolden } from './helpers/golden.js';
+import { earthAtFirst } from './helpers/earth.js';
 
 const SEED = 20261119;
+// The real Earth under the world, as the game has it when it opens (world/earth.js).
+const EARTH = await earthAtFirst();
 const STEP_UP = 0.28; // the player's (player/player.js)
 
 // The world as the game has it: what the berths keep clear of, made the way
 // their features make them.
 const CARDS = HIKES.map(({ load, ...card }) => card);
 function worldOf(land) {
-  const gen = growWorld(SEED, [], land);
+  const gen = growWorld(SEED, [], land, [], EARTH);
   const start = gen.findSpawn(0, 0);
   const landforms = new Landforms(HIKES);
   const keepHike = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);

@@ -17,8 +17,11 @@ import { Airports, regionsOf, profile, topAt, outside, SHARE, GRADE, HALF, STRIP
 import { Flight, FLY, taxiOut, taxiIn, intoWind, canTakeOff, canLand } from '../src/airports/flight.js';
 import { PARK } from '../src/airports/airfield.js';
 import { matchesGolden } from './helpers/golden.js';
+import { earthAtFirst } from './helpers/earth.js';
 
 const SEED = 20261119;
+// The real Earth under the world, as the game has it when it opens (world/earth.js).
+const EARTH = await earthAtFirst();
 const CARDS = HIKES.map(({ load, ...card }) => card);
 
 // The world as the game has it: what the airfields keep clear of, made the
@@ -26,7 +29,7 @@ const CARDS = HIKES.map(({ load, ...card }) => card);
 const worlds = new Map();
 function worldOf(land) {
   if (worlds.has(land)) return worlds.get(land);
-  const gen = growWorld(SEED, [], land);
+  const gen = growWorld(SEED, [], land, [], EARTH);
   const start = gen.findSpawn(0, 0);
   const landforms = new Landforms(HIKES);
   const keepHike = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);

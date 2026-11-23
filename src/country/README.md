@@ -9,7 +9,10 @@ the sky over it is doing. The kinds, and what each is like, are one table
 This feature is the part that follows you about. As you come onto a real
 place its weather comes over you: its layer of cloud, at its real height, so
 you can be under it or above it; how thick its air is; how much sun gets
-through. In the forest it has nothing to do.
+through. Out on the real Earth (see [the world](../world/README.md#the-real-earth))
+the weather is the country's you're in, the boreal forest's low grey sky or
+the desert's clear dry air, and a hike's comes over that as you walk onto
+it. In the forest round the middle it has nothing to do.
 
 Where a real place has a sea, you hear it break on the shore: one wave after
 another gathers with a low rumble, breaks in a wash and runs up the shore
@@ -28,6 +31,6 @@ From the console: `world.country.name`.
 
 ```
 index.js              plugs it into the game: every country's colours, and the weather and the surf where you are
-here.js               which real place you're on, and its weather where you stand
+here.js               which real place you're on, and its weather where you stand (over the Earth's)
 surf.js               the sound of the sea breaking on a real shore
 ```

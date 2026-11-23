@@ -23,8 +23,13 @@ import { STRUCTURES } from '../structures/index.js';
 import { placeStructures } from '../structures/loader.js';
 import { HIKES } from './hikes.js';
 import { Landforms } from './landforms.js';
+import { Earth, searchedAtFirst } from './earth.js';
+import { EARTH_TILES, CLIMATE, EARTH_DETAILS } from './earthTiles.js';
 
 const DAY_MINUTES = 24; // how long a full day takes when time flows
+// ms at most the features after this one wait for the real Earth round the
+// start and the hikes before they install
+const EARTH_WAIT = 8000;
 const wrapHours = (h) => ((h % 24) + 24) % 24;
 
 // The features this uses, so it is installed after them (game/features.js).
@@ -32,11 +37,13 @@ export const after = ['render', 'ui'];
 export function installWorld(game) {
   const { scene, camera, hud, save } = game;
 
-  // The forest a seed grows on its land. The real hikes are set into it as
-  // their land arrives, which it does the first time something near one is
+  // The forest a seed grows on its land, and out past the middle, the real
+  // Earth (earth.js). The real hikes are set into it as their land arrives,
+  // and the Earth a tile at a time, each the first time something on it is
   // grown.
-  const landforms = new Landforms(HIKES);
-  const gen = growWorld(CONFIG.seed, STRUCTURES, CONFIG.land);
+  const landforms = new Landforms(HIKES, { tiles: EARTH_TILES, climate: CLIMATE, details: EARTH_DETAILS });
+  const earth = new Earth({ wants: (name) => landforms.wantEarth(name).catch(() => {}), places: landforms.cards, details: EARTH_DETAILS });
+  const gen = growWorld(CONFIG.seed, STRUCTURES, CONFIG.land, [], earth);
   const materials = {
     terrain: createTerrainMaterial(),
     terrainShadow: createTerrainDepthMaterial(),
@@ -67,6 +74,17 @@ export function installWorld(game) {
     gen.addHike(def);
     chunks.addHike(def);
   });
+  landforms.on('earth', (tile) => {
+    gen.addEarth(tile);
+    chunks.addEarth(tile);
+  });
+  // The Earth round the start and round every hike is sent for now, and the
+  // features after this one wait for it to come (game.use): what is grown
+  // from the seed is looked for there from the start (a ski run, the
+  // airfields, the pier on Maui). Anywhere else, whatever asks before it has
+  // come is told so (core/notYet.ts), and asks again.
+  // (not for ever: what asks before it has come asks again)
+  const earthNear = Promise.race([landforms.earthUnder(searchedAtFirst(HIKES)), new Promise((r) => setTimeout(r, EARTH_WAIT))]);
   const grass = new Grass(scene, chunks, materials.grass, CONFIG.seed);
   const sky = new Sky(scene);
   // its position is the way up, not a place: it stays put when the scene is slid to be drawn
@@ -184,4 +202,7 @@ export function installWorld(game) {
       particles.update(at, at.y, sky.open);
     },
   });
+
+  // (the features after this wait for the Earth near the start and the hikes)
+  return earthNear;
 }

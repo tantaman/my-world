@@ -53,6 +53,7 @@ npm run api        # http://127.0.0.1:8787 — the save server (optional)
 npm run build      # static site in dist/
 npm test           # the rules, in Node (see "Checking it still works")
 npm run hike -- photo.heic   # put a hike you've done into the world (see src/hikes/README.md)
+npm run earth        # the real Earth under the world (see src/world/README.md)
 ```
 
 The game is a static site and runs on its own; `npm run api` adds the save
@@ -205,6 +206,7 @@ place in that order, not at the end:
 | `caves/sites.js` | the mouths of caves, as something grown later keeps clear of | `caveMouths(caves, clear)`, with `keepClear` |
 | `core/card.js` | a place out of a book: its name and lines over the picture as you come into it, and the dark on the way | `new Card({ id, book })`, `card.show({ title, who, lines, canto })`, `await card.darken(on)` |
 | `core/lazy.ts` | code that isn't needed until you get there (what a place looks like), fetched then and once | `const look = lazy(() => import('./look.js'))`, `look.want()` → the module or null, `await look.ready()` |
+| `core/notYet.ts` | asking about something sent for that hasn't come yet (the real Earth under a place): no fault, asked again | `throw new NotYet(what)`; `isNotYet(err)` where a search of your own is stepped by hand, to start it over |
 | `core/searches.ts` | answers that take a while to work out (where a thing grown from the seed is), each worked out once: outright, or a little at a time | `new Searches({ *grow(key) { …; yield; … } })`, `get`, `peek`, `pump(ms)` |
 | `country/index.js` | a layer of cloud of your own over everything, for a while (a flight's) | `game.country.cloud(() => ({ at, cover, x, z }))` |
 | `far/index.js` | land drawn past where the forest is streamed in, to be seen from high ground | `game.far.want(id, x0, z0, x1, z1, step)`, `far.drop(id)` |
@@ -214,6 +216,7 @@ place in that order, not at the end:
 | `game/commands.js` | keys of its own for somewhere that isn't the forest, where the forest's do nothing | `commands.add({ …, mode })`, `commands.mode = …` |
 | `game/game.ts` | something done every frame | `game.addSystem({ name, phase, update })` |
 | `game/game.ts` | something that must be here before the hiker is set down where they were left | `game.beforeArrival(look.ready())` |
+| `game/game.ts` | something the features after this one look about on as they install (the real Earth round the start and the hikes), fetched first | return its promise from the install function |
 | `game/settings.js` | a remembered preference | `game.settings.get / set` |
 | `hell/index.ts` | where the road out of the bottom of Hell comes up, instead of the hillside by the gate | `game.hell.leadOut({ arrive() })` |
 | `hunting/shot.js` | something else the rifle can hit (a man, a wall that stops a shot) | `game.hunting.targets.add({ aimed, struck?, heard? })` |
@@ -269,6 +272,7 @@ place in that order, not at the end:
 | `world/breakers.js` | waves breaking on a shore, for the sea to rise with and anyone to ride | `game.breakers.set(break)`; how high they stand: `breakers.sample(x, z)`, `chunks.waterAt`'s `rise` |
 | `world/claims.ts` | what a search for somewhere to put a thing keeps clear of, from what was there first | `keepClear([landOf(landforms), placesOf(sites), …])` → `keepOff(x0, z0, x1, z1)`, `keepOff.ready` |
 | `world/country.js` | a kind of country (its ground, plants, sky, animals, what its trees are called) | an entry in `COUNTRY` |
+| `world/country.js` | what kind of country a climate is, out on the real Earth | an entry in `EARTH_COUNTRY` |
 | `world/cuts.js` | a hole in the ground, for something to stand in for it | `setCuts([{ ax, az, bx, bz, fa, fb, w, h }], owner)` |
 | `world/flora.js` | a plant | an entry in `FLORA`, a model, and where it grows (`chunkGen.js`) |
 | `world/frame.js` | a place laid out on a plan of its own: from its frame to the world and back, and what it covers | `toWorld(site, lx, lz)`, `toLocal`, `onPlan`, `planDiscs`, `boxOf` |
@@ -293,7 +297,9 @@ Each of those files opens with what the thing is and what it is handed.
   frozen, a change to how the forest grows is a new one, and the frozen ones
   keep growing as they did. Real places are part of what is grown too, but
   only where each one is, and on whichever land
-  ([real places](src/world/README.md#real-places)).
+  ([real places](src/world/README.md#real-places)); and so is the real
+  Earth, out past the forest round the middle
+  ([the real Earth](src/world/README.md#the-real-earth)).
 - *A save is spelled once, for good.* Each system says how its share of a
   save is cut into elements (`t:120:-40`, `l:x:0:0:4:0`), next to the class
   that owns it. Worlds on the server are spelled that way now: add new kinds,
@@ -489,6 +495,8 @@ src/
 tools/
   hike.mjs                npm run hike: a photo → a hike in the world
   hike/                   reading photos (EXIF), elevation tiles, OpenStreetMap; building one
+  earth.mjs               npm run earth: the real Earth under the world, from elevation tiles and a climate map
+  earth/                  the Earth's grids: land, sea, coast, relief; the climate
 worker/
   index.js                the front door: mint an id, route to the world
   world.js                a world's Durable Object — the only writer, and who is who

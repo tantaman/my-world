@@ -69,6 +69,9 @@ export function installFar(game) {
   landforms.on('land', (def) => {
     if (worker) worker.postMessage({ type: 'land', def });
   });
+  landforms.on('earth', (tile) => {
+    if (worker) worker.postMessage({ type: 'earth', tile });
+  });
 
   function start() {
     if (worker !== null) return;
@@ -83,7 +86,7 @@ export function installFar(game) {
         worker = false;
       };
       const pads = (structures || []).map((s) => ({ x: s.x, z: s.z, radius: s.radius }));
-      worker.postMessage({ type: 'init', seed: gen.seed, land: gen.land, structures: pads, hikes: gen.hikes });
+      worker.postMessage({ type: 'init', seed: gen.seed, land: gen.land, structures: pads, hikes: gen.hikes, earth: gen.earthCopy });
     } catch (err) {
       worker = false;
     }

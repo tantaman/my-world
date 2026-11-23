@@ -21,8 +21,11 @@ import { Arena, RELOAD } from '../src/spaceport/arena.js';
 import { route, steer } from '../src/spaceport/bots.js';
 import { Flight, FLIGHT, climbHeight, homeHeight } from '../src/spaceport/flight.js';
 import { matchesGolden } from './helpers/golden.js';
+import { earthAtFirst } from './helpers/earth.js';
 
 const SEED = 20261119;
+// The real Earth under the world, as the game has it when it opens (world/earth.js).
+const EARTH = await earthAtFirst();
 const MAP = { boxes: BOXES, pads: PADS };
 const STEP = 1 / 60;
 const still = { x: 0, z: 0 };
@@ -30,7 +33,7 @@ const still = { x: 0, z: 0 };
 // The world as the game has it: the things the site keeps clear of, made
 // the way their features make them.
 function worldOf(land) {
-  const gen = growWorld(SEED, [], land);
+  const gen = growWorld(SEED, [], land, [], EARTH);
   const start = gen.findSpawn(0, 0);
   const landforms = new Landforms(HIKES);
   const keepHike = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);

@@ -3,6 +3,7 @@
 // ImageBitmaps / canvases, least-recently-used first out.
 
 import { growWorld } from '../world/lands.js';
+import { Earth } from '../world/earth.js';
 import { TILE, renderTile, createVegCache } from './mapRender.js';
 
 // Past its own edges a tile reads a pixel of border, and the trees of every
@@ -19,11 +20,15 @@ export class MapTiles {
   // hikes: the hikes whose land is here already; addHike() brings more.
   // ready(x0, z0, x1, z1, ask): whether all a square is drawn from is here
   // (see world/landforms.js); a tile waits until it is.
-  constructor(seed, structures = [], land = 1, hikes = [], ready = () => true) {
+  // earth: the real Earth's plain facts and the tiles of it here already
+  // ({ meta, got }: WorldGen.earthCopy), or null for a world with none;
+  // addEarth() brings more.
+  constructor(seed, structures = [], land = 1, hikes = [], ready = () => true, earth = null) {
     this.seed = seed;
     this.land = land;
     this.structures = structures.map((s) => ({ x: s.x, z: s.z, radius: s.radius }));
     this.hikes = [...hikes];
+    this.earth = earth && { meta: earth.meta, got: [...earth.got] };
     this.ready = ready;
     this.cache = new Map(); // key -> { img }
     this.inFlight = new Set();
@@ -42,7 +47,7 @@ export class MapTiles {
           console.warn('map worker failed, rendering on the main thread', e.message);
           this._dropWorkers();
         };
-        w.postMessage({ type: 'init', seed, land, structures: this.structures, hikes });
+        w.postMessage({ type: 'init', seed, land, structures: this.structures, hikes, earth: this.earth });
         this.workers.push(w);
         this.busy.push(0);
       }
@@ -91,6 +96,14 @@ export class MapTiles {
     if (this.local) this.local.gen.addHike(def);
   }
 
+  // A tile of the real Earth has arrived: the same.
+  addEarth(tile) {
+    if (!this.earth) return;
+    this.earth.got.push(tile);
+    for (const w of this.workers) w.postMessage({ type: 'earth', tile });
+    if (this.local) this.local.gen.addEarth(tile);
+  }
+
   pump() {
     if (this.workers.length) {
       for (let i = 0; i < this.workers.length; i++) {
@@ -108,7 +121,8 @@ export class MapTiles {
     if (!w) return;
     this.inFlight.add(w.key);
     if (!this.local) {
-      const gen = growWorld(this.seed, this.structures, this.land, this.hikes);
+      const gen = growWorld(this.seed, this.structures, this.land, this.hikes, this.earth ? new Earth(this.earth.meta) : null);
+      for (const t of this.earth ? this.earth.got : []) gen.addEarth(t);
       this.local = { gen, vegFor: createVegCache(gen, 48) };
     }
     const px = renderTile(this.local.gen, w.level, w.tx, w.tz, this.local.vegFor);

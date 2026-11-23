@@ -207,8 +207,18 @@ north-north-east of the Hoh, is 5 km north-north-east of where you start;
 Angels Landing, 1,480 km away in fact, is 296 km to the south-east; and the
 hikes on Maui, 4,200 km away, are 835 km off to the south-west. The forest
 round the middle is the game's own, not the real Hoh, so a hike is kept a
-few kilometres clear of it (`tools/hike/place.js`). Between hikes it's
-forest; the list beside the map is the quick way across.
+few kilometres clear of it (`tools/hike/place.js`). Out past that forest,
+about 80 km round the start, the land between the hikes is the real Earth
+(see [the real Earth](../world/README.md#the-real-earth)): the Pacific lies
+between here and Maui, and Maui is an island in it; the bayou is in the
+swamps of the Mississippi delta, with the bays and lakes where they really
+are; Zion stands in red rock country on the plateau. Out there a hike stands
+at its real height, on the same land as the Earth's round it, finer: round
+each hike the Earth is a height every 460 m for 35 km about it, from the
+same elevation, so the valleys you see off the top are the real valleys.
+Its country reaches a couple of kilometres past its edge before the
+Earth's own takes over, and a sea it has runs on into the Earth's. The list
+beside the map is the quick way across.
 
 A real place can go down a long way below the forest round it (a canyon
 cut into a plateau, its trailhead on the rim): the haze is as clear down in

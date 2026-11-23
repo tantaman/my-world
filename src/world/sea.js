@@ -110,7 +110,13 @@ export class Sea {
   // The land h (as the land without a sea grows it) at (x, z), as it lies
   // by the sea. Leaves this.fall at how far it fell there.
   shape(h, x, z) {
-    const D = this.drop(x, z);
+    return this.shapeBy(h, this.drop(x, z));
+  }
+
+  // The land h, falling away D m toward the sea, as it lies by the sea.
+  // (shape() is this with the sea's own fall; the real Earth has its own, and
+  // a floor of its own, lower: realPlaces.js.)
+  shapeBy(h, D, floor = SEA.floor, softness = SEA.soft) {
     this.fall = D;
     let u = h - D - SEA.level; // height above the sea
     // inland, no hollow below the floor
@@ -120,9 +126,9 @@ export class Sea {
       // one, rounded off between. Written the long way round because e^t
       // overflows past t = 709 — about 1400 m up, which the high country
       // reaches (worldgen.js) — and then the whole height came out infinite.
-      const t = (u - SEA.floor) / SEA.soft;
+      const t = (u - floor) / softness;
       const soft = Math.max(t, 0) + Math.log1p(Math.exp(-Math.abs(t)));
-      const f = SEA.floor + SEA.soft * soft;
+      const f = floor + softness * soft;
       u += (f - u) * inland;
     }
     // a beach at the waterline

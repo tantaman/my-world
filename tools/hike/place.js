@@ -27,47 +27,22 @@
 // are wide.
 
 import { localFrame } from './geo.js';
+import { ORIGIN, stretch, project } from '../../src/core/geo.js';
 
-// The real place at the middle of the game world: the Hoh rain forest, a
-// little down the valley from the visitor centre. (From there, Mount Storm
-// King's land stays out of the few kilometres round the start, which are the
-// game's own: its first railway squares are pinned, test/railway.test.js.)
-export const ORIGIN = { lat: 47.85, lon: -123.95 };
+// (the projection is the game's own: src/core/geo.js. The real place at its
+// middle is the Hoh rain forest, a little down the valley from the visitor
+// centre; from there, Mount Storm King's land stays out of the few
+// kilometres round the start, which are the game's own: its first railway
+// squares are pinned, test/railway.test.js.)
+export { ORIGIN, stretch, project };
+
 // Game metres kept clear between the middle of the world and a hike's edge.
 const CLEAR_OF_MIDDLE = 2000;
 // How much wider than life the map is, sideways, before it's worth saying.
 const STRETCH_WORTH_SAYING = 1.1;
 
 const round = (v) => Math.round(v * 10) / 10 + 0;
-const EARTH = 6371008.8; // m, mean radius
-const D = Math.PI / 180;
 const outerOf = (h) => h.radius + h.fade;
-
-// The angle (rad) between the middle of the world and (lat, lon), seen from
-// the centre of the Earth, and its cosine.
-function arcFromMiddle(lat, lon) {
-  const [p0, p] = [ORIGIN.lat * D, lat * D];
-  const dl = (lon - ORIGIN.lon) * D;
-  const cosc = Math.max(-1, Math.min(1, Math.sin(p0) * Math.sin(p) + Math.cos(p0) * Math.cos(p) * Math.cos(dl)));
-  return Math.acos(cosc);
-}
-
-// How many times wider than life the map is at (lat, lon), across the line
-// from the middle. Along that line it is always true.
-export function stretch(lat, lon) {
-  const c = arcFromMiddle(lat, lon);
-  return c < 1e-6 ? 1 : c / Math.max(Math.sin(c), 1e-9);
-}
-
-// Real (lat, lon) → game [x, z] at `scale` game metres per real metre.
-export function project(lat, lon, scale) {
-  const [p0, p] = [ORIGIN.lat * D, lat * D];
-  const dl = (lon - ORIGIN.lon) * D;
-  const k = stretch(lat, lon);
-  const east = EARTH * k * Math.cos(p) * Math.sin(dl);
-  const north = EARTH * k * (Math.cos(p0) * Math.sin(p) - Math.sin(p0) * Math.cos(p) * Math.cos(dl));
-  return [east * scale, -north * scale];
-}
 
 // The real place a hike's land is centred on: its photo, unless it says.
 export const centreOf = (h) => h.middle || h.photo;

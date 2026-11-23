@@ -89,6 +89,16 @@
 //            the slope sets the level): an area the map draws a river over
 //            is still water from bank to bank, as a lake is, and so is a
 //            canal's. The importer reads it (tools/hike/build.js)
+//   woods    0..1: how thickly wooded it is where the Earth itself is this
+//            country (world/earth.js), as a share of the forest's own woods:
+//            a desert none, a savanna a few trees out in the grass. (A hike
+//            says how wooded it is for itself, on its card.)
+//
+// Out past the forest round the middle of the world the land is the real
+// Earth's (world/earth.js), and each part of it is a country by its climate:
+// EARTH_COUNTRY, at the end, says which. Where one of those says nothing of a
+// treeline or a snow line, the Earth has its own, by how far from the equator
+// it is.
 //
 // Each also gets an id, its place in the table: the ground carries it vertex
 // by vertex, so the shaders, which are handed every country's colours, know
@@ -129,6 +139,7 @@ const FOREST = {
   forms: {},
   moss: {},
   tidal: false,
+  woods: 1,
 };
 
 const kind = (over) => ({ ...FOREST, ...over, ground: { ...FOREST.ground, ...over.ground }, clouds: { ...FOREST.clouds, ...over.clouds } });
@@ -353,6 +364,214 @@ export const COUNTRY = {
     moss: { broad: 0.9, pine: 0.75 },
     tidal: true,
   }),
+
+  // ── The Earth's own ─────────────────────────────────────────────────────
+  // What the real Earth is, climate by climate, out past the forest round the
+  // middle (EARTH_COUNTRY, below, says which climate is which). Broad strokes:
+  // each stands for a great deal of the world.
+
+  // Tropical rainforest (the Amazon, the Congo, Borneo): tall broadleaves,
+  // closed overhead, palms and tree ferns under them, red clay, and thick wet
+  // air under a broken sky.
+  jungle: kind({
+    ground: { tint: [0.9, 1.15, 0.66], dirt: [0.26, 0.11, 0.055], rock: [0.1, 0.085, 0.07], bare: [[0.26, 0.11, 0.055], [0.14, 0.065, 0.04]] },
+    trees: [['broad', 0.8], ['palm', 0.12], ['ironwood', 0.08]],
+    under: { fern: [['fern', 0.55], ['treefern', 0.45]], bush: [['bush', 0.7], ['treefern', 0.3]] },
+    sizes: { broad: 1.25 },
+    rocks: 0.12,
+    clouds: { deck: 1400, cover: 0.55, shade: 0.3 },
+    haze: 1.9,
+    animals: ['snake', 'mouse', 'flock', 'flit', 'butterflies', 'bees'],
+    names: { broad: ['kapok', 'a kapok'], ironwood: ['mahogany', 'a mahogany'] },
+  }),
+
+  // Tropical grassland with a dry season (the Serengeti, the llanos, the
+  // Top End): tall tawny grass, red earth, and flat-topped trees standing
+  // well apart.
+  savanna: kind({
+    ground: { tint: [1.45, 1.1, 0.48], dirt: [0.34, 0.14, 0.06], rock: [0.3, 0.16, 0.09], bare: [[0.36, 0.15, 0.065], [0.3, 0.17, 0.09]], sand: [0.4, 0.26, 0.15], barren: 0.15 },
+    trees: [['broad', 1]],
+    under: { fern: [['bush', 0.3]], bush: [['bush', 0.8]] },
+    sizes: { broad: 0.85 },
+    slim: { broad: -0.9 },
+    rocks: 0.2,
+    clouds: { deck: 1800, cover: 0.3, shade: 0.08 },
+    haze: 1.2,
+    animals: ['snake', 'mouse', 'rabbit', 'flock', 'flit', 'crows', 'hawk', 'butterflies'],
+    names: { broad: ['acacia', 'an acacia'] },
+    tints: { broad: [1.05, 1.0, 0.72], bush: [1.1, 1.0, 0.7] },
+    woods: 0.18,
+  }),
+
+  // Hot desert (the Sahara, Arabia, the Mojave): sand and stone, the odd
+  // bush, clear dry air and no cloud.
+  desert: kind({
+    ground: { tint: [1.5, 1.15, 0.6], dirt: [0.42, 0.3, 0.18], rock: [0.36, 0.22, 0.13], bare: [[0.5, 0.36, 0.21], [0.4, 0.27, 0.15]], sand: [0.52, 0.4, 0.25], barren: 0.94 },
+    trees: [],
+    under: { fern: [], bush: [['bush', 0.25]] },
+    rocks: 0.32,
+    haze: 0.55,
+    animals: ['snake', 'mouse', 'hawk', 'crows'],
+    tints: { bush: [1.1, 0.95, 0.65], rock: [1.5, 1.15, 0.85] },
+    woods: 0,
+  }),
+
+  // Cold desert and sagebrush steppe (the Great Basin, Patagonia, the Gobi):
+  // grey-green sage over pale ground, a juniper here and there, wide skies.
+  sagebrush: kind({
+    ground: { tint: [1.2, 1.05, 0.7], dirt: [0.3, 0.25, 0.18], rock: [0.26, 0.22, 0.18], bare: [[0.32, 0.27, 0.2], [0.24, 0.2, 0.15]], sand: [0.38, 0.32, 0.23], barren: 0.5 },
+    trees: [['pine', 1]],
+    sizes: { pine: 0.3 },
+    slim: { pine: -1.2 },
+    under: { fern: [['bush', 0.4]], bush: [['bush', 1]] },
+    rocks: 0.3,
+    clouds: { deck: 3000, cover: 0.2, shade: 0.05 },
+    haze: 0.6,
+    animals: ['deer', 'elk', 'cougar', 'bobcat', 'fox', 'rabbit', 'mouse', 'snake', 'flock', 'crows', 'hawk'],
+    names: { pine: ['juniper', 'a juniper'] },
+    tints: { bush: [0.85, 0.95, 0.78], pine: [0.72, 0.85, 0.78] },
+    woods: 0.06,
+  }),
+
+  // Grassland too dry for woods (the Great Plains, the steppe of Kazakhstan,
+  // the Sahel's edge): rolling grass, a line of trees along a creek, a big
+  // sky with fair-weather cloud.
+  prairie: kind({
+    ground: { tint: [1.3, 1.12, 0.62], dirt: [0.26, 0.19, 0.11], rock: [0.24, 0.2, 0.16], bare: [[0.28, 0.21, 0.13], [0.2, 0.15, 0.1]], barren: 0.08 },
+    trees: [['broad', 0.85], ['pine', 0.15]],
+    riparian: { reach: 30, trees: [['broad', 1]], dry: 0.35 },
+    under: { fern: [['bush', 0.25]], bush: [['bush', 0.7]] },
+    rocks: 0.1,
+    clouds: { deck: 1600, cover: 0.35, shade: 0.1 },
+    haze: 0.8,
+    animals: ['deer', 'elk', 'wolf', 'fox', 'rabbit', 'mouse', 'snake', 'flock', 'crows', 'hawk', 'butterflies', 'bees'],
+    names: { broad: ['cottonwood', 'a cottonwood'] },
+    woods: 0.12,
+  }),
+
+  // Summer-dry hills (California, the Mediterranean, the Cape): golden grass
+  // and dark scrub, oaks spread out over it and pines on the ridges.
+  chaparral: kind({
+    ground: { tint: [1.4, 1.12, 0.55], dirt: [0.32, 0.22, 0.13], rock: [0.3, 0.26, 0.21], bare: [[0.34, 0.24, 0.14], [0.26, 0.18, 0.1]], sand: [0.42, 0.34, 0.24], barren: 0.12 },
+    trees: [['broad', 0.75], ['pine', 0.25]],
+    under: { fern: [['bush', 0.5]], bush: [['bush', 1]] },
+    slim: { broad: -0.5 },
+    rocks: 0.28,
+    clouds: { deck: 1200, cover: 0.15, shade: 0.05 },
+    haze: 0.85,
+    animals: ['deer', 'cougar', 'bobcat', 'fox', 'rabbit', 'squirrel', 'mouse', 'snake', 'flock', 'flit', 'crows', 'hawk', 'owl', 'butterflies', 'bees'],
+    names: { broad: ['live oak', 'a live oak'], pine: ['stone pine', 'a stone pine'] },
+    tints: { bush: [0.75, 0.85, 0.6], broad: [0.85, 0.95, 0.75] },
+    woods: 0.45,
+  }),
+
+  // Broadleaf woods of a temperate continent (the eastern United States,
+  // Europe east of the Rhine, Japan): oaks and maples, birch and a few pines,
+  // in a fresher green.
+  'deciduous forest': kind({
+    ground: { tint: [1.05, 1.08, 0.82] },
+    trees: [['broad', 0.68], ['birch', 0.12], ['pine', 0.2]],
+    under: { fern: [['fern', 0.6], ['bush', 0.3]], bush: [['bush', 1]] },
+    rocks: 0.22,
+    clouds: { deck: 1500, cover: 0.4, shade: 0.15 },
+    animals: ['deer', 'bear', 'bobcat', 'fox', 'rabbit', 'squirrel', 'chipmunk', 'mouse', 'snake', 'salamander', 'flock', 'flit', 'crows', 'hawk', 'owl', 'butterflies', 'bees'],
+    names: { broad: ['maple', 'a maple'] },
+    tints: { broad: [1.05, 1.06, 0.85] },
+  }),
+
+  // The northern forest, all the way round the world (Canada, Scandinavia,
+  // Siberia): slim dark spruces close together, birches where it's burned,
+  // moss underfoot, and a grey sky low over it.
+  'boreal forest': kind({
+    ground: { tint: [0.82, 0.95, 0.85], dirt: [0.16, 0.12, 0.08] },
+    trees: [['pine', 0.85], ['birch', 0.15]],
+    under: { fern: [['fern', 0.5], ['bush', 0.3]], bush: [['bush', 1]] },
+    slim: { pine: 0.5 },
+    rocks: 0.3,
+    clouds: { deck: 900, cover: 0.6, shade: 0.35 },
+    haze: 1.1,
+    animals: ['moose', 'bear', 'wolf', 'fox', 'rabbit', 'squirrel', 'mouse', 'flock', 'flit', 'crows', 'hawk', 'owl'],
+    names: { pine: ['spruce', 'a spruce'] },
+    tints: { pine: [0.8, 0.88, 0.9] },
+  }),
+
+  // Tundra (the Arctic coasts, the tops of high plateaus): too cold for
+  // trees anywhere, thin turf and lichen among stones, snow lying here and
+  // there.
+  tundra: kind({
+    ground: { tint: [0.95, 0.95, 0.8], dirt: [0.2, 0.17, 0.13], rock: [0.2, 0.2, 0.19], bare: [[0.22, 0.2, 0.17], [0.15, 0.14, 0.12]], barren: 0.25, rubble: 0.6 },
+    trees: [],
+    under: { fern: [], bush: [['bush', 0.35]] },
+    rocks: 0.45,
+    clouds: { deck: 700, cover: 0.65, shade: 0.4 },
+    haze: 0.9,
+    animals: ['elk', 'wolf', 'fox', 'rabbit', 'flock', 'hawk', 'owl'],
+    treeline: [-100, 0],
+    woods: 0,
+  }),
+
+  // Ice (Greenland, Antarctica): snow over everything but the crags, the
+  // water frozen, nothing living on it.
+  ice: kind({
+    ground: { tint: [0.85, 0.9, 0.95], rock: [0.12, 0.12, 0.13] },
+    trees: [],
+    under: { fern: [], bush: [] },
+    rocks: 0.2,
+    haze: 0.6,
+    animals: [],
+    treeline: [-100, 0],
+    snowline: [-100, 0],
+    frozen: true,
+    woods: 0,
+  }),
+};
+
+// What kind of country each part of the real Earth is (world/earth.js), by
+// its climate: the Köppen-Geiger class there (tools/earth/build.js).
+//   climate   class → country
+//   lowland   on low, flat ground (under `below` real m, rugged by less than
+//             `relief` m) these climates are something else: the swamps of a
+//             delta or a coastal plain
+//   poleward  further than `from` degrees from the equator these climates
+//             are something else: a dry summer that far north is the Pacific
+//             north-west's forest, not California's golden hills
+// A class it doesn't name (out at sea) is the forest.
+export const EARTH_COUNTRY = {
+  climate: {
+    Af: 'jungle',
+    Am: 'jungle',
+    As: 'savanna',
+    Aw: 'savanna',
+    BWh: 'desert',
+    BWk: 'sagebrush',
+    BSh: 'prairie',
+    BSk: 'prairie',
+    Csa: 'chaparral',
+    Csb: 'chaparral',
+    Csc: 'forest',
+    Cfa: 'deciduous forest',
+    Cfb: 'forest',
+    Cfc: 'boreal forest',
+    Cwa: 'deciduous forest',
+    Cwb: 'deciduous forest',
+    Cwc: 'boreal forest',
+    Dfa: 'deciduous forest',
+    Dfb: 'deciduous forest',
+    Dfc: 'boreal forest',
+    Dfd: 'boreal forest',
+    Dsa: 'prairie',
+    Dsb: 'forest',
+    Dsc: 'boreal forest',
+    Dsd: 'boreal forest',
+    Dwa: 'deciduous forest',
+    Dwb: 'deciduous forest',
+    Dwc: 'boreal forest',
+    Dwd: 'boreal forest',
+    ET: 'tundra',
+    EF: 'ice',
+  },
+  lowland: { below: 6, relief: 10, climates: { Cfa: 'bayou', Cwa: 'bayou', Am: 'bayou', Aw: 'bayou' } },
+  poleward: { from: 42, climates: { Csb: 'forest', Csa: 'forest' } },
 };
 
 // Every country, by its id (the forest is 0).

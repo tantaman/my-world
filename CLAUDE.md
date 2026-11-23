@@ -16,6 +16,7 @@ npm run smoke        # builds, then a play-through in headless Chromium, a few m
 npm run serve        # built site + save server together on :8787
 npm run together     # two visitors in one world; needs `npm run serve` running
 npm run hike -- photo.heic   # a hike from a photo into the world (fetches elevation + OSM)
+npm run earth        # the real Earth under the world, into src/world/earth/ (fetches elevation + climate)
 ```
 
 Run `npm test` after any change. Run `npm run smoke` after touching anything
@@ -191,6 +192,23 @@ don't edit the same lines:
   `landforms.ready(box)` first and waits, and anything else grown from the
   seed keeps off a hike's reach (`landforms.reaches(box)`), as the old places
   and the caves do.
+- **The real Earth is part of the world description too.** Past the forest
+  round the middle (`EARTH` in `world/earth.js`) the land is the Earth's,
+  set in by `world/realPlaces.js` as the hikes are, from the tiles
+  `npm run earth` writes to `world/earth/`. Don't edit those, and once a
+  land is frozen don't re-run the importer to reshape them: worlds are built
+  on them. Nothing inside the middle may change for it
+  (`test/earth.test.js`), which is why the water never runs from the Earth
+  into the middle. Its tiles are fetched as they're needed, like a hike's
+  land, and `landforms.ready(box)` waits for them too; anything else that
+  asks about the Earth before its tile has come is thrown a `NotYet`
+  (`core/notYet.ts`): a `Searches` search starts over when it has, a system
+  is run again next frame, and a search of a feature's own that steps its
+  generator by hand has to catch it and start over. What's grown from the
+  seed round the start and round each hike can count on the Earth there
+  being in hand as it installs (`world/index.js` fetches it first). What a
+  part of the Earth looks like is its country, by its climate:
+  `EARTH_COUNTRY` in `world/country.js`.
 - Values put into or taken out of the element record must be copies
   (`own()` in `save/regions.js` does this for domains that go through the
   registry).
