@@ -15,7 +15,9 @@
 // written by `npm run earth` (tools/earth.mjs) to world/earth/: for each
 // cell, the height of its land and the depth of its sea, how far it is from
 // the coast, and how rugged the land round it is (tools/earth/build.js says
-// exactly); and finer, round the start and round each hike (DETAIL). A tile
+// exactly); finer where it's a range of mountains, a height every 1' of arc,
+// with the tile (MOUNTAIN); and finer still, round the start and round each
+// hike (DETAIL). A tile
 // is fetched the first time something near it is grown (landforms.js), as a
 // hike's land is. The climate is a map of its own, half a degree to a cell
 // (Köppen-Geiger), fetched with the first tile.
@@ -133,6 +135,18 @@ export const TILE_DEGREES = 15;
 export const TILE_CELLS = TILE_DEGREES * PER_DEGREE;
 const GRID_W = 360 * PER_DEGREE;
 const GRID_H = 180 * PER_DEGREE;
+
+// Where the land is a range of mountains (`relief` real m or more over a cell
+// and those next to it), the grid is finer: a height every 1' of arc (about
+// 1.85 km: 370 m in the game), `perDegree` to a degree, so a peak stands as
+// high as it does and a valley runs where it runs, rather than both being
+// worn down to the mean of nine kilometres. In a ring of cells round each
+// range the finer heights come down to the coarse grid's, so there's no step
+// where they end. Each is kept to `step` m, as the change from its own cell's
+// height, with the tile the cell is in (see encodeTile).
+export const MOUNTAIN = { perDegree: 60, relief: 200, step: 8 };
+const SUB = MOUNTAIN.perDegree / PER_DEGREE; // the finer heights along a cell's side
+const SUB2 = SUB * SUB;
 // What a cell's numbers are stored as (a tile's bytes: see encodeTile). The
 // land's height and the sea's depth each on a curve (asinh) that is fine near
 // the sea's level and coarser further from it: half a metre on the shore,
@@ -146,6 +160,8 @@ const code = (c, v) => Math.round(c.k * Math.asinh(v / c.s));
 const uncode = (c, q) => c.s * Math.sinh(q / c.k);
 const COAST_STEP = 0.5;
 const RELIEF_ROOT = 2;
+// A land height (m) as a tile keeps it, and gives it back.
+export const storedLand = (v) => uncode(LAND_CODE, code(LAND_CODE, v));
 
 // The tile (its name, as its file is called) a cell of the grid is in, by
 // its north-west corner: 'n45w135' is 30°–45° N, 135°–120° W.
@@ -181,11 +197,25 @@ export function tilesAt(lat, lon, into, details = []) {
 // squared over RELIEF_ROOT), a byte each. Each is the change from the cell
 // before it (the first of a row from the first of the row above), which is
 // mostly small, so the whole packs down well (the importer deflates it).
+//
+// Then, if any of it is mountains (MOUNTAIN), which cells are, a bit each
+// (the first cell the lowest bit of the first byte), and the finer heights
+// of each of those cells in turn, SUB² of them row by row from its
+// north-west: each as the change, in MOUNTAIN.step m, from its cell's own
+// height as kept here, and that as the change from the one before it, 16
+// bits, low bytes then high bytes.
 const N2 = TILE_CELLS * TILE_CELLS;
+const BITS = Math.ceil(N2 / 8);
+const zig = (v) => (v << 1) ^ (v >> 31);
+const unzig = (z) => (z >>> 1) ^ -(z & 1);
 
-// { land, sea, coast, relief }: TILE_CELLS² numbers each (m, m, km, m) → bytes
-export function encodeTile({ land, sea, coast, relief }) {
-  const out = new Uint8Array(N2 * 6);
+// { land, sea, coast, relief }: TILE_CELLS² numbers each (m, m, km, m), and
+// mountains: { flags (TILE_CELLS² bytes, 1 for a cell that has them), heights
+// (SUB² real m for each such cell, in order) }, or none → bytes
+export function encodeTile({ land, sea, coast, relief, mountains = null }) {
+  const count = mountains ? mountains.flags.reduce((n, f) => n + (f ? 1 : 0), 0) : 0;
+  const M = count * SUB2;
+  const out = new Uint8Array(N2 * 6 + (count ? BITS + M * 2 : 0));
   const q = [
     (k) => code(LAND_CODE, land[k]),
     (k) => code(SEA_CODE, sea[k]),
@@ -203,7 +233,6 @@ export function encodeTile({ land, sea, coast, relief }) {
     }
     return d;
   };
-  const zig = (v) => (v << 1) ^ (v >> 31);
   for (const [plane, f] of [[0, q[0]], [1, q[1]]]) {
     const d = deltas(f);
     for (let k = 0; k < N2; k++) {
@@ -216,12 +245,30 @@ export function encodeTile({ land, sea, coast, relief }) {
     const d = deltas(f);
     for (let k = 0; k < N2; k++) out[plane * N2 + k] = d[k] & 255;
   }
+  if (count) {
+    const at = N2 * 6;
+    let o = 0;
+    let before = 0;
+    for (let k = 0; k < N2; k++) {
+      if (!mountains.flags[k]) continue;
+      out[at + (k >> 3)] |= 1 << (k & 7);
+      const base = storedLand(land[k]);
+      for (let s = 0; s < SUB2; s++, o++) {
+        const r = Math.round((mountains.heights[o] - base) / MOUNTAIN.step);
+        const z = zig(r - before) & 0xffff;
+        before = r;
+        out[at + BITS + o] = z & 255;
+        out[at + BITS + M + o] = z >> 8;
+      }
+    }
+  }
   return out;
 }
 
-// bytes → { land, sea, coast, relief }: Float32Arrays of TILE_CELLS² (m, m, km, m)
+// bytes → { land, sea, coast, relief }: Float32Arrays of TILE_CELLS² (m, m,
+// km, m); and mountains: { index (TILE_CELLS²: where a cell's finer heights
+// start in heights, or -1), heights (real m) }, or null
 export function decodeTile(bytes) {
-  const unzig = (z) => (z >>> 1) ^ -(z & 1);
   const undo = (get, wrap) => {
     const v = new Int32Array(N2);
     for (let j = 0; j < TILE_CELLS; j++) {
@@ -240,7 +287,27 @@ export function decodeTile(bytes) {
   const sea = Float32Array.from(i16(1), (v) => uncode(SEA_CODE, v));
   const coast = Float32Array.from(i8(4), (v) => v * COAST_STEP);
   const relief = Float32Array.from(u8(5), (v) => (v / RELIEF_ROOT) ** 2);
-  return { land, sea, coast, relief };
+  let mountains = null;
+  if (bytes.length > N2 * 6) {
+    const at = N2 * 6;
+    const index = new Int32Array(N2).fill(-1);
+    let count = 0;
+    for (let k = 0; k < N2; k++) if (bytes[at + (k >> 3)] & (1 << (k & 7))) index[k] = count++ * SUB2;
+    const M = count * SUB2;
+    const heights = new Float32Array(M);
+    let o = 0;
+    let r = 0;
+    for (let k = 0; k < N2; k++) {
+      if (index[k] < 0) continue;
+      const base = land[k];
+      for (let s = 0; s < SUB2; s++, o++) {
+        r += unzig(bytes[at + BITS + o] | (bytes[at + BITS + M + o] << 8));
+        heights[o] = base + r * MOUNTAIN.step;
+      }
+    }
+    mountains = { index, heights };
+  }
+  return { land, sea, coast, relief, mountains };
 }
 
 // A box of finer heights (DETAIL) packs as the land's plane of a tile does:
@@ -367,6 +434,11 @@ export class Earth {
     this._last = null;
     this._ll = [0, 0];
     this._c = { land: 0, sea: 0, coast: 0, relief: 0 };
+    this._c2 = { land: 0, sea: 0, coast: 0, relief: 0 };
+    this._m = { height: 0, w: 0 };
+    this._mv = new Float64Array(4); // the finer heights at the four corners round a point
+    this._mf = new Uint8Array(4); // and which of them there are
+    this._lt = { ti: 0, tj: 0, t: null };
   }
 
   // A tile: { name, bytes } (bytes as encodeTile makes them, inflated), or
@@ -426,15 +498,14 @@ export class Earth {
   }
 
   // Each of the four numbers of the grid at (lat, lon), between its cells,
-  // into this._c.
-  _cell(lat, lon) {
+  // into c.
+  _cell(lat, lon, c = this._c) {
     const fi = (lon + 180) * PER_DEGREE - 0.5;
     const fj = Math.max(0, Math.min(GRID_H - 1, (90 - lat) * PER_DEGREE - 0.5));
     const i0 = Math.floor(fi);
     const j0 = Math.min(GRID_H - 2, Math.floor(fj));
     const tx = fi - i0;
     const ty = fj - j0;
-    const c = this._c;
     c.land = c.sea = c.coast = c.relief = 0;
     for (let b = 0; b < 2; b++) {
       for (let a = 0; a < 2; a++) {
@@ -461,6 +532,66 @@ export class Earth {
     return c;
   }
 
+  // The finer heights of a range of mountains (MOUNTAIN) at (lat, lon), into
+  // this._m: the land's height there (real m), between the finer heights
+  // round it (and the coarse grid's, where one of those isn't a mountain's),
+  // and how far it is the finer heights' (w: 0 where none of them is).
+  _mid(lat, lon) {
+    const o = this._m;
+    const P = MOUNTAIN.perDegree;
+    const fi = (lon + 180) * P - 0.5;
+    const fj = Math.max(0, Math.min(180 * P - 1, (90 - lat) * P - 0.5));
+    const i0 = Math.floor(fi);
+    const j0 = Math.min(180 * P - 2, Math.floor(fj));
+    const tx = fi - i0;
+    const ty = fj - j0;
+    let any = false;
+    for (let n = 0; n < 4; n++) {
+      const I = (((i0 + (n & 1)) % (360 * P)) + 360 * P) % (360 * P);
+      const J = j0 + (n >> 1);
+      const ci = Math.floor(I / SUB);
+      const cj = Math.floor(J / SUB);
+      const ti = Math.floor(ci / TILE_CELLS);
+      const tj = Math.floor(cj / TILE_CELLS);
+      const t = this._tile(ti, tj);
+      const at = t.mountains ? t.mountains.index[(cj - tj * TILE_CELLS) * TILE_CELLS + (ci - ti * TILE_CELLS)] : -1;
+      this._mf[n] = at >= 0 ? 1 : 0;
+      if (at >= 0) {
+        this._mv[n] = t.mountains.heights[at + (J - cj * SUB) * SUB + (I - ci * SUB)];
+        any = true;
+      }
+    }
+    o.w = 0;
+    o.height = 0;
+    if (!any) return o;
+    for (let n = 0; n < 4; n++) {
+      const I = i0 + (n & 1);
+      const J = j0 + (n >> 1);
+      const w = (n & 1 ? tx : 1 - tx) * (n >> 1 ? ty : 1 - ty);
+      const h = this._mf[n] ? this._mv[n] : this._cell(90 - (J + 0.5) / P, -180 + (I + 0.5) / P, this._c2).land;
+      o.height += h * w;
+      o.w += this._mf[n] * w;
+    }
+    return o;
+  }
+
+  // Tile (ti, tj), the last asked kept (it's nearly always the same again).
+  _tile(ti, tj) {
+    const L = this._lt;
+    if (L.t && L.ti === ti && L.tj === tj) return L.t;
+    const name = tileName(ti, tj);
+    const t = this.tiles.get(name);
+    if (!t) {
+      this.missed = true;
+      if (this.wants) this.wants(name);
+      throw new NotYet(`the Earth's tile ${name}`);
+    }
+    L.ti = ti;
+    L.tj = tj;
+    L.t = t;
+    return t;
+  }
+
   // The real height (m above the sea, negative under it) at (lat, lon): the
   // land's, rising from the shore, or the sea's, falling away from it.
   _height(c) {
@@ -475,6 +606,8 @@ export class Earth {
   //   lat, lon
   //   fine    0..1, how far it is the finer land round a hike (DETAIL): there
   //           the real valleys and ridges are in its heights already
+  //   mid     0..1, how far it is a range of mountains' finer heights
+  //           (MOUNTAIN): there the ranges' own ridges and valleys are
   // Worked out on a grid of points EARTH.node m apart, a block of them at a
   // time, and taken between them: it's the same wherever it's asked.
   at(x, z, out) {
@@ -513,6 +646,7 @@ export class Earth {
     const lon = mix(4);
     out.lon = lon > 180 ? lon - 360 : lon < -180 ? lon + 360 : lon;
     out.fine = mix(5);
+    out.mid = mix(6);
     return out;
   }
 
@@ -520,7 +654,7 @@ export class Earth {
     const B = EARTH.block;
     const N = EARTH.node;
     const S = B + 1;
-    const f = [0, 1, 2, 3, 4, 5].map(() => new Float32Array(S * S));
+    const f = [0, 1, 2, 3, 4, 5, 6].map(() => new Float32Array(S * S));
     const ll = this._ll;
     let lon0 = null;
     for (let j = 0; j < S; j++) {
@@ -528,12 +662,15 @@ export class Earth {
         const k = j * S + i;
         unproject((bx * B + i) * N, (bz * B + j) * N, EARTH.scale, ll);
         const c = this._cell(ll[0], ll[1]);
+        const m = this._mid(ll[0], ll[1]);
+        if (m.w > 0) c.land = m.height;
         const d = this._detail(ll[0], ll[1]);
         const h = this._height(c);
         f[0][k] = (h + (d.w > 0 ? (d.height - h) * d.w : 0)) * EARTH.scale;
         f[1][k] = c.relief * EARTH.scale;
         f[2][k] = d.w > 0 ? c.coast + (d.coast - c.coast) * d.w : c.coast;
         f[5][k] = d.w;
+        f[6][k] = m.w;
         f[3][k] = ll[0];
         let lon = ll[1];
         if (lon0 === null) lon0 = lon;

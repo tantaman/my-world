@@ -1,17 +1,17 @@
 {
  "huntclub:far:0:-3": {
   "name": "Tamarack Hill Hunt Club",
-  "x": 3584.516,
-  "z": -27014.428,
-  "yaw": 5.534,
-  "base": -31.105
+  "x": 3754.825,
+  "z": -27225.152,
+  "yaw": 0.822,
+  "base": -31.188
  },
  "huntclub:far:2:-3": {
   "name": "Timber Run Hunt Club",
-  "x": 24297.356,
-  "z": -25700.062,
-  "yaw": 2.328,
-  "base": -31.135
+  "x": 23331.614,
+  "z": -26053.885,
+  "yaw": 5.47,
+  "base": -31.191
  },
  "huntclub:far:-1:1": {
   "name": "Elk Point Hunt Club",

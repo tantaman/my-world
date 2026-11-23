@@ -11,6 +11,10 @@
 // square and one for the climate, listed in src/world/earthTiles.js; the game
 // fetches each the first time something near it is grown.
 //
+// Where the land is a range of mountains (MOUNTAIN in earth.js), a height
+// every 1' of arc as well, read from tiles at zoom 8 (about 600 m a pixel at
+// the equator), kept with the tile it's in.
+//
 // And round the start, and round each hike (src/world/hikes.js), the land
 // finer (DETAIL in earth.js: a height every 15" of arc, about 460 m, from
 // tiles at zoom 10), DETAIL.start km about the start and DETAIL.reach about a
@@ -31,7 +35,8 @@ import { deflateRawSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { decodePng, encodePng } from './hike/png.js';
 import { mosaic, seaMask, cells, parseKoppen, W, H, CLIMATE_W, CLIMATE_H } from './earth/build.js';
-import { encodeTile, encodeDetail, tileName, TILE_CELLS, TILE_DEGREES, DETAIL } from '../src/world/earth.js';
+import { mountainCells, mountainHeights, tileHasMountains, finerAt, SUB } from './earth/mountains.js';
+import { encodeTile, encodeDetail, tileName, TILE_CELLS, TILE_DEGREES, DETAIL, MOUNTAIN } from '../src/world/earth.js';
 import { ORIGIN } from '../src/core/geo.js';
 import { HIKES } from '../src/world/hikes.js';
 import { tileXY, terrarium } from './hike/geo.js';
@@ -43,6 +48,7 @@ const CACHE = path.join(ROOT, 'node_modules/.cache/earth');
 const ZOOM = 5;
 const KOPPEN = 'http://koeppen-geiger.vu-wien.ac.at/data/Koeppen-Geiger-ASCII.zip';
 const AT_ONCE = 16; // downloads at a time
+const MOUNTAIN_ZOOM = 8; // of the elevation tiles the mountains' finer heights are read from
 
 const args = process.argv.slice(2);
 const opt = (name) => {
@@ -103,6 +109,77 @@ const zipFile = path.join(CACHE, 'koppen-ascii.zip');
 await fetchTo(zipFile, KOPPEN);
 const climate = parseKoppen(new TextDecoder().decode(await unzipOne(fs.readFileSync(zipFile))));
 
+// ── The mountains, finer ─────────────────────────────────────────────────────
+const ranges = mountainCells(grid);
+const MZ = MOUNTAIN_ZOOM;
+const PIXELS = 2 ** MZ * 256; // across the world, at that zoom
+let mountainTiles = 0;
+let mountainCellCount = 0;
+// Tile (ti, tj)'s mountains (encodeTile's), the elevation tiles under them
+// fetched and read, and let go of again.
+async function mountainsOf(ti, tj) {
+  const at = (lat, lon) => tileXY(lat, lon, MZ).map((v) => v * 256 - 0.5);
+  const need = new Set();
+  for (let cj = 0; cj < TILE_CELLS; cj++) {
+    for (let ci = 0; ci < TILE_CELLS; ci++) {
+      const i = ti * TILE_CELLS + ci;
+      const j = tj * TILE_CELLS + cj;
+      if (!ranges[j * W + i]) continue;
+      mountainCellCount++;
+      // (each finer height, and the ground a minute round it, for a summit's)
+      for (let s = 0; s < SUB; s++) {
+        for (let r = 0; r < SUB; r++) {
+          const [lat, lon] = finerAt(i, j, s, r);
+          const [x0, y0] = at(lat + 1 / MOUNTAIN.perDegree, lon - 1 / MOUNTAIN.perDegree);
+          const [x1, y1] = at(lat - 1 / MOUNTAIN.perDegree, lon + 1 / MOUNTAIN.perDegree);
+          for (const [X, Y] of [[x0 - 1, y0 - 1], [x1 + 2, y0 - 1], [x0 - 1, y1 + 2], [x1 + 2, y1 + 2]]) {
+            const px = ((Math.floor(X) % PIXELS) + PIXELS) % PIXELS;
+            const py = Math.max(0, Math.min(PIXELS - 1, Math.floor(Y)));
+            need.add(`${px >> 8}/${py >> 8}`);
+          }
+        }
+      }
+    }
+  }
+  const list = [...need];
+  const imgs = new Map();
+  for (let k = 0; k < list.length; k += AT_ONCE) {
+    await Promise.all(
+      list.slice(k, k + AT_ONCE).map(async (key) => {
+        const [tx, ty] = key.split('/');
+        const file = path.join(CACHE, `terrarium-${MZ}-${tx}-${ty}.png`);
+        await fetchTo(file, `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${MZ}/${tx}/${ty}.png`);
+        imgs.set(key, decodePng(fs.readFileSync(file)));
+      }),
+    );
+  }
+  const px = (X, Y) => {
+    X = ((X % PIXELS) + PIXELS) % PIXELS;
+    Y = Math.max(0, Math.min(PIXELS - 1, Y));
+    const img = imgs.get(`${X >> 8}/${Y >> 8}`);
+    const o = ((Y & 255) * 256 + (X & 255)) * img.channels;
+    return terrarium(img.data[o], img.data[o + 1], img.data[o + 2]);
+  };
+  const real = (lat, lon) => {
+    const [x, y] = at(lat, lon);
+    const X = Math.floor(x);
+    const Y = Math.floor(y);
+    const [u, v] = [x - X, y - Y];
+    return (px(X, Y) * (1 - u) + px(X + 1, Y) * u) * (1 - v) + (px(X, Y + 1) * (1 - u) + px(X + 1, Y + 1) * u) * v;
+  };
+  // the highest pixel within `half` degrees of (lat, lon) either way
+  const highest = (lat, lon, half) => {
+    const [x0, y0] = at(lat + half, lon - half);
+    const [x1, y1] = at(lat - half, lon + half);
+    let most = -Infinity;
+    for (let Y = Math.round(y0); Y <= Math.round(y1); Y++) for (let X = Math.round(x0); X <= Math.round(x1); X++) most = Math.max(most, px(X, Y));
+    return most;
+  };
+  mountainTiles++;
+  process.stdout.write(`\rmountains: ${mountainTiles} tiles, ${mountainCellCount} cells (${list.length} elevation tiles for ${tileName(ti, tj)})   `);
+  return mountainHeights(grid, ranges, ti, tj, real, highest);
+}
+
 // ── Writing it ───────────────────────────────────────────────────────────────
 const b64 = (bytes) => deflateRawSync(bytes, { level: 9 }).toString('base64');
 const where = (ti, tj) => {
@@ -122,7 +199,8 @@ for (let tj = 0; tj < H / TILE_CELLS; tj++) {
       return a;
     };
     const name = tileName(ti, tj);
-    const text = b64(encodeTile({ land: pick(grid.land), sea: pick(grid.sea), coast: pick(grid.coast), relief: pick(grid.relief) }));
+    const mountains = tileHasMountains(ranges, ti, tj) ? await mountainsOf(ti, tj) : null;
+    const text = b64(encodeTile({ land: pick(grid.land), sea: pick(grid.sea), coast: pick(grid.coast), relief: pick(grid.relief), mountains }));
     bytes += text.length;
     names.push(name);
     fs.writeFileSync(
@@ -238,6 +316,7 @@ export default ${JSON.stringify(text)};
   );
 }
 
+process.stdout.write('\n');
 const climateText = b64(climate.grid);
 fs.writeFileSync(
   path.join(OUT, 'climate.js'),
@@ -247,7 +326,7 @@ fs.writeFileSync(
   REGISTRY,
   `// The real Earth under the game world (world/earth.js), a tile 15° square at a\n// time, each fetched the first time something on it is grown (landforms.js).\n// Written by \`npm run earth\`: don't edit it by hand.\n\nexport const EARTH_TILES = {\n${names.map((nm) => `  ${nm}: () => import('./earth/${nm}.js'),`).join('\n')}\n};\n\nexport const CLIMATE = () => import('./earth/climate.js');\n\n// Finer, round the hikes: box [south, west, north, east] (degrees), w × h\n// heights from the north-west, DETAIL.perDegree to a degree (earth.js).\nexport const EARTH_DETAILS = {\n${details.map((d) => `  '${d.name}': { box: ${JSON.stringify(d.box)}, w: ${d.w}, h: ${d.h}, load: () => import('./earth/${d.name}.js') },`).join('\n')}\n};\n`,
 );
-console.log(`the Earth → src/world/earth/ (${names.length} tiles and ${details.length} finer round the hikes, ${(bytes / 1e6).toFixed(1)} MB; the climate, ${(climateText.length / 1e3).toFixed(0)} kB)`);
+console.log(`the Earth → src/world/earth/ (${names.length} tiles, ${mountainTiles} with mountains in, ${mountainCellCount} cells of them; and ${details.length} finer round the hikes; ${(bytes / 1e6).toFixed(1)} MB; the climate, ${(climateText.length / 1e3).toFixed(0)} kB)`);
 
 // ── A picture of it ──────────────────────────────────────────────────────────
 const preview = opt('preview');

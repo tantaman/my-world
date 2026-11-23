@@ -9,7 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { project, unproject, ORIGIN } from '../src/core/geo.js';
-import { Earth, EARTH, encodeTile, decodeTile, inflate, tileName, treelineOf, snowlineOf, TILE_CELLS, CLIMATE_W, CLIMATE_H } from '../src/world/earth.js';
+import { Earth, EARTH, MOUNTAIN, encodeTile, decodeTile, inflate, tileName, treelineOf, snowlineOf, TILE_CELLS, CLIMATE_W, CLIMATE_H } from '../src/world/earth.js';
 import { EARTH_TILES } from '../src/world/earthTiles.js';
 import { COUNTRY, EARTH_COUNTRY } from '../src/world/country.js';
 import { growWorld } from '../src/world/lands.js';
@@ -26,6 +26,10 @@ const S = EARTH.scale;
 // Game (x, z) of a real place.
 const at = (lat, lon) => project(lat, lon, S);
 const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} is not within ${tol} of ${b}`);
+// A peak stands at least this much of its real height (the mountains' finer
+// heights are a minute of arc apart, from elevation a few hundred metres to a
+// pixel: a needle is a little lower than it is).
+const PEAK_LEAST = 0.94;
 
 // ── The projection ───────────────────────────────────────────────────────────
 test('the world is the Earth laid out round the Hoh, and can be read back', () => {
@@ -65,6 +69,25 @@ test('a tile packs down and comes back, to within what it is stored to', () => {
     near(back.coast[k], Math.max(-63, Math.min(63, coast[k])), 0.26, 'coast');
     near(back.relief[k], relief[k], 1 + Math.sqrt(relief[k]) * 0.6, 'relief');
   }
+  assert.equal(back.mountains, null, 'and no mountains, where none were');
+  // and a range of mountains' finer heights, to within half their step
+  const flags = new Uint8Array(N);
+  const cells = [];
+  for (let k = 0; k < N; k += 11) {
+    flags[k] = 1;
+    cells.push(k);
+  }
+  const SUB2 = (MOUNTAIN.perDegree / 12) ** 2;
+  const heights = new Float32Array(cells.length * SUB2);
+  cells.forEach((k, o) => {
+    for (let s = 0; s < SUB2; s++) heights[o * SUB2 + s] = land[k] + 1800 * Math.sin(k + s * 0.7);
+  });
+  const again = decodeTile(encodeTile({ land, sea, coast, relief, mountains: { flags, heights } }));
+  assert.equal(again.mountains.index[1], -1, 'a cell with none says so');
+  cells.forEach((k, o) => {
+    const at = again.mountains.index[k];
+    for (let s = 0; s < SUB2; s++) near(again.mountains.heights[at + s], heights[o * SUB2 + s], MOUNTAIN.step / 2 + 0.01, 'a finer height');
+  });
 });
 
 test('every tile of the Earth is there, and the climate', async () => {
@@ -157,6 +180,30 @@ test('the oceans are where the oceans are, and the land where the land is', asyn
   assert.ok(k > 60 && k < 160, `Kansas stands about as high as it really does, at 1 : 5 (${k.toFixed(0)} m over the sea)`);
   const z = height(ZION) - SEA.level;
   assert.ok(z > 250, `and the plateau round Zion higher still (${z.toFixed(0)} m)`);
+});
+
+test('a range of mountains is finer: its peaks stand about as high as they really do', async () => {
+  // (the summit: lat, lon, and its real height, m)
+  const PEAKS = {
+    Rainier: [46.8523, -121.7603, 4392],
+    Everest: [27.9881, 86.925, 8849],
+    Aconcagua: [-32.6532, -70.0109, 6961],
+    Denali: [63.0692, -151.007, 6190],
+    Kilimanjaro: [-3.0674, 37.3556, 5895],
+  };
+  const e = {};
+  for (const [name, [lat, lon, real]] of Object.entries(PEAKS)) {
+    const [x, z] = at(lat, lon);
+    const earth = await earthFor([around(x, z, 3000)]);
+    // the highest point within a kilometre of the summit (5 km, really)
+    let top = -Infinity;
+    for (let dz = -1000; dz <= 1000; dz += 25) for (let dx = -1000; dx <= 1000; dx += 25) top = Math.max(top, earth.at(x + dx, z + dz, e).height / S);
+    assert.ok(top > real * PEAK_LEAST && top < real * 1.02, `${name} stands ${top.toFixed(0)} m (really ${real})`);
+    assert.equal(earth.at(x, z, e).mid, 1, `${name}'s range has its finer heights`);
+  }
+  // and a plain hasn't
+  const [kx, kz] = at(38.8, -98.5);
+  assert.equal((await earthFor([around(kx, kz, 3000)])).at(kx, kz, e).mid, 0, 'Kansas has none');
 });
 
 test('the country is the climate’s: a desert, a jungle, the northern forest, a swamp on the Gulf', async () => {

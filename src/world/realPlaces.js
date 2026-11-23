@@ -46,6 +46,10 @@ const RUGGED = [0.03, 1.4];
 // heights have its ridges and valleys in them: the forest's are flattened to
 // this (or flatter still, where the country is), for the roughness under them.
 const FINE_RUGGED = 0.1;
+// ...and where it's a range of mountains (earth.js, MOUNTAIN), its heights a
+// few hundred metres apart have the range's own ridges and valleys in them:
+// the forest's are flattened to this, for the crags and gullies between.
+const MID_RUGGED = 0.4;
 // The borders between climates wander this far (game m) either way, over
 // this many metres, so a country doesn't end along the edge of a cell.
 const BORDER = [2500, 9000];
@@ -76,8 +80,8 @@ export function withRealPlaces(Land) {
       // the tiles of it handed over so far, as they came (for whoever grows
       // a world of their own from this one's: a worker)
       this.earthGot = [];
-      this._ea = { x: NaN, z: NaN, height: 0, relief: 0, coast: 0, lat: 0, lon: 0 };
-      this._eb = { x: NaN, z: NaN, height: 0, relief: 0, coast: 0, lat: 0, lon: 0 };
+      this._ea = { x: NaN, z: NaN, height: 0, relief: 0, coast: 0, lat: 0, lon: 0, fine: 0, mid: 0 };
+      this._eb = { x: NaN, z: NaN, height: 0, relief: 0, coast: 0, lat: 0, lon: 0, fine: 0, mid: 0 };
       this._ce = { x: NaN, z: NaN, low: 0, mtn: 0, alp: 0, bench: 0 };
       this._ec = { x: NaN, z: NaN, country: null, place: null };
       this._place = { country: null, out: 0 };
@@ -232,6 +236,7 @@ export function withRealPlaces(Land) {
       // forest's hills don't stand up out of a channel between two islands)
       const calm = e.coast >= 0 ? EARTH.shore + (1 - EARTH.shore) * smoothstep(0, EARTH.calm, e.coast) : EARTH.shore * (1 - smoothstep(0, EARTH.calm, -e.coast));
       let rugged = Math.max(RUGGED[0], Math.min(RUGGED[1], e.relief / this.ownSpread(c))) * calm;
+      if (e.mid > 0) rugged += (Math.min(MID_RUGGED, rugged) - rugged) * e.mid;
       if (e.fine > 0) rugged += (Math.min(FINE_RUGGED, rugged) - rugged) * e.fine;
       // how far toward the sea, as the sea's own fall says it (sea.js): all
       // the way at the coast, none at all inland
