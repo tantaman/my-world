@@ -80,16 +80,18 @@ const PONY_ROOT = new THREE.Vector3(0, 0.016, -0.097);
 const PONY_LENGTH = 0.26;
 const HAIR_COLOUR = new THREE.Color(HAIR);
 
-// Her jawline: the skull is cut back (`cut` in head.js) to a ball either
-// side, so the side of her face turns under at an edge. Each ball's surface
-// runs from where her chin's broad underside turns up at the side (JAW_CHIN)
-// back to the angle of her jaw under her ear (JAW_ANGLE), facing down and
-// out at JAW_TURN from straight down, and is big enough (JAW_BALL) to be all
-// but flat along her jaw. Under her chin it's cut flat by a bigger one,
-// rising back gently from CHIN_UNDER to her throat.
+// Her jawline: the eggs of her face are cut back (`cut` in head.js) to a
+// ball either side, so the side of her face turns under at an edge; the
+// cranium behind isn't, so under her ear the jaw's angle meets her skull.
+// Each ball's surface runs from where her chin's broad underside turns up at
+// the side (JAW_CHIN) back to the angle of her jaw, a little below and in
+// front of her ear lobe (JAW_ANGLE), facing down and out at JAW_TURN from
+// straight down, and is big enough (JAW_BALL) to be all but flat along her
+// jaw. Under her chin it's cut flat by a bigger one, rising back gently from
+// CHIN_UNDER to her throat.
 const JAW_CHIN = [0.026, -0.101, 0.06]; // m: x either side of the middle, y, z
-const JAW_ANGLE = [0.045, -0.08, -0.008];
-const JAW_TURN = 0.75; // radians
+const JAW_ANGLE = [0.047, -0.062, -0.014];
+const JAW_TURN = 0.5; // radians
 const JAW_BALL = 0.3; // m, radius
 const CHIN_UNDER = [-0.103, 0.06]; // m: y, z in the middle
 const CHIN_RISE = 0.15; // radians, back from it
@@ -110,6 +112,13 @@ function jawSide(from, to, turn, r, side) {
 // A ball of radius r whose surface goes under (0, y, z), rising back at `rise`.
 const underside = ([y, z], rise, r) => [[0, y + r * Math.cos(rise), z + r * Math.sin(rise)], [r, r, r]];
 
+// What the eggs of her face are cut back to.
+const JAW = [
+  jawSide(JAW_CHIN, JAW_ANGLE, JAW_TURN, JAW_BALL, 1),
+  jawSide(JAW_CHIN, JAW_ANGLE, JAW_TURN, JAW_BALL, -1),
+  underside(CHIN_UNDER, CHIN_RISE, CHIN_BALL),
+];
+
 const LOOK = {
   // an oval face: the cranium, cheekbones high and wide, the jaw narrower
   // and softly round, the cheeks full, and a broad, rounded chin: the end of
@@ -117,17 +126,12 @@ const LOOK = {
   // flat underneath
   skull: [
     [[0, 0.018, -0.01], [0.074, 0.09, 0.095]],
-    [[0, -0.02, 0.012], [0.07, 0.052, 0.076]],
-    [[0, -0.044, 0.01], [0.058, 0.054, 0.076]],
-    [[0, -0.034, 0.016], [0.064, 0.04, 0.072]],
-    [[0, -0.046, 0.037], [0.05, 0.066, 0.042], 0.66],
+    [[0, -0.02, 0.012], [0.07, 0.052, 0.076], 0, JAW],
+    [[0, -0.044, 0.01], [0.058, 0.054, 0.076], 0, JAW],
+    [[0, -0.034, 0.016], [0.064, 0.04, 0.072], 0, JAW],
+    [[0, -0.046, 0.037], [0.05, 0.066, 0.042], 0.66, JAW],
   ],
   round: 0.016,
-  cut: [
-    jawSide(JAW_CHIN, JAW_ANGLE, JAW_TURN, JAW_BALL, 1),
-    jawSide(JAW_CHIN, JAW_ANGLE, JAW_TURN, JAW_BALL, -1),
-    underside(CHIN_UNDER, CHIN_RISE, CHIN_BALL),
-  ],
   cutRound: 0.012,
   eyeX: 0.031,
   brow: 0.026,
