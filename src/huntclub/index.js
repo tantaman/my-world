@@ -209,7 +209,7 @@ export function installHuntclub(game) {
     const n = builder.slotOf(shotgun ? shotgun.id : 'rifle');
     return n && n <= 10 ? String(n % 10) : 'tool bar';
   };
-  commands.describe({ group: 'HUNT CLUB', help: gunKey, label: 'the shotgun, once the club gives you one: click to shoot, hold right-click to mount it' });
+  commands.describe({ group: 'HUNT CLUB', help: gunKey, label: 'the shotgun, once the club gives you one: click to shoot, right-click to mount it, and again to lower it' });
   commands.describe({ group: 'HUNT CLUB', help: 'click', label: 'on a skeet station: call pull for the targets, then shoot ahead of them' });
 
   // ── Materials ─────────────────────────────────────────────────────────────
