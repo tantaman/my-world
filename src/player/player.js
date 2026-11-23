@@ -122,7 +122,25 @@ const LOOK_HOLD = 1.5;
 // from this far (m, the grown-up's) to the side, and being carried (aboard)
 // or walked somewhere (steer), it swings round behind the way you go this
 // quickly (1/s).
-const LOCKED = { turn: 2, back: 0.55, shoulder: 0.5, follow: 4 };
+//
+// The right stick turns you then, and a thumb pushing it across wanders up
+// or down as it goes, which would tip the camera a little with every turn
+// until it lay on the ground looking up at you. So a push tips it only by
+// as much as it's further than `across` (radians) off straight across. And
+// once you've left it alone for LOOK_HOLD, walking on brings the camera back
+// to CAM_PITCH this quickly (1/s), whatever tipped it.
+const LOCKED = { turn: 2, back: 0.55, shoulder: 0.5, follow: 4, across: 0.5, level: 1.5 };
+const ACROSS = Math.tan(LOCKED.across);
+// How far the camera is pitched (radians) to begin with: a little above
+// your head, looking down past it.
+const CAM_PITCH = 0.32;
+
+// How hard a push of the right stick (x right, y down) tips the camera
+// locked behind you: none of it within LOCKED.across of straight across,
+// all of it straight up or down.
+function tipOf(stick) {
+  return Math.sign(stick.y) * Math.max(0, Math.abs(stick.y) - Math.abs(stick.x) * ACROSS);
+}
 
 // Where someone at (x, z) stands: on the ground, afloat in deep water, or on
 // the floor of a space they are in (feet about y; spaces: world/spaces.js).
@@ -192,7 +210,7 @@ export class Player extends Emitter {
     this.turnRate = 0;
 
     this.camYaw = Math.PI;
-    this.camPitch = 0.32;
+    this.camPitch = CAM_PITCH;
     this.camDist = 6;
     this.camDistSmooth = 6;
     this.camTarget = new THREE.Vector3();
@@ -204,6 +222,7 @@ export class Player extends Emitter {
     // camera up and down.
     this.lockCamera = false;
     this._shoulder = 0; // how far (m) to the side the camera looks from, eased
+    this._untipped = 0; // how long (s) since you last tipped the camera up or down
     this.hasMoved = false;
     // { x, z, yaw }: where the path starts, and where to appear when the
     // world opens (the start, unless a save remembers where you stood).
@@ -471,7 +490,9 @@ export class Player extends Emitter {
     // under water you can look up at the surface from below, and from your
     // eyes, well up and down
     const range = this.fromEye ? PITCH.eye : this.submerged ? PITCH.under : PITCH.air;
-    this.camPitch = clamp(this.camPitch + look.y * sens + (stick.y * STICK_TURN.pitch * dt) / steady, Math.min(range[0], PITCH.under[0]), range[1]);
+    const tip = this.lockCamera ? tipOf(stick) : stick.y;
+    this._untipped = look.y || tip ? 0 : this._untipped + dt;
+    this.camPitch = clamp(this.camPitch + look.y * sens + (tip * STICK_TURN.pitch * dt) / steady, Math.min(range[0], PITCH.under[0]), range[1]);
     if (this.camPitch < range[0]) this.camPitch = lerp(this.camPitch, range[0], 1 - Math.exp(-dt * 5));
     const z = input.consumeZoom();
     if (z) this._zoom(z > 0 ? WHEEL_STEP : 1 / WHEEL_STEP);
@@ -737,6 +758,12 @@ export class Player extends Emitter {
     }
     this.turnRate = lerp(this.turnRate, turn, 1 - Math.exp(-dt * 8));
     if (steered && this.lockCamera && hs > 0.3) this.camYaw += wrap(this.yaw + Math.PI - this.camYaw) * (1 - Math.exp(-dt * LOCKED.follow));
+    // ...and as you go, it comes back to its own pitch once you've left
+    // tipping it a while (but not deep in the water, where the way it looks
+    // is the way you swim, nor looking out of your eyes, where it's where you look)
+    if (this.lockCamera && hs > 0.3 && this._untipped > LOOK_HOLD && this.under <= UNDER_STEER && !this.fromEye) {
+      this.camPitch = lerp(this.camPitch, CAM_PITCH, 1 - Math.exp(-dt * LOCKED.level));
+    }
 
     const root = this.character.root;
     root.position.copy(this.pos);

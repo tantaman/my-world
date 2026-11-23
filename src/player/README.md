@@ -73,7 +73,11 @@ screen) does everything:
 | back | back up, slower, still facing ahead |
 
 Looking about (the mouse, the right stick, your right thumb, **Q E**) turns
-you too, and still tips the camera up and down. On something you steer
+you too, and still tips the camera up and down. The right stick tips it only
+when pushed more up or down than across, so turning with it doesn't tip the
+camera as well, little by little, until it's on the ground looking up at you.
+Whatever tipped it, leave it a moment and walk on, and the camera comes back
+to where it sits to begin with. On something you steer
 yourself (a horse, a boat) it's the same: left and right turn it. On
 something that carries you along (a train, skis, a car) the camera keeps
 round behind the way you're going. Your browser remembers the choice.

@@ -19,9 +19,10 @@ function walker(lockCamera) {
     forEachCollider() {},
   };
   const held = new Set();
+  const pad = { x: 0, y: 0 }; // the right stick, as Input.lookRate gives it
   const input = {
     consumeLook: () => ({ x: 0, y: 0 }),
-    lookRate: () => ({ x: 0, y: 0 }),
+    lookRate: () => pad,
     consumeZoom: () => 0,
     isDown: (a) => held.has(a),
     // as Input's: W A S D, held, and kept to the round of a stick's travel
@@ -46,8 +47,16 @@ function walker(lockCamera) {
     for (const k of keys) held.add(k);
     for (let i = 0; i < seconds * 60; i++) player.update(1 / 60);
     held.clear();
+    pad.x = pad.y = 0;
   };
-  return { player, run };
+  // the right stick pushed this far, this many radians above straight across
+  // (as a thumb's does), and let go after
+  const push = (seconds, x, above = 0) => {
+    pad.x = x * Math.cos(above);
+    pad.y = -Math.abs(x) * Math.sin(above);
+    run(seconds);
+  };
+  return { player, run, pad, push };
 }
 
 test('locked behind you, left and right turn you on the spot, and the camera with you', () => {
@@ -86,6 +95,63 @@ test('locked behind you, back backs you up still facing ahead, slower, and never
   assert.ok(Math.abs(wrap(player.yaw)) < 0.05, `still facing ahead, not ${player.yaw.toFixed(2)}`);
   const back = Math.hypot(player.vel.x, player.vel.z);
   assert.ok(back < ahead * 0.7, `backing at ${back.toFixed(2)} m/s, walking ${ahead.toFixed(2)}`);
+});
+
+test("locked behind you, turning with the right stick doesn't tip the camera, though the thumb wanders up", () => {
+  const { player, push } = walker(true);
+  const pitch = player.camPitch;
+  for (const way of [1, -1, 1, -1]) push(1.5, way, 0.25);
+  assert.ok(Math.abs(player.camPitch - pitch) < 1e-9, `tipped from ${pitch.toFixed(2)} to ${player.camPitch.toFixed(2)}`);
+  const yaw = player.camYaw;
+  push(1, 1, 0.25);
+  assert.ok(player.camYaw < yaw - 1.5, `but it turns you (${(yaw - player.camYaw).toFixed(2)} rad)`);
+  assert.ok(player.camera.position.y > player.pos.y + player.eye, 'and the camera is still above your head');
+});
+
+test('locked behind you, the right stick pushed up or down still tips the camera', () => {
+  const { player, pad, run } = walker(true);
+  const pitch = player.camPitch;
+  pad.y = -1;
+  run(0.3);
+  assert.ok(player.camPitch < pitch - 0.3, `up brings it down to look up (${player.camPitch.toFixed(2)})`);
+  pad.y = 1;
+  run(0.6);
+  assert.ok(player.camPitch > pitch + 0.3, `down raises it to look down (${player.camPitch.toFixed(2)})`);
+});
+
+test('locked behind you, walking on brings the camera back to its own pitch, standing it stays tipped', () => {
+  const { player, pad, run } = walker(true);
+  const pitch = player.camPitch;
+  pad.y = -1;
+  run(0.3);
+  const tipped = player.camPitch;
+  run(3);
+  assert.equal(player.camPitch, tipped, 'standing, it stays where you tipped it');
+  pad.y = -1;
+  run(0.5, 'forward'); // walking, but still tipping it
+  assert.ok(player.camPitch < pitch - 0.3, `held tipped while you tip it (${player.camPitch.toFixed(2)})`);
+  run(4, 'forward');
+  assert.ok(Math.abs(player.camPitch - pitch) < 0.05, `walked on, back to ${player.camPitch.toFixed(2)} (from ${tipped.toFixed(2)})`);
+});
+
+test('locked behind you but looking out of your own eyes, walking on leaves your look where it was', () => {
+  const { player, pad, run } = walker(true);
+  player.firstPerson = true;
+  pad.y = 1;
+  run(0.5);
+  const looked = player.camPitch;
+  run(4, 'forward');
+  assert.equal(player.camPitch, looked);
+});
+
+test('free, the right stick tips the camera as it is pushed, and it stays tipped as you walk', () => {
+  const { player, push, run } = walker(false);
+  const pitch = player.camPitch;
+  push(0.5, 1, 0.25);
+  assert.ok(player.camPitch < pitch - 0.05, `tipped to ${player.camPitch.toFixed(2)}`);
+  const tipped = player.camPitch;
+  run(4, 'forward');
+  assert.equal(player.camPitch, tipped);
 });
 
 test('free, left steps you sideways and the camera stays where it was', () => {
