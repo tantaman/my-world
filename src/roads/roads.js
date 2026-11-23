@@ -78,6 +78,10 @@ export const SHOULDER = 1.0; // m of gravel shoulder beyond it
 export const WIDE = HALF + SHOULDER; // m from the middle to the edge of what is level
 export const GRADE = 0.1; // the steepest a road climbs (rise over run)
 export const BED = 0.14; // m the top of the road stands over the highest ground under it, at the least
+// For a closer look at the ground under the road (closer()): this many points
+// across its lanes, at each sample and at this many more between one sample
+// and the next.
+const LOOK = { across: 9, between: 3 };
 const CLEAR = 1.8; // m a road keeps above water it crosses
 export const BRIDGE_FROM = 2.6; // m over the ground from which a road is on a bridge, not a bank
 const BRIDGE_MOST = 12; // m: no road needs a bridge higher than this...
@@ -156,12 +160,15 @@ export function gateOf(gen, t) {
   const n = Math.round(APPROACH / DS) + 1;
   const ds = APPROACH / (n - 1);
   const floor = new Float64Array(n);
+  const way = { n, ds, x: new Float64Array(n), z: new Float64Array(n) };
   for (let i = 0; i < n; i++) {
-    const x = e.x + ax * ds * i;
-    const z = e.z + az * ds * i;
+    const x = (way.x[i] = e.x + ax * ds * i);
+    const z = (way.z[i] = e.z + az * ds * i);
     floor[i] = Math.max(gen.height(x, z), gen.height(x + az * WIDE * 0.85, z - ax * WIDE * 0.85), gen.height(x - az * WIDE * 0.85, z + ax * WIDE * 0.85)) + BED;
   }
-  const h = envelope(floor, ds);
+  const pin = new Uint8Array(n);
+  pin[n - 1] = 1; // (the round where the roads meet stays where it is)
+  const h = closer(gen, way, floor, envelope(floor, ds), pin);
   g = { x: e.x + ax * APPROACH, z: e.z + az * APPROACH, ax, az, ex: e.x, ez: e.z, h: h[n - 1], approach: { n, ds, h } };
   gates.set(t, g);
   return g;
@@ -622,6 +629,11 @@ export class Roads {
       wetN += wet[i];
     }
     if (high > BRIDGE_MOST || bridges > BRIDGE_SHARE * n || wetN > WET_SHARE * n) return null;
+    yield;
+    // lifted clear of the ground where it would come up through the top: by
+    // a few centimetres here and there, after it's judged worth building, so
+    // that a road on the edge of having too much bridge doesn't come and go
+    h = closer(gen, curve, floor, h, pin, steep);
 
     // ── Writing it down ──
     const road = {
@@ -904,6 +916,62 @@ export function tightest({ n, ds, x, z }, skip = 0) {
     worst = Math.max(worst, Math.abs(Math.atan2(Math.sin(hb - ha), Math.cos(hb - ha))) / (span * ds));
   }
   return worst > 0 ? 1 / worst : Infinity;
+}
+
+// The highest ground under the lanes, right across them, at (x, z) on a
+// road running (tx, tz) (a unit vector).
+function groundAcross(gen, x, z, tx, tz) {
+  let hi = -Infinity;
+  for (let k = 0; k < LOOK.across; k++) {
+    const off = HALF * ((2 * k) / (LOOK.across - 1) - 1);
+    hi = Math.max(hi, gen.height(x - tz * off, z + tx * off));
+  }
+  return hi;
+}
+
+// A closer look at the ground under a road's top. The heights `h` of a way
+// ({ n, ds, x, z }) were made by envelope() from `floor`, which looked at the
+// ground at each sample, in the middle and either side of it; but the top is
+// level across and runs straight from one sample to the next, so a hump
+// across the lanes, or between two samples, can still come up through it.
+// -> the heights lifted BED clear of that too, as envelope() would make them
+// (with `steep`), or h as it was if that would lift a pinned sample (pin[i]:
+// a gate, a crossing's rail), which stay where they are. Next to one, the
+// ground isn't looked at between the samples: by a gate that stretch is
+// under the round where the roads meet, and by a crossing it's the
+// railway's ground.
+function closer(gen, way, floor, h, pin, steep = null) {
+  const { n, ds, x, z } = way;
+  const lift = Float64Array.from(floor);
+  let more = false;
+  const raise = (i, by) => {
+    lift[i] += by;
+    more = true;
+  };
+  for (let i = 0; i < n; i++) {
+    if (pin[i]) continue;
+    const a = Math.max(0, i - 1);
+    const b = Math.min(n - 1, i + 1);
+    const l = Math.hypot(x[b] - x[a], z[b] - z[a]) || 1;
+    const short = groundAcross(gen, x[i], z[i], (x[b] - x[a]) / l, (z[b] - z[a]) / l) + BED - lift[i];
+    if (short > 0) raise(i, short);
+  }
+  for (let i = 0; i < n - 1; i++) {
+    if (pin[i] || pin[i + 1]) continue;
+    const l = Math.hypot(x[i + 1] - x[i], z[i + 1] - z[i]) || 1;
+    for (let q = 1; q <= LOOK.between; q++) {
+      const f = q / (LOOK.between + 1);
+      const want = groundAcross(gen, x[i] + (x[i + 1] - x[i]) * f, z[i] + (z[i + 1] - z[i]) * f, (x[i + 1] - x[i]) / l, (z[i + 1] - z[i]) / l) + BED;
+      const short = want - (lift[i] * (1 - f) + lift[i + 1] * f);
+      if (short <= 0) continue;
+      raise(i, short);
+      raise(i + 1, short);
+    }
+  }
+  if (!more) return h;
+  const out = envelope(lift, ds, GRADE, steep);
+  for (let i = 0; i < n; i++) if (pin[i] && out[i] > h[i] + 1e-9) return h;
+  return out;
 }
 
 // The lowest road at least as high as `floor` everywhere that never climbs

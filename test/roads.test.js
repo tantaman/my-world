@@ -8,8 +8,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LANDS } from '../src/world/lands.js';
-import { gateOf, pointAt, nearest, topAt, tightest, envelope, GRADE, BED, WIDE, DS } from '../src/roads/roads.js';
-import { footprint, pieceCount, pieceRange, buildPiece, buildGate } from '../src/roads/pavement.js';
+import { gateOf, pointAt, nearest, topAt, tightest, envelope, GRADE, BED, WIDE, HALF, DS } from '../src/roads/roads.js';
+import { footprint, pieceCount, pieceRange, buildPiece, buildGate, roundTop, PAL } from '../src/roads/pavement.js';
 import { createBuildingMaterial } from '../src/build/surfaces.js';
 import { onPlan } from '../src/world/frame.js';
 import { roadsWorld } from './helpers/roadsWorld.js';
@@ -140,6 +140,39 @@ test('it never runs under the ground or through the water', () => {
   }
 });
 
+test('the ground stays under its lanes, between the samples too, and under the round where roads meet', () => {
+  const { all, gen, towns } = surveyed(SEED, 1);
+  const ground = (x, z) => gen.height(x, z);
+  for (const r of all) {
+    // (the stretches at its ends are under its gates' rounds, and a level crossing on the railway's own ground)
+    for (let i = 1; i < r.n - 2; i++) {
+      if (r.cross[i] || r.cross[i + 1]) continue;
+      const tx = (r.x[i + 1] - r.x[i]) / r.ds;
+      const tz = (r.z[i + 1] - r.z[i]) / r.ds;
+      for (let f = 0; f < 1; f += 0.125) {
+        const x = r.x[i] + (r.x[i + 1] - r.x[i]) * f;
+        const z = r.z[i] + (r.z[i + 1] - r.z[i]) * f;
+        const top = r.h[i] + (r.h[i + 1] - r.h[i]) * f;
+        for (let off = -HALF; off <= HALF; off += HALF / 6) {
+          const g = gen.height(x - tz * off, z + tx * off);
+          assert.ok(g < top - 0.02, `${r.id} at ${i}+${f}, ${off.toFixed(1)} m across: the ground is ${(g - top).toFixed(2)} m from its top`);
+        }
+      }
+    }
+    for (const id of [r.from, r.to]) {
+      const gate = gateOf(gen, towns.byId(id));
+      for (let d = 0; d <= WIDE + 1.6; d += 1.4) {
+        for (let a = 0; a < 6.28; a += 0.4) {
+          const x = gate.x + Math.cos(a) * d;
+          const z = gate.z + Math.sin(a) * d;
+          const top = roundTop(gate, x, z, ground);
+          assert.ok(top >= gate.h + 0.02 - 1e-9 && top >= ground(x, z) + BED - 1e-9, `the round at ${id}`);
+        }
+      }
+    }
+  }
+});
+
 test('it keeps clear of what was there first', () => {
   const { all, there, towns, start } = surveyed(SEED, 1);
   for (const r of all) {
@@ -222,4 +255,74 @@ test('what a road looks like: every piece of it, and the gates at its ends, can 
       assert.ok(solids.some((sd) => Math.abs(sd.topA - gate.h - 0.02) < 1e-6), 'the round where its roads meet, to stand on');
     }
   }
+});
+
+// The top of a piece of road at (x, z): its height and colour there, from the
+// triangles of its top (those facing up, within the road's width of `on`).
+function topOf(object, x, z) {
+  let best = null;
+  const o = object.position;
+  for (const mesh of object.children) {
+    const g = mesh.geometry;
+    const P = g.attributes.position.array;
+    const N = g.attributes.normal.array;
+    const C = g.attributes.color.array;
+    const I = g.index.array;
+    for (let t = 0; t < I.length; t += 3) {
+      const [a, b, c] = [I[t], I[t + 1], I[t + 2]];
+      if (N[a * 3 + 1] < 0.97) continue;
+      const v = (k) => [P[k * 3] + o.x, P[k * 3 + 1] + o.y, P[k * 3 + 2] + o.z];
+      const [A, B, D] = [v(a), v(b), v(c)];
+      const det = (B[2] - D[2]) * (A[0] - D[0]) + (D[0] - B[0]) * (A[2] - D[2]);
+      if (Math.abs(det) < 1e-12) continue;
+      const l1 = ((B[2] - D[2]) * (x - D[0]) + (D[0] - B[0]) * (z - D[2])) / det;
+      const l2 = ((D[2] - A[2]) * (x - D[0]) + (A[0] - D[0]) * (z - D[2])) / det;
+      if (l1 < -1e-9 || l2 < -1e-9 || l1 + l2 > 1 + 1e-9) continue;
+      const y = l1 * A[1] + l2 * B[1] + (1 - l1 - l2) * D[1];
+      if (!best || y > best.y + 1e-6) best = { y, r: C[a * 3], g: C[a * 3 + 1], b: C[a * 3 + 2], n: 1 };
+      else if (Math.abs(y - best.y) <= 1e-6) best.n++;
+    }
+  }
+  return best;
+}
+
+test('its top: the paint is part of it, and a gravel road has a rut each side of its crown', () => {
+  const { all, gen } = surveyed(SEED, 1);
+  const ground = (x, z) => gen.height(x, z);
+  const material = createBuildingMaterial();
+  const near = (c, p) => Math.abs(c.r - p.r) < 1e-6 && Math.abs(c.g - p.g) < 1e-6 && Math.abs(c.b - p.b) < 1e-6;
+  const dark = (c) => c.r + c.g + c.b;
+  const seen = { paved: 0, gravel: 0 };
+  for (const r of all) {
+    const p = Math.floor(pieceCount(r) / 2);
+    const [i0, i1] = pieceRange(r, p);
+    const { object } = buildPiece(r, p, ground, material);
+    let dashes = 0;
+    for (let i = i0 + 1; i < i1 - 1; i++) {
+      if (r.h[i] - r.g[i] > 2 || r.h[i + 1] - r.g[i + 1] > 2) continue; // (not on a bridge, with its railings)
+      const at = (off) => {
+        const q = pointAt(r, (i + 0.5) * r.ds);
+        const top = topOf(object, q.x - q.dz * off, q.z + q.dx * off);
+        assert.ok(top, `${r.id} has a top ${off} m across`);
+        // one surface there, at the road's own height: nothing laid a hair over it
+        assert.equal(top.n, 1, `${r.id} at ${i}: one surface, ${off} m across`);
+        assert.ok(Math.abs(top.y - q.y) < 0.02, `${r.id} at ${i}: its top, ${off} m across`);
+        return top;
+      };
+      if (r.surface === 'paved') {
+        assert.ok(near(at(-2.9), PAL.white) && near(at(2.9), PAL.white), `${r.id} at ${i}: a white line along each edge`);
+        assert.ok(!near(at(-1.5), PAL.white) && !near(at(1.5), PAL.yellow), 'tarmac between');
+        if (near(at(0), PAL.yellow)) dashes++;
+      } else {
+        const ruts = [at(-1.05), at(1.05)];
+        const crown = at(0);
+        const sides = [at(-2.3), at(2.3)];
+        for (const rut of ruts) assert.ok(dark(rut) < dark(crown) && sides.every((s) => dark(rut) < dark(s)), `${r.id} at ${i}: the ruts are darker than the crown between them and the gravel either side`);
+      }
+    }
+    if (r.surface === 'paved') assert.ok(dashes > 0, `${r.id}: a dashed line down the middle`);
+    seen[r.surface]++;
+    for (const mesh of object.children) mesh.geometry.dispose();
+  }
+  assert.ok(seen.paved > 0 && seen.gravel > 0, 'both kinds looked at');
 });

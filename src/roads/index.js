@@ -27,7 +27,7 @@
 
 import { Roads, gateOf, nearest, topAt, samplesNear, pointAt, OUT, WIDE, HALF, CELL } from './roads.js';
 import { firstThere } from './clear.js';
-import { buildPiece, buildGate, pieceCount, pieceRange, footprint, PIECE } from './pavement.js';
+import { buildPiece, buildGate, roundTop, pieceCount, pieceRange, footprint, PIECE } from './pavement.js';
 import { roadLayer } from './onMap.js';
 import './sound.js';
 import { HOME_REACH as BERTH_REACH } from '../cruise/site.js';
@@ -87,10 +87,17 @@ export function installRoads(game) {
     clear: there.clear,
     ready: there.ready,
   });
+  // The road's material, drawn a little in front of the ground it lies on,
+  // and the rounds' at the towns' gates, in front of the roads' ends under
+  // them (pavement.js buildGate).
   const material = createBuildingMaterial(); // (build/surfaces.js)
   material.polygonOffset = true;
   material.polygonOffsetFactor = -1;
   material.polygonOffsetUnits = -2;
+  const roundMaterial = createBuildingMaterial();
+  roundMaterial.polygonOffset = true;
+  roundMaterial.polygonOffsetFactor = -1;
+  roundMaterial.polygonOffsetUnits = -8;
   const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset ? chunks.heightOffset(x, z) : 0);
 
   // ── Whether a road is there at all ────────────────────────────────────────
@@ -223,7 +230,7 @@ export function installRoads(game) {
     }
     for (const g of gatesIn(at.x - SHOW, at.z - SHOW, at.x + SHOW, at.z + SHOW)) {
       const d = Math.hypot(g.gate.x - at.x, g.gate.z - at.z);
-      if (d < SHOW) out.push({ key: `gate:${g.id}`, x: g.gate.x, z: g.gate.z, r: 30, d, build: () => buildGate(g.gate, g.paved, ground, material) });
+      if (d < SHOW) out.push({ key: `gate:${g.id}`, x: g.gate.x, z: g.gate.z, r: 30, d, build: () => buildGate(g.gate, g.paved, ground, material, roundMaterial) });
     }
     return out;
   }
@@ -269,7 +276,10 @@ export function installRoads(game) {
     for (const road of here.roads) {
       if (!nearest(road, x, z, _n) || _n.d > WIDE + 0.2) continue;
       pointAt(road, _n.s, _p);
-      return { road, top: topAt(road, _n), surface: road.surface, on: _n.d < HALF, s: _n.s, dx: _p.dx, dz: _p.dz };
+      let top = topAt(road, _n);
+      // where it comes onto a town's round, which may rise over the ground there
+      for (const g of here.gates) if (Math.hypot(x - g.gate.x, z - g.gate.z) < JUNCTION) top = Math.max(top, roundTop(g.gate, x, z, ground));
+      return { road, top, surface: road.surface, on: _n.d < HALF, s: _n.s, dx: _p.dx, dz: _p.dz };
     }
     for (const g of here.gates) {
       if (!onGate(g, x, z, 0.2)) continue;
@@ -280,7 +290,7 @@ export function installRoads(game) {
       const k = Math.min(n - 1, Math.max(0, _seg.t * (n - 1)));
       const k0 = Math.floor(k);
       const k1 = Math.min(n - 1, k0 + 1);
-      const top = round ? gate.h + 0.02 : gate.approach.h[k0] + (gate.approach.h[k1] - gate.approach.h[k0]) * (k - k0);
+      const top = round ? roundTop(gate, x, z, ground) : gate.approach.h[k0] + (gate.approach.h[k1] - gate.approach.h[k0]) * (k - k0);
       return { road: null, top, surface: g.paved ? 'paved' : 'gravel', on: true, s: 0, dx: gate.ax, dz: gate.az };
     }
     return null;
