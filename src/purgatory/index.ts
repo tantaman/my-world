@@ -12,6 +12,7 @@
 //   air.js         the sky (the forest's, keeping the mountain's hours), the haze, the smoke
 //   brow.js        the seven P's on your brow
 //   sound.js       what it sounds like: the sea, the wind, the singing
+//   pictures.js    what drinking from the stream looks like, on its button
 //   view.js        what it looks like: fetched the first time you come up the road
 //                  (and what it builds: look.js, models.js, furnish.js, built.js, people.js)
 //
@@ -35,6 +36,7 @@ import { Brow } from './brow.js';
 import { mountSounds } from './sound.js';
 import { R, H, AT, BURROW, CLEFT, VALLEY, GATE, WAYS, TERRACES, DAY, REGIONS, LIQUID, STREAM, regionAt, terraceAt } from './plan.js';
 import { WORDS, ARRIVAL, ANGELS, DREAMS, SLEEP, SAID, VOICES } from './words.js';
+import * as pictures from './pictures.js';
 
 // What this provides: game.purgatory, for the features that come after it.
 declare module '../game/game.ts' {
@@ -372,6 +374,7 @@ export function installPurgatory(game: Game) {
     id: 'drink',
     group: 'ACT',
     label: 'drink from the stream',
+    icon: pictures.DRINK,
     run: () => {
       drink();
     },
