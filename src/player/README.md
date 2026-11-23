@@ -167,12 +167,20 @@ whole figure is scaled by it afterwards. The `id` is what others in a shared
 world are told, so don't change it once someone has played as them; the
 `name` can change.
 
+Once someone is dressed, the pieces that keep their shape are merged into a
+few meshes, one for each kind of surface (`bake.js`). That makes a hiker
+about ten draws instead of fifty, and they look and move exactly as before.
+So a piece has to stay how `dress` left it. Something that will be shown or
+hidden later, or found again, needs a name (`object.name = 'helmet'`), and
+is then kept whole, as the fighters in Dry Wells keep their helmets.
+
 ## Files
 
 ```
 index.ts              plugs it into the game: controls, the hiker, who you are, the camera behind you, where you arrive; and the pads, as yours
 player.js             movement, collision, wading, swimming and diving, the camera: behind you (free or locked) or from your eyes
 character.js          the body anyone has: bones, IK gait (forwards or backwards), work poses (played, or held part-way), swimming, things raised to the face, a stance on skis or a board; dressed as one of the hikers, at their size, or as someone else altogether (the fighters in Dry Wells)
+bake.js               once dressed, the pieces that keep their shape merged into a mesh for each kind of surface
 hikers.js             who you can be: the hikers, in the order they're offered
 hikers/hiker.js       the hiker: his look, sunglasses and snapback; rain shell, daypack, trousers and boots
 hikers/lauren.js      Lauren: her look, aviators, cap and swinging ponytail; tank top, daypack, tied jacket, leggings and boots
