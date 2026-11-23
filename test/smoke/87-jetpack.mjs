@@ -34,7 +34,12 @@ export default async function ({ page, step, key, frames, shot }) {
     // jump, and keep holding space
     await page.keyboard.down('Space');
     const lit = await page.evaluate(() => T.until(() => world.jetpack.flying, 30000));
-    assert.ok(lit, 'jump and hold space, and the jets fire');
+    // (if they don't, what is in the way: something else has you, or has the keys)
+    const why = lit ? '' : await page.evaluate(() => {
+      const p = world.player;
+      return JSON.stringify({ have: world.jetpack.have, grounded: p.grounded, swimming: p.swimming, heldBy: p.rides.by, carried: !!p.carrier, aboard: !!p.aboard, keysElsewhere: world.input.blocked, map: world.map.isOpen, focus: document.activeElement?.tagName, y: +p.pos.y.toFixed(1), height: +p.height.toFixed(1) });
+    });
+    assert.ok(lit, `jump and hold space, and the jets fire (${why})`);
     await page.keyboard.down('KeyW');
     const up = await page.evaluate(() => T.until(() => world.player.height > 15, 60000));
     const flying = await page.evaluate(() => ({ ...world.jetpack.state(), idle: world.builder.idle, hanging: !!world.player.character.stood, prompt: T.prompt() }));

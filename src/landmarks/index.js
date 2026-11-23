@@ -25,7 +25,7 @@ import * as THREE from 'three';
 import { onPlan, planDiscs } from '../world/frame.js';
 import { Sites } from './sites.js';
 import { KINDS } from './kinds.js';
-import { buildSite } from './models.js';
+import { lazy } from '../core/lazy.ts';
 import { VEG_STRIDE } from '../world/flora.js';
 import { rayBox } from '../core/geom.js';
 import { createBuildingMaterial } from '../build/surfaces.js';
@@ -128,8 +128,11 @@ export function installLandmarks(game) {
   });
 
   // ── Standing them up and taking them down ─────────────────────────────────
+  // What an old place is built from comes when the first one is about to be
+  // stood up (models.js, fetched then: core/lazy.ts).
+  const look = lazy(() => import('./models.js'));
   function show(s) {
-    const built = buildSite(s, ground, material);
+    const built = look.loaded.buildSite(s, ground, material);
     const entry = { site: s, ...built };
     scene.add(built.object);
     solids.set(entry, built.solids);
@@ -229,7 +232,7 @@ export function installLandmarks(game) {
         sites.prefetch(at.x, at.z, KNOWN);
       }
       // one a frame: a cabin is a good few thousand logs and shakes
-      if (queue.length) show(queue.shift());
+      if (queue.length && look.want()) show(queue.shift());
 
       const t = now / 1000;
       const p = player.pos;

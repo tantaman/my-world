@@ -38,6 +38,10 @@ export class Flight extends Emitter {
     this.phase = 'ground';
     this.destination = null;
     this.t = 0; // s into the phase
+    // Whether what's up there is ready to arrive at: until it is, the climb
+    // goes on at its top, in the glare. (Whoever builds what's up there says:
+    // it's fetched as you board, and is nearly always here long before.)
+    this.mayArrive = () => true;
   }
 
   _go(phase) {
@@ -89,7 +93,7 @@ export class Flight extends Emitter {
         break;
       }
       case 'climb':
-        if (t >= FLIGHT.climb) this._go('orbit');
+        if (t >= FLIGHT.climb && this.mayArrive()) this._go('orbit');
         break;
       case 'home':
         if (t >= FLIGHT.home) this._go('ground');
@@ -99,7 +103,7 @@ export class Flight extends Emitter {
 
   // How high the rocket is over the pad (m).
   get rocketUp() {
-    return this.phase === 'climb' ? climbHeight(this.t) : 0;
+    return this.phase === 'climb' ? climbHeight(Math.min(this.t, FLIGHT.climb)) : 0;
   }
 
   // How high the capsule is over where it comes down (m).

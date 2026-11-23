@@ -22,8 +22,7 @@ Run `npm test` after any change. Run `npm run smoke` after touching anything
 a player does (tools, movement, HUD, saving, sound, wildlife);
 `node test/smoke.mjs build fires` plays only the parts named. Run
 `npm run together` after touching `src/save/`, `src/voice/` or `worker/`.
-`npm test` and `npm run smoke` also run on every pull request
-(`.github/workflows/ci.yml`).
+All three also run on every pull request (`.github/workflows/ci.yml`).
 
 ## How to add things
 
@@ -89,6 +88,13 @@ starts with the contract.
   (`towns/perTown.ts`), and registers one job:
   `game.budget.add({ name, work: (ms) => it.pump(ms) })`. Don't slice time
   by hand or keep an allowance of the frame of your own.
+- What is only needed once you're at a place (what builds it, who is in
+  it) goes in a module of its own that the feature fetches when the first
+  one is about to be stood up: `const look = lazy(() => import('./look.js'))`
+  (`core/lazy.ts`), `look.want()` before standing it up. Don't import such
+  a module from `index.js`, or from anything `index.js` imports. If a save
+  can leave the hiker standing on what it builds, say
+  `game.beforeArrival(look.ready())` in `restore`.
 - What a search keeps clear of is put together from claims
   (`world/claims.ts`). How a thing is kept clear of is said once, beside the
   thing (`railsNear`, `caveMouths`, `airfieldsOver`): add a claim for a new

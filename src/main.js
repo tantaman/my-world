@@ -33,6 +33,9 @@ const loader = {
 const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
 // ms a word about how the world opened stays up: long enough to read a sentence
 const SAY_FOR = 6000;
+// ms at most that the opening waits for code a feature needs before you're
+// set down (game.beforeArrival): past that you arrive without it
+const ARRIVAL_WAIT = 8000;
 
 // ── Which world? ─────────────────────────────────────────────────────────────
 // ?w=<id> opens a world kept on the save server. Its seed and its land live
@@ -81,6 +84,9 @@ for (let i = 0; i < 6; i++) {
   grass.update(at.x, at.z, 40);
   await nextFrame();
 }
+// (and what's fetched only when it's wanted, where it's wanted at once:
+// a feature whose save left you standing on something it builds says so)
+await Promise.race([Promise.all(game.arrivals), new Promise((r) => setTimeout(r, ARRIVAL_WAIT))]);
 player.arrive();
 loader.done();
 

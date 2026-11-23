@@ -25,11 +25,11 @@
 import { Emitter } from '../core/events.js';
 import { BOXES, PADS, SPAWNS, FLOOR, floorAt } from './orrery.js';
 import { MOVE, makeBody, moveBody, rayBoxes, rayBox } from './mover.js';
-import { Match, RULES } from './match.js';
+import { Match, RULES, RELOAD } from './match.js';
 import { Bot, ROSTER } from './bots.js';
 import { mulberry32 } from '../noise.js';
 
-export const RELOAD = 1.5; // s for the railgun to charge again
+export { RELOAD }; // (said in match.js, with the other rules: the HUD reads it without the arena)
 const REACH = 4000; // m a rail carries, if nothing stops it
 const HIT_HALF = 0.5; // m either side of a fighter's middle a rail hits them (a touch more than they are wide)
 const BACK_IN = 1.8; // s before a fragged bot comes back in...

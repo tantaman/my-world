@@ -13,6 +13,8 @@
 
 import { Emitter } from '../core/events.js';
 
+export const RELOAD = 1.5; // s for the railgun to charge again
+
 export const RULES = {
   frags: 20, // the frag limit
   time: 600, // s on the clock

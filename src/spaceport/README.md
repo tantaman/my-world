@@ -133,6 +133,7 @@ arena.js        a match: the fighters, their railguns, frags, coming back in
 match.js        the score: frags, the frag limit, the clock, who's in the lead
 bots.js         the bots: finding their way, seeing, aiming, dodging
 arenaLook.js    what the arena looks like: platforms, pads, the world below, fighters, rails
+orbit.js        the station and the arena, fetched as a rocket is boarded
 arenaHud.js     the arena's HUD, and the big words of the trip
 sound.js        the rocket's roar, the railgun, the pads, the countdown
 spaceport.css   the glare, the big words, the arena's HUD
