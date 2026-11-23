@@ -56,7 +56,7 @@ class Chunk {
     this.water = null; // water surface mesh
     this.step = 1;
     this.n = 0;
-    this.veg = []; // { kind, form (the model it's drawn with), mesh }
+    this.veg = []; // { kind, form (the model it's drawn with), mesh, cast (its shadow: render/casters.ts) }
     this.vegLists = null; // raw placement lists by kind (see VEG_STRIDE)
     this.vegAt = {}; // kind -> [[{ mesh }, i], ...]: which mesh plant k is drawn in, and where in it
     this.moss = []; // { kind, form, mesh, of: tree instance -> its moss's, or -1 }
@@ -142,9 +142,12 @@ const SOURCE_SPREAD = 14;
 export class ChunkManager extends Emitter {
   // ready(x0, z0, x1, z1): whether everything that square is grown from is
   // here yet (see landforms.js); a chunk waits until it is.
-  constructor(scene, gen, materials, models, structures = [], { ready = () => true } = {}) {
+  // casters: what takes over the plants' shadows, drawing into each light's
+  // only those it reaches (render/casters.ts); without, each mesh casts its own.
+  constructor(scene, gen, materials, models, structures = [], { ready = () => true, casters = null } = {}) {
     super();
     this.ready = ready;
+    this.casters = casters;
     this.scene = scene;
     this.gen = gen;
     this.materials = materials;
@@ -728,6 +731,8 @@ export class ChunkManager extends Emitter {
         mesh.position.set(ch.x0, 0, ch.z0);
         mesh.matrixAutoUpdate = false;
         mesh.updateMatrix();
+        // and it is drawn from just the plants each light reaches
+        if (this.casters) entry.cast = this.casters.add(mesh);
         this.scene.add(mesh);
         ch.veg.push(entry);
       }
@@ -810,11 +815,13 @@ export class ChunkManager extends Emitter {
   }
 
   applyVegLod(ch) {
-    for (const { kind, form, mesh } of ch.veg) {
+    for (const { kind, form, mesh, cast } of ch.veg) {
       const model = this.models[form];
       mesh.geometry = ch.lod === 0 ? model.lod0 : ch.lod === 1 ? model.lod1 : model.lod2;
       mesh.visible = ch.lod <= FLORA[kind].maxLod;
-      if (FLORA[kind].tree) mesh.castShadow = ch.lod <= 1;
+      if (!FLORA[kind].tree) continue;
+      if (cast) cast.on = ch.lod <= 1;
+      else mesh.castShadow = ch.lod <= 1;
     }
     // moss, near enough to make out
     for (const { form, mesh } of ch.moss) {

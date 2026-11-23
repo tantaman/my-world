@@ -19,6 +19,7 @@
 import * as THREE from 'three';
 import { SHARED } from '../render/uniforms.js';
 import { NOISE_GLSL, POINT_GLSL } from '../render/glsl.js';
+import { createShadowDepthMaterial } from '../world/materials.js';
 
 const GLOW = 0.008; // m: a glowworm's light
 
@@ -96,7 +97,7 @@ export function createRockMaterial({ decor = false } = {}) {
 // The rock as the sun sees it, for shadows: cut off where it pokes out of the
 // hillside, like the rock itself, or the cutting would sit in its shadow.
 export function createRockDepthMaterial() {
-  const mat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  const mat = createShadowDepthMaterial();
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aGround;\nvarying float vGround;\nvarying float vRockY;')

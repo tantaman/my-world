@@ -68,6 +68,20 @@ same few lights, given to whichever deserve them, because a shader is
 compiled for a number of lights, and changing the number would compile
 everything again.
 
+**Shadows from what the light can reach.** Three.js draws an object into a
+shadow whole if any of it is in the light's reach, and a chunk's plants of
+one kind are one mesh 64 m across: so the sun's shadow, 120 m across, was
+drawn from every plant of each chunk it touched a corner of, and a fire's,
+16 m round it, from every plant of each chunk round it, six times over (once
+for each face of the cube a light that shines every way casts into). Most
+of that fell out of reach. Now such a mesh is drawn only for the picture, and
+each light that casts shadows has a copy of it, on a layer only that light's
+shadow sees, holding just the plants within its reach (`casters.ts`). They
+are picked again only when the light has gone some metres, or a plant is
+felled. The shadows come out as they did, from far fewer plants: with a fire
+lit, under a third of them. What is drawn into a shadow writes no colour
+either: a shadow is read from the depth it leaves.
+
 **Fire and heat.** A flame is a volume of burning gas, not a picture on a
 card (`flame.js`): each ray through it adds up the light of the gas it
 passes, a tongue torn up by turbulence that rises and quickens, hottest low
@@ -174,6 +188,7 @@ pipeline.js           render (all but the water; a copy; the water over it; the 
 uniforms.js           shader uniforms everything shares: time, wind, sky
 glsl.js               shared GLSL: noise (and in three dimensions), patterns over the world, sky, ground colour, relief, a mirror
 lights.js             light given off by things: a pool of real lights for those that matter most, and their shadows
+casters.ts            shadows drawn from just the instances each light reaches, not whole meshes of them
 flame.js              a flame, as a volume of burning gas
 haze.js               the shimmer of the air over something hot
 skin.js               skin: hides, horn, iron, a wing, a crust over fire; lit as skin is

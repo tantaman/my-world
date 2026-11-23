@@ -62,13 +62,15 @@ export function installWorld(game) {
     // what other countries draw a kind of tree as (country.js, forms)
     cypress: makeCypress(89),
   };
-  const chunks = new ChunkManager(scene, gen, materials, models, STRUCTURES, { ready: (x0, z0, x1, z1) => landforms.ready(x0, z0, x1, z1) });
+  const chunks = new ChunkManager(scene, gen, materials, models, STRUCTURES, { ready: (x0, z0, x1, z1) => landforms.ready(x0, z0, x1, z1), casters: game.casters });
   landforms.on('land', (def) => {
     gen.addHike(def);
     chunks.addHike(def);
   });
   const grass = new Grass(scene, chunks, materials.grass, CONFIG.seed);
   const sky = new Sky(scene);
+  // the plants cast into its shadow only what is in its reach (render/casters.ts)
+  game.casters.light(sky.sun);
   // its position is the way up, not a place: it stays put when the scene is slid to be drawn
   game.origin.keep(sky.hemi);
   const particles = createParticles();
