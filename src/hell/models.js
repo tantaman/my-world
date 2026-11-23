@@ -1,13 +1,11 @@
 // The things that stand, lie and walk on Hell's ground, as shapes: rocks
-// and crags, the trees of the wood, tombs, the holes of the simoniacs — and
-// the shades themselves, in the few ways they hold themselves. All made of
-// simple shapes (sculpt.js), each a geometry to be drawn many times over
-// (furnish.js), standing on the origin and facing +z, in metres.
-//
-// A shade's geometry marks its limbs (aTag: ±1 the legs, ±2 the arms, by
-// side), so the material can swing them when it walks (shades.js).
+// and crags, the trees of the wood, tombs, the holes of the simoniacs, a
+// hypocrite in his cloak. (The shades themselves are render/shades.js's.)
+// All made of simple shapes (render/sculpt.js), each a geometry to be drawn
+// many times over (furnish.js), standing on the origin and facing +z, in
+// metres.
 
-import { Sculpt, vary } from './sculpt.js';
+import { Sculpt, vary } from '../render/sculpt.js';
 import { mulberry32 } from '../noise.js';
 
 const ROCK = [0.07, 0.066, 0.064];
@@ -182,66 +180,6 @@ export function iceHead(bow = 0) {
   s.ball(0, -0.02, 0, 0.3, [0.32, 0.4, 0.46], { sy: 0.4, sx: 1.25 });
   s.limb([0, 0.02, 0], [0, 0.14, bow * 0.04], 0.065, 0.058, PALE, { joints: false });
   s.ball(0, 0.25, bow * 0.1, 0.105, vary(PALE, 0.4), { sy: 1.15, rx: bow * 0.9 });
-  return s.build();
-}
-
-// ── Shades ──────────────────────────────────────────────────────────────────
-// The joints of a body 1.72 m tall, standing, arms hanging: each [x, y, z]
-// for the right side (x > 0); the left is its mirror.
-const STAND = {
-  pelvis: [0, 0.93, 0],
-  chest: [0, 1.4, 0],
-  neck: [0, 1.5, 0],
-  head: [0, 1.63, 0.01],
-  hip: [0.09, 0.92, 0],
-  knee: [0.1, 0.5, 0.01],
-  ankle: [0.1, 0.07, 0],
-  toe: [0.1, 0.03, 0.12],
-  shoulder: [0.2, 1.42, 0],
-  elbow: [0.23, 1.13, -0.02],
-  wrist: [0.22, 0.86, 0.04],
-};
-// How they hold themselves otherwise: whatever differs from standing.
-const POSES = {
-  stand: {},
-  // head down and shoulders in: the weeping, the slow processions
-  bowed: { chest: [0, 1.37, 0.08], neck: [0, 1.45, 0.16], head: [0, 1.5, 0.27], elbow: [0.2, 1.1, 0.08], wrist: [0.16, 0.9, 0.2] },
-  // leaning into a weight with both arms
-  push: { pelvis: [0, 0.86, -0.3], hip: [0.09, 0.85, -0.3], chest: [0, 1.16, 0.06], neck: [0, 1.2, 0.17], head: [0, 1.24, 0.3], shoulder: [0.2, 1.17, 0.08], elbow: [0.22, 1.1, 0.34], wrist: [0.2, 1.08, 0.6], knee: [0.1, 0.46, -0.2], ankle: [0.1, 0.07, -0.55], toe: [0.1, 0.03, -0.43] },
-  // arms thrown up: out of the marsh, out of the blood
-  raise: { elbow: [0.3, 1.62, 0.06], wrist: [0.24, 1.92, 0.12], head: [0, 1.63, -0.03] },
-  // sitting hunched over drawn-up knees
-  sit: { pelvis: [0, 0.14, 0], hip: [0.1, 0.14, 0.02], chest: [0, 0.56, 0.14], neck: [0, 0.64, 0.2], head: [0, 0.74, 0.3], shoulder: [0.19, 0.58, 0.14], elbow: [0.24, 0.36, 0.3], wrist: [0.12, 0.44, 0.5], knee: [0.12, 0.5, 0.36], ankle: [0.12, 0.07, 0.55], toe: [0.12, 0.03, 0.67] },
-  // lying on the back, arms flung out
-  supine: { pelvis: [0, 0.13, 0], hip: [0.09, 0.12, 0], chest: [0, 0.16, 0.46], neck: [0, 0.15, 0.56], head: [0, 0.14, 0.68], shoulder: [0.2, 0.15, 0.47], elbow: [0.46, 0.08, 0.42], wrist: [0.7, 0.06, 0.52], knee: [0.11, 0.14, -0.42], ankle: [0.12, 0.07, -0.84], toe: [0.14, 0.16, -0.86] },
-  // face down in the mud
-  prone: { pelvis: [0, 0.13, 0], hip: [0.09, 0.12, 0], chest: [0, 0.14, 0.46], neck: [0, 0.12, 0.56], head: [0, 0.1, 0.68], shoulder: [0.2, 0.13, 0.47], elbow: [0.3, 0.07, 0.72], wrist: [0.16, 0.05, 0.9], knee: [0.11, 0.1, -0.42], ankle: [0.11, 0.06, -0.84], toe: [0.11, 0.03, -0.96] },
-};
-
-// A shade, as it holds itself in `pose` (a key of POSES).
-export function shade(pose = 'stand') {
-  const J = { ...STAND, ...POSES[pose] };
-  const s = new Sculpt();
-  const side = (p, k) => [p[0] * k, p[1], p[2]];
-  const flat = pose === 'supine' || pose === 'prone';
-  // (a shade is drawn in its hundreds: few sides, coarse joints, one to a bone)
-  const B = { sides: 5, joints: 'end', coarse: true };
-  // the trunk: hips, belly, chest, shoulders
-  s.limb(J.pelvis, J.chest, 0.125, 0.15, PALE, { sides: 6, coarse: true });
-  s.ball(J.pelvis[0], J.pelvis[1], J.pelvis[2], 0.15, PALE, { sy: 0.75, sz: flat ? 1 : 0.8, coarse: true });
-  s.limb(side(J.shoulder, -0.85), side(J.shoulder, 0.85), 0.085, 0.085, PALE, { sides: 5, coarse: true });
-  s.limb(J.chest, J.neck, 0.062, 0.052, PALE, { sides: 5, joints: false });
-  s.ball(J.head[0], J.head[1], J.head[2], 0.1, PALE, { sy: 1.18, sz: 1.08 });
-  for (const k of [1, -1]) {
-    s.tag = k;
-    s.limb(side(J.hip, k), side(J.knee, k), 0.078, 0.055, PALE, B);
-    s.limb(side(J.knee, k), side(J.ankle, k), 0.052, 0.036, PALE, B);
-    s.limb(side(J.ankle, k), side(J.toe, k), 0.04, 0.03, PALE, { sides: 4, joints: false, capped: true });
-    s.tag = 2 * k;
-    s.limb(side(J.shoulder, k), side(J.elbow, k), 0.05, 0.038, PALE, B);
-    s.limb(side(J.elbow, k), side(J.wrist, k), 0.036, 0.03, PALE, B);
-  }
-  s.tag = 0;
   return s.build();
 }
 

@@ -250,6 +250,8 @@ waterSurface.js       the water's mesh and shader: a window and a mirror, from a
 breakers.js           waves breaking on a shore at a break: sets coming in, peeling, white water (JS, and the same in GLSL)
 solids.js             built things you bump into and stand on
 spaces.js             places under the ground you can be in (caves): floor, walls, roof
+landSpace.js          a land made in code (Hell, Purgatory) as a space: its floor, its walls, its lid
+strewn.js             what such a land is strewn with, square by square near you: drawn many at once, bumped into
 basins.js             water held up in something built (a pool, a tub), to swim in
 cuts.js               holes in the ground, where something else stands in for it
 models.js             procedural trees, bushes, ferns, rocks, logs: trunks, branches, and cards on them; Spanish moss

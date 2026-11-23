@@ -14,12 +14,12 @@
 // (land.barrier), and a bridge's roadway is too (land.deck).
 
 import * as THREE from 'three';
-import { Sculpt, vary } from './sculpt.js';
+import { Sculpt, vary } from '../render/sculpt.js';
 import { R, H, BOLGE, SECTOR, STEPS, bankTop, bolgeOuter } from './plan.js';
 import { WALL, CASTLE, BROOK } from './land.js';
 import { SHARED } from '../render/uniforms.js';
 import { NOISE_GLSL } from '../render/glsl.js';
-import { flameGeometry, stillFlames, createFlameHaze, hazeOver } from './shades.js';
+import { flameGeometry, stillFlames, createFlameHaze, hazeOver } from '../render/shades.js';
 import { OVER } from '../render/pipeline.js';
 import { SEEN } from './look.js';
 
