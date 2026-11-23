@@ -22,11 +22,18 @@
 // ski resorts are both 'ski'). A stream needn't stop: it's only pulled as far
 // as somebody scrolls.
 //
+// A search in Routes (search.js) looks in every source that can say what it
+// has (nearest or destinations), in a list or not: a place that's meant to be
+// come upon rather than listed (the gate under the hill) can still be looked
+// up by name.
+//
 // A place:
 //   id       a string with a ':' in it, so it can't be taken for a mark's
 //   x, z     where it is (and where tracking it leads)
 //   name     its name ('Hollis cabin'); kind: what it is ('old cabin')
 //   note     a line about it
+//   words    optional: more it's found by in a search, what it's about
+//            ('hell' for the gate, whose name doesn't say so)
 //   glyph    7×7 rows of '#' and '.', drawn on its badge
 //   visited  whether you've been there
 //   shape    optional: polygons [[x, z], ...] in the world, drawn close up
@@ -35,7 +42,7 @@
 //   yaw      optional: which way to face when `go here` sets you down at
 //            x, z (the way in, say); otherwise the way you were facing
 
-import { ListNearest, MergeNearest } from '../core/nearest.js';
+import { ListNearest, MergeNearest, FilterNearest, ReachNearest } from '../core/nearest.js';
 
 export const PLACE_COLOR = '#e9dfc0';
 
@@ -68,6 +75,24 @@ export class Places {
       .filter((s) => s.list && (!list || s.list === list))
       .map((s) => (s.nearest ? s.nearest(x, z) : new ListNearest(x, z, s.destinations ? s.destinations() : [])));
     return new MergeNearest(streams);
+  }
+
+  // What a search wants (match: search.js), from every source that can say
+  // what it has, or from one list: a stream from each (core/nearest.js),
+  // nearest to (x, z) first, for the caller to let go at its own pace, so
+  // that one whose owner works it out a little each frame (the car
+  // dealerships) doesn't hold up the rest. A source without end (nearest)
+  // is looked over only as far as `reach` (m), and its stream is `cut` if it
+  // stopped there; one that knows all it has (destinations) is looked over
+  // to the ends of the earth, so a far place still turns up.
+  search(x, z, match, list = null, reach = Infinity) {
+    return this.sources
+      .filter((s) => (s.nearest || s.destinations) && (!list || s.list === list))
+      .map((s) => {
+        const keep = (p) => match(p, s.list);
+        if (s.nearest) return new ReachNearest(new FilterNearest(s.nearest(x, z), keep), reach);
+        return new FilterNearest(new ListNearest(x, z, s.destinations()), keep);
+      });
   }
 
   get(id) {

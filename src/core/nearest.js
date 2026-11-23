@@ -14,6 +14,9 @@
 //   work()   look a little further: 'more' (ask again), 'wait' (an owner is
 //            still working something out: ask again next frame) or 'done'
 //
+// FilterNearest and ReachNearest wrap a stream to narrow it: to what a
+// search wants, and to so far away.
+//
 // A caller pulls for as long as it can spare:
 //   while (!stream.ready && stream.work() === 'more') if (late()) break;
 //   if (stream.ready) list.push(stream.take());
@@ -180,6 +183,66 @@ export class PendingNearest {
   work() {
     if (this.list) return 'done';
     return this._known() ? 'more' : 'wait';
+  }
+}
+
+// A stream of only the places keep(place) says yes to (a search's).
+export class FilterNearest {
+  constructor(stream, keep) {
+    this.stream = stream;
+    this.keep = keep;
+    this.kept = null; // the next place, once keep() has said yes to it
+  }
+  _skip() {
+    const s = this.stream;
+    for (let r = s.ready; r && r.place !== this.kept; r = s.ready) {
+      if (this.keep(r.place)) this.kept = r.place;
+      else s.take();
+    }
+  }
+  get low() {
+    this._skip();
+    return this.stream.low;
+  }
+  get ready() {
+    this._skip();
+    return this.stream.ready;
+  }
+  take() {
+    this._skip();
+    return this.stream.take();
+  }
+  work() {
+    this._skip();
+    return this.stream.work();
+  }
+}
+
+// A stream only as far as `reach` (m) from where it's listed from: past
+// that it's done, and `cut` says there may have been more to come. What
+// keeps a search for something that isn't there from looking for ever.
+export class ReachNearest {
+  constructor(stream, reach) {
+    this.stream = stream;
+    this.reach = reach;
+  }
+  get low() {
+    const low = this.stream.low;
+    return low > this.reach ? Infinity : low;
+  }
+  get ready() {
+    const r = this.stream.ready;
+    return r && r.d <= this.reach ? r : null;
+  }
+  take() {
+    return this.ready ? this.stream.take() : null;
+  }
+  work() {
+    return this.stream.low > this.reach ? 'done' : this.stream.work();
+  }
+  get cut() {
+    const low = this.stream.low;
+    return low > this.reach && low < Infinity;
   }
 }
 

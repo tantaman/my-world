@@ -57,6 +57,7 @@ import { segDist } from '../core/geom.js';
 
 // The gate's badge on the map: a doorway, and the dark in it.
 const GLYPH = ['#######', '#.....#', '#.###.#', '#.###.#', '#.###.#', '#.###.#', '#.###.#'];
+const SEARCH_WORDS = 'hell inferno dante underworld'; // what the gate is found by in Routes, its name not saying
 const CLEAR = 5; // m round the way in kept clear of trees and undergrowth
 const WOOD = 70; // m from the gate: the dark wood, where the poem begins
 const REARM = 3.5; // m you must be from a door you came out of before it takes you again
@@ -146,10 +147,11 @@ export function installHell(game) {
     frame.rotation.y = Math.atan2(_at.x - land.cx, _at.z - land.cz);
     under.add(frame);
   }
-  // On the map: somewhere to look up and head for.
+  // On the map: somewhere to look up and head for, and to find by what it
+  // leads to in a search in Routes (it's in no list there: it's to be come upon).
   let been = false; // through the door, ever
   let found = false; // to the gate
-  const asPlace = () => ({ id: gate.id, x: gate.x - gate.ux * 5, z: gate.z - gate.uz * 5, name: gate.name, kind: 'gate', note: INSCRIPTION[0], glyph: GLYPH, visited: been, yaw: Math.atan2(gate.ux, gate.uz) });
+  const asPlace = () => ({ id: gate.id, x: gate.x - gate.ux * 5, z: gate.z - gate.uz * 5, name: gate.name, kind: 'gate', note: INSCRIPTION[0], words: SEARCH_WORDS, glyph: GLYPH, visited: been, yaw: Math.atan2(gate.ux, gate.uz) });
   map.places.addSource({
     within: (x0, z0, x1, z1) => (gate.x >= x0 && gate.x <= x1 && gate.z >= z0 && gate.z <= z1 ? [asPlace()] : []),
     get: (id) => (id === gate.id ? asPlace() : null),

@@ -4,9 +4,10 @@ Somewhere in the dark of the woods, a walk from where the path starts, a
 doorway of black stone stands at the foot of a hillside, with nine lines cut
 over it that end *All hope abandon, ye who enter in!* It is on the map (see
 [The map](../map/README.md)) as **The Gate**: pick it there and track it, and
-the HUD leads you to it. Behind it a passage runs down into the hill to a
-round chamber and a door with nothing in it but the dark and a dull red
-light. Walk into the door.
+the HUD leads you to it. It isn't in any of the lists in Routes (it's
+meant to be come upon), but a search there for *hell* or *gate* finds it.
+Behind it a passage runs down into the hill to a round chamber and a door
+with nothing in it but the dark and a dull red light. Walk into the door.
 
 What is under it is the Hell of Dante's *Inferno*, laid out as the poem lays
 it out and in its words (Longfellow's translation): a pit, round, going down
