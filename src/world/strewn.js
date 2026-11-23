@@ -13,13 +13,14 @@
 //   more: { go: [dirX, dirZ, speed, span], phase, rise, sink, stride, shade,
 //   red, tall, tiltX, tiltZ } (render/shades.js says what the first five do)
 //
-// and a kit says what each kind is: { geo, mat, solid, goes, haze, shadow }
+// and a kit says what each kind is: { geo, mat, solid, goes, haze, shadow, receiveShadow }
 // — its shape, what it is drawn with, how wide and tall it is if it is in
 // the way ({ r, top, step, len }, m at a scale of 1), whether it can walk
 // (its instances say how, so its geometry is its own), for a flame, the
 // shimmer over it, and whether it casts a shadow (the material its shadow
-// is drawn with, if it isn't the one it is: leaves have gaps in them). A kind called 'flame' is drawn over the rest and gives
-// light (render/flame.js, render/lights.js).
+// is drawn with, if it isn't the one it is: leaves have gaps in them) or
+// receives one. A kind called 'flame' is drawn over the rest and gives light
+// (render/flame.js, render/lights.js).
 //
 // A land whose circles don't close (Hell's) furnishes a square for a turn of
 // them, and one turn on furnishes it differently: turnOf, in a subclass.
@@ -181,7 +182,7 @@ export class Strewn {
       mesh.matrixAutoUpdate = false;
       mesh.castShadow = !!k.shadow;
       if (k.shadow && k.shadow !== true) mesh.customDepthMaterial = k.shadow;
-      mesh.receiveShadow = false;
+      mesh.receiveShadow = !!k.receiveShadow;
       group.add(mesh);
       // (a flame is drawn over the rest, which it reads: render/flame.js; and
       // the air over it shimmers)

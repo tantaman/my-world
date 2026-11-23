@@ -46,9 +46,10 @@ float travel(inout vec4 p) {
 // hip, shoulder: how high the legs and the arms swing from (m)
 // glow: the light of what is hot in it (aHot), linear: a coal's by default,
 // or whatever else shines of itself (an angel's face)
-export function createShadeMaterial({ hip = 0.92, shoulder = 1.42, glow = [1.6, 0.48, 0.08] } = {}) {
+// rolling: draw an instanced iron weight turning as it travels
+export function createShadeMaterial({ hip = 0.92, shoulder = 1.42, glow = [1.6, 0.48, 0.08], rolling = false } = {}) {
   const g = glow.map((c) => c.toFixed(3)).join(', ');
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 });
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: rolling ? 0.53 : 0.85, metalness: rolling ? 0.32 : 0 });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = SHARED.uTime;
     shader.vertexShader = shader.vertexShader
@@ -59,12 +60,26 @@ export function createShadeMaterial({ hip = 0.92, shoulder = 1.42, glow = [1.6, 
         attribute float aHot;
         varying float vHot;
         varying float vFade;
-        ${GO_GLSL}`,
+        ${GO_GLSL}
+        ${rolling ? `
+        vec2 roll(vec2 p) {
+          float radius = 0.74 * length(instanceMatrix[0].xyz);
+          float around = mod(uTime * aGo.z + aHow.x * aGo.w, aGo.w) / radius;
+          float c = cos(around);
+          float s = sin(around);
+          return mat2(c, s, -s, c) * p;
+        }` : ''}`,
+      )
+      .replace(
+        '#include <beginnormal_vertex>',
+        `#include <beginnormal_vertex>
+        ${rolling ? 'objectNormal.yz = roll(objectNormal.yz);' : ''}`,
       )
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
         vHot = aHot;
+        ${rolling ? 'transformed.yz = roll(transformed.yz - vec2(0.74, 0.0)) + vec2(0.74, 0.0);' : ''}
         if (abs(aTag) > 0.5 && aHow.w > 0.0) {
           bool leg = abs(aTag) < 1.5;
           float gait = 6.2832 * (uTime * max(aGo.z, 0.4) / 1.5 + aHow.x * 7.0);
@@ -105,7 +120,7 @@ export function createShadeMaterial({ hip = 0.92, shoulder = 1.42, glow = [1.6, 
         totalEmissiveRadiance += vec3(${g}) * vHot;`,
       );
   };
-  mat.customProgramCacheKey = () => `shade-${hip}-${shoulder}-${g}`;
+  mat.customProgramCacheKey = () => `shade-${hip}-${shoulder}-${g}-${rolling}`;
   return mat;
 }
 

@@ -34,9 +34,9 @@ export const WEATHER = {
   acheron: { ...STILL, much: 0.2, murk: 0.1 },
   limbo: { ...STILL, much: 0.05 },
   // the hurricane: grit, flat out, on round the circle
-  lustful: { fall: [26, -1.5, 3], sway: 1.6, size: 0.085, long: 16, colour: [0.16, 0.16, 0.2], much: 1, murk: 0.25, box: 0.7 },
+  lustful: { fall: [26, -1.5, 3], sway: 1.6, size: 0.04, long: 20, colour: [0.11, 0.12, 0.15], much: 1, murk: 0.25, box: 0.7 },
   // "eternal, maledict, and cold, and heavy": rain, with hail and snow in it
-  gluttons: { fall: [1.2, -15, 0.6], sway: 0.25, size: 0.04, long: 18, colour: [0.22, 0.24, 0.27], much: 1, murk: 0.35, box: 0.42 },
+  gluttons: { fall: [5, -15, 1.1], sway: 0.12, size: 0.021, long: 28, colour: [0.19, 0.22, 0.27], much: 1, murk: 0.35, box: 0.39 },
   avaricious: STILL,
   styx: { fall: [0.3, 0.1, 0], sway: 2.5, size: 0.06, long: 1, colour: [0.11, 0.12, 0.08], much: 0.5, murk: 0.2, box: 1 },
   // sparks, going up
@@ -49,7 +49,7 @@ export const WEATHER = {
   malebolge: STILL,
   well: { fall: [0, -0.3, -3], sway: 1, size: 0.035, long: 3, colour: [0.5, 0.56, 0.62], much: 0.3, murk: 0.1, box: 1 },
   // the wind from the middle, and what it carries
-  cocytus: { fall: [0, -0.4, -9], sway: 1.2, size: 0.05, long: 9, colour: [0.5, 0.57, 0.64], much: 0.9, murk: 0.2, box: 0.7 },
+  cocytus: { fall: [0, -0.4, -9], sway: 1.2, size: 0.035, long: 9, colour: [0.21, 0.27, 0.34], much: 0.9, murk: 0.2, box: 0.7 },
 };
 
 export class HellWeather {
@@ -71,12 +71,12 @@ export class HellWeather {
       uBox: { value: new THREE.Vector3(...BOX) },
       uEye: { value: new THREE.Vector3() }, // where the eye is, from the mesh
       uSlide: { value: new THREE.Vector3() }, // how far the box's contents have gone
+      uVelocity: { value: new THREE.Vector3() },
       uSway: { value: 1 },
       uSize: { value: 0.03 },
       uLong: { value: 1 },
       uColour: { value: new THREE.Color(0.2, 0.2, 0.2) },
       uMuch: { value: 0.1 },
-      uFlat: { value: 0 },
     };
     const mat = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
@@ -87,12 +87,14 @@ export class HellWeather {
         uniform vec3 uBox;
         uniform vec3 uEye;
         uniform vec3 uSlide;
+        uniform vec3 uVelocity;
         uniform float uSway;
         uniform float uSize;
         uniform float uLong;
         uniform float uMuch;
         varying float vShow;
         varying float vLong;
+        varying vec2 vAlong;
         void main() {
           // where it is in the box, once the box's contents have slid along,
           // and the box has come with the eye
@@ -105,22 +107,25 @@ export class HellWeather {
           float dist = -mv.z;
           // fewer of them, the less of it there is; and none right at the edge of the box
           vec3 e = abs(q - 0.5) * 2.0;
-          vShow = step(aSeed, uMuch) * (1.0 - smoothstep(0.8, 1.0, max(e.x, max(e.y, e.z))));
-          vLong = uLong;
-          gl_PointSize = pointPx(uSize * (0.7 + 0.6 * aSeed) * uLong, dist);
+          vShow = step(aSeed, uMuch) * (1.0 - smoothstep(0.8, 1.0, max(e.x, max(e.y, e.z)))) * smoothstep(0.35, 2.1, dist);
+          vec3 velocity = mat3(viewMatrix) * uVelocity;
+          vec2 motion = velocity.xy + mv.xy * (velocity.z / max(dist, 0.35));
+          float speed = length(motion);
+          vAlong = speed > 0.01 ? motion / speed : vec2(0.0, 1.0);
+          float stretch = smoothstep(0.05, 0.86, speed / max(length(velocity), 0.01));
+          vLong = mix(1.0, uLong, stretch * mix(0.56, 1.0, aSeed));
+          gl_PointSize = pointPx(uSize * (0.7 + 0.6 * aSeed) * vLong, dist);
         }`,
       fragmentShader: /* glsl */ `
         uniform vec3 uColour;
-        uniform float uFlat;
         varying float vShow;
         varying float vLong;
+        varying vec2 vAlong;
         void main() {
           if (vShow < 0.01) discard;
-          // a streak through the middle of its square, as long as the square:
-          // upright for what falls, lying flat for what the wind carries
-          vec2 c = gl_PointCoord - 0.5;
-          if (uFlat > 0.5) c = c.yx;
-          float a = (1.0 - smoothstep(0.3, 0.5, abs(c.x) * vLong)) * (1.0 - smoothstep(0.35, 0.5, abs(c.y)));
+          vec2 p = (gl_PointCoord - 0.5) * vec2(1.0, -1.0);
+          vec2 streak = vec2(dot(p, vAlong), dot(p, vec2(-vAlong.y, vAlong.x)) * vLong);
+          float a = 1.0 - smoothstep(0.12, 0.5, length(streak));
           if (a < 0.02) discard;
           gl_FragColor = vec4(uColour * a * vShow, 1.0);
         }`,
@@ -154,9 +159,8 @@ export class HellWeather {
     const iz = az / l;
     const u = this.uniforms;
     // (left of inward is on round: land.js)
-    this._slide.x += (-iz * now.fall[0] + ix * now.fall[2]) * dt;
-    this._slide.y += now.fall[1] * dt;
-    this._slide.z += (ix * now.fall[0] + iz * now.fall[2]) * dt;
+    u.uVelocity.value.set(-iz * now.fall[0] + ix * now.fall[2], now.fall[1], ix * now.fall[0] + iz * now.fall[2]);
+    this._slide.addScaledVector(u.uVelocity.value, dt);
     u.uBox.value.set(BOX[0] * now.box, BOX[1] * now.box, BOX[2] * now.box);
     u.uSlide.value.copy(this._slide);
     // the cloud is its own mesh, kept near the eye, its specks measured from it
@@ -167,7 +171,6 @@ export class HellWeather {
     u.uLong.value = now.long;
     u.uColour.value.setRGB(...now.colour);
     u.uMuch.value = now.much;
-    u.uFlat.value = Math.hypot(now.fall[0], now.fall[2]) > Math.abs(now.fall[1]) ? 1 : 0;
     return now.murk;
   }
 }

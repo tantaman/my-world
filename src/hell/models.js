@@ -119,6 +119,22 @@ export function bareTree(seed = 5) {
   return s.build();
 }
 
+// Tall cypresses catch the side light in the meadow around Limbo's keep.
+export function cypress(seed = 17) {
+  const rnd = mulberry32(seed);
+  const s = new Sculpt();
+  const needles = [0.032, 0.072, 0.039];
+  s.drum(0, -0.28, 0, 0.16, 0.24, 8.2, BARK, { sides: 7 });
+  for (let i = 0; i < 41; i++) {
+    const u = i / 40;
+    const a = i * 2.39996;
+    const r = (0.30 + 0.73 * Math.sin(Math.PI * u)) * (1 - u * 0.67);
+    const spread = r * (0.45 + rnd() * 0.43);
+    s.drum(Math.cos(a) * spread, 1.05 + u * 8.4, Math.sin(a) * spread, 0.025, r * 0.57, 1.6 + rnd() * 0.9, vary(needles, rnd(), 0.55), { sides: 5, rz: Math.cos(a) * -0.18, rx: Math.sin(a) * 0.18 });
+  }
+  return s.build();
+}
+
 // Dead reeds, for the edges of the marsh.
 export function reeds(seed = 7) {
   const rnd = mulberry32(seed);
@@ -146,6 +162,13 @@ export function tomb(seed = 11) {
   for (const side of [-1, 1]) {
     s.box(side * (w / 2 - t / 2), 0.16 + h / 2, 0, t, h, l, vary(TOMB, rnd()));
     s.box(0, 0.16 + h / 2, side * (l / 2 - t / 2), w - 2 * t, h, t, vary(TOMB, rnd()));
+    const x = side * (w / 2 + 0.01);
+    s.box(x, h + 0.10, 0, 0.18, 0.14, l + 0.08, vary(TOMB, 0.67));
+    s.box(x, 0.28, 0, 0.10, 0.11, l + 0.06, vary(TOMB, 0.4));
+    for (const z of [-0.94, 0.94]) s.box(x, 0.64, z, 0.095, 0.62, 0.17, vary(TOMB, 0.81));
+    s.box(x, 0.65, 0, 0.065, 0.42, 0.47, vary(TOMB, 0.5));
+    s.box(x + side * 0.04, 0.65, 0, 0.021, 0.245, 0.044, vary(TOMB, 0.82));
+    s.box(x + side * 0.04, 0.69, 0, 0.021, 0.043, 0.21, vary(TOMB, 0.82));
   }
   // what burns in it: a bed of coals, and the walls lit from inside
   s.box(0, 0.42, 0, w - 2 * t, 0.3, l - 2 * t, [0.3, 0.07, 0.02], { hot: 1 });
@@ -199,11 +222,16 @@ export function cloaked() {
 export function weight(seed = 13) {
   const rnd = mulberry32(seed);
   const s = new Sculpt();
-  s.ball(0, 0.7, 0, 0.74, vary(ROCK, rnd()), { fine: true, sy: 0.95 });
-  for (let i = 0; i < 4; i++) {
-    const a = rnd() * 6.28;
-    const b = rnd() * 3.14;
-    s.ball(Math.cos(a) * Math.sin(b) * 0.5, 0.7 + Math.cos(b) * 0.5, Math.sin(a) * Math.sin(b) * 0.5, 0.34, vary(ROCK, rnd()), { sy: 0.8 });
+  const brass = [0.29, 0.17, 0.069];
+  s.ball(0, 0.74, 0, 0.74, vary([0.135, 0.109, 0.078], rnd()), { fine: true });
+  for (const x of [-0.28, 0.28]) {
+    const radius = Math.sqrt(0.74 ** 2 - x ** 2);
+    const loop = Array.from({ length: 25 }, (_, i) => {
+      const a = i * Math.PI / 12;
+      return [x, 0.74 + radius * Math.cos(a), radius * Math.sin(a)];
+    });
+    s.tube(loop, loop.map(() => 0.042), brass, { sides: 5, caps: false });
+    for (let i = 0; i < 24; i += 3) s.ball(...loop[i], 0.063, vary(brass, rnd()), { coarse: true });
   }
   return s.build();
 }

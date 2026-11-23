@@ -211,6 +211,8 @@ uniform float uFogHeight;
 uniform float uFogFloor;
 uniform float uFogFar;
 uniform float uFogTint;
+uniform vec3 uGroundMist; // height of the layer, falloff distance, and density
+uniform vec2 uMistWind;
 uniform float uDeck;
 uniform float uDeckCover;
 uniform vec2 uDeckMid;
@@ -239,6 +241,33 @@ float deckAt(vec2 p, float t, out float tall) {
 }
 
 float viewZ(float d) { return -perspectiveDepthToViewZ(d, uNear, uFar); }
+
+// Optical depth through a low, drifting layer. Stop at the first opaque
+// surface so near silhouettes cut into the fog and distant ones fade into it.
+float groundMist(vec3 rd, float dist) {
+  float start = 0.0;
+  float end = min(dist, 580.0);
+  float above = uCamPos.y - uGroundMist.x;
+  float band = 3.5 * uGroundMist.y;
+  if (abs(rd.y) > 1.0e-4) {
+    float mid = -above / rd.y;
+    float halfBand = band / abs(rd.y);
+    start = max(start, mid - halfBand);
+    end = min(end, mid + halfBand);
+  } else if (abs(above) > band) return 0.0;
+  if (start >= end) return 0.0;
+  float stride = (end - start) / 5.0;
+  float density = 0.0;
+  vec2 drift = uMistWind * uTime;
+  for (int i = 0; i < 5; i++) {
+    vec3 p = uCamPos + rd * (start + (float(i) + 0.5) * stride);
+    vec2 wp = worldXZ(p) - drift;
+    float billow = wnoise(wp, 0.016) * 0.72 + wnoise(wp, 0.045, vec2(2.7)) * 0.28;
+    float height = (p.y - uGroundMist.x) / uGroundMist.y;
+    density += exp(-abs(height - billow + 0.5) * 1.6) * smoothstep(0.18, 0.78, billow);
+  }
+  return density * stride * uGroundMist.z;
+}
 
 // How open to the sky this pixel is: the occlusion's 4 × 4 texels round it,
 // each counted as far as it's on the same surface. dz: how the depth runs
@@ -368,6 +397,7 @@ void main() {
     float b = uFogHeight;
     float ry = abs(rd.y) < 1e-3 ? 1e-3 : rd.y;
     float fogAmt = uFogDensity * exp(-(uCamPos.y - uFogFloor) * b) * (1.0 - exp(-dist * ry * b)) / (ry * b);
+    if (uGroundMist.z > 0.0) fogAmt += groundMist(rd, dist);
     float fog = 1.0 - exp(-max(fogAmt, 0.0));
     fog = max(fog, smoothstep(uFogFar * 0.55, uFogFar, dist));
     vec3 frd = normalize(vec3(rd.x, clamp(rd.y, 0.0, 0.08), rd.z));
@@ -613,6 +643,8 @@ export class Pipeline {
     // (src/hell/), where the air is as thick at any height, makes this next
     // to nothing.
     this.fogThin = FOG_THIN;
+    // An optional second layer of fog, concentrated around a world height.
+    this.groundMist = null;
 
     // Light given off by things in the world (lights.js): a pool of real
     // lights, given each frame to the sources that matter most in the scene
@@ -665,6 +697,8 @@ export class Pipeline {
         uFogFloor: { value: 0 },
         uFogFar: { value: 250 },
         uFogTint: { value: FOG_TINT },
+        uGroundMist: { value: new THREE.Vector3(0, 1, 0) },
+        uMistWind: { value: new THREE.Vector2() },
         uGlowPos: { value: Array.from({ length: LIGHTS_AIR }, () => new THREE.Vector3()) },
         uGlowCol: { value: Array.from({ length: LIGHTS_AIR }, () => new THREE.Vector3()) },
         uGlowRange: { value: new Array(LIGHTS_AIR).fill(1) },
@@ -936,6 +970,9 @@ export class Pipeline {
     u.uFogDensity.value = FOG_DENSITY * this.haze;
     u.uFogFloor.value = this.fogFloor;
     u.uFogHeight.value = this.fogThin;
+    const mist = this.groundMist;
+    u.uGroundMist.value.set(mist?.floor ?? 0, mist?.height ?? 1, mist?.density ?? 0);
+    if (mist) u.uMistWind.value.copy(mist.wind);
     // the air round the lights, where they are in the picture's frame (slid
     // as the scene is)
     u.uGlowAir.value = FOG_DENSITY * this.haze * GLOW_AIR;
