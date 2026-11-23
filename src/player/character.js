@@ -241,6 +241,8 @@ function fit(w, crown) {
 //                    that height, in brow's parent's frame: for a strap round it
 //             back   an object where something worn on the back goes (a
 //                    jetpack): +z into the body, y up the spine
+//           and, if anything of theirs moves on its own (hair that swings):
+//             swing(dt)  called each frame once the body is posed, to move it
 export class Character {
   constructor(who = HIKER) {
     this.root = new THREE.Group();
@@ -302,6 +304,7 @@ export class Character {
     this.outfit = []; // what dress() hung on the bones
     this.resources = new Set(); // ...and what it is made of
     this.worn = []; // straps round the head: { holder, crown } (addWorn)
+    this.swing = null; // what of theirs moves on its own (who.dress)
     this.dress(who);
   }
 
@@ -380,7 +383,8 @@ export class Character {
     for (const b of limbs) b.rotation.set(0, 0, 0);
     const there = new Set();
     this.root.traverse((o) => there.add(o));
-    const { brow, crown, back } = who.dress(this);
+    const { brow, crown, back, swing } = who.dress(this);
+    this.swing = swing ?? null;
     this.root.traverse((o) => {
       if (there.has(o)) return;
       if (there.has(o.parent)) this.outfit.push(o);
@@ -400,6 +404,7 @@ export class Character {
   }
 
   #undress() {
+    this.swing = null;
     for (const o of this.outfit) o.removeFromParent();
     this.outfit.length = 0;
     for (const resource of this.resources) resource.dispose();
@@ -1050,6 +1055,7 @@ export class Character {
     _inv.copy(this.hips.matrix).invert();
     this.#reach(this.legL, this.footL, hPitch, hYaw, hRoll + bank);
     this.#reach(this.legR, this.footR, hPitch, hYaw, hRoll + bank);
+    this.swing?.(dt);
   }
 
   // Kick and stroke, blended in by w over whatever the walk made of the legs
