@@ -64,6 +64,9 @@ const RIDGE_HIGH = 170;
 // points: they're for whoever reshapes the land, realPlaces.js).
 const RIDGE_MEAN = 0.2495;
 const SPREAD = { low: 6.2, hills: 17.1, mtn: 34.5 };
+// The chance of a tree out in the open, on a jittered grid 4.2 m apart
+// (chunkGen.js), where the forest itself is none.
+const LONE_TREES = 0.02;
 // The high country: whole massifs, a thousand metres and more over the
 // valleys, far enough apart that one is a day's walk from the next. Over this
 // many metres, and where on its own field the forest gives way to them.
@@ -513,6 +516,12 @@ export class WorldGen {
     // country reach)
     if (c.mtn > 0 || c.alp > 0) f *= 1 - this.above(x, z, this._baseHeight(x, z));
     return f;
+  }
+
+  // The chance of a lone tree out in the open, where the forest is none
+  // (chunkGen.js adds it to the forest's own): one here and there.
+  loneTrees(x, z) {
+    return LONE_TREES;
   }
 
   // −1..1: low = broadleaf woods, high = conifers. Conifers up the mountains

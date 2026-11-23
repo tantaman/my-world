@@ -325,6 +325,14 @@ export function withRealPlaces(Land) {
     }
 
     // ── Ecology ─────────────────────────────────────────────────────────────
+    // (On the Earth, none out in the open above its treeline either: the
+    // forest's own lone trees stand in its high country, but no real range
+    // has pines dotted over its snowfields.)
+    loneTrees(x, z) {
+      const v = super.loneTrees(x, z);
+      return this.earth ? v * (1 - this.above(x, z, this._baseHeight(x, z))) : v;
+    }
+
     // (On the Earth, as thickly wooded as its country is, and not above its
     // treeline.)
     forest(x, z) {
