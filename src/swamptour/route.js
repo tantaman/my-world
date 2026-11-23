@@ -338,6 +338,14 @@ export class Course {
     // (it never quite stops but where it means to: idle on)
     for (let i = 1; i < n - 1; i++) if (!stand.has(i)) v[i] = Math.max(v[i], PACE.idle);
     this.v = v;
+    // the way it heads at each point, looked a few metres ahead and behind
+    // so it doesn't twitch (at() goes smoothly from one to the next)
+    this.heading = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const c = P[Math.min(n - 1, i + 3)];
+      const d = P[Math.max(0, i - 2)];
+      this.heading[i] = Math.atan2(c[0] - d[0], c[1] - d[1]);
+    }
   }
 
   // the point at or before distance s
@@ -362,10 +370,11 @@ export class Course {
     const [a, b] = [this.pts[i], this.pts[j]];
     out.x = a[0] + (b[0] - a[0]) * t;
     out.z = a[1] + (b[1] - a[1]) * t;
-    // heading, looked a few metres ahead so it doesn't twitch
-    const c = this.pts[Math.min(S.length - 1, i + 3)];
-    const d = this.pts[Math.max(0, i - 2)];
-    out.yaw = Math.atan2(c[0] - d[0], c[1] - d[1]);
+    // heading: turned smoothly from this point's to the next's, not all at
+    // once as it passes each, or the boat would jerk round a metre at a time
+    // and lurch over with it (it leans by how fast it turns)
+    const H = this.heading;
+    out.yaw = H[i] + angle(H[i], H[j]) * t;
     out.v = this.v[i] + (this.v[j] - this.v[i]) * t;
     out.clear = this.clear[i];
     return out;

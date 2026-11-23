@@ -2,9 +2,10 @@
 // landing in Jean Lafitte, Louisiana, a real place a long way from the
 // forest. Out along the dock the guide says hello from the boat, and F (the
 // act key) there puts you in its front row with the ear defenders on, tools put
-// away. The boat sets off along the way round, on the water; at its first
-// stop a gator is waiting where the guide points it out, and the boat
-// stands while you look. F again and you're run back to the dock.
+// away. The boat sets off along the way round, on the water, with you sat
+// in your seat as it goes and its wake behind it; at its first stop a gator
+// is waiting where the guide points it out, and the boat stands while you
+// look. F again and you're run back to the dock.
 // Taken somewhere else on the way round, you're off it where you are. Then
 // once more, the whole way round: back at the dock you're off, and it
 // counts.
@@ -68,6 +69,22 @@ export default async function ({ page, step, key, frames, shot }) {
   await step('down the bayou, to a gator', async () => {
     const off = await page.evaluate(() => T.until(() => world.swamptour.ride.phase === 'go' && world.swamptour.ride.s > 2, 30000));
     assert.ok(off, 'it sets off');
+    // under way: you're where your seat is, not where it was a frame ago
+    // (which would have the boat jerking back and forth under you)
+    const going = await page.evaluate(async () => {
+      await T.until(() => world.swamptour.ride.v > 4, 30000);
+      const b = world.swamptour.tours[0].built;
+      const o = b.boat.object;
+      o.updateMatrixWorld();
+      const s = b.boat.seats[1];
+      const e = o.matrixWorld.elements;
+      const p = world.player.pos;
+      const off = Math.hypot(p.x - (e[0] * s.x + e[4] * s.y + e[8] * s.z + e[12]), p.z - (e[2] * s.x + e[6] * s.y + e[10] * s.z + e[14]));
+      return { v: world.swamptour.ride.v, off, wake: !!b.wake?.object.visible };
+    });
+    assert.ok(going.v > 4, 'it gets going');
+    assert.ok(going.off < 0.01, `sat in your seat as it goes (${going.off.toFixed(3)} m from it)`);
+    assert.ok(going.wake, 'with its wake behind it');
     const from = await page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z }));
     // (on to just short of the first stop: it's a long way)
     await page.evaluate(() => {

@@ -1,9 +1,10 @@
 // The swamp tour (src/swamptour/): an airboat round a real bayou, and the
 // alligators on the way. What's checked here: that the way round is on the
 // water the real place has, and goes where the real tour went; that the boat
-// slows to a stand where it means to; that a tidal country's water is all
-// one, islands and all (tools/hike/build.js); and that a gator finds the
-// water, lies in it or on the bank, and goes when it should.
+// slows to a stand where it means to, and turns smoothly round the bends;
+// that it leaves a wake on the water behind it; that a tidal country's water
+// is all one, islands and all (tools/hike/build.js); and that a gator finds
+// the water, lies in it or on the bank, and goes when it should.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,6 +17,7 @@ import { findRoute, Course, CLEAR, PACE } from '../src/swamptour/route.js';
 import { buildAirboat, HULL } from '../src/swamptour/airboat.js';
 import { buildLanding } from '../src/swamptour/landing.js';
 import { gatorLine } from '../src/swamptour/guide.js';
+import { Wake } from '../src/swamptour/wake.js';
 import { tidalWater } from '../tools/hike/build.js';
 import { localFrame } from '../src/core/geo.js';
 import { localFrame as importersFrame } from '../tools/hike/geo.js';
@@ -85,6 +87,66 @@ test('the boat slows to a stand at its stops, and keeps to the pace the water al
   }
   const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
   assert.ok(fast.length && slow.length && mean(fast) > mean(slow) * 1.5, `quicker on the open bayou (${mean(fast).toFixed(1)}) than in the canals (${mean(slow).toFixed(1)})`);
+});
+
+test('the boat turns smoothly round the bends, never all at once', () => {
+  // the way it heads is the same just before each point of the way as just
+  // after it: were it to jump as it passed each one, the boat would jerk
+  // round under you a metre at a time, and lurch over with it (it leans by
+  // how fast it turns) — and at the end of a dead-end canal, spin round in
+  // a single frame
+  const C = new Course(route);
+  let most = 0;
+  let at = 0;
+  for (let i = 1; i < C.s.length - 1; i++) {
+    const a = C.at(C.s[i] - 1e-4).yaw;
+    const b = C.at(C.s[i] + 1e-4).yaw;
+    const d = Math.abs(Math.atan2(Math.sin(b - a), Math.cos(b - a)));
+    if (d > most) [most, at] = [d, C.s[i]];
+  }
+  assert.ok(most < 0.01, `no jump in the way it heads (${most.toFixed(3)} rad, ${at.toFixed(0)} m along)`);
+});
+
+test('the airboat leaves a wake on the water behind it, which fades once it stops', () => {
+  const C = new Course(route);
+  const wake = new Wake();
+  const level = 0.3;
+  const go = (s, v, seconds) => {
+    for (let f = 0; f < seconds * 60; f++, s += v / 60) {
+      const p = C.at(s);
+      wake.update({ x: p.x, z: p.z, yaw: p.yaw, level, v, room: p.clear }, 1 / 60);
+    }
+    return s;
+  };
+  const s = go(60, 12, 10);
+  assert.ok(wake.object.visible && wake.pts.length > 20, `there is a wake behind it (${wake.pts.length} points)`);
+  // built round its own mesh, which is where the boat is (render/origin.js)
+  const p = C.at(s - 12 / 60);
+  const o = wake.object.position;
+  assert.ok(Math.hypot(o.x - p.x, o.z - p.z) < 1e-6 && o.y === level, 'its mesh is under the boat');
+  const pos = wake.geometry.attributes.position.array;
+  const index = wake.geometry.index.array;
+  let far = 0;
+  let wet = -Infinity;
+  for (let k = 0; k < wake.geometry.drawRange.count; k++) {
+    const v = index[k];
+    const [x, y, z] = [pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]];
+    assert.ok(Number.isFinite(x + y + z));
+    far = Math.max(far, Math.hypot(x, z));
+    wet = Math.max(wet, shore(o.x + x, o.z + z));
+    assert.ok(Math.abs(y) < 0.1, 'and lies on the water');
+  }
+  assert.ok(far > 50 && far < 150, `it reaches back along the way, and no further (${far.toFixed(0)} m)`);
+  assert.ok(wet < 0.8, `it keeps to the water, washing up to the banks (${wet.toFixed(2)} m from the shore at the most)`);
+  // stood still, it fades; put somewhere else, it's gone at once
+  go(s, 0, 9);
+  assert.equal(wake.object.visible, false, 'gone a while after it stops');
+  const s2 = go(s, 10, 3);
+  assert.ok(wake.object.visible);
+  const q = C.at(s2 + 300);
+  wake.update({ x: q.x, z: q.z, yaw: q.yaw, level, v: 0, room: q.clear }, 1 / 60);
+  assert.equal(wake.object.visible, false, 'none left where it was, put somewhere else');
+  wake.dispose();
 });
 
 test('in tidal country the water is all one, at the level of the sea, islands and all', () => {
