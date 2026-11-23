@@ -234,3 +234,82 @@ test('a pose can be held part-way through it, for as long as it is', () => {
   assert.ok(ch.action.t > 0 && ch.action.t < 0.1, 'played, it starts from its beginning');
 });
 
+
+// ── Drawn as a few meshes ───────────────────────────────────────────────────
+// Once dressed, what keeps its shape is merged into a mesh for each kind of
+// surface (bake.js). Nothing may look any different for it: every vertex
+// goes where its piece would have put it, however the body moves.
+
+// Is o drawn: shown all the way up, and on the layer a camera draws?
+const drawn = (o) => {
+  for (let p = o; p; p = p.parent) if (!p.visible) return false;
+  return (o.layers.mask & 1) !== 0;
+};
+const meshesOf = (root) => {
+  const out = [];
+  root.traverse((o) => o.isMesh && out.push(o));
+  return out;
+};
+
+test('a hiker is drawn as a few meshes, and every piece of them is where it was, in any pose', () => {
+  for (const who of HIKERS) {
+    const ch = new Character(who);
+    const merged = ch.outfit.filter((o) => o.userData.pieces);
+    const pieces = merged.flatMap((m) => m.userData.pieces);
+    const shown = meshesOf(ch.root).filter(drawn);
+    const were = shown.length - merged.length + pieces.length;
+    assert.ok(pieces.length > 20 && shown.length <= were * 0.4, `${who.id}: ${shown.length} meshes drawn, of the ${were} there were`);
+    assert.ok(pieces.every(({ piece }) => !drawn(piece)), 'and the pieces themselves are not drawn');
+
+    // far from the middle of the world, walking, swinging an axe, leaning
+    ch.root.position.set(3.1e6, 412, -2.4e6);
+    ch.root.rotation.y = 2.2;
+    ch.play('chop', 1, true);
+    for (let i = 0; i < 40; i++) ch.update(DT, 2.4, true, 0, 0.6);
+    ch.root.updateMatrixWorld(true);
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    let worst = 0;
+    for (const mesh of merged) {
+      for (const { piece, start, count } of mesh.userData.pieces) {
+        const pos = piece.geometry.attributes.position;
+        for (const i of [0, Math.floor(count / 2), count - 1]) {
+          piece.localToWorld(a.fromBufferAttribute(pos, i));
+          mesh.localToWorld(mesh.getVertexPosition(start + i, b));
+          worst = Math.max(worst, a.distanceTo(b));
+        }
+      }
+    }
+    assert.ok(worst < 1e-4, `${who.id}: each vertex where its piece puts it (off by ${worst.toExponential(1)} m at the most)`);
+
+    // looking out of your own eyes hides the whole body, merged or not
+    ch.hips.visible = false;
+    assert.deepEqual(meshesOf(ch.root).filter(drawn).filter((o) => !o.parent || o.parent !== ch.root), [], 'first person hides it all');
+    ch.dispose();
+  }
+});
+
+test('a piece hung mirrored still faces out, merged', () => {
+  const ch = new Character(hiker('hiker'));
+  ch.root.updateMatrixWorld(true);
+  const p = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const q = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const facing = (v) => new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[2], v[0]));
+  let mirrored = 0;
+  for (const mesh of ch.outfit.filter((o) => o.userData.pieces)) {
+    const index = mesh.geometry.index;
+    for (const { piece, start } of mesh.userData.pieces) {
+      if (piece.matrixWorld.determinant() >= 0) continue;
+      mirrored++;
+      // its first face, as it was drawn (turned, since its frame is mirrored) and as it is now
+      const g = piece.geometry;
+      const at = (k) => (g.index ? g.index.getX(k) : k);
+      for (let k = 0; k < 3; k++) piece.localToWorld(p[k].fromBufferAttribute(g.attributes.position, at(k)));
+      const was = facing(p).negate();
+      const first = [...index.array].findIndex((v) => v >= start);
+      for (let k = 0; k < 3; k++) mesh.localToWorld(mesh.getVertexPosition(index.getX(first + k), q[k]));
+      assert.ok(was.dot(facing(q)) > 0, 'faces the way it did');
+    }
+  }
+  assert.ok(mirrored > 0, 'the hiker has mirrored pieces (an ear)');
+});

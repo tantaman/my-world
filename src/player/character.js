@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 import { smoothstep, lerp, clamp } from '../noise.js';
 import { group } from './clothing.js';
+import { bake } from './bake.js';
 import { HIKER } from './hikers/hiker.js';
 
 // Work poses as keyframes over one swing (p = 0..1). Angles in radians:
@@ -253,6 +254,14 @@ function fit(w, crown) {
 //                    jetpack): +z into the body, y up the spine
 //           and, if anything of theirs moves on its own (hair that swings):
 //             swing(dt)  called each frame once the body is posed, to move it
+//           What dress hangs on keeps the shape and place it's given there:
+//           once someone is dressed, the pieces that keep their shape are
+//           merged into a few meshes (bake.js), so they're drawn a few
+//           times, not a hundred. What moves on its own moves what it hangs
+//           on (a group: the ponytail turns about where it's gathered), and
+//           whatever is merged from it goes along. Anything given a name is
+//           left whole, to be found by it and shown or hidden (a helmet put
+//           on and taken off).
 export class Character {
   constructor(who = HIKER) {
     this.root = new THREE.Group();
@@ -423,6 +432,10 @@ export class Character {
       this.resources.add(o.material);
       if (o.isSkinnedMesh) this.resources.add(o.skeleton);
     });
+    // what keeps its shape, merged into a mesh for each kind of surface
+    const { meshes, made } = bake(this.root, this.hips, this.outfit);
+    this.outfit.push(...meshes);
+    for (const r of made) this.resources.add(r);
     limbs.forEach((b, i) => b.rotation.copy(bent[i]));
 
     place(this.capFrame, brow.parent);

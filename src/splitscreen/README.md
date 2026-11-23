@@ -71,11 +71,11 @@ Nothing else knows about it. It uses things other features offer:
   they're drawn for, so the rest would be drawn as nothing. While everyone
   is within 12 m of the middle of them all, the sun's shadows are drawn once,
   round that middle, with the first part, and the others use the same map
-  (`sky.freshShadows`). Each hiker is a hundred or so pieces, each casting a
-  shadow, so that's most of what there is to save. Drawing four parts with
-  everyone together then costs about five times one picture's draw calls
-  and three times its triangles. Most of the rest is the hikers themselves:
-  every part draws all of them.
+  (`sky.freshShadows`). And every part draws every hiker, which is cheap
+  because a hiker, once dressed, is about ten meshes rather than fifty
+  (`player/bake.js`). With everyone together, four parts cost about two and
+  a half times the draw calls one picture did before any of this, and three
+  times the triangles.
 - `#hud`'s box (`index.html`): your HUD lays itself out in your part
 
 ## Files
