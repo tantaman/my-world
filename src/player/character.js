@@ -167,7 +167,8 @@ const SHOULDER_Y = 0.42;
 const NECK = 0.145; // centre of the head (eye level) above the base of the neck
 const THIGH = 0.42;
 const SHIN = 0.43;
-const REACH = (THIGH + SHIN) * 0.985; // a planted leg never quite locks straight
+const REACH = 0.985; // a planted leg never quite locks straight: of its length, the most it reaches
+const GROWN = 1.8; // m, how tall the grown-up stands, to the top of the head
 // The boot, from the ankle joint: sole below, heel behind, toe ahead. A boot
 // sole hardly bends, so it rolls up onto the tip of the toe.
 const ANKLE_H = 0.07;
@@ -233,6 +234,11 @@ function fit(w, crown) {
 //           the way a smaller body does, with quicker, shorter steps
 //   shoulders  (if not the grown-up's) how far either side of the middle
 //           of the chest the shoulder joints are, before it's made smaller
+//   legs    (if not the grown-up's) how long the legs are, as a share of
+//           the grown-up's: they stand as tall as `size` says all the same,
+//           so the rest of them is made that much smaller, and in the
+//           measurements here the hips are higher and the knees and ankles
+//           further down (body.legL.knee.position, .ankle.position)
 //   dress(body)  puts their skin, hair and clothes on the bones (body.chest,
 //           body.neck, body.head, body.armL.shoulder and .elbow,
 //           body.legL.hip, .knee and .ankle, ...: see #bones), in metres of the
@@ -304,7 +310,11 @@ export class Character {
     // Whoever is dressed owns their clothes; what is held, worn or carried
     // on the bones (a peer's borrowed gear, too) stays when someone else is.
     this.who = null;
-    this.size = 1; // who.size
+    this.size = 1; // who.size: how tall, as a share of the grown-up
+    this.scale = 1; // ...and how much smaller the body is made, for that
+    this.thigh = THIGH; // their legs (who.legs)
+    this.shin = SHIN;
+    this.hipsY = HIPS_Y;
     this.outfit = []; // what dress() hung on the bones
     this.resources = new Set(); // ...and what it is made of
     this.worn = []; // straps round the head: { holder, crown } (addWorn)
@@ -379,8 +389,21 @@ export class Character {
     this.#undress();
     this.who = who;
     this.size = who.size ?? 1;
-    this.root.scale.setScalar(this.size);
+    // longer legs, the hips that much higher, the whole made smaller to
+    // stand as tall
+    const legs = who.legs ?? 1;
+    const longer = (legs - 1) * (THIGH + SHIN);
+    this.thigh = THIGH * legs;
+    this.shin = SHIN * legs;
+    this.hipsY = HIPS_Y + longer;
+    this.scale = longer ? (this.size * GROWN) / (GROWN + longer) : this.size;
+    this.root.scale.setScalar(this.scale);
     for (const [A, side] of [[this.armL, 1], [this.armR, -1]]) A.shoulder.position.x = side * (who.shoulders ?? SHOULDER_X);
+    for (const L of [this.legL, this.legR]) {
+      L.knee.position.y = -this.thigh;
+      L.ankle.position.y = -this.shin;
+    }
+    this.hips.position.y = this.hipsY;
     // Cloth is bound to the bones as they stand, so straighten the limbs
     // while it is put on.
     const limbs = [this.armL, this.armR, this.legL, this.legR].flatMap((L) => (L.shoulder ? [L.shoulder, L.elbow] : [L.hip, L.knee]));
@@ -607,7 +630,7 @@ export class Character {
     // and their steps turn over quicker by the same root. The strides come
     // out the right length for how fast they go in the world, so the feet
     // don't skate, and a small child's legs go like the clappers.
-    const quick = 1 / Math.sqrt(this.size);
+    const quick = 1 / Math.sqrt(this.scale);
     const v = speed * quick;
     vy *= quick;
     const k = 1 - Math.exp(-dt * 8);
@@ -671,7 +694,7 @@ export class Character {
     // Walking vaults over a stiff leg (highest mid-stance); running bounces
     // on a springy one (lowest mid-stance). The hips shift over the loaded
     // foot, the free side dips, and the pelvis turns with the swinging leg.
-    let hy = HIPS_Y - walkW * (0.012 + 0.01 * v) - runW * 0.06;
+    let hy = this.hipsY - walkW * (0.012 + 0.01 * v) - runW * 0.06;
     hy += twice * (walkW * 0.022 - runW * 0.04);
     const shift = Math.sin(this.time * 0.55) * 0.6 + Math.sin(this.time * 0.23 + 1) * 0.4; // idle weight shift
     let hx = side1 * (walkW * 0.028 + runW * 0.012) + idle * shift * 0.022;
@@ -828,7 +851,7 @@ export class Character {
       hx *= 1 - sit;
       hz *= 1 - sit;
       // (the seat is in the world's metres, the body in the grown-up's)
-      const sz = this.size;
+      const sz = this.scale;
       hy = lerp(hy, SEAT_HIPS / sz, sit);
       hPitch *= 1 - sit;
       hYaw *= 1 - sit;
@@ -886,7 +909,7 @@ export class Character {
       const reach = S.reach ?? 0;
       hx = lerp(hx, 0, std);
       hz = lerp(hz, -0.04 - crouch * 0.1, std);
-      hy = lerp(hy, HIPS_Y - 0.04 - crouch * 0.3 - reach * 0.06 + this.land, std);
+      hy = lerp(hy, this.hipsY - 0.04 - crouch * 0.3 - reach * 0.06 + this.land, std);
       hPitch *= 1 - std;
       hYaw *= 1 - std;
       hRoll *= 1 - std;
@@ -946,7 +969,7 @@ export class Character {
       const flat = smoothstep(HANG_FLAT[0], HANG_FLAT[1], tilt);
       hx *= 1 - hng;
       hz *= 1 - hng;
-      hy = lerp(hy, HIPS_Y, hng);
+      hy = lerp(hy, this.hipsY, hng);
       hPitch *= 1 - hng;
       hYaw *= 1 - hng;
       hRoll *= 1 - hng;
@@ -1036,7 +1059,8 @@ export class Character {
       const jz = hz - F.z;
       const h2 = jx * jx + jz * jz;
       const dy = hy + HIP_Y - F.y;
-      const need = dy - Math.sqrt(Math.max(0, REACH * REACH - h2));
+      const reach = (this.thigh + this.shin) * REACH;
+      const need = dy - Math.sqrt(Math.max(0, reach * reach - h2));
       if (need > 0) drop = Math.max(drop, need * F.load);
     }
     hy -= Math.min(drop, 0.4);
@@ -1055,7 +1079,7 @@ export class Character {
   #swimPose(dt, w) {
     const { prone, pitch, under } = this.swimTo;
     const going = smoothstep(0.05, 0.6, prone);
-    this.stroke += (dt / Math.sqrt(this.size)) * lerp(STROKES[0], STROKES[1], going);
+    this.stroke += (dt / Math.sqrt(this.scale)) * lerp(STROKES[0], STROKES[1], going);
     const ph = this.stroke * TAU;
     const mix = (cur, val) => cur + (val - cur) * w;
 
@@ -1088,7 +1112,7 @@ export class Character {
     if (r.rotation.order !== 'YXZ') r.rotation.order = 'YXZ'; // pitch in the body's own frame
     const tilt = clamp((prone * 1.4 + pitch) * w, -0.3, 2.6);
     r.rotation.x = tilt;
-    const pivot = SWIM_PIVOT * this.size;
+    const pivot = (SWIM_PIVOT + this.hipsY - HIPS_Y) * this.scale;
     const back = pivot * Math.sin(tilt);
     r.position.y += pivot * (1 - Math.cos(tilt));
     r.position.x -= Math.sin(r.rotation.y) * back;
@@ -1132,7 +1156,7 @@ export class Character {
   // world's: a smaller body's are that much smaller.)
   #feelGround(dt, w) {
     const r = this.root;
-    const sz = this.size;
+    const sz = this.scale;
     const yaw = r.rotation.y;
     const cy = Math.cos(yaw) * sz;
     const sy = Math.sin(yaw) * sz;
@@ -1160,9 +1184,11 @@ export class Character {
     const roll = Math.atan2(_t.x, -_t.y);
     const down = _t.x * Math.sin(roll) - _t.y * Math.cos(roll);
     const fwd = _t.z;
-    const d = clamp(Math.hypot(down, fwd), 0.2, (THIGH + SHIN) * 0.9995);
-    const kneeIn = Math.acos(clamp((THIGH * THIGH + SHIN * SHIN - d * d) / (2 * THIGH * SHIN), -1, 1));
-    const lift = Math.acos(clamp((THIGH * THIGH + d * d - SHIN * SHIN) / (2 * THIGH * d), -1, 1));
+    const T = this.thigh;
+    const S = this.shin;
+    const d = clamp(Math.hypot(down, fwd), 0.2, (T + S) * 0.9995);
+    const kneeIn = Math.acos(clamp((T * T + S * S - d * d) / (2 * T * S), -1, 1));
+    const lift = Math.acos(clamp((T * T + d * d - S * S) / (2 * T * d), -1, 1));
     const aim = Math.atan2(fwd, down);
     leg.hip.rotation.set(-(aim + lift), 0, roll);
     leg.knee.rotation.x = Math.PI - kneeIn;
