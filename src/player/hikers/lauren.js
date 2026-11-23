@@ -24,6 +24,8 @@ import { buildHead, buildGlasses, buildCap, lensMaterial, bareSkin } from '../he
 // side of the middle of her chest, before she's made smaller).
 const SIZE = 0.9;
 const SHOULDERS = 0.18;
+// Her head, a little smaller than the grown-up's is on him, for her.
+const HEAD = 0.94;
 
 // ── Colours (as in the photographs, out of the snow's glare) ─────────────────
 const SKIN = 0xd6ae94;
@@ -78,16 +80,14 @@ const HAIR_COLOUR = new THREE.Color(HAIR);
 
 const LOOK = {
   // an oval face: the cranium, cheekbones high and wide, the jaw narrower
-  // and softly round, the cheeks full, and a small, neat chin. (Every egg
-  // takes in the middle of the head, which the skin is cast out from, so
-  // none of them ends partway across it: the chin is the end of a long egg
-  // down through the mouth.)
+  // and softly round, the cheeks full, and a small, rounded chin: the end of
+  // an egg tilted forward down through her mouth
   skull: [
     [[0, 0.018, -0.01], [0.074, 0.09, 0.095]],
     [[0, -0.02, 0.012], [0.07, 0.052, 0.076]],
-    [[0, -0.046, 0.01], [0.057, 0.056, 0.076]],
+    [[0, -0.044, 0.01], [0.058, 0.054, 0.076]],
     [[0, -0.034, 0.016], [0.064, 0.04, 0.072]],
-    [[0, -0.046, 0.024], [0.03, 0.062, 0.062]],
+    [[0, -0.046, 0.037], [0.031, 0.066, 0.042], 0.66],
   ],
   round: 0.016,
   eyeX: 0.031,
@@ -115,9 +115,9 @@ const LOOK = {
     cheekbones: [0.003, 0.045, -0.018],
     cheeks: [0.0035, 0.034, -0.03],
     teeth: 0.0045,
-    lips: [0.0022, 0.0032], // full, the lower the fuller
+    lips: [0.0026, 0.0036], // full, the lower the fuller
     lipW: [0.022, 0.02],
-    chin: [0.0012, -0.098],
+    chin: [0.0014, -0.09],
   },
   ear: { x: 0.0715, y: -0.004, z: -0.012, h: 0.0275, w: 0.0155, flare: 0.3, lean: 0.18 },
   colour: {
@@ -291,7 +291,9 @@ function ponytail() {
 
 // Her face, hair, earrings, aviators, cap and ponytail, on the head bone.
 // -> { brow, crown, pony } (as Character.dress asks, and the ponytail's pivot)
-function herHead(head, skin) {
+function herHead(bone, skin) {
+  const head = group(bone);
+  head.scale.setScalar(HEAD);
   buildHead(head, skin, LOOK);
 
   // small pearl studs in her ear lobes
@@ -398,9 +400,9 @@ function swinging(pony, chest) {
 // out from it, her shoulders narrow and sloping to her neck.
 const TORSO = [
   [-0.075, 0.176, 0.11, -0.008], [-0.04, 0.166, 0.106, -0.007],
-  [0.02, 0.146, 0.097, -0.004], [0.08, 0.126, 0.089, 0],
-  [0.13, 0.12, 0.087, 0.004], [0.19, 0.127, 0.091, 0.008],
-  [0.24, 0.138, 0.098, 0.011], [0.29, 0.146, 0.104, 0.013],
+  [0.02, 0.144, 0.096, -0.004], [0.08, 0.12, 0.086, 0],
+  [0.13, 0.112, 0.083, 0.004], [0.19, 0.122, 0.088, 0.008],
+  [0.24, 0.134, 0.096, 0.011], [0.29, 0.144, 0.102, 0.013],
   [0.34, 0.151, 0.104, 0.011], [0.385, 0.155, 0.099, 0.006],
   [0.42, 0.152, 0.092, 0], [0.448, 0.132, 0.082, -0.005],
   [0.472, 0.098, 0.069, -0.009], [0.49, 0.066, 0.057, -0.011], [0.505, 0.048, 0.046, -0.012],
@@ -408,7 +410,7 @@ const TORSO = [
 const TORSO_SQUARE = 0.9;
 // Her bust, standing out of the front of her chest (m), at height y, across
 // her (-1..1 round the front) and how far round to the front (front: 1).
-const bust = (y, across, front) => 0.018 * Math.exp(-(((y - 0.3) / 0.055) ** 2)) * Math.exp(-(((Math.abs(across) - 0.42) / 0.3) ** 2)) * smoothstep(0.2, 0.75, front);
+const bust = (y, across, front) => 0.026 * Math.exp(-(((y - 0.3) / 0.056) ** 2)) * Math.exp(-(((Math.abs(across) - 0.42) / 0.3) ** 2)) * smoothstep(0.2, 0.75, front);
 
 // The tank top: it stands this far off her skin, and where it isn't, it's
 // tucked this far under it. Its straps are over her shoulders this far out
@@ -484,8 +486,8 @@ const ARM = [
   [-0.512, 0.023, 0.019], [-0.49, 0.024, 0.02], [-0.45, 0.027, 0.023],
   [-0.41, 0.031, 0.027, 0.002], [-0.36, 0.034, 0.03, 0.003], [-0.32, 0.033, 0.03, 0.002],
   [-0.285, 0.03, 0.029, -0.003], [-0.26, 0.031, 0.03, -0.003], [-0.2, 0.034, 0.033],
-  [-0.14, 0.037, 0.036], [-0.08, 0.04, 0.039], [-0.02, 0.044, 0.042],
-  [0.02, 0.043, 0.041], [0.048, 0.031, 0.031], [0.061, 0.012, 0.014],
+  [-0.14, 0.038, 0.037, 0.002], [-0.08, 0.039, 0.039], [-0.02, 0.046, 0.043],
+  [0.02, 0.045, 0.042], [0.048, 0.032, 0.032], [0.061, 0.012, 0.014],
 ];
 
 // ── Her legs (the hip's frame: the knee at -0.42, the ankle at -0.85) ───────
@@ -495,8 +497,8 @@ const LEGGINGS_ROWS = [
   [-0.775, 0.033, 0.036], [-0.74, 0.035, 0.038], [-0.68, 0.04, 0.046, -0.006],
   [-0.61, 0.046, 0.054, -0.012], [-0.54, 0.045, 0.052, -0.01], [-0.48, 0.041, 0.046, -0.003],
   [-0.43, 0.042, 0.046, 0.004], [-0.38, 0.046, 0.05, 0.004], [-0.3, 0.054, 0.06, 0.003],
-  [-0.2, 0.064, 0.07, 0.001], [-0.1, 0.076, 0.082, -0.006], [-0.02, 0.088, 0.096, -0.012],
-  [0.025, 0.094, 0.1, -0.012], [0.07, 0.082, 0.092, -0.006], [0.12, 0.066, 0.084],
+  [-0.2, 0.063, 0.07, 0.001], [-0.1, 0.075, 0.084, -0.008], [-0.02, 0.088, 0.1, -0.016],
+  [0.025, 0.094, 0.1, -0.02], [0.07, 0.08, 0.084, -0.014], [0.12, 0.064, 0.074, -0.004],
 ];
 // Her socks, in the knee's frame (the ankle at -0.43): up out of her boots,
 // over the leggings, the cuff turned at the top.
@@ -534,10 +536,10 @@ const TIE_Y = 0.06; // where it's tied
 const SPINE = 0.06; // her chest's frame is this far above her hips'
 const SKIRT_ROUND = 1.72; // radians either side of the middle of her back it comes round
 const SKIRT_LONG = [0.33, 0.22]; // how far it hangs at the back, and at her hips
-const SKIRT_TOP = [0.18, 0.122, -0.01]; // half width, half depth and middle at the tie
-const SKIRT_HEM = [0.2, 0.136, -0.012]; // ...and at the hem
+const SKIRT_TOP = [0.19, 0.132, -0.012]; // half width, half depth and middle at the tie
+const SKIRT_HEM = [0.206, 0.144, -0.014]; // ...and at the hem
 const SKIRT_CHANNEL = 0.068; // between its lines of stitching
-const SKIRT_LOFT = 0.009;
+const SKIRT_LOFT = 0.007;
 const SKIRT_LEGS = 0.6; // how much the bottom of it goes with the thigh behind it
 
 // How full a channel of down is at d along it: 0 at the stitching, 1 between.

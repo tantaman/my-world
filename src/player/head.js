@@ -34,8 +34,11 @@ import { SHARED, SKY } from '../render/uniforms.js';
 const TAU = Math.PI * 2;
 
 // ── A look ──────────────────────────────────────────────────────────────────
-//   skull    egg shapes, [centre, half-sizes], whose surfaces are rounded
-//            into one another over `round` (m)
+//   skull    egg shapes, [centre, half-sizes, tilt], whose surfaces are
+//            rounded into one another over `round` (m); tilted (radians, if
+//            given) about x, its bottom forward. Each should take in the
+//            middle of the head, which the skin is cast out from: one that
+//            doesn't leaves a seam where it ends
 //   eyeX     half the distance between the pupils
 //   brow     the brow ridge, above eye level
 //   nose     from the bridge between the eyes (nasion: { y, z }) straight
@@ -94,14 +97,24 @@ function smax(a, b, k) {
 }
 
 // How far along the ray from the centre in unit direction n its surface is,
-// for an egg shape [centre, half-sizes]; 0 if the ray misses it.
-function rayToEgg(n, [c, r]) {
+// for an egg shape [centre, half-sizes, tilt]; 0 if the ray misses it.
+const _ray = [0, 0, 0];
+function rayToEgg(n, [c, r, tilt]) {
+  let N = n.toArray(_ray);
+  let C = c;
+  if (tilt) {
+    // into the egg's own frame (how far along the ray is the same in it)
+    const co = Math.cos(tilt);
+    const si = Math.sin(tilt);
+    N = [N[0], N[1] * co - N[2] * si, N[1] * si + N[2] * co];
+    C = [c[0], c[1] * co - c[2] * si, c[1] * si + c[2] * co];
+  }
   let a = 0;
   let b = 0;
   let k = -1;
   for (let i = 0; i < 3; i++) {
-    const ni = n.getComponent(i) / r[i];
-    const ci = c[i] / r[i];
+    const ni = N[i] / r[i];
+    const ci = C[i] / r[i];
     a += ni * ni;
     b -= 2 * ni * ci;
     k += ci * ci;
