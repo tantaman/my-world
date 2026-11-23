@@ -13,7 +13,21 @@ import assert from 'node:assert/strict';
 
 // ms to let the hiker walk each stretch of a stair: drawn in software, the
 // fire and the forest on the top go at a frame a second or so
-const STRETCH = 60000;
+const STRETCH = 30000;
+
+// In the page: the points to walk up way w (plan.WAYS) by, as world { x, z }:
+// in at its foot, along its way in, round its turn, and up its climb.
+export function inPage() {
+  T.wayUp = (w) => {
+    const L = world.purgatory.land;
+    const pts = [w.ra + 1, w.ra - 1, w.ra - w.lag / 2, w.ra - w.lag].map((r) => L.place(r, w.a0));
+    for (let i = 1; i <= 10; i++) {
+      const u = i / 10;
+      pts.push(L.place(w.ra - w.lag - (w.ra - w.rb) * u, w.a0 - (w.a0 - w.a1) * u));
+    }
+    return pts;
+  };
+}
 
 export default async function ({ page, step, open, shot }) {
   await step('up the road out of Hell', async () => {
@@ -139,7 +153,6 @@ export default async function ({ page, step, open, shot }) {
   await step('up the first stair, and a P gone', async () => {
     const stair = await page.evaluate(async (STRETCH) => {
       const { purgatory, player } = world;
-      const L = purgatory.land;
       purgatory.hours = 10;
       purgatory.stair(1);
       await T.frames(10);
@@ -147,14 +160,11 @@ export default async function ({ page, step, open, shot }) {
       const region = purgatory.region;
       // in at its foot, past the angel, and up its climb to its head
       const w = purgatory.ways[1];
-      const foot = L.place(w.ra - 1, w.a0);
-      player.steer = { x: foot.x, z: foot.z };
-      await T.until(() => purgatory.wiped > 0, 30000);
-      for (let i = 0; i <= 10 && purgatory.region !== 'envy'; i++) {
-        const u = i / 10;
-        const p = L.place(w.ra - w.lag - (w.ra - w.rb) * u, w.a0 - (w.a0 - w.a1) * u);
+      for (const p of T.wayUp(w)) {
+        if (purgatory.region === 'envy') break;
+        purgatory.hours = 10; // (kept at midday, whatever the clock does: nobody climbs at night)
         player.steer = { x: p.x, z: p.z, run: true };
-        await T.until(() => Math.hypot(player.pos.x - p.x, player.pos.z - p.z) < 2, STRETCH);
+        await T.until(() => Math.hypot(player.pos.x - p.x, player.pos.z - p.z) < 1, STRETCH);
       }
       player.steer = null;
       await T.frames(10);
@@ -185,7 +195,6 @@ export default async function ({ page, step, open, shot }) {
   await step('through the fire to the top', async () => {
     const fire = await page.evaluate(async (STRETCH) => {
       const { purgatory, player } = world;
-      const L = purgatory.land;
       purgatory.hours = 11;
       // (as if the angels below had wiped theirs: the last P is the fire's to take)
       if (!purgatory.marked) purgatory.mark();
@@ -194,16 +203,13 @@ export default async function ({ page, step, open, shot }) {
       await T.frames(10);
       const w = purgatory.ways[7];
       let burned = 0;
-      const foot = L.place(w.ra - 1, w.a0);
-      player.steer = { x: foot.x, z: foot.z };
-      await T.until(() => Math.hypot(player.pos.x - foot.x, player.pos.z - foot.z) < 2, STRETCH);
-      for (let i = 0; i <= 10 && purgatory.region !== 'eden'; i++) {
-        const u = i / 10;
-        const p = L.place(w.ra - w.lag - (w.ra - w.rb) * u, w.a0 - (w.a0 - w.a1) * u);
+      for (const p of T.wayUp(w)) {
+        if (purgatory.region === 'eden') break;
+        purgatory.hours = 11;
         player.steer = { x: p.x, z: p.z, run: true };
         await T.until(() => {
           burned = Math.max(burned, parseFloat(document.getElementById('purgatory-fire').style.opacity || 0));
-          return Math.hypot(player.pos.x - p.x, player.pos.z - p.z) < 2;
+          return Math.hypot(player.pos.x - p.x, player.pos.z - p.z) < 1;
         }, STRETCH);
       }
       player.steer = null;
@@ -238,17 +244,17 @@ export default async function ({ page, step, open, shot }) {
       const pack = () => game.commands.list.find((c) => c.id === 'drink');
       // Eunoë first: it works not, unless Lethe is tasted first
       const e = at('eunoe');
-      player.spawn(e.x, e.z, 0);
+      purgatory.stand(e.x, e.z);
       await T.frames(20);
       const notYet = pack().now();
       await purgatory.drink();
       const first = purgatory.done;
       const l = at('lethe');
-      player.spawn(l.x, l.z, 0);
+      purgatory.stand(l.x, l.z);
       await T.frames(20);
       const atLethe = pack().now();
       await purgatory.drink();
-      player.spawn(e.x, e.z, 0);
+      purgatory.stand(e.x, e.z);
       await T.frames(20);
       pack().run();
       const out = await T.until(() => !purgatory.inside && !purgatory.passing, 30000);

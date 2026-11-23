@@ -704,6 +704,11 @@ export function installPurgatory(game: Game) {
     // world.purgatory.go(r, th) sets you down anywhere; arrive() as if up the
     // road from Hell; stair(k) at the foot of a way up (0: the needle's eye)
     go: standAt,
+    // world.purgatory.stand(x, z) at a world position on the island
+    stand(x: number, z: number) {
+      land.polar(x, z, 0, _p);
+      standAt(_p.r, _p.th);
+    },
     arrive: () => hell.pass('stars'),
     stair(k: number) {
       const w = WAYS[k];

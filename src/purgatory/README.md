@@ -108,6 +108,7 @@ From the console:
 world.purgatory.arrive()         // up the road out of Hell, onto the shore
 world.purgatory.go(1500, -0.1)   // stand at a radius and an angle (here: on the slope)
 world.purgatory.stair(3)         // at the foot of a way up (0: the needle's eye)
+world.purgatory.stand(x, z)      // at a world position on the island
 world.purgatory.at('lethe')      // where something is: lethe, eunoe, spring, valley, gate, burrow
 world.purgatory.here             // { r, th, h }
 world.purgatory.hours = 19       // the mountain's hour
