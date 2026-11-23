@@ -84,8 +84,12 @@ export default async function ({ page, step, key, frames, shot }) {
     });
     assert.ok(back > 150);
     await key('KeyZ');
-    const came = await page.evaluate(() => T.until(() => world.mounts.list()[0].dist < 4.5, 60000));
-    assert.ok(came, 'it comes when called');
+    // until it has stopped beside you, and said so: near isn't there yet, and
+    // what it says on arriving would land on whatever the next step says
+    const came = await page.evaluate(() => T.until(() => world.mounts.list()[0].mode !== 'come', 60000));
+    const here = await page.evaluate(() => ({ dist: world.mounts.list()[0].dist, said: document.getElementById('toast').textContent }));
+    assert.ok(came && here.dist < 4.5, `it comes when called (${JSON.stringify(here)})`);
+    assert.match(here.said, /your horse is here/, `and says it's here (${here.said})`);
     return { word: word.said, signs: signs.r, gallop: Math.round(gallop * 10) / 10 };
   });
 
@@ -117,7 +121,7 @@ export default async function ({ page, step, key, frames, shot }) {
       }),
     }));
     assert.deepEqual(after.mine, ['eagle', 'horse', 'turtle'], 'all three are yours');
-    assert.match(after.said, /yours/, 'and it says so');
+    assert.match(after.said, /yours/, `and it says so (${after.said})`);
     assert.equal(after.off, true, 'with nothing left in the option, it greys out');
     assert.ok(after.home, 'each is still at its haunt');
     await key('KeyM');
