@@ -37,6 +37,7 @@ export const wrap = (a) => a - TAU * Math.round(a / TAU);
 // How far the drawn sea goes (m from the axis): to where the air hides it.
 export const SEA_REACH = 7600;
 const SIDE = 0.35; // m: how far a stair's walls take to rise from its tread to the bank either side
+const TURN = 1.1; // m wider a way up is cut where its way in turns into its climb, so nobody catches on the corner
 const STILL = 26; // m from a way up or the gate: the cliff lines don't wander there
 // The gate's door: how far in from the foot of the great cliff it hangs,
 // and how thick it is as far as anyone walking into it is concerned (m).
@@ -381,7 +382,7 @@ export class MountLand {
       if (r > w.ra + 1 || r < w.rb - w.lag - 3) continue;
       const at = this._along(w, r, th, this._s);
       if (!at) continue;
-      const cut = (1 - smoothstep(w.half, w.half + SIDE, Math.abs(at.across))) * at.on;
+      const cut = (1 - smoothstep(at.half, at.half + SIDE, Math.abs(at.across))) * at.on;
       if (cut <= 0) continue;
       // (the needle's eye goes in level with the gate's threshold, over the
       // ledge: there it is the tread, whatever is under it)
@@ -401,6 +402,7 @@ export class MountLand {
   //   out.inward   whether it's the way in, not the climb
   //   out.u        how far up the climb (0..1; 0 on the way in)
   //   out.across   m from its line
+  //   out.half     m either side of its line it is cut (wider where it turns)
   //   out.tread    its height there (from the sea)
   //   out.on       1 within its length, fading off its ends
   _along(w, r, th, out) {
@@ -425,11 +427,13 @@ export class MountLand {
     if (inward) {
       out.u = 0;
       out.across = acrossIn;
+      out.half = w.half + TURN * smoothstep(0.4, 1, e);
       out.tread = w.h0;
       out.on = smoothstep(-0.15, 0, e) * (1 - smoothstep(1, 1.1, e));
     } else {
       out.u = clamp(u, 0, 1);
       out.across = acrossUp;
+      out.half = w.half + TURN * (1 - smoothstep(0, 0.1, u));
       out.tread = w.h0 + (w.h1 - w.h0) * out.u;
       out.on = smoothstep(-0.04, 0, u) * (1 - smoothstep(1, 1.04, u));
     }
@@ -443,7 +447,7 @@ export class MountLand {
       const w = WAYS[k];
       if (r > w.ra + 1 || r < w.rb - w.lag - 1) continue;
       const at = this._along(w, r, th, this._s);
-      if (!at || Math.abs(at.across) > w.half + 0.2 || at.on < 0.5) continue;
+      if (!at || Math.abs(at.across) > at.half + 0.2 || at.on < 0.5) continue;
       return { k, up: at.u, inward: at.inward };
     }
     return null;
