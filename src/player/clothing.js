@@ -206,20 +206,22 @@ export function handShape(side) {
   return mergeGeometries(pieces);
 }
 
-export function bootUpper() {
+// A boot, in the ankle's frame: the upper and the sole under it, coloured by
+// surface (as tailored() takes it) if given.
+export function bootUpper(surface) {
   return tailored([
     [-0.052, 0.058, 0.115, 0.045], [-0.037, 0.059, 0.115, 0.045],
     [-0.018, 0.056, 0.109, 0.043], [0.002, 0.053, 0.088, 0.026],
     [0.032, 0.05, 0.065, 0.008], [0.073, 0.052, 0.058],
     [0.094, 0.055, 0.059], [0.10, 0.049, 0.052],
-  ], { squareness: 0.76, segments: 20 });
+  ], { squareness: 0.76, segments: 20, surface });
 }
 
-export function outsole() {
+export function outsole(surface) {
   return tailored([
     [-0.07, 0.057, 0.12, 0.045], [-0.062, 0.061, 0.12, 0.045],
     [-0.047, 0.061, 0.119, 0.045], [-0.042, 0.058, 0.116, 0.045],
-  ], { squareness: 0.75, segments: 20 });
+  ], { squareness: 0.75, segments: 20, surface });
 }
 
 // ── Putting it on ───────────────────────────────────────────────────────────

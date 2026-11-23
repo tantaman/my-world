@@ -1,16 +1,177 @@
 // The hiker: an orange rain shell with the grey hood rolled at the collar,
 // tan hiking trousers and brown boots, a black daypack with a hydration hose
 // over the left shoulder, a brown snapback with a maroon flat brim, white
-// sunglasses and a full dark beard (his head is ../head.js).
+// sunglasses and a full dark beard.
 //
 // Grown-up sized: the body's measurements (character.js) are his.
+//
+// His head is drawn from a photo of the man himself on a snowfield: a lean,
+// long face with a straight, prominent nose, a full dark beard kept short on
+// the cheeks and fuller at the chin, short dark hair under a brown snapback
+// with a flat maroon brim, and white square-framed sunglasses with dark
+// lenses that catch the sky. ../head.js builds it to his look (LOOK, what
+// each of it is, is at the top of head.js), from eye level, +z the way he
+// looks, the size a real head is.
 
 import * as THREE from 'three';
 import { smoothstep } from '../../noise.js';
 import { tailored, sleeve, trouserLeg, bootUpper, outsole, handShape, textile, foldAt, material as M, piece, cord, group, limb } from '../clothing.js';
-import { buildHead } from '../head.js';
+import { buildHead, buildGlasses, buildCap, lensMaterial } from '../head.js';
 
 const BACK_OF_PACK = 0.182; // m from the middle of the daypack to the back of it
+
+// ── His head ────────────────────────────────────────────────────────────────
+// The snapback: a high, boxy six-panel crown, worn level and a touch back,
+// with a flat maroon brim (what each of these is, is at buildCap in head.js).
+const SNAPBACK = {
+  rx: 0.086, rz: 0.107, z: -0.008, // the band centred a touch behind the face, over the hair
+  front: 0.104, back: 0.09,
+  square: 4.5,
+  y: 0.029, tilt: -0.08,
+  colour: 0x6c5932, seam: 0x56452f,
+  brim: { w: 0.094, l: 0.072, attach: 1.2, colour: 0x6e1f2c },
+};
+const HAIR_COLOR = new THREE.Color(0x37261a);
+const BEARD_CHIN = 0.0155; // m, the longest of the beard
+
+const LOOK = {
+  // the cranium, the cheekbones and upper jaw, the jaw, the chin
+  skull: [
+    [[0, 0.024, -0.008], [0.0755, 0.097, 0.099]],
+    [[0, -0.02, 0.013], [0.066, 0.056, 0.077]],
+    [[0, -0.058, 0.004], [0.0555, 0.062, 0.083]],
+    [[0, -0.097, 0.054], [0.029, 0.026, 0.032]],
+  ],
+  round: 0.016,
+  eyeX: 0.032,
+  brow: 0.024,
+  // a long, strong nose and not a pinched one: straight down its back with
+  // a hint of a hump, fuller and rounder toward the tip
+  nose: {
+    nasion: { y: 0.014, z: 0.0912 },
+    slope: 0.62,
+    hump: 0.0007,
+    tip: { y: -0.0362, round: 0.006 },
+    under: { z: 0.096, slope: 1.8 },
+    bridgeRound: 0.0042,
+    tipRound: 0.0078,
+    steep: [1.45, 2.3],
+    sideCurve: 30,
+    ala: { x: 0.0115, y: -0.0412, rx: 0.0062, ry: 0.0056, lift: 0.0085 },
+    nostril: 0.0066,
+    base: -0.0498,
+  },
+  // smiling, the upper teeth showing
+  mouth: { y: -0.0695, w: 0.0235, smile: 0.0035, parted: 0.0026, teeth: [0.75, 0.35] },
+  relief: {
+    socket: 0.0075,
+    browRidge: 0.0035,
+    cheekbones: [0.0042, 0.047, -0.021],
+    cheeks: [0.0035, 0.035, -0.026],
+    teeth: 0.0055,
+    lips: [0.0022, 0.0024],
+    lipW: [0.02, 0.018],
+    chin: [0.0028, -0.1],
+  },
+  ear: { x: 0.0735, y: -0.006, z: -0.012, h: 0.031, w: 0.0168, flare: 0.36, lean: 0.2 },
+  colour: {
+    rosy: new THREE.Color(0xb8664f),
+    lip: new THREE.Color(0x8e5a4d),
+    brow: new THREE.Color(0xdcae90),
+    root: new THREE.Color(0x3a281e), // skin seen through a thick beard
+    nostril: new THREE.Color(0x24130e),
+    socket: new THREE.Color(0x6b4a3c),
+    teeth: new THREE.Color(0xcfc4b2),
+    mouth: new THREE.Color(0x2a1410),
+  },
+  hair: {
+    beard: { cheek: 0.008, jaw: 0.0145, chin: BEARD_CHIN, moustache: 0.0075, colour: new THREE.Color(0x3a2517), auburn: new THREE.Color(0x553420) },
+    // short at the sides, under the cap
+    scalp: {
+      line: [0.075, 0.026, -0.07], from: [1.3, 1.45], band: { y: SNAPBACK.y, tilt: SNAPBACK.tilt },
+      len: 0.0055, thin: 0.6, flow: new THREE.Vector3(0, -0.8, -0.6), colour: HAIR_COLOR,
+    },
+    brows: { inner: 0.009, span: 0.044, drop: 0.002, arch: 0.006, tail: 0.004, half: [0.0055, 0.0022], len: 0.0035, colour: HAIR_COLOR },
+    deepest: BEARD_CHIN,
+  },
+};
+
+// His sunglasses: thick white square frames, a gentle wrap; the lenses sit
+// in them, set back a little, so the frame shows as a rim.
+const GLASSES_Y = 0.002; // lens centres, a hair above eye level
+const GLASSES_Z = 0.099; // the front of the frame at the bridge
+const GLASSES_R = 0.1; // radius the front is bent round (m)
+const TEMPLE_END = new THREE.Vector3(0.084, 0.022, -0.02); // the arm rests on the ear
+
+// A rounded rectangle as a path: [x0, x1] by [y0, y1], corner radius r,
+// with the bottom corner at x0 (by the nose) rounder still (rIn).
+function roundRect(path, x0, y0, x1, y1, r, rIn) {
+  return path.moveTo(x0 + r, y1)
+    .lineTo(x1 - r, y1).quadraticCurveTo(x1, y1, x1, y1 - r)
+    .lineTo(x1, y0 + r).quadraticCurveTo(x1, y0, x1 - r, y0)
+    .lineTo(x0 + rIn, y0).quadraticCurveTo(x0, y0, x0, y0 + rIn)
+    .lineTo(x0, y1 - r).quadraticCurveTo(x0, y1, x0 + r, y1);
+}
+
+// His face, beard, sunglasses and snapback, on the head bone. -> { brow,
+// crown } (as Character.dress asks).
+function hisHead(head, skin) {
+  buildHead(head, skin, LOOK);
+
+  // ── Sunglasses ──
+  // One side is drawn (u along the face from the bridge, v up from the lens
+  // centres) and the other is its mirror.
+  const LX0 = 0.009, LX1 = 0.058, LY0 = -0.0162, LY1 = 0.0158; // the lens
+  // The frame: a thick rim round the lens, carried across the nose as a
+  // bridge above it.
+  const TOP = LY1 + 0.0055, BOT = LY0 - 0.0036, OUT = LX1 + 0.0062, IN = LX0 - 0.0034;
+  const outer = new THREE.Shape().moveTo(0, TOP)
+    .lineTo(OUT - 0.007, TOP).quadraticCurveTo(OUT, TOP, OUT, TOP - 0.007)
+    .lineTo(OUT, BOT + 0.008).quadraticCurveTo(OUT, BOT, OUT - 0.008, BOT)
+    .lineTo(IN + 0.013, BOT).quadraticCurveTo(IN, BOT, IN, BOT + 0.013)
+    .quadraticCurveTo(IN, 0.0085, 0.0025, 0.0098).lineTo(0, 0.0098).lineTo(0, TOP);
+  // the lens's hole, going round the other way
+  outer.holes.push(new THREE.Path(roundRect(new THREE.Path(), LX0, LY0, LX1, LY1, 0.0065, 0.011).getPoints(10).reverse()));
+  const frame = new THREE.ExtrudeGeometry(outer, { depth: 0.0048, bevelEnabled: true, bevelThickness: 0.0008, bevelSize: 0.0008, bevelSegments: 2, curveSegments: 8 });
+  frame.translate(0, 0, -0.0048);
+  const lens = new THREE.ShapeGeometry(roundRect(new THREE.Shape(), LX0 - 0.001, LY0 - 0.001, LX1 + 0.001, LY1 + 0.001, 0.007, 0.0115), 8);
+  lens.translate(0, 0, -0.0022);
+  buildGlasses(head, {
+    y: GLASSES_Y, z: GLASSES_Z, r: GLASSES_R, frame, lens,
+    hinge: [LX1 + 0.0055, LY1 - 0.003], temple: TEMPLE_END, arm: [0.0034, 0.0075],
+    frameMat: M(0xf2f1ec, 0.28), lensMat: lensMaterial(),
+  });
+
+  // ── Snapback ──
+  const { hat, at } = buildCap(head, SNAPBACK);
+  const _p = new THREE.Vector3();
+  const _q = new THREE.Vector3();
+  // leather patch, flat on the front panel
+  const ph = 0.42; // how far up the front panel, 0..1
+  at(0, 1, ph, _p);
+  at(0, 1, ph + 0.01, _q).sub(_p); // up the panel
+  const patch = piece(hat, new THREE.BoxGeometry(0.044, 0.028, 0.003), M(0xa8784f, 0.8));
+  patch.rotation.x = -Math.atan2(-_q.z, _q.y);
+  patch.position.copy(_p);
+  patch.translateZ(0.0012);
+  // a small white woven label low on the right front panel
+  {
+    const la = -0.62; // radians round the band from the front (the wearer's right)
+    at(Math.sin(la), Math.cos(la), 0.2, _p);
+    const label = piece(hat, new THREE.BoxGeometry(0.016, 0.009, 0.0015), M(0xe9e6dc, 0.7));
+    label.position.copy(_p);
+    label.rotation.y = la;
+    label.translateZ(0.0009);
+  }
+
+  // Where something strapped round the cap sits (a headlamp): the middle of
+  // the front panel, facing out of it, a little above the patch.
+  const brow = new THREE.Group();
+  at(0, 1, ph + 0.22, brow.position);
+  brow.rotation.x = patch.rotation.x;
+  hat.add(brow);
+  return { brow, crown: { rx: SNAPBACK.rx, rz: SNAPBACK.rz, z: SNAPBACK.z, y: at(1, 0, ph + 0.22, new THREE.Vector3()).y } };
+}
 
 export const HIKER = {
   id: 'hiker',
@@ -130,7 +291,7 @@ export const HIKER = {
       [0.128, 0.305, 0.141]]);
     piece(body.neck, new THREE.CylinderGeometry(0.054, 0.064, 0.13, 16), skin, 0, 0.055);
     // what is worn on the head goes on the cap (Character.addWorn)
-    const { brow, crown } = buildHead(body.head, skin);
+    const { brow, crown } = hisHead(body.head, skin);
 
     // Only the cloth bridges the moving joints, with a short blend through
     // the elbow or kneecap.

@@ -7,6 +7,14 @@ world see you as them.
 - **The hiker** wears an orange rain shell with the hood gathered at the
   collar, a loaded daypack with a hydration hose, tan trousers, a brown
   snapback with a maroon brim, white sunglasses and a beard.
+- **Lauren** is about 1.6 m tall. She wears a royal-blue ribbed tank top
+  with a fine gold chain at her neck, black leggings, grey wool socks and
+  charcoal hiking boots with mint at the heel. She carries a black
+  packable daypack, its blue hydration hose looped across her chest, and has
+  her blue-violet down jacket tied round her waist by its sleeves. Her white cap is
+  stitched in grey, and her long dark-brown hair goes through the back of it
+  in a ponytail that swings as she goes. She has gold aviators with mirrored
+  violet lenses, small pearl studs, and a wide smile.
 - **Oliver** is five, nearly six, and about 1.16 m tall. He wears a dark
   green henley with three buttons at the neck, navy joggers gathered over
   grey socks, and royal blue trainers with white soles and a red-orange heel.
@@ -30,11 +38,16 @@ walk the way a small child does at the same speed: quicker, shorter steps,
 so the feet still don't skate. The camera sits at their eye level, deep
 water floats them sooner, and wading drags at them sooner too.
 
-The hiker's face is drawn from a photo of the man himself: a real-sized head with a
-lean face and a long, straight nose, smiling, a full dark beard and short
-dark hair at the sides, square white frames with dark lenses that catch the
-sky. Beard, hair and eyebrows are layers of strands you can make out up
-close, which become a solid mass of hair further off.
+The grown-ups' faces are drawn from photos of them. The hiker has a
+real-sized head with a lean face and a long, straight nose, smiling, a full
+dark beard and short dark hair at the sides, and square white frames with
+dark lenses that catch the sky. Lauren has high cheekbones, a small nose and
+a wide smile showing her teeth, with her hair drawn back behind her ears.
+Beard, hair and eyebrows are layers of strands you can make out up close,
+which become a solid mass of hair further off. Lauren's ponytail hangs
+from where it's gathered: it falls, trails and bobs as she goes, swings
+from side to side when she runs, and springs back to lie down her back over
+her pack.
 
 The walk is solved, not keyframed. Each foot follows a path on the ground,
 rolling heel to toe while it's planted and arcing forward when it swings.
@@ -129,10 +142,14 @@ A hiker is a file in `hikers/` and a line in `HIKERS` (`hikers.js`), which
 is also the order they're offered in. The file exports
 `{ id, name, size, dress(body) }`: what each of those is, and what `dress`
 hangs clothes on and has to say back, is at the top of `Character` in
-`character.js`. For a child, `oliver.js` is the one to start from. A child's
-head is built round the eyes by `child.js`, to a look: how big the skull is,
-where the face sits on it, where the hair stops and how it lies, and the
-colours. Oliver's clothes reuse the grown-up's patterns taken in; Elliott's
+`character.js`. For a grown-up, `lauren.js` is the one to start from; for a
+child, `oliver.js`. A grown-up's head is built by `head.js` to a look: the
+eggs the skull is made of, the nose, the mouth and how far the face's
+features stand out, where hair grows and how long and which way it lies, and
+the colours. Sunglasses and a cap are built there too, to each one's own
+frames and shape. A child's head is built round the eyes by `child.js`, to
+a look of its own: how big the skull is, where the face sits on it, where
+the hair stops and how it lies, and the colours. Oliver's clothes reuse the grown-up's patterns taken in; Elliott's
 jacket and sleeves are rows of their own, quilted. The helpers for putting
 things on the bones are at the end of `clothing.js`.
 
@@ -148,12 +165,13 @@ index.js              plugs it into the game: controls, the hiker, who you are, 
 player.js             movement, collision, wading, swimming and diving, the camera: behind you (free or locked) or from your eyes
 character.js          the body anyone has: bones, IK gait (forwards or backwards), work poses, swimming, things raised to the face, a stance on skis or a board; dressed as one of the hikers, at their size
 hikers.js             who you can be: the hikers, in the order they're offered
-hikers/hiker.js       the hiker's clothes: rain shell, daypack, trousers and boots
+hikers/hiker.js       the hiker: his look, sunglasses and snapback; rain shell, daypack, trousers and boots
+hikers/lauren.js      Lauren: her look, aviators, cap and swinging ponytail; tank top, daypack, tied jacket, leggings and boots
 hikers/oliver.js      Oliver: his look, henley, joggers and trainers
 hikers/elliott.js     Elliott: his look, puffer jacket, henley at the neck, joggers and trainers
 hikers/child.js       what the children share: a head built to a look, patterns taken in, trainers
 clothing.js           garment sections, cloth folds, boots and generated weave, and putting them on the bones
-head.js               the hiker's face, ears, hair and beard (strands in layers), sunglasses and snapback
+head.js               a grown-up's head to a look: face, ears, hair and beard (strands in layers); sunglasses and caps
 input.js              keyboard, mouse, touch, and a pad's buttons as keys
 gamepad.js            game controllers: reading them, what their buttons are called, typing into panels
 peers.js              everyone else, drawn as whoever they are and eased between messages

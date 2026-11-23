@@ -28,17 +28,20 @@ test('the hikers: each with an id the save server will pass on, a name and a siz
     assert.ok(h.name, `${h.id} has a name`);
     assert.ok(h.size > 0.3 && h.size <= 1.2, `${h.id} is ${h.size} the grown-up's size`);
   }
+  assert.equal(hiker('lauren').name, 'Lauren');
   assert.equal(hiker('oliver').name, 'Oliver');
   assert.equal(hiker('elliott').name, 'Elliott');
   assert.equal(hiker('somebody-newer'), HIKERS[0], 'someone this build has never heard of is the first');
   assert.equal(hiker(undefined), HIKERS[0]);
 });
 
-test('the hiker is a grown-up, Oliver a five-year-old and Elliott nearly three', () => {
+test('the hiker and Lauren are grown-ups, Oliver a five-year-old and Elliott nearly three', () => {
   const grown = height(new Character());
+  const lauren = height(new Character(hiker('lauren')));
   const oliver = height(new Character(hiker('oliver')));
   const elliott = height(new Character(hiker('elliott')));
   assert.ok(grown > 1.72 && grown < 1.88, `the hiker stands ${grown.toFixed(2)} m`);
+  assert.ok(lauren > 1.52 && lauren < 1.68, `Lauren stands ${lauren.toFixed(2)} m`);
   assert.ok(oliver > 1.1 && oliver < 1.24, `Oliver stands ${oliver.toFixed(2)} m`);
   assert.ok(elliott > 0.9 && elliott < 1.0, `Elliott stands ${elliott.toFixed(2)} m`);
 });
@@ -85,6 +88,43 @@ test('someone smaller takes quicker steps', () => {
   const elliott = steps(new Character(hiker('elliott')));
   assert.ok(oliver > grown * 1.15, `${oliver} steps to the hiker's ${grown} in five seconds`);
   assert.ok(elliott > oliver, `Elliott ${elliott} to Oliver's ${oliver}`);
+});
+
+// Which way Lauren's ponytail hangs, in her chest's frame (+z ahead, +x to
+// her left).
+function ponytail(ch) {
+  const pony = ch.root.getObjectByName('ponytail');
+  ch.root.updateMatrixWorld(true);
+  const chest = ch.chest.getWorldQuaternion(new THREE.Quaternion()).invert();
+  return new THREE.Vector3(0, -1, 0).applyQuaternion(pony.getWorldQuaternion(new THREE.Quaternion())).applyQuaternion(chest);
+}
+
+test("Lauren's ponytail hangs down her back, swings as she runs, and never into her neck", () => {
+  const ch = new Character(hiker('lauren'));
+  ch.groundAt = () => 0;
+  for (let i = 0; i < 120; i++) ch.update(DT, 0, true, 0, 0);
+  const still = ponytail(ch);
+  assert.ok(still.y < -0.9 && still.z < 0, `standing, it hangs down and back (${still.toArray().map((v) => v.toFixed(2))})`);
+  let left = 0;
+  let right = 0;
+  let forward = -1;
+  for (let i = 0; i < 300; i++) {
+    ch.root.position.z += 4.5 * DT;
+    ch.update(DT, 4.5, true, 0, 0);
+    const d = ponytail(ch);
+    left = Math.max(left, d.x);
+    right = Math.min(right, d.x);
+    forward = Math.max(forward, d.z);
+  }
+  assert.ok(left > 0.1 && right < -0.1, `running, it swings from side to side (${right.toFixed(2)} to ${left.toFixed(2)})`);
+  assert.ok(forward < -0.1, `and stays behind her (${forward.toFixed(2)} ahead at most)`);
+  // taken a long way in an instant (a teleport), it isn't flung about
+  ch.root.position.x += 5000;
+  for (let i = 0; i < 3; i++) ch.update(DT, 0, true, 0, 0);
+  const after = ponytail(ch);
+  assert.ok(after.y < -0.9, `after a jump across the world it still hangs (${after.toArray().map((v) => v.toFixed(2))})`);
+  ch.dress(hiker('hiker'));
+  assert.equal(ch.swing, null, "dressed as someone else, there's nothing of hers to swing");
 });
 
 test('sat on something, the hips are on the seat whoever sits there', () => {
