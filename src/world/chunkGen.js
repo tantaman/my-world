@@ -324,7 +324,7 @@ export function generateVegetation(gen, cx, cz, size, trunkRadius) {
       const r7 = rng();
       const tint = rng();
       const f = gen.forest(x, z);
-      if (r1 > f * 0.8 + 0.02) continue;
+      if (r1 > f * 0.8 + gen.loneTrees(x, z)) continue;
       gen.pathMask(x, z);
       if (gen.pathEdge < 1.3 + r5 * 1.8) continue;
       if (gen.padClearance(x, z) < 2.5) continue;
