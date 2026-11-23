@@ -254,6 +254,7 @@ place in that order, not at the end:
 | `render/sculpt.js` | a shape made of simple ones: boxes, drums, balls, limbs, tubes, panels (or melted out of them) | `new Sculpt()`, `s.box / drum / ball / limb / tube / quad`, `s.build()` |
 | `render/shades.js` | the dead, by the hundred: standing, sitting, lying, walking in files without end; and fires | `shade(pose, color, thin)`, `createShadeMaterial({ glow })`, `createFlameMaterial()` |
 | `render/skin.js` | skin: a hide, a horn, a wing, a crust over fire, with its pores, veins and wet | `createSkinMaterial({ hot, baked })` |
+| `render/views.ts` | the screen split between cameras, a part each, and what to change for each part as it is drawn | `game.views.show([{ camera, rect, before, after }])`, `views.show([])` |
 | `roads/index.js` | driving on the roads: the top of the road under a spot, and what it's made of | `game.roads.under(x, z, game.roads.around(x, z, r))` |
 | `save/domains.js` | something that is saved | `game.save.register({ id, collect, restore, … })` |
 | `save/regions.js` | which square of the world a saved thing is filed under | `regionOf(x, z)`, `LOOSE` |

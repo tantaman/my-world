@@ -245,7 +245,7 @@ flora.js              what grows, in one table
 country.js            the kinds of country, in one table: ground, plants, sky, animals, names
 chunkGen.js           pure chunk generation (terrain buffers, vegetation lists)
 chunkWorker.js        Web Worker wrapper around chunkGen
-chunks.js             streaming, LOD, meshes, collision + height + water queries
+chunks.js             streaming (round you, and round the others on a split screen), LOD, meshes, collision + height + water queries
 waterSurface.js       the water's mesh and shader: a window and a mirror, from above; from under it
 breakers.js           waves breaking on a shore at a break: sets coming in, peeling, white water (JS, and the same in GLSL)
 solids.js             built things you bump into and stand on
@@ -257,7 +257,7 @@ cuts.js               holes in the ground, where something else stands in for it
 models.js             procedural trees, bushes, ferns, rocks, logs: trunks, branches, and cards on them; Spanish moss
 modelsIsland.js       and other countries': palm, ironwood, tree fern, silversword, bald cypress
 foliage.js            what a plant's surfaces are: needles and leaves cut from cards, bark (shader)
-grass.js              grass blades, wildflowers, reeds and lilies near the player
+grass.js              grass blades, wildflowers, reeds and lilies near the player (and near the others on a split screen)
 materials.js          terrain / vegetation / grass shader hooks; plants' shadows, with their gaps
 sky.js                sky dome, clouds, stars, sun/moon, time-of-day palettes; how much
                       daylight reaches the eye (open)

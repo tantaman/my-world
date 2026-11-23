@@ -385,3 +385,49 @@ test('the chunks grow where you are going, and keep the detail where you are', (
     last = d2;
   }
 });
+
+// ── Round the others ────────────────────────────────────────────────────────
+// On a split screen the others are followed too (world.followed), and the
+// chunks grow round each of them as they do round you: as finely, as soon,
+// and let go once nobody is near.
+test('the chunks grow round the others followed too, and are let go with them', () => {
+  const warn = console.warn;
+  console.warn = () => {}; // no Web Workers here: it says so
+  const gen = new WorldGen(CONFIG.seed, []);
+  const stand = Object.fromEntries(VEG_KINDS.map((k) => [k, { trunkRadius: 0.3 }]));
+  const chunks = new ChunkManager(scene, gen, { terrain: null, water: null, vegetation: null }, stand);
+  console.warn = warn;
+  const S = CONFIG.chunkSize;
+  const R = CONFIG.viewRadius;
+  const wanted = (cx, cz) => chunks.wanted.find((w) => w.cx === cx && w.cz === cz);
+
+  chunks.update(0, 0, 0);
+  const alone = chunks.wanted.length;
+  const far = 4 * R + 3; // chunks off: nowhere near you
+  assert.equal(wanted(far, 0), undefined, 'nothing is grown out there for you alone');
+
+  const them = { x: far * S + S / 2, z: S / 2 };
+  chunks.update(0, 0, 0, 0, 0, [them]);
+  assert.equal(chunks.wanted.length, 2 * alone, `as much again round them (${chunks.wanted.length})`);
+  assert.equal(wanted(far, 0)?.lod, 0, 'the ground under them at full detail, for the grass');
+  assert.equal(wanted(0, 0)?.lod, 0, 'and under you still');
+  assert.equal(wanted(far + 3, 0)?.lod, chunks.lodFor(3), "coarser further from them, as it is from you");
+  const order = chunks.wanted.map((w) => w.d2);
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), 'nearest to whoever is nearest, first');
+  const near = chunks.wanted.slice(0, 2).map((w) => `${w.cx},${w.cz}`).sort();
+  assert.deepEqual(near, ['0,0', `${far},0`].sort(), 'the ground under each of you before anything round it');
+
+  // two near each other want what they share once, at the finer detail
+  chunks.update(0, 0, 0, 0, 0, [{ x: S * 1.5, z: 0 }]);
+  const keys = chunks.wanted.map((w) => `${w.cx},${w.cz}`);
+  assert.equal(new Set(keys).size, keys.length, 'no chunk wanted twice');
+  assert.equal(wanted(1, 0)?.lod, 0);
+
+  // grown round them, and let go once they've gone
+  chunks.update(0, 0, 0, 0, 0, [them]);
+  chunks.update(0, 0, 5, 0, 0, [them]);
+  const theirs = () => [...chunks.chunks.values()].filter((ch) => Math.abs(ch.cx - far) <= R + 1);
+  assert.ok(theirs().length > 0, 'chunks were grown round them');
+  chunks.update(0, 0, 0);
+  assert.equal(theirs().length, 0, 'and let go with them');
+});

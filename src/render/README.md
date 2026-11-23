@@ -167,6 +167,16 @@ world's 4 km period (`glsl.js`), so nothing shifts when the origin does. The
 play-through walks to the far side of the Earth to check
 (`test/smoke/97-far-out.mjs`).
 
+**More than one picture at once.** The screen can be split between cameras
+(`views.ts`: a split screen, one part for each hiker). The same scene is
+drawn from each in turn, into its own part of the screen. The first part
+uses the game's own pipeline, fitted to the part. Each other part gets a
+pipeline of its own that looks the same and shares the same lights, so each
+part has an eye of its own and is drawn as finely as its size allows.
+Anything else that differs between parts, such as whose hiker the grass
+parts round, is set by whoever split the screen, just before each part is
+drawn.
+
 ## Settings
 
 On the settings panel (**O**, or *settings* in the corner), under *picture*:
@@ -182,9 +192,10 @@ On the settings panel (**O**, or *settings* in the corner), under *picture*:
 ## Files
 
 ```
-index.js              plugs it into the game: renderer, scene, camera, the picture's settings
+index.ts              plugs it into the game: renderer, scene, camera, the picture's settings
 origin.js             where each frame is drawn from, so far-off places stay sharp
 pipeline.js           render (all but the water; a copy; the water over it; the heat) → occlusion → composite → bloom → the eye → tone map → screen
+views.ts              the screen split between cameras: a part each, each drawn through a pipeline of its own
 uniforms.js           shader uniforms everything shares: time, wind, sky
 glsl.js               shared GLSL: noise (and in three dimensions), patterns over the world, sky, ground colour, relief, a mirror
 lights.js             light given off by things: a pool of real lights for those that matter most, and their shadows

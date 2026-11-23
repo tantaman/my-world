@@ -572,8 +572,19 @@ const pass = (uniforms, fragmentShader, extra = {}) =>
 const hdrTarget = (w, h, filter = THREE.LinearFilter) =>
   new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, minFilter: filter, magFilter: filter, depthBuffer: false });
 
+// What another pipeline takes on of the game's own, drawing another part of
+// a split screen (render/views.ts, lookLike below): how it looks, and the air.
+const LOOK = ['enabled', 'pixelSize', 'softness', 'outline', 'levels', 'dither', 'ao', 'bloom', 'fogFar', 'haze', 'fogFloor', 'fogThin'];
+
 export class Pipeline {
-  constructor(renderer) {
+  // lights, casters: the pool of lights given off by things (lights.js), and
+  // what is drawn into their shadows (casters.ts), to share with another
+  // pipeline drawing the same world; or none, to have its own.
+  /**
+   * @param {import('three').WebGLRenderer} renderer
+   * @param {{ lights?: Lights | null, casters?: Casters | null }} [opts]
+   */
+  constructor(renderer, { lights = null, casters = null } = {}) {
     this.renderer = renderer;
     // Pixel art: drawn a few hundred lines tall and blown up in soft pixels,
     // with outlines and a reduced palette. Off, the picture is as fine as the
@@ -606,11 +617,13 @@ export class Pipeline {
     // Light given off by things in the world (lights.js): a pool of real
     // lights, given each frame to the sources that matter most in the scene
     // being drawn, the nearest casting shadows.
-    this.lights = new Lights({ count: CONFIG.lights, shadows: CONFIG.lightShadows });
+    this.lights = lights || new Lights({ count: CONFIG.lights, shadows: CONFIG.lightShadows });
     // What is drawn into those lights' shadows, and the sun's, from just what
-    // is in each one's reach (casters.ts).
-    this.casters = new Casters();
-    for (const l of this.lights.pool) if (l.castShadow) this.casters.light(l);
+    // is in each one's reach (casters.ts). Shared, like the lights, with
+    // another pipeline drawing the same world, which picks them again for
+    // where the lights are as it draws.
+    this.casters = casters || new Casters();
+    if (!casters) for (const l of this.lights.pool) if (l.castShadow) this.casters.light(l);
 
     this.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
@@ -694,6 +707,8 @@ export class Pipeline {
     const one = () => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false });
     this.adapted = [one(), one()];
     this.adaptFresh = true; // (nothing to go on: start where it wants to be)
+    this.screenW = 0; // what it is drawn onto, in device pixels (setSize)
+    this.screenH = 0;
     this.lowW = 0;
     this.lowH = 0;
     this.bloomChain = [];
@@ -723,13 +738,8 @@ export class Pipeline {
       depthTexture: new THREE.DepthTexture(lw, lh, THREE.UnsignedIntType),
       samples,
     });
-    // a leaf's cutout: where there are samples, how much of the pixel it
-    // covers is how many of them it takes; where there aren't, all or none
-    SHARED.uAlphaCut.value = samples > 0 ? 0.02 : 0.5;
     // the copy of it that what's on OVER is drawn over
     this.rtBehind = hdrTarget(lw, lh);
-    BEHIND.tBehind.value = this.rtBehind.texture;
-    BEHIND.uBehindRes.value.set(lw, lh);
     // the occlusion at half size, once there are pixels enough to spare
     const aoDiv = lh > 400 ? 2 : 1;
     this.rtAO = hdrTarget(Math.ceil(lw / aoDiv), Math.ceil(lh / aoDiv), THREE.NearestFilter);
@@ -751,11 +761,48 @@ export class Pipeline {
       if (bh < 4) break;
       this.bloomChain.push(hdrTarget(bw, bh));
     }
-    SHARED.uLines.value = lh;
+    this._share();
     this.composite.uniforms.uRes.value.set(lw, lh);
     this.composite.uniforms.uAORes.value.set(this.rtAO.width, this.rtAO.height);
     this.occlusion.uniforms.uDepthRes.value.set(lw, lh);
     this.upscale.uniforms.uLowRes.value.set(lw, lh);
+  }
+
+  // What the scene's own shaders are told of what this draws into: the
+  // copy of the picture that the water reads, how many lines tall it is,
+  // and so how a leaf's cutout is taken (where there are samples, how much
+  // of the pixel it covers is how many of them it takes; where there aren't,
+  // all or none). Told again before each picture, since more than one
+  // pipeline may draw in turn (render/views.ts).
+  _share() {
+    BEHIND.tBehind.value = this.rtBehind.texture;
+    BEHIND.uBehindRes.value.set(this.lowW, this.lowH);
+    SHARED.uLines.value = this.lowH;
+    SHARED.uAlphaCut.value = this.rtScene.samples > 0 ? 0.02 : 0.5;
+  }
+
+  // Look as `other` does (another pipeline, drawing another part of the
+  // screen): its settings and its air, as they are now. A setting that
+  // changes what the picture is drawn into makes that again.
+  lookLike(other) {
+    const remake = other.enabled !== this.enabled || other.pixelSize !== this.pixelSize;
+    for (const k of LOOK) this[k] = other[k];
+    if (remake && this.screenW) {
+      this.lowW = 0;
+      this.setSize(this.screenW, this.screenH);
+    }
+  }
+
+  // Let go of everything it draws into, and its passes.
+  dispose() {
+    for (const rt of [this.rtScene, this.rtBehind, this.rtAO, this.rtHeat, this.rtHDR, this.rtLow, ...this.bloomChain, ...this.adapted]) {
+      if (!rt) continue;
+      rt.depthTexture?.dispose();
+      rt.dispose();
+    }
+    for (const p of [this.occlusion, this.composite, this.behind, this.bloomDown, this.bloomUp, this.final, this.upscale, this.adapt]) p.dispose();
+    this.quad.geometry.dispose();
+    this.lowW = this.lowH = 0;
   }
 
   currentPixelSize() {
@@ -789,6 +836,7 @@ export class Pipeline {
   render(scene, camera, exposure, fogLight = 1, dt = 1 / 60) {
     const r = this.renderer;
     const pixel = this.enabled;
+    this._share();
 
     // The lights things give off, to those that matter most from here. (The
     // scene may be slid to an origin near the camera just now, origin.js, and

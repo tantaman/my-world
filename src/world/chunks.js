@@ -32,6 +32,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 // A land with no high ground (see chunkGen.js) draws its terrain with nothing
 // above the trees and no snow: one array of zeros per size of chunk.
 const NO_HIGH = new Map();
+const NOBODY = [];
 function noHigh(n) {
   if (!NO_HIGH.has(n)) NO_HIGH.set(n, new Float32Array(n));
   return NO_HIGH.get(n);
@@ -156,9 +157,11 @@ export class ChunkManager extends Emitter {
     this.chunks = new Map();
     this.lastCx = NaN;
     this.lastCz = NaN;
-    // ...and the square ahead that was last reached toward (see update())
+    // ...and the square ahead that was last reached toward (see update()),
+    // and the squares of everyone else followed (x, z, x, z, ...)
     this.lastAx = NaN;
     this.lastAz = NaN;
+    this.lastAlso = [];
     this.wanted = [];
     this.pending = true;
     // (x, z) -> how far the ground has been moved from where it was grown.
@@ -359,7 +362,11 @@ export class ChunkManager extends Emitter {
   // Detail still goes by how far a chunk is from *you*, not from where you
   // are going, so you never stand on the coarse kind; and the nearest are
   // still grown first, so the ground underfoot never waits on the view.
-  update(px, pz, budgetMs = 5, aheadX = px, aheadZ = pz) {
+  //
+  // also: anyone else being followed at the same time (the others on a split
+  // screen), each { x, z }. The chunks round each of them are grown as they
+  // are round you, as finely near them, and as soon.
+  update(px, pz, budgetMs = 5, aheadX = px, aheadZ = pz, also = NOBODY) {
     const size = this.size;
     const cx = Math.floor(px / size);
     const cz = Math.floor(pz / size);
@@ -368,7 +375,23 @@ export class ChunkManager extends Emitter {
     const R = CONFIG.viewRadius;
     const within = (R + 0.6) * (R + 0.6);
 
-    if (cx !== this.lastCx || cz !== this.lastCz || ax !== this.lastAx || az !== this.lastAz) {
+    // the squares the others are on: has anyone come onto another?
+    const others = this.lastAlso;
+    let moved = cx !== this.lastCx || cz !== this.lastCz || ax !== this.lastAx || az !== this.lastAz;
+    let n = 0;
+    for (const p of also) {
+      const ox = Math.floor(p.x / size);
+      const oz = Math.floor(p.z / size);
+      if (others[n] !== ox || others[n + 1] !== oz) moved = true;
+      others[n++] = ox;
+      others[n++] = oz;
+    }
+    if (others.length !== n) {
+      others.length = n;
+      moved = true;
+    }
+
+    if (moved) {
       this.lastCx = cx;
       this.lastCz = cz;
       this.lastAx = ax;
@@ -386,19 +409,47 @@ export class ChunkManager extends Emitter {
           wanted.push({ cx: x, cz: z, lod: this.lodFor(ring), d2: dx * dx + dz * dz });
         }
       }
+      // ...and round each of the others, as finely as is wanted by whoever
+      // is nearest, and as soon
+      if (n) {
+        const by = new Map();
+        for (const w of wanted) by.set(chunkKey(w.cx, w.cz), w);
+        for (let i = 0; i < n; i += 2) {
+          const ox = others[i];
+          const oz = others[i + 1];
+          for (let z = oz - R; z <= oz + R; z++) {
+            for (let x = ox - R; x <= ox + R; x++) {
+              const dx = x - ox;
+              const dz = z - oz;
+              const d2 = dx * dx + dz * dz;
+              if (d2 > within) continue;
+              const lod = this.lodFor(Math.max(Math.abs(dx), Math.abs(dz)));
+              const k = chunkKey(x, z);
+              const w = by.get(k);
+              if (!w) {
+                const fresh = { cx: x, cz: z, lod, d2 };
+                by.set(k, fresh);
+                wanted.push(fresh);
+              } else {
+                w.lod = Math.min(w.lod, lod);
+                w.d2 = Math.min(w.d2, d2);
+              }
+            }
+          }
+        }
+      }
       wanted.sort((a, b) => a.d2 - b.d2);
       this.wanted = wanted;
 
       const keep = (R + 1.6) * (R + 1.6);
+      const near = (ch, x, z) => (ch.cx - x) * (ch.cx - x) + (ch.cz - z) * (ch.cz - z) <= keep;
       for (const [k, ch] of this.chunks) {
-        const dx = ch.cx - cx;
-        const dz = ch.cz - cz;
-        const ex = ch.cx - ax;
-        const ez = ch.cz - az;
-        if (dx * dx + dz * dz > keep && ex * ex + ez * ez > keep) {
-          this.disposeChunk(ch);
-          this.chunks.delete(k);
-        }
+        if (near(ch, cx, cz) || near(ch, ax, az)) continue;
+        let kept = false;
+        for (let i = 0; i < n && !kept; i += 2) kept = near(ch, others[i], others[i + 1]);
+        if (kept) continue;
+        this.disposeChunk(ch);
+        this.chunks.delete(k);
       }
     }
 

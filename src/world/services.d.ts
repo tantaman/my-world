@@ -26,5 +26,6 @@ declare module '../game/game.ts' {
     spaces: Spaces;
     basins: Basins;
     focus: Vector3;
+    followed: Set<{ x: number; z: number }>;
   }
 }

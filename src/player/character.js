@@ -336,6 +336,7 @@ export class Character {
       parent.add(bone);
       return bone;
     };
+    /** @type {THREE.Bone} the figure from the hips: hidden, so is the body, and not what's on the root */
     this.hips = joint(this.root, 0, HIPS_Y);
     this.spine = group(this.hips, 0, 0.06, 0);
     this.chest = joint(this.spine, 0, 0);

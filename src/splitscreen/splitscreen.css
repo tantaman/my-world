@@ -1,0 +1,13 @@
+/* The parts of a split screen (index.ts): a thin dark line round each, and on
+   each of the others' parts, who that is and what their pad's spare buttons
+   do. Under the HUD, which keeps to the first part. */
+#split { position: fixed; inset: 0; pointer-events: none; z-index: 9; }
+#split[hidden] { display: none; }
+#split .part { position: absolute; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.8); }
+#split .who {
+  position: absolute; left: calc(14px + var(--inset-l, 0px)); top: calc(12px + var(--inset-t, 0px)); max-width: calc(100% - 28px);
+  font-family: var(--font); font-size: 12px; letter-spacing: 0.06em; color: var(--ink);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75), 0 0 6px rgba(0, 0, 0, 0.5);
+}
+#split .who b { font-weight: 600; color: var(--accent); }
+#split .who i { display: block; margin-top: 3px; font-style: normal; font-size: 10.5px; color: var(--ink-dim); white-space: pre; overflow: hidden; text-overflow: ellipsis; }
