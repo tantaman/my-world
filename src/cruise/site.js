@@ -1,11 +1,11 @@
-// Where the ship is: alongside a pier, on the coast a walk from where people
-// first arrive.
+// Where the ship is: alongside a pier, on the real coast nearest where people
+// first arrive (and at Maui).
 //
-// The sea is always a walk away from the start, in a direction of the
-// seed's own choosing (world/sea.js), and the land goes down into it
-// quickly. Where exactly the pier is, is grown from the seed and the land,
-// like the old places: along each of a fan of lines out from the start
-// toward the sea, the first place it reaches the water, and from there,
+// The sea is wherever the real coast is (world/earth.js): from the start in
+// the Hoh, the Pacific a long walk west, the Strait of Juan de Fuca north.
+// Where exactly the pier is, is grown from the seed and the land, like the
+// old places: along each of a ring of lines out from where it's looked for,
+// the first place it reaches the water, and from there,
 // straight out to sea, the nearest spot with water deep enough for her all
 // the way round, and clear of everything else grown from the seed. The best
 // of those is a short walk out along a short pier.
@@ -22,9 +22,6 @@
 // Out from each berth runs her lane to the open sea (lane()): deep water
 // straight out from the pier, room to swing her round off it, and at its end
 // no land within sight. That's the way she sails, out and in (voyage.js).
-//
-// Away from the start there's no knowing which way the sea is: the lines are
-// looked along all the way round (findBerth's `round`), further.
 //
 // A berth:
 //   id      'cruise:<x>:<z>': a place on the map
@@ -60,34 +57,35 @@ export const TERMINAL = { x0: PIER.x0 + 9, x1: PIER.x1 - 2, z0: 12, z1: 58 };
 export const GANGWAY = { x0: PIER.x0 + 1.4, x1: PIER.x0 + 3.4, foot: 0, head: -17.5, landing: [-24.6, -17.5], door: [-24, -20] };
 const DEEP = DRAFT + 3; // m of water she wants under her and round her
 const ROOM = 6; // m of that water past her sides and ends
-const LOOK = { fan: 1.35, steps: 27, near: 150, far: 2600, step: 8 }; // the lines looked along: how wide a fan (radians each way), how many, from and to (m), how finely
-const ROUND = { steps: 40, far: 14000, step: 40 }; // ...or all the way round, further and more coarsely (the edge then found finely)
+const LOOK = { near: 150, step: 8 }; // the lines looked along: from (m), and how finely the water's edge is found on one
+const ROUND = { steps: 120, far: 14000, step: 40 }; // ...all the way round, how many, out to (m), and how coarsely the land is looked at first
 // Her lane out to sea (m): she moves off the pier sideways this far, then
 // swings round in water this wide round her (half her length and some);
 // the lane runs straight out as far as LANE.most and must reach LANE.least,
 // and where she leaves the coast behind there's no land within LANE.clear.
 export const LANE = { side: 40, swing: 165, most: 3200, least: 900, clear: 450, wide: 30 };
-const OUT = { from: 60, to: 520, step: 10, keep: 3, apart: 60 }; // m out to sea from the water's edge, to where her middle is; how many spots kept along each line, how far apart
+const OUT = { from: 60, to: 1100, step: 10, keep: 3, apart: 60 }; // m out to sea from the water's edge, to where her middle is; how many spots kept along each line, how far apart
 const NORMAL_SPAN = 40; // m: the slope of the land is read across this much of it
-const TRESTLE_MOST = 700; // m: a longer one than this isn't worth it
+const TRESTLE_MOST = 1200; // m: a longer one than this isn't worth it (a real coast's shelf can be shallow a long way out)
 const NEARER = 0.2; // how much a metre nearer the start is worth, in metres of pier
 const CLEAR = 25; // m round it all kept clear of anything else grown from the seed
 const MOUTH_CLEAR = 30; // m from a cave's mouth
-// How far (m) a berth looked for from the start (not all the way round) can
-// reach from it, the most: the farthest shore along the fan, out to sea to
-// her middle, and from there the longest trestle, the pier and her length.
-// What's grown after her needn't ask about her further off than this.
-export const HOME_REACH = LOOK.far + OUT.to + TRESTLE_MOST + PIER.x1 + BOW + CLEAR;
+// How far (m) a berth can reach from where it's looked for from, the most:
+// the farthest shore, out to sea to her middle, and from there the longest
+// trestle, the pier and her length. What's grown after her needn't ask about
+// her further off than this.
+export const HOME_REACH = ROUND.far + OUT.to + TRESTLE_MOST + PIER.x1 + BOW + CLEAR;
 
 const _w = { x: 0, z: 0 };
 
 // gen: the WorldGen. start: { x, z }. keepOff(x0, z0, x1, z1): whether a
 // square is somewhere it may not be (a hike, an old place, a town...).
-// -> a berth, or null where there's nowhere for one.
-// round: look all the way round start, out to ROUND.far (somewhere other
-// than where people arrive, where the sea could be any way).
-export function findBerth(gen, start, keepOff = () => false, opts = {}) {
-  const steps = berthSearch(gen, start, keepOff, opts);
+// -> a berth, or null where there's nowhere for one. It's looked for all the
+// way round start, out to ROUND.far: the real coast is wherever it is (the
+// Pacific's is a long walk west of where people first arrive, and Port
+// Angeles' harbour on the strait further north-east).
+export function findBerth(gen, start, keepOff = () => false) {
+  const steps = berthSearch(gen, start, keepOff);
   let r = steps.next();
   while (!r.done) r = steps.next();
   return r.value;
@@ -96,22 +94,20 @@ export function findBerth(gen, start, keepOff = () => false, opts = {}) {
 // findBerth a step at a time: a generator that yields after each line looked
 // along and each candidate tried, and returns the berth (or null), so it can
 // be spread over frames.
-export function* berthSearch(gen, start, keepOff = () => false, { round = false } = {}) {
+export function* berthSearch(gen, start, keepOff = () => false) {
   const sea = SEA.level;
   const deep = sea - DEEP;
   const h = (x, z) => gen.height(x, z);
-  const base = Math.atan2(gen.sea.dirZ, gen.sea.dirX);
   const found = [];
   const spot = { x: 0, z: 0, yaw: 0 };
-  const steps = round ? ROUND.steps : LOOK.steps;
-  for (let i = 0; i < steps; i++) {
-    const a = round ? (i / steps) * Math.PI * 2 : base + (i / (LOOK.steps - 1) - 0.5) * 2 * LOOK.fan;
+  for (let i = 0; i < ROUND.steps; i++) {
+    const a = (i / ROUND.steps) * Math.PI * 2;
     const dx = Math.cos(a);
     const dz = Math.sin(a);
     // the water's edge along this line (coarsely, then to within a step)
     let shore = null;
-    const step = round ? ROUND.step : LOOK.step;
-    for (let t = LOOK.near; t <= (round ? ROUND.far : LOOK.far); t += step) {
+    const step = ROUND.step;
+    for (let t = LOOK.near; t <= ROUND.far; t += step) {
       if (h(start.x + dx * t, start.z + dz * t) < sea - 0.3) {
         let lo = t - step;
         let hi = t;
@@ -304,14 +300,13 @@ export function clearOf({ landforms, sites, towns, caves, lines, boxes = () => [
   return keepClear(claims, { waits: false });
 }
 
-// How far from where it's looked for round a berth can reach (m): from the
-// start, along its fan; elsewhere, all the way round.
-export const REACH = { coast: LOOK.far + TRESTLE_MOST + 200, round: ROUND.far + TRESTLE_MOST + 200 };
+// How far (m) a berth looked for round a point may reach, the most, and so
+// how far off what's grown before her is asked about.
+export const REACH = ROUND.far + TRESTLE_MOST + 200;
 
 // The airfields' regions whose airfield might be in the way of a berth
-// looked for round `from` (round, or along the start's fan): the ones
-// clearOf will ask about. (regions: the Airports' regions.)
-export function regionsInTheWay(regions, from, round = false) {
-  const far = round ? REACH.round : REACH.coast;
-  return regions.filter((g) => mayReach(g, Math.hypot(from.x - g.x, from.z - g.z), far));
+// looked for round `from`: the ones clearOf will ask about. (regions: the
+// Airports' regions.)
+export function regionsInTheWay(regions, from) {
+  return regions.filter((g) => mayReach(g, Math.hypot(from.x - g.x, from.z - g.z), REACH));
 }

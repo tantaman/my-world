@@ -146,7 +146,7 @@ test('the rest are out in the forest, grown from the seed, each in its own squar
   const pinned = {};
   // the squares round the start that have one
   const near = [];
-  for (let j = -2; j <= 1; j++) for (let i = -2; i <= 1; i++) if (far.spot(i, j)) near.push([i, j]);
+  for (let j = -3; j <= 2; j++) for (let i = -3; i <= 2; i++) if (far.spot(i, j)) near.push([i, j]);
   for (const [i, j] of near) {
     const s = far.cell(i, j);
     if (!s) continue;

@@ -1,6 +1,6 @@
 // Which real place you're on or nearest, and what its weather is where you
-// stand: a hike's, over the real Earth's (world/earth.js) out past the
-// forest round the middle.
+// stand: a hike's, over the real Earth's (world/earth.js) under all of the
+// world.
 
 import { smoothstep } from '../noise.js';
 import { SEA } from '../world/sea.js';
@@ -70,16 +70,16 @@ export function deckAt(land, x, z, under = CLEAR) {
   return { deck: under.deck, mid: under.mid || (land ? [land.cx, land.cz] : null) };
 }
 
-// The weather of the Earth's own country `country`, where w (0..1) of
-// (x, z) is the Earth's, with your eye at height y: as weatherAt() says it,
-// and where its cloud's billows are measured from (mid).
-export function earthWeather(country, w, x, z, y) {
+// The weather of the Earth's own country `country` at (x, z), with your eye
+// at height y: as weatherAt() says it, and where its cloud's billows are
+// measured from (mid).
+export function earthWeather(country, x, z, y) {
   const c = country.clouds;
   const deck = c.deck === null ? NaN : SEA.level + c.deck * EARTH.scale;
-  const cover = Number.isNaN(deck) ? 0 : c.cover * w;
+  const cover = Number.isNaN(deck) ? 0 : c.cover;
   return {
     cover,
-    haze: 1 + (country.haze - 1) * w,
+    haze: country.haze,
     overcast: cover > 0 && y < deck ? c.shade * cover : 0,
     floor: 0,
     deck,

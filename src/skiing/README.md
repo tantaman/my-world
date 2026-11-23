@@ -31,13 +31,15 @@ head and let it take you down. See [the world](../world/README.md#the-world).
 
 **Finding the snow.** Open **M → routes → ski** for the runs, nearest first,
 for as far out as you scroll: the High Country ski run, the top with the
-most snow below it within 30 km of the start, and then one in every ten
-kilometres square of the forest where the high country holds snow enough
-(*Raven Bowl*, *Tarn Face*, *Granite Couloir*), with how many metres of snow
-lie below its top, and the snowy real places among them. Out on the real
-Earth, past the forest round the middle, the high country is the Earth's own
-mountains, wherever they stand that far over its snow line. Pick one for
-directions, or *go here* to stand on its top. They're on the map too.
+most snow below it within 15 km of the start (the summit of Mount Olympus,
+over the Hoh), and then one in every ten kilometres square where the high
+country holds snow enough (*Raven Bowl*, *Tarn Face*, *Granite Couloir*),
+with how many metres of snow lie below its top, and the snowy real places
+among them. The high country is the real Earth's mountains, at its scale as
+the rest of it is, so a run there wants a fifth as many metres of snow as
+one on a made-up land: Baker, Rainier and Adams have one, and the Coast
+Mountains north of the border. Pick one for directions, or *go here* to
+stand on its top. They're on the map too.
 
 Or go to a snowy real place: the hikes tab beside the map, and *the view*,
 which stands you where the photo was taken. The longest of those is the Vallée

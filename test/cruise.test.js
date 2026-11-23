@@ -75,7 +75,7 @@ test('her pier is grown from the seed: the same every time, on the coast, in wat
     assert.ok(b, `land ${land} has a berth`);
     assert.deepEqual(findBerth(gen, start, keepOff), b, 'and the same one again');
     const d = Math.hypot(b.x - start.x, b.z - start.z);
-    assert.ok(d > 300 && d < 2600, `a walk from the start (${d.toFixed(0)} m)`);
+    assert.ok(d > 300 && d < 15000, `on the real coast, a long walk from the start (${d.toFixed(0)} m)`);
     // deep water under her and round her
     const p = {};
     for (const x of [-HALF_BEAM - 4, 0, HALF_BEAM + 4]) {
@@ -94,7 +94,7 @@ test('her pier is grown from the seed: the same every time, on the coast, in wat
     // a way out to sea, straight out from the pier
     assert.ok(b.lane.jump >= LANE.least && b.lane.jump <= LANE.most && b.lane.swing === LANE.side);
     // Maui's, round about the hikes there, but on the land the seed grows, not theirs
-    const m = findBerth(gen, w.maui, keepOff, { round: true });
+    const m = findBerth(gen, w.maui, keepOff);
     assert.ok(m, 'and one at Maui');
     assert.ok(Math.hypot(m.x - w.maui.x, m.z - w.maui.z) < 15000, 'near the hikes');
     assert.ok(!keepOff(...m.box), 'clear of their land, and its airfield');
@@ -110,7 +110,7 @@ test('her berth waits for the airfields in its way, and asks about no others', (
   const { airports, start } = worldOf(LANDS[LANDS.length - 1]);
   assert.deepEqual(regionsInTheWay(airports.regions, start).map((g) => g.id), ['home'], 'at home, only the airfield there');
   const maui = airports.regions.find((g) => g.hikes.includes('waihee-ridge'));
-  assert.ok(regionsInTheWay(airports.regions, maui, true).some((g) => g.id === maui.id), "at Maui, Maui's");
+  assert.ok(regionsInTheWay(airports.regions, maui).some((g) => g.id === maui.id), "at Maui, Maui's");
 });
 
 test('there is a berth for other seeds too', () => {
@@ -378,7 +378,7 @@ test('both slides go down, quickly but not too, clear of the decks, and end in t
 test('she sails by the clock: alongside, off, out of sight of land, across in the fog, in and alongside again', () => {
   const w = worldOf(LANDS[LANDS.length - 1]);
   const home = findBerth(w.gen, w.start, w.keepOff);
-  const maui = findBerth(w.gen, w.maui, w.keepOff, { round: true });
+  const maui = findBerth(w.gen, w.maui, w.keepOff);
   const v = new Voyage([home, () => maui], SEED);
   assert.equal(CYCLE, 2 * (DOCK + 1020));
   const t0 = 1.8e9;

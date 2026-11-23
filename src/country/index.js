@@ -76,8 +76,8 @@ export function installCountry(game) {
       // next frame, core/notYet.ts).
       const onLand = !!land && land.clearance(at.x, at.z) < CLEARS_IN;
       const earth = gen.earthAt(at.x, at.z);
-      const under = earth ? earthWeather(earth.country, earth.w, at.x, at.z, camera.position.y) : undefined;
-      const here = onLand ? land.country : earth ? earth.country : COUNTRY.forest;
+      const under = earth ? earthWeather(earth, at.x, at.z, camera.position.y) : undefined;
+      const here = onLand ? land.country : earth || COUNTRY.forest;
       if (land !== state.land || here !== state.here) {
         state.land = land;
         state.here = here;

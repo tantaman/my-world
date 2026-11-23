@@ -310,7 +310,7 @@ export class WorldGen {
   // minWavelength metres: for drawing relief from far away (the map), where
   // finer detail would only alias into noise.
   broadHeight(x, z, minWavelength = 0) {
-    return this.bySea(this.ownLand(x, z, minWavelength), this.ownDrop(x, z));
+    return this.sea.shape(this.ownLand(x, z, minWavelength), x, z);
   }
 
   // 0..~1: ridged noise, sharp along the crests (rounded off just enough to
@@ -405,11 +405,8 @@ export class WorldGen {
   //                          the forest
   //   countryIn(x0, z0, x1, z1)  whether surface() or countryAt() may say
   //                          anything but the forest anywhere in that square
-  //   apart(ax, az, bx, bz)  whether water running from b to a is lost on the
-  //                          way (drainage.js): here, never
-  //   earthAt(x, z)          where the real Earth is under the land (earth.js):
-  //                          { country, w }, its kind of country there and how
-  //                          much of (x, z) is the Earth's; here, null
+  //   earthAt(x, z)          the kind of country the real Earth is there, where
+  //                          it's under the land (earth.js); here, null
   //   thicket(x, z)          0..1 how much of a thicket of shrubs it is (a
   //                          real place's willows): here none
   //   talus(x, z)            0..1 how thickly strewn with boulders (a real
@@ -417,7 +414,6 @@ export class WorldGen {
   // And what a real place that reshapes the land itself (the real Earth:
   // realPlaces.js) asks of a land, to lay its own over the land's:
   //   ownLand(x, z, mw)      the land's own shape, before the sea is laid over it
-  //   ownDrop(x, z)          how far (m) it falls away there toward the sea (sea.js)
   //   bySea(h, D, floor, soft)  land h, falling away D, as it lies by the
   //                          sea; with its floor inland that high over the sea
   //                          (m), eased in over `soft` m, if not the sea's own
@@ -426,9 +422,6 @@ export class WorldGen {
   //                          (m, one standard deviation) it strays from that
   ownLand(x, z, minWavelength = 0) {
     return this._landHeight(x, z, minWavelength);
-  }
-  ownDrop(x, z) {
-    return this.sea.drop(x, z);
   }
   bySea(h, D, floor, soft) {
     return this.sea.shapeBy(h, D, floor, soft);
@@ -464,9 +457,6 @@ export class WorldGen {
   }
   earthAt() {
     return null;
-  }
-  apart() {
-    return false;
   }
   thicket() {
     return 0;

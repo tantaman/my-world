@@ -11,10 +11,11 @@
 // square and one for the climate, listed in src/world/earthTiles.js; the game
 // fetches each the first time something near it is grown.
 //
-// And round each hike (src/world/hikes.js) out on the Earth, the land finer
-// (DETAIL in earth.js: a height every 15" of arc, about 460 m, from tiles at
-// zoom 10) for DETAIL.reach km about it, where the valleys and the coast are
-// seen close: a box of its own, shared by hikes near enough to overlap.
+// And round the start, and round each hike (src/world/hikes.js), the land
+// finer (DETAIL in earth.js: a height every 15" of arc, about 460 m, from
+// tiles at zoom 10), DETAIL.start km about the start and DETAIL.reach about a
+// hike, where the valleys and the coast are seen close: a box of its own,
+// shared by hikes near enough to overlap (and the start's, by those near it).
 //
 // Like the hikes, the Earth is part of what every world grows: a world built
 // in somewhere remembers it as it was there. So once worlds are kept on it,
@@ -30,7 +31,8 @@ import { deflateRawSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { decodePng, encodePng } from './hike/png.js';
 import { mosaic, seaMask, cells, parseKoppen, W, H, CLIMATE_W, CLIMATE_H } from './earth/build.js';
-import { encodeTile, encodeDetail, tileName, earthWeight, TILE_CELLS, TILE_DEGREES, DETAIL } from '../src/world/earth.js';
+import { encodeTile, encodeDetail, tileName, TILE_CELLS, TILE_DEGREES, DETAIL } from '../src/world/earth.js';
+import { ORIGIN } from '../src/core/geo.js';
 import { HIKES } from '../src/world/hikes.js';
 import { tileXY, terrarium } from './hike/geo.js';
 
@@ -129,18 +131,16 @@ for (let tj = 0; tj < H / TILE_CELLS; tj++) {
     );
   }
 }
-// ── Finer round the hikes ────────────────────────────────────────────────────
-// A box for each hike out on the Earth, those that overlap made one, snapped
-// to the finer grid.
+// ── Finer round the start and the hikes ──────────────────────────────────────
+// A box round the start and one for each hike, those that overlap made one
+// (named for the first), snapped to the finer grid.
 const P = DETAIL.perDegree;
-let boxes = [];
-for (const h of HIKES) {
-  if (earthWeight(h.at[0], h.at[1]) <= 0) continue;
-  const c = h.middle || h.photo;
-  const dlat = DETAIL.reach / 111.2;
+const boxAbout = (name, c, km) => {
+  const dlat = km / 111.2;
   const dlon = dlat / Math.cos((c.lat * Math.PI) / 180);
-  boxes.push({ name: `d-${h.id}`, s: c.lat - dlat, w: c.lon - dlon, n: c.lat + dlat, e: c.lon + dlon });
-}
+  return { name, s: c.lat - dlat, w: c.lon - dlon, n: c.lat + dlat, e: c.lon + dlon };
+};
+let boxes = [boxAbout('d-start', ORIGIN, DETAIL.start), ...HIKES.map((h) => boxAbout(`d-${h.id}`, h.middle || h.photo, DETAIL.reach))];
 for (let merged = true; merged; ) {
   merged = false;
   for (let a = 0; a < boxes.length && !merged; a++) {
@@ -223,7 +223,8 @@ for (const b of boxes) {
   const text = b64(encodeDetail(elev, W2, H2));
   bytes += text.length;
   details.push({ name: b.name, box: [b.s, b.w, b.n, b.e].map((v) => Math.round(v * P) / P), w: W2, h: H2 });
-  const where = HIKES.filter((h) => earthWeight(h.at[0], h.at[1]) > 0 && (h.middle || h.photo).lat >= b.s && (h.middle || h.photo).lat <= b.n && (h.middle || h.photo).lon >= b.w && (h.middle || h.photo).lon <= b.e).map((h) => h.name);
+  const inside = (c) => c.lat >= b.s && c.lat <= b.n && c.lon >= b.w && c.lon <= b.e;
+  const where = [...(inside(ORIGIN) ? ['the start, in the Hoh rain forest'] : []), ...HIKES.filter((h) => inside(h.middle || h.photo)).map((h) => h.name)];
   fs.writeFileSync(
     path.join(OUT, `${b.name}.js`),
     `// The real Earth finer, round ${where.join(', ')} (src/world/earth.js):

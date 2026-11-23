@@ -15,6 +15,9 @@ import { buildSite } from '../src/landmarks/models.js';
 import { MarkStore } from '../src/map/marks.js';
 import { Places } from '../src/map/places.js';
 import { matchesGolden } from './helpers/golden.js';
+import { earthAtFirst } from './helpers/earth.js';
+// The real Earth under the world, as the game has it when it opens (world/earth.js).
+const EARTH = await earthAtFirst();
 
 const SEED = 20261119;
 const AREA = 2100; // m either side of the middle
@@ -23,14 +26,14 @@ const TRUNK = { pine: 0.3, broad: 0.4, birch: 0.2, bush: 0, fern: 0, rock: 0.7, 
 // The seed on each land (src/world/lands.js). The places stand on whatever
 // land they find, so the rules about where are checked on every one.
 const WORLDS = LANDS.map((land) => {
-  const gen = growWorld(SEED, [], land);
+  const gen = growWorld(SEED, [], land, [], EARTH);
   const sites = new Sites(gen);
   return { land, on: land > 1 ? ` (land ${land})` : '', gen, sites, all: sites.within(-AREA, -AREA, AREA, AREA) };
 });
 const { gen, sites, all } = WORLDS[0];
 
 test('the same seed puts the same places in the same spots', () => {
-  const again = new Sites(growWorld(SEED, [], 1)).within(-800, -800, 800, 800);
+  const again = new Sites(growWorld(SEED, [], 1, [], EARTH)).within(-800, -800, 800, 800);
   const first = all.filter((s) => s.box[2] >= -800 && s.box[0] <= 800 && s.box[3] >= -800 && s.box[1] <= 800);
   assert.ok(first.length > 3);
   assert.deepEqual(again, first);
@@ -38,7 +41,7 @@ test('the same seed puts the same places in the same spots', () => {
 
 for (const land of LANDS) for (const seed of [SEED, 42]) {
   test(`seed ${seed}${land > 1 ? ` on land ${land}` : ''}: where the old places are`, () => {
-    const s = seed === SEED ? WORLDS[land - 1].sites : new Sites(growWorld(seed, [], land));
+    const s = seed === SEED ? WORLDS[land - 1].sites : new Sites(growWorld(seed, [], land, [], EARTH));
     const list = s.within(-900, -900, 900, 900).map(({ id, name, x, z, yaw, len }) => ({ id, name, x, z, yaw, len }));
     matchesGolden(land > 1 ? `landmarks-${seed}-land${land}` : `landmarks-${seed}`, list, { tolerance: 1e-6 });
   });
@@ -107,7 +110,7 @@ for (const { on, gen, all } of WORLDS) {
 }
 
 for (const land of LANDS) test(`finding them leaves the forest as the seed grows it${land > 1 ? ` (land ${land})` : ''}`, () => {
-  const fresh = growWorld(SEED, [], land);
+  const fresh = growWorld(SEED, [], land, [], EARTH);
   const before = generateVegetation(fresh, 3, -4, 64, TRUNK);
   const ground = generateTerrain(fresh, 3, -4, 2, 64).heights;
   new Sites(fresh).within(-1200, -1200, 1200, 1200);
@@ -118,7 +121,7 @@ for (const land of LANDS) test(`finding them leaves the forest as the seed grows
 });
 
 test("a place's id finds it again, and nothing else", () => {
-  const other = new Sites(growWorld(SEED, [], 1));
+  const other = new Sites(growWorld(SEED, [], 1, [], EARTH));
   for (const s of all.slice(0, 12)) assert.deepEqual(other.byId(s.id), s);
   const empty = all[0].id.replace(/^[a-z]+/, (k) => (k === 'well' ? 'cabin' : 'well'));
   assert.equal(other.byId(empty), null, 'the right cell, the wrong kind');
@@ -140,7 +143,7 @@ test('a site measures its own ground', () => {
 });
 
 test('the map hears of them a few at a time, and catches up', () => {
-  const s = new Sites(growWorld(SEED, [], 1));
+  const s = new Sites(growWorld(SEED, [], 1, [], EARTH));
   assert.deepEqual(s.within(-1500, -1500, 1500, 1500, false), [], 'nothing known yet');
   assert.ok(s.queue.size > 50);
   while (s.pump(50) > 0);

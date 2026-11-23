@@ -32,6 +32,7 @@ import { R, H, STEPS, SECTOR, ONE, BOLGE, LIQUID, TAU, bankTop } from './plan.js
 
 const SALT = 0x1ef2;
 const FALL = 11; // m: how far a way down's sides take to rise to the cliff either side
+const LANDING = 16; // m at the foot of a way down over which its level gives way to the ground below
 // The door: a passage `half` m either side of th = 0, running `depth` m back
 // into the rock, level with the vestibule.
 export const DOOR = { half: 2.4, depth: 14 };
@@ -385,7 +386,7 @@ export class HellLand {
       const s = STEPS[i];
       if (!s.pass) continue;
       const fan = (s.hi - s.lo) / s.pass.slope - s.pass.back;
-      if (rr > s.at + s.pass.back + 6 || rr < s.at - fan - 6) continue;
+      if (rr > s.at + s.pass.back + 6 || rr < s.at - fan - LANDING) continue;
       // the nearest of this sector's way down and its neighbours'
       let a = Infinity;
       for (let q = k - 1; q <= k + 1; q++) a = Math.min(a, Math.abs(th - this.sector(q).pass[i]) * r);
@@ -394,7 +395,10 @@ export class HellLand {
       // a little eased at the ends, so you walk onto it and off it
       const ramp = lerp(s.lo, s.hi, lerp(t, smooth(t), 0.35));
       // (it runs out into the ground of each circle over its last few metres)
-      const ends = (1 - smoothstep(s.at + s.pass.back, s.at + s.pass.back + 6, rr)) * smoothstep(s.at - fan - 6, s.at - fan, rr);
+      // (and at its foot a landing, the ramp's own level running on out over
+      // what's below a little way before giving way to it, so the last step
+      // off it is no steeper than the rest, whatever the rough ground there)
+      const ends = (1 - smoothstep(s.at + s.pass.back, s.at + s.pass.back + 6, rr)) * smoothstep(s.at - fan - LANDING, s.at - fan, rr);
       h = lerp(h, ramp, (1 - smoothstep(s.pass.half, s.pass.half + FALL, a)) * ends);
     }
     return h;

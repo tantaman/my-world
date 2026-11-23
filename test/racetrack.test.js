@@ -28,6 +28,9 @@ import { Tracks, layoutFor, hasTrack, TRACK } from '../src/racetrack/tracks.js';
 import { Car, CAR, GROUND } from '../src/racetrack/car.js';
 import { Race, RACE, profile, racingLine, bump } from '../src/racetrack/race.js';
 import { matchesGolden } from './helpers/golden.js';
+import { earthAtFirst } from './helpers/earth.js';
+// The real Earth under the world, as the game has it when it opens (world/earth.js).
+const EARTH = await earthAtFirst();
 
 const SEED = 20261119;
 const CARDS = HIKES.map(({ load, ...card }) => card);
@@ -83,7 +86,7 @@ test('a point is found on the circuit where it is: how far round, and how far to
 // The world as the game has it: the things the tracks keep clear of, made
 // the way their features make them.
 function worldOf(land, seed = SEED) {
-  const gen = growWorld(seed, [], land);
+  const gen = growWorld(seed, [], land, [], EARTH);
   const start = gen.findSpawn(0, 0);
   const landforms = new Landforms(HIKES);
   const keepHike = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);

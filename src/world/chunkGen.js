@@ -171,8 +171,8 @@ export function generateTerrain(gen, cx, cz, step, size) {
 // for each vertex of the terrain generateTerrain() makes for the same chunk,
 // in the same order (the grid, then the skirts): how bare the ground is, how
 // sandy, how far it is that country's ground at all, and which country's
-// (WorldGen.surface). null for a chunk that is all forest, which in the
-// forest round the middle of the world is nearly all of them.
+// (WorldGen.surface). null for a chunk that is all forest, which on a land
+// grown without the Earth under it is nearly all of them.
 export const SURFACE_STRIDE = 4;
 export function generateSurface(gen, cx, cz, step, size) {
   const x0 = cx * size;

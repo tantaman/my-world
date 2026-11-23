@@ -1,15 +1,15 @@
-// The real Earth under the world (src/world/earth.js): out past the forest
-// round the middle the land is the Earth's, its seas, coasts, plains and
-// mountains where they really are and as high as they really are, and each
-// part of it the country its climate makes it. What matters most here: the
-// forest round the middle is left exactly as it was, a hike stands on the
-// Earth at its real height, and the Earth is the same whichever order its
-// tiles come in.
+// The real Earth under the world (src/world/earth.js): the land is the
+// Earth's, its seas, coasts, plains and mountains where they really are and
+// as high as they really are, and each part of it the country its climate
+// makes it, from the start in the Hoh rain forest to the far side of the
+// world. What matters most here: you start where you should, a hike stands
+// on the Earth at its real height, and the Earth is the same whichever order
+// its tiles come in.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { project, unproject, ORIGIN } from '../src/core/geo.js';
-import { Earth, EARTH, encodeTile, decodeTile, inflate, tileName, tilesIn, earthWeight, treelineOf, snowlineOf, TILE_CELLS, CLIMATE_W, CLIMATE_H } from '../src/world/earth.js';
+import { Earth, EARTH, encodeTile, decodeTile, inflate, tileName, treelineOf, snowlineOf, TILE_CELLS, CLIMATE_W, CLIMATE_H } from '../src/world/earth.js';
 import { EARTH_TILES } from '../src/world/earthTiles.js';
 import { COUNTRY, EARTH_COUNTRY } from '../src/world/country.js';
 import { growWorld } from '../src/world/lands.js';
@@ -104,33 +104,34 @@ test('the coast lies between the land and the sea, where the land is more land t
   assert.ok(d[(j + 20) * W + 500] < -100 / 2, 'and out at sea, far from it');
 });
 
-// ── The middle is the forest's own ───────────────────────────────────────────
-test('the forest round the middle of the world is exactly as it was', async () => {
-  const earth = await earthFor([around(0, 0, EARTH.full)]);
+// ── The start ────────────────────────────────────────────────────────────────
+test('you start in the real Hoh rain forest, by its river, under the Olympics, a walk from the Pacific', async () => {
+  const earth = await earthFor([around(0, 0, 25000)]);
   for (const seed of [SEED, 42]) {
-    const bare = growWorld(seed, [], 1);
-    const real = growWorld(seed, [], 1, [], earth);
-    // (out to within a kilometre of where the Earth begins, the water too:
-    // past that, a stream may see a little way past the edge which way it
-    // runs, drainage.js)
-    for (let k = 0; k < 600; k++) {
-      const a = (k / 600) * Math.PI * 2 * 7;
-      const r = (k / 600) * (EARTH.from - 1);
-      const [x, z] = [Math.cos(a) * r, Math.sin(a) * r];
-      if (r < EARTH.from - 1000) {
-        assert.equal(real.height(x, z), bare.height(x, z), `the height at ${x.toFixed(0)}, ${z.toFixed(0)}`);
-        assert.equal(real.water.level, bare.water.level, 'and its water');
-      }
-      assert.equal(real.naturalHeight(x, z), bare.naturalHeight(x, z), `the lie of the land at ${x.toFixed(0)}, ${z.toFixed(0)}`);
-      assert.equal(real.forest(x, z), bare.forest(x, z), 'and its woods');
-      assert.equal(real.countryAt(x, z), null, 'and it is the forest');
-    }
-    assert.deepEqual(real.findSpawn(0, 0), bare.findSpawn(0, 0), 'you start where you did');
+    const gen = growWorld(seed, [], 1, [], earth);
+    const s = gen.findSpawn(0, 0);
+    assert.ok(Math.hypot(s.x, s.z) < 600, `near the middle of the world (${Math.hypot(s.x, s.z).toFixed(0)} m)`);
+    const up = (gen.height(s.x, s.z) - SEA.level) / S;
+    assert.ok(up > 100 && up < 400, `on the valley floor, as high as it really is (${up.toFixed(0)} m)`);
+    assert.ok(gen.forest(s.x, s.z) > 0.45 && gen.countryAt(s.x, s.z) === null, 'among the trees of the forest, which is what the Hoh is');
   }
-  assert.equal(earthWeight(0, 0), 0);
-  assert.equal(earthWeight(EARTH.full, 0), 1);
-  assert.equal(tilesIn(-4000, -4000, 4000, 4000).size, 0, 'and none of the Earth is fetched to grow it');
-  assert.ok(tilesIn(-EARTH.from + 500, -100, -EARTH.from + 600, 100).size > 0, 'but at its edge, what lies past it is');
+  const gen = growWorld(SEED, [], 1, [], earth);
+  // the Pacific, at Ruby Beach, 35 km west and a little south
+  const [px, pz] = at(47.68, -124.45);
+  gen.height(px, pz);
+  assert.equal(gen.water.kind, 'sea', 'the Pacific is west of the start');
+  assert.ok(Math.hypot(px, pz) < 9000, 'a long walk west');
+  // Mount Olympus, 20 km east, with its glaciers
+  const [ox, oz] = at(47.8013, -123.7108);
+  let top = null;
+  for (let dz = -1500; dz <= 1500; dz += 50) for (let dx = -1500; dx <= 1500; dx += 50) {
+    const h = gen.broadHeight(ox + dx, oz + dz);
+    if (!top || h > top[2]) top = [ox + dx, oz + dz, h];
+  }
+  const real = (top[2] - SEA.level) / S;
+  assert.ok(real > 1900 && real < 2700, `Mount Olympus stands about as high as it does (${real.toFixed(0)} m)`);
+  assert.ok(gen.snow(top[0], top[1], top[2]) > 0.9, 'with snow on its top');
+  assert.ok(gen.above(top[0], top[1], top[2]) > 0.9, 'above the trees');
 });
 
 // ── Out on the Earth ─────────────────────────────────────────────────────────
@@ -174,9 +175,10 @@ test('the country is the climate’s: a desert, a jungle, the northern forest, a
   assert.equal(kind(BAYOU), 'bayou', 'low, flat ground on the Gulf is the swamps of the delta');
   assert.ok(gen.forest(...at(...SAHARA)) < 0.05, 'nothing much grows in the Sahara');
   // the treeline comes down toward the poles
-  const line = (lat) => treelineOf(COUNTRY.forest, lat)[1];
+  const line = (lat, c = COUNTRY['deciduous forest']) => treelineOf(c, lat)[1];
   assert.ok(line(0) > 3500 && line(46) > 1800 && line(46) < 2300 && line(70) < 300, 'the treeline: high in the tropics, about 2,000 m in the Alps, at the sea in the Arctic');
-  assert.ok(snowlineOf(COUNTRY.forest, 46)[0] > line(46), 'and the snow that lies all summer above it');
+  assert.ok(snowlineOf(COUNTRY['deciduous forest'], 46)[0] > line(46), 'and the snow that lies all summer above it');
+  assert.ok(line(47.8, COUNTRY.forest) < line(47.8) && snowlineOf(COUNTRY.forest, 47.8)[0] < 2100, 'and lower on a wet coast: the Olympics have glaciers under 2,100 m');
 });
 
 test('a hike on the Earth stands at its real height, its sea at the sea’s', async () => {
@@ -293,7 +295,7 @@ test('the Earth under the world is fetched as it is needed, with its climate', a
   const lf = new Landforms([], { tiles: EARTH_TILES, climate: CLIMATE, details: EARTH_DETAILS });
   const got = [];
   lf.on('earth', (t) => got.push(t.name || 'climate'));
-  assert.ok(lf.ready(-1000, -1000, 1000, 1000), 'the middle needs none of it');
+  assert.ok(!lf.ready(-1000, -1000, 1000, 1000), 'the start is on it too');
   const [x, z] = at(20.8, -156.3);
   assert.ok(!lf.ready(x - 100, z - 100, x + 100, z + 100), "Maui's isn't here at first");
   await lf.earthUnder([[x - 100, z - 100, x + 100, z + 100]]);

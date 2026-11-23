@@ -298,7 +298,7 @@ Each of those files opens with what the thing is and what it is handed.
   keep growing as they did. Real places are part of what is grown too, but
   only where each one is, and on whichever land
   ([real places](src/world/README.md#real-places)); and so is the real
-  Earth, out past the forest round the middle
+  Earth, which all of it stands on
   ([the real Earth](src/world/README.md#the-real-earth)).
 - *A save is spelled once, for good.* Each system says how its share of a
   save is cut into elements (`t:120:-40`, `l:x:0:0:4:0`), next to the class

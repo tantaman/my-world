@@ -18,12 +18,17 @@ import { Landforms, reachOf } from '../src/world/landforms.js';
 import { Timetable, TRAIN_LEN, DWELL, SPEED } from '../src/railway/timetable.js';
 import { segDist } from '../src/core/geom.js';
 import { matchesGolden } from './helpers/golden.js';
+import { earthAtFirst } from './helpers/earth.js';
+// The real Earth under the world, as the game has it when it opens (world/earth.js).
+const EARTH = await earthAtFirst();
 
 const _s = { d: 0, t: 0, nx: 0, nz: 0 };
 
 const SEED = 20261119;
 // the squares surveyed: the four round the middle of the world
-const SQUARES = [-1, 0];
+// (the squares round the middle: on the real Olympic Peninsula the lines are
+// down in the lowlands, the nearest a few kilometres from the start)
+const SQUARES = [-3, -2, -1, 0, 1, 2];
 
 // Real land, told from the hikes' cards alone (their land is never fetched
 // here): no line, nor cave, is grown within its reach.
@@ -40,7 +45,7 @@ function linesOn(gen, sites = new Sites(gen), caves = cavesOf(gen)) {
 }
 
 const WORLDS = LANDS.map((land) => {
-  const gen = growWorld(SEED, [], land);
+  const gen = growWorld(SEED, [], land, [], EARTH);
   const sites = new Sites(gen);
   const caves = cavesOf(gen);
   const lines = linesOn(gen, sites, caves);
@@ -61,7 +66,7 @@ test('there are lines, and not everywhere', () => {
 
 test('the same seed grows the same lines, however the survey is run', () => {
   const { gen, all } = WORLDS[0];
-  const again = linesOn(growWorld(SEED, [], 1));
+  const again = linesOn(growWorld(SEED, [], 1, [], EARTH));
   // a little at a time, the way the game does it between frames
   for (const cj of SQUARES) for (const ci of SQUARES) again.queue.add(`${ci}:${cj}`);
   let slices = 0;
@@ -82,7 +87,7 @@ test('the same seed grows the same lines, however the survey is run', () => {
 
 for (const land of LANDS) for (const seed of [SEED, 42]) {
   test(`seed ${seed}${land > 1 ? ` on land ${land}` : ''}: where the stations are`, () => {
-    const lines = seed === SEED ? WORLDS[land - 1].lines : linesOn(growWorld(seed, [], land));
+    const lines = seed === SEED ? WORLDS[land - 1].lines : linesOn(growWorld(seed, [], land, [], EARTH));
     const list = [];
     for (const cj of SQUARES) for (const ci of SQUARES) {
       const l = lines.cell(ci, cj);
@@ -343,7 +348,7 @@ test('no line is grown where a real place reaches, and everywhere else they are 
       assert.deepEqual(a && a.stations.map((st) => st.id), b && b.stations.map((st) => st.id));
     }
   }
-  for (const cj of SQUARES) for (const ci of SQUARES) assert.ok(!keepOff(ci * CELL, cj * CELL, (ci + 1) * CELL, (cj + 1) * CELL), 'no real place reaches the lines near the start');
+  for (const l of WORLDS[0].all) assert.ok(!keepOff(...l.box), `no real place reaches ${l.name}, near the start`);
   assert.ok(CAVE.cell < CELL);
 });
 
@@ -390,7 +395,8 @@ test('a line far away is built from where it stands, and its smoke drawn from be
   const train = new Train({ material, glow: material });
   train.place(far, far.length / 3);
   assert.ok(biggest(train.object) < 64, 'each car measures from its own middle');
-  for (const car of train.cars) assert.ok(Math.hypot(car.group.position.x - FAR[0], car.group.position.z - FAR[1]) < 4000, 'and is put out there');
+  const [mx, mz] = [(far.box[0] + far.box[2]) / 2, (far.box[1] + far.box[3]) / 2];
+  for (const car of train.cars) assert.ok(Math.hypot(car.group.position.x - mx, car.group.position.z - mz) < 4000, 'and is put out there');
   const smoke = new Smoke({ add() {} });
   const stack = train.stack();
   for (let k = 0; k < 6; k++) smoke.puff(stack, 3, 2, 0, 1.4, 0.6);

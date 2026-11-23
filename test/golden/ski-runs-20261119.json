@@ -1,86 +1,38 @@
 {
- "ski:run:-5:-5": {
-  "name": "Gable Glades",
-  "x": -49625,
-  "z": -48375,
-  "drop": 258.977
+ "ski:run:0:-5": {
+  "name": "Larch Bowl",
+  "x": 5875,
+  "z": -48625,
+  "drop": 56.707
  },
  "ski:run:2:-5": {
   "name": "Owl Face",
-  "x": 21375,
-  "z": -45625,
-  "drop": 262.988
+  "x": 27375,
+  "z": -43625,
+  "drop": 53.434
  },
- "ski:run:4:-5": {
-  "name": "Granite Glades",
-  "x": 48125,
-  "z": -46875,
-  "drop": 554.217
+ "ski:run:3:-5": {
+  "name": "Juniper Bowl",
+  "x": 38375,
+  "z": -48625,
+  "drop": 70.521
  },
- "ski:run:-3:-3": {
-  "name": "Raven Face",
-  "x": -27625,
-  "z": -25375,
-  "drop": 741.109
+ "ski:run:3:-3": {
+  "name": "Gable Face",
+  "x": 30375,
+  "z": -20375,
+  "drop": 49.412
  },
- "ski:run:3:1": {
-  "name": "Gable Bowl",
-  "x": 36125,
-  "z": 14375,
-  "drop": 483.172
- },
- "ski:run:4:1": {
-  "name": "Scree Glades",
-  "x": 44625,
-  "z": 14375,
-  "drop": 701.512
- },
- "ski:run:0:2": {
-  "name": "Scree Run",
-  "x": 9875,
-  "z": 29125,
-  "drop": 327.399
- },
- "ski:run:1:2": {
-  "name": "Corrie Couloir",
-  "x": 10375,
-  "z": 28625,
-  "drop": 340.814
+ "ski:run:3:2": {
+  "name": "Hoarfrost Run",
+  "x": 33125,
+  "z": 21375,
+  "drop": 172.206
  },
  "ski:run:3:3": {
   "name": "Juniper Face",
-  "x": 38875,
-  "z": 39375,
-  "drop": 824.019
- },
- "ski:run:4:3": {
-  "name": "Granite Bowl",
-  "x": 40125,
-  "z": 39375,
-  "drop": 465.945
- },
- "ski:run:0:4": {
-  "name": "Granite Chute",
-  "x": 6375,
-  "z": 49875,
-  "drop": 600.953
- },
- "ski:run:1:4": {
-  "name": "Raven Run",
-  "x": 10125,
-  "z": 49875,
-  "drop": 439.291
- },
- "ski:run:3:4": {
-  "name": "Marten Chute",
-  "x": 38125,
-  "z": 40625,
-  "drop": 920.172
- },
- "ski:run:4:4": {
-  "name": "Ermine Run",
-  "x": 40125,
-  "z": 40125,
-  "drop": 290.328
+  "x": 38375,
+  "z": 36625,
+  "drop": 114.317
  }
 }

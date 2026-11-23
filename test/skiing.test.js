@@ -214,13 +214,13 @@ test('ski runs are wherever the high country holds snow, a square at a time, and
   const { HIKES } = await import('../src/world/hikes.js');
   const { Landforms } = await import('../src/world/landforms.js');
   const { findRunTop, runDrop } = await import('../src/skiing/descent.js');
-  const { SkiRuns, RUNS } = await import('../src/skiing/runs.js');
+  const { SkiRuns, RUNS, HOME } = await import('../src/skiing/runs.js');
   const { matchesGolden } = await import('./helpers/golden.js');
   const SEED = 20261119;
   const gen = growWorld(SEED, [], LANDS[0], [], await earthAtFirst());
   const start = gen.findSpawn(0, 0);
   const landforms = new Landforms(HIKES);
-  const home = findRunTop(gen, landforms, start, 30000, 750);
+  const home = findRunTop(gen, landforms, start, HOME.reach, HOME.step);
   const runs = new SkiRuns(gen, landforms, { home });
   const pinned = {};
   const names = new Map();

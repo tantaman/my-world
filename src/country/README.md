@@ -12,7 +12,8 @@ you can be under it or above it; how thick its air is; how much sun gets
 through. Out on the real Earth (see [the world](../world/README.md#the-real-earth))
 the weather is the country's you're in, the boreal forest's low grey sky or
 the desert's clear dry air, and a hike's comes over that as you walk onto
-it. In the forest round the middle it has nothing to do.
+it. On a land grown without the Earth (as the tests grow one) it has
+nothing to do.
 
 Where a real place has a sea, you hear it break on the shore: one wave after
 another gathers with a low rumble, breaks in a wash and runs up the shore

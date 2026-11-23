@@ -3,13 +3,13 @@
 // A land (worldgen.js) grows a forest from a seed.
 // withRealPlaces(Land) is that land with real places set into it:
 //
-//   the real Earth (earth.js), out past the forest round the middle of the
-//     world: its seas and coasts, how high and how rugged its land is, and
-//     the country its climate makes it. The forest's own hills, ridges and
-//     water are still what you walk on, but laid over the Earth's land,
-//     raised and flattened to it, and its sea is the Earth's. So the water
-//     runs over the Earth's land like any other: it's the forest's land, as
-//     far as the water is concerned (forestHeight)
+//   the real Earth (earth.js), under all of the world: its seas and coasts,
+//     how high and how rugged its land is, and the country its climate makes
+//     it. The forest's own hills, ridges and water are still what you walk
+//     on, but laid over the Earth's land, raised and flattened to it, and its
+//     sea is the Earth's. So the water runs over the Earth's land like any
+//     other: it's the forest's land, as far as the water is concerned
+//     (forestHeight)
 //   hikes (landform.js), each a piece of real ground: inside one the ground,
 //     its trails, its lakes and its woods are the real ones, and the land
 //     round it takes over again round its edge. On the Earth a hike stands at
@@ -28,7 +28,7 @@
 import { smoothstep, createSimplex2 } from '../noise.js';
 import { Landform, TRAIL_HALF, VIEW_WORN } from './landform.js';
 import { COUNTRY } from './country.js';
-import { EARTH, earthWeight, earthCountry, treelineOf, snowlineOf } from './earth.js';
+import { EARTH, earthCountry, treelineOf, snowlineOf } from './earth.js';
 import { SEA } from './sea.js';
 
 // How rugged (real m: the Earth's relief) the land is where it's all lake
@@ -60,12 +60,13 @@ const SEA_INLAND = SEA.inland[1];
 export function withRealPlaces(Land) {
   return class extends Land {
     // earth: the real Earth (earth.js), whose tiles come as they're needed, or
-    // null for none: the forest goes on for ever.
+    // null for none: the land's own forest goes on for ever, as the golden
+    // tests grow it.
     constructor(seed, structures = [], hikes = [], earth = null) {
       super(seed, structures);
-      // (Until here, while the land was being grown, the Earth wasn't set: so
-      // nothing grown then — the sea's own lie of the land round the start —
-      // knows of it, which is as it should be: the middle is the forest's.)
+      // (Until here, while the land was being grown, the Earth wasn't set: what
+      // the land works out as it's grown, its own sea's lie round the start,
+      // is the land's alone, and out on the Earth nothing asks it.)
       this.earth = earth;
       // the noise the borders between the Earth's climates wander by: fields
       // of its own, numbered clear of the land's (worldgen.js, sea.js)
@@ -78,7 +79,6 @@ export function withRealPlaces(Land) {
       this._ea = { x: NaN, z: NaN, height: 0, relief: 0, coast: 0, lat: 0, lon: 0 };
       this._eb = { x: NaN, z: NaN, height: 0, relief: 0, coast: 0, lat: 0, lon: 0 };
       this._ce = { x: NaN, z: NaN, low: 0, mtn: 0, alp: 0, bench: 0 };
-      this._ew = { x: NaN, z: NaN, w: 0 };
       this._ec = { x: NaN, z: NaN, country: null, place: null };
       this._place = { country: null, out: 0 };
       // Settled into the land around them before anything is asked of them.
@@ -115,7 +115,7 @@ export function withRealPlaces(Land) {
       this._settle(L);
       L.settled();
       // (on the Earth its sea is the Earth's, and runs on past its edge)
-      if (this.earth && earthWeight(L.cx, L.cz) >= 1) L.openToSea();
+      if (this.earth) L.openToSea();
       this.landforms.push(L);
       this.hikes.push(def);
       // (a structure on real land stands on the real ground)
@@ -146,18 +146,6 @@ export function withRealPlaces(Land) {
     }
 
     // ── The Earth ───────────────────────────────────────────────────────────
-    // How much of (x, z) is the Earth's (0..1) rather than the forest's own.
-    _earthW(x, z) {
-      if (!this.earth) return 0;
-      const k = this._ew;
-      if (k.x !== x || k.z !== z) {
-        k.w = earthWeight(x, z);
-        k.x = x;
-        k.z = z;
-      }
-      return k.w;
-    }
-
     // What the Earth is at (x, z) (earth.js), the last asked kept.
     _earthAt(x, z, e = this._ea) {
       if (e.x !== x || e.z !== z) {
@@ -193,37 +181,25 @@ export function withRealPlaces(Land) {
       return country;
     }
 
-    // The forest round the middle takes in no water from the Earth: rivers
-    // run out of it, not into it, so what's in it is as it was without the
-    // Earth (drainage.js asks).
-    apart(ax, az, bx, bz) {
-      return !!this.earth && earthWeight(ax, az) <= 0 && earthWeight(bx, bz) > 0;
-    }
-
-    // The Earth's kind of country at (x, z), and how much of (x, z) is the
-    // Earth's (0..1): { country, w }; or null where it's all the forest's own.
+    // The Earth's kind of country at (x, z) (country.js), or null with no Earth.
     earthAt(x, z) {
-      const w = this._earthW(x, z);
-      return w > 0 ? { country: this._earthCountry(x, z), w } : null;
+      return this.earth ? this._earthCountry(x, z) : null;
     }
 
-    // The country the land is, with the Earth's say in it: lake country where
-    // the Earth is flat, mountains where it's rugged, and none of the
-    // forest's own high country (the Earth has its own).
+    // The country the land is, on the Earth: lake country where the Earth is
+    // flat, mountains where it's rugged, and none of the forest's own high
+    // country (the Earth has its own).
     country(x, z) {
       const c = super.country(x, z);
-      const w = this._earthW(x, z);
-      if (w <= 0) return c;
+      if (!this.earth) return c;
       const k = this._ce;
       if (k.x === x && k.z === z) return k;
       const r = this._earthAt(x, z).relief / EARTH.scale;
       const low = 1 - smoothstep(LOWLAND[0], LOWLAND[1], r);
-      const mtn = smoothstep(MOUNTAINS[0], MOUNTAINS[1], r);
-      const bench = c.bench * (1 - w * low);
-      k.low = c.low + (low - c.low) * w;
-      k.mtn = c.mtn + (mtn - c.mtn) * w;
-      k.alp = c.alp * (1 - w);
-      k.bench = bench;
+      k.bench = c.bench * (1 - low);
+      k.low = low;
+      k.mtn = smoothstep(MOUNTAINS[0], MOUNTAINS[1], r);
+      k.alp = 0;
       k.x = x;
       k.z = z;
       return k;
@@ -240,18 +216,17 @@ export function withRealPlaces(Land) {
       return this.landforms.length ? this._onLandforms(x, z, h, pm, true) : h;
     }
 
-    // The land, as if there were no hikes in it: the forest's own, and out on
-    // the Earth, the forest's hills and ridges stretched or flattened to be
-    // as rugged as the Earth is there, standing on the Earth's land at its
-    // real height, by the Earth's sea. (The sea's floor and beaches are laid
-    // over that as over the forest's: inland, away from the coast, no hollow
-    // goes below the sea; near it, a hollow under the sea's level is the sea.)
+    // The land, as if there were no hikes in it: on the Earth, the forest's
+    // hills and ridges stretched or flattened to be as rugged as the Earth is
+    // there, standing on the Earth's land at its real height, by the Earth's
+    // sea. (The sea's floor and beaches are laid over that as over the
+    // forest's: inland, away from the coast, no hollow goes below the sea;
+    // near it, a hollow under the sea's level is the sea.) With no Earth, the
+    // land's own.
     forestHeight(x, z, minWavelength = 0) {
-      const w = this._earthW(x, z);
-      if (w <= 0) return super.broadHeight(x, z, minWavelength);
+      if (!this.earth) return super.broadHeight(x, z, minWavelength);
       const e = this._earthAt(x, z);
       const land = this.ownLand(x, z, minWavelength);
-      const drop = w < 1 ? this.ownDrop(x, z) : 0;
       const c = this.country(x, z);
       // (a share of it at the shore, all of it inland, and none out at sea: the
       // forest's hills don't stand up out of a channel between two islands)
@@ -262,7 +237,7 @@ export function withRealPlaces(Land) {
       // the way at the coast, none at all inland
       const D = SEA_INLAND * (1 - smoothstep(0, EARTH.inland, e.coast));
       const h = this.sea.level + (land - this.ownMean(c)) * rugged + e.height + D;
-      return this.bySea(land + (h - land) * w, drop + (D - drop) * w, SEA.floor + (EARTH.floor - SEA.floor) * w, SEA.soft + (EARTH.soft - SEA.soft) * w);
+      return this.bySea(h, D, EARTH.floor, EARTH.soft);
     }
 
     forestNaturalHeight(x, z) {
@@ -303,23 +278,21 @@ export function withRealPlaces(Land) {
     //
     // On the Earth, though, a real place stands at its real height: its sea
     // at the Earth's sea, and its land where the Earth's land is (the same
-    // land, finer). Between the forest round the middle and the Earth, part
-    // way to each.
+    // land, finer).
     _settle(L) {
       const def = L.def;
-      const d = def.datum || this._ownDatum(L);
-      const real = this.earth ? earthWeight(d.at[0], d.at[1]) : 0;
-      let own = 0;
-      if (real < 1) {
-        const K = 64;
-        let sum = 0;
-        for (let k = 0; k < K; k++) {
-          const a = (k / K) * Math.PI * 2;
-          sum += this._baseHeight(d.at[0] + Math.cos(a) * d.outer, d.at[1] + Math.sin(a) * d.outer);
-        }
-        own = this.datumLevel(sum / K) - d.anchor + ((def.base || 0) - (d.base || 0)) * def.scale;
+      if (this.earth) {
+        L.offset = this.sea.level + (def.base || 0) * def.scale;
+        return;
       }
-      L.offset = own + (this.sea.level + (def.base || 0) * def.scale - own) * real;
+      const d = def.datum || this._ownDatum(L);
+      const K = 64;
+      let sum = 0;
+      for (let k = 0; k < K; k++) {
+        const a = (k / K) * Math.PI * 2;
+        sum += this._baseHeight(d.at[0] + Math.cos(a) * d.outer, d.at[1] + Math.sin(a) * d.outer);
+      }
+      L.offset = this.datumLevel(sum / K) - d.anchor + ((def.base || 0) - (d.base || 0)) * def.scale;
     }
 
     // For a hike that doesn't say: its own trailhead (or, failing one, the
@@ -351,11 +324,7 @@ export function withRealPlaces(Land) {
     // treeline.)
     forest(x, z) {
       let f = super.forest(x, z);
-      const w = this._earthW(x, z);
-      if (w > 0) {
-        const woods = this._earthCountry(x, z).woods * (1 - this._earthHigh(x, z, this._baseHeight(x, z), 'above'));
-        f *= 1 + (woods - 1) * w;
-      }
+      if (this.earth) f *= this._earthCountry(x, z).woods * (1 - this._earthHigh(x, z, this._baseHeight(x, z), 'above'));
       for (const L of this.landforms) {
         const w = L.weight(x, z);
         if (w > 0) f += (L.forest(x, z) - f) * w;
@@ -379,8 +348,7 @@ export function withRealPlaces(Land) {
       out.land = 0;
       out.country = 0;
       let country = null;
-      const ew = this._earthW(x, z);
-      if (ew > 0) {
+      if (this.earth) {
         // (the forest's own country too, out on the Earth: so that it's the
         // Earth that lays its beaches, along its coasts, and not every low
         // field of a delta that is a beach)
@@ -390,9 +358,9 @@ export function withRealPlaces(Land) {
         let sand = 0;
         const coast = this._earthAt(x, z).coast;
         if (c.shore !== 'rock' && coast < BEACH[1]) sand = (1 - smoothstep(SEA.sand * 0.75, SEA.sand * 1.2, this._baseHeight(x, z) - this.sea.level)) * (1 - smoothstep(BEACH[0], BEACH[1], coast));
-        out.bare = Math.max(0, Math.min(1, bare)) * (1 - sand) * ew;
-        out.sand = sand * ew;
-        out.land = ew;
+        out.bare = Math.max(0, Math.min(1, bare)) * (1 - sand);
+        out.sand = sand;
+        out.land = 1;
         out.country = c.id;
         country = c;
       }
@@ -442,7 +410,7 @@ export function withRealPlaces(Land) {
     // (or null where that's the forest).
     countryAt(x, z) {
       for (const L of this.landforms) if (L.weight(x, z) > 0.5) return L.country;
-      if (this._earthW(x, z) > 0.5) {
+      if (this.earth) {
         const c = this._earthCountry(x, z);
         if (c !== COUNTRY.forest) return c;
       }
@@ -457,7 +425,7 @@ export function withRealPlaces(Land) {
       const mx = (x0 + x1) / 2;
       const mz = (z0 + z1) / 2;
       const r = Math.hypot(x1 - x0, z1 - z0) / 2;
-      if (this.earth && Math.hypot(mx, mz) + r > EARTH.from) return true;
+      if (this.earth) return true;
       return this.landforms.some((L) => L.clearance(mx, mz) < r);
     }
 
@@ -508,8 +476,7 @@ export function withRealPlaces(Land) {
     }
 
     _onEarth(x, z, h, v, what) {
-      const w = this._earthW(x, z);
-      return w > 0 ? v + (this._earthHigh(x, z, h, what) - v) * w : v;
+      return this.earth ? this._earthHigh(x, z, h, what) : v;
     }
 
     // The real heights [from, to] the Earth's treeline (or snow line) is
@@ -538,8 +505,7 @@ export function withRealPlaces(Land) {
     }
 
     _lineOnEarth(x, z, line, what) {
-      const w = this._earthW(x, z);
-      return w > 0 ? line + (this._earthLine(x, z, what)[1] - line) * w : line;
+      return this.earth ? this._earthLine(x, z, what)[1] : line;
     }
 
     _ownHigh(x, z, v, what) {
@@ -555,7 +521,7 @@ export function withRealPlaces(Land) {
     // (x0, z0)–(x1, z1).
     highIn(x0, z0, x1, z1) {
       if (super.highIn(x0, z0, x1, z1)) return true;
-      if (this.earth && Math.max(Math.hypot(x0, z0), Math.hypot(x1, z1), Math.hypot(x0, z1), Math.hypot(x1, z0)) > EARTH.from) return true;
+      if (this.earth) return true;
       const mx = (x0 + x1) / 2;
       const mz = (z0 + z1) / 2;
       const r = Math.hypot(x1 - x0, z1 - z0) / 2;

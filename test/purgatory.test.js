@@ -18,9 +18,12 @@ import { strew, CELL } from '../src/purgatory/furnish.js';
 import { Brow } from '../src/purgatory/brow.js';
 import { Card } from '../src/core/card.js';
 import { matchesGolden } from './helpers/golden.js';
+import { earthAtFirst } from './helpers/earth.js';
+// The real Earth under the world, as the game has it when it opens (world/earth.js).
+const EARTH = await earthAtFirst();
 
 const SEED = 20261119;
-const gen = growWorld(SEED, [], 1);
+const gen = growWorld(SEED, [], 1, [], EARTH);
 const hell = new HellLand({ seed: SEED, ...findGate(gen).hell });
 const land = new MountLand({ seed: SEED, ...placeOf(hell) });
 const space = new MountSpace(land);
@@ -37,7 +40,7 @@ const STEEP = 1.05; // rise per metre the space lets you walk up (world/landSpac
 for (const n of LANDS)
   for (const seed of [SEED, 42]) {
     test(`seed ${seed}, land ${n}: where Purgatory is`, () => {
-      const g = seed === SEED && n === 1 ? gen : growWorld(seed, [], n);
+      const g = seed === SEED && n === 1 ? gen : growWorld(seed, [], n, [], EARTH);
       const h = new HellLand({ seed, ...findGate(g).hell });
       const p = placeOf(h);
       // it never meets Hell, and lies lower than any of Hell
