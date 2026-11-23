@@ -13,15 +13,19 @@ import { Ride, RIDE } from '../src/surfing/ride.js';
 import { HIKES } from '../src/world/hikes.js';
 import { Landforms } from '../src/world/landforms.js';
 import { matchesGolden } from './helpers/golden.js';
+import { earthAtFirst } from './helpers/earth.js';
+// The real Earth under the world, as the game has it when it opens (world/earth.js).
+const EARTH = await earthAtFirst();
 
 const SEED = 20261119;
-const gen = growWorld(SEED, [], 1);
+const gen = growWorld(SEED, [], 1, [], EARTH);
 const spots = new SurfSpots(gen);
-// the squares round the start
-const NEAR = [-2, -1, 0, 1];
+// the squares along the real coast nearest the start: the Strait of Juan de
+// Fuca a long walk north, the Pacific's beaches further west
+const ALONG = { i: [-8, 2], j: [-6, -1] };
 const around = (s) => {
   const list = [];
-  for (const j of NEAR) for (const i of NEAR) {
+  for (let j = ALONG.j[0]; j <= ALONG.j[1]; j++) for (let i = ALONG.i[0]; i <= ALONG.i[1]; i++) {
     const b = s.cell(i, j);
     if (b) list.push(b);
   }
@@ -33,19 +37,19 @@ const nearest = near.reduce((a, b) => (Math.hypot(b.x - start.x, b.z - start.z) 
 
 for (const land of LANDS) for (const seed of [SEED, 42]) {
   test(`seed ${seed}, land ${land}: where the breaks are`, () => {
-    const s = seed === SEED && land === 1 ? spots : new SurfSpots(growWorld(seed, [], land));
+    const s = seed === SEED && land === 1 ? spots : new SurfSpots(growWorld(seed, [], land, [], EARTH));
     const list = around(s).map((b) => ({ id: b.id, name: b.name, kind: b.kind, x: b.x, z: b.z, nx: b.nx, nz: b.nz, size: b.size, period: b.period, peel: b.peel, reach: b.reach, far: b.far, fetch: b.fetch }));
-    assert.ok(list.length >= 3, `${list.length} of 16 squares have one`);
+    assert.ok(list.length >= 3, `${list.length} squares along the coast have one`);
     matchesGolden(land > 1 ? `surf-spots-${seed}-land${land}` : `surf-spots-${seed}`, list, { tolerance: 1e-6 });
   });
 }
 
-test('breaks are grown from the seed: the same every time, one near the start, and none elsewhere for another seed', () => {
-  const again = new SurfSpots(growWorld(SEED, [], 1));
+test('breaks are grown from the seed: the same every time, one on the coast nearest the start, and none elsewhere for another seed', () => {
+  const again = new SurfSpots(growWorld(SEED, [], 1, [], EARTH));
   for (const b of near) assert.deepEqual(again.cell(b.i, b.j), b);
   const d = Math.hypot(nearest.x - start.x, nearest.z - start.z);
-  assert.ok(d < 1500, `the nearest is ${d.toFixed(0)} m from the start`);
-  const other = new SurfSpots(growWorld(42, [], 1));
+  assert.ok(d < 10000, `the nearest is on the real coast, ${d.toFixed(0)} m from the start`);
+  const other = new SurfSpots(growWorld(42, [], 1, [], EARTH));
   assert.notDeepEqual(other.cell(nearest.i, nearest.j)?.x, nearest.x);
 });
 
@@ -84,7 +88,7 @@ test('no break is grown where a real place reaches, and everywhere else they are
 
 test('a break changes nothing the seed grows', () => {
   const before = near.map((b) => gen.height(b.x + b.nx * 20, b.z + b.nz * 20));
-  const after = near.map((b) => growWorld(SEED, [], 1).height(b.x + b.nx * 20, b.z + b.nz * 20));
+  const after = near.map((b) => growWorld(SEED, [], 1, [], EARTH).height(b.x + b.nx * 20, b.z + b.nz * 20));
   assert.deepEqual(after, before);
 });
 

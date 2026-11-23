@@ -78,9 +78,9 @@ and you open there again.
 ## Sailing
 
 She sails between **Port Angeles**, where people first arrive (the world
-starts on the Olympic Peninsula, by Lake Crescent: Mount Storm King is a walk
-from the start), and **Kahului, on Maui**, where the hikes round the island
-are. By the clock on the wall, as the trains run: everyone in a world sees
+starts on the Olympic Peninsula, in the Hoh rain forest, and her pier is on
+the Strait of Juan de Fuca to the north), and **Kahului, on Maui**, where the
+hikes round the island are. By the clock on the wall, as the trains run: everyone in a world sees
 her in the same place, so you sail with whoever's aboard when she goes, and
 if you're ashore when she sails, you've missed the boat (there's always the
 plane: see [Airports](../airports/README.md)).
@@ -100,16 +100,17 @@ minute. The pier and the HUD say when she's due and when she sails; aboard,
 you're told as she leaves, as she's out at sea, as she comes in, and when
 she's alongside, until when.
 
-**Her piers** are grown from the seed and the land (`site.js`). At home:
-along a fan of lines out from the start toward the sea, the first water each
-reaches, and from there straight out, the nearest spot with water deep
-enough under her and round her, a short pier out to it, and a lane straight
-out from it to the open sea, deep all the way, with room to swing her round
-and no land in sight at its end; clear of the old places, the towns, the
-caves, the railway, the launch sites, the video stores, the abandoned
-buildings, the hunt clubs and the airfield. At Maui the same, looking all
-the way round the hikes there, off their land (theirs is real; the coast
-round it is the seed's). Everyone in a world finds them in the same place.
+**Her piers** are on the real coast (the real Earth's: see
+[the world](../world/README.md#the-real-earth)), and where on it is grown
+from the seed and the land (`site.js`). At home: along a ring of lines out
+from the start, the first water each reaches, and from there straight out,
+the nearest spot with water deep enough under her and round her, a short
+pier out to it, and a lane straight out from it to the open sea, deep all
+the way, with room to swing her round and no land in sight at its end;
+clear of the old places, the towns, the caves, the railway, the launch
+sites, the video stores, the abandoned buildings, the hunt clubs and the
+airfield. At Maui the same, looking all the way round the hikes there, off
+their land. Everyone in a world finds them in the same place.
 The home pier is found once the airfields in its way have been (a moment
 after the world opens), and Maui's a little after that. **Nothing about the
 land changes for them**: the trestle starts where the ground is as high as

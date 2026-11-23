@@ -28,7 +28,7 @@ import { EARTH_TILES, CLIMATE, EARTH_DETAILS } from './earthTiles.js';
 
 const DAY_MINUTES = 24; // how long a full day takes when time flows
 // ms at most the features after this one wait for the real Earth round the
-// start and the hikes before they install
+// hikes before they install
 const EARTH_WAIT = 8000;
 const wrapHours = (h) => ((h % 24) + 24) % 24;
 
@@ -79,12 +79,14 @@ export function installWorld(game) {
     chunks.addEarth(tile);
   });
   // The Earth round the start and round every hike is sent for now, and the
-  // features after this one wait for it to come (game.use): what is grown
-  // from the seed is looked for there from the start (a ski run, the
-  // airfields, the pier on Maui). Anywhere else, whatever asks before it has
-  // come is told so (core/notYet.ts), and asks again.
-  // (not for ever: what asks before it has come asks again)
-  const earthNear = Promise.race([landforms.earthUnder(searchedAtFirst(HIKES)), new Promise((r) => setTimeout(r, EARTH_WAIT))]);
+  // features after this one wait for it to come (game.use): where you start
+  // is found on it, and what is grown from the seed is looked for there from
+  // the start (the towns, the railway, a ski run; the airfields, the pier on
+  // Maui). The start's they wait for whatever it takes; the hikes', not for
+  // ever. Anywhere else, whatever asks before it has come is told so
+  // (core/notYet.ts), and asks again.
+  const [round, ...hikes] = searchedAtFirst(HIKES);
+  const earthNear = Promise.all([landforms.earthUnder([round]), Promise.race([landforms.earthUnder(hikes), new Promise((r) => setTimeout(r, EARTH_WAIT))])]);
   const grass = new Grass(scene, chunks, materials.grass, CONFIG.seed);
   const sky = new Sky(scene);
   // the plants cast into its shadow only what is in its reach (render/casters.ts)

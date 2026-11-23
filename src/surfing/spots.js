@@ -162,6 +162,9 @@ export class SurfSpots {
     // the shore either side
     const sh = this._shore(x, z, nx, nz);
     if (!sh) return null;
+    // (and straight out from the peak's own point on the shore, which a rocky
+    // coast can have behind a rock the spot looked from hadn't)
+    for (const u of SURF.clear.out) if (-this._up(sh.x + nx * u, sh.z + nz * u) < SURF.clear.deep) return null;
     const ride = sh.reach[0] + sh.reach[1];
     if (ride < SURF.ride + 2 * SURF.fade) return null;
     // how steeply the seabed shoals (a line through the shore, fitted)

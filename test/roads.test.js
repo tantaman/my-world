@@ -20,14 +20,25 @@ const SEED = 20261119;
 const SQUARES = [-2, -1, 0, 1];
 const RAMP = 0.17; // (roads.js: steeper for a short way out of a gate)
 
-function surveyed(seed, land) {
+function surveyed(seed, land, squares = SQUARES) {
   const w = roadsWorld(seed, land);
   const all = [];
-  for (const cj of SQUARES) for (const ci of SQUARES) for (const dir of ['e', 's']) {
+  for (const cj of squares) for (const ci of squares) for (const dir of ['e', 's']) {
     const r = w.roads.link(ci, cj, dir);
     if (r) all.push(r);
   }
   return { ...w, all };
+}
+
+// The survey, widened a square at a time until it has a road of each kind.
+function bothKinds(seed, land) {
+  for (let n = 2; ; n++) {
+    const squares = [];
+    for (let c = -n; c < n; c++) squares.push(c);
+    const w = surveyed(seed, land, squares);
+    const kinds = new Set(w.all.map((r) => r.surface));
+    if (kinds.has('paved') && kinds.has('gravel') || n >= 6) return w;
+  }
 }
 
 test('there are roads, and not everywhere', () => {
@@ -287,7 +298,7 @@ function topOf(object, x, z) {
 }
 
 test('its top: the paint is part of it, and a gravel road has a rut each side of its crown', () => {
-  const { all, gen } = surveyed(SEED, 1);
+  const { all, gen } = bothKinds(SEED, 1);
   const ground = (x, z) => gen.height(x, z);
   const material = createBuildingMaterial();
   const near = (c, p) => Math.abs(c.r - p.r) < 1e-6 && Math.abs(c.g - p.g) < 1e-6 && Math.abs(c.b - p.b) < 1e-6;

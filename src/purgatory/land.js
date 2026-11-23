@@ -213,7 +213,10 @@ export class MountLand {
       tint = lerp(tint, 0.5 + 0.5 * this._n3(x / 4, z / 4), v.k);
     } else if (rr >= R.cliff) {
       // ── The ledge before the great cliff, and the gate's three steps ────
-      h = H.ledge + (lump * 0.5 + fine * 0.1) * smoothstep(R.cliff, R.cliff + 10, rr) * smoothstep(R.ledge, R.ledge - 8, r);
+      // (lying still before the steps, so the first rises from the ledge as
+      // it's cut, whatever the swell of the land is there)
+      const atGate = smoothstep(STILL, STILL * 3, Math.abs(wrap(th - AT.gate)) * r);
+      h = H.ledge + (lump * 0.5 + fine * 0.1) * smoothstep(R.cliff, R.cliff + 10, rr) * smoothstep(R.ledge, R.ledge - 8, r) * atGate;
       col = GRASS;
       const s = this._steps(r, th);
       if (s >= 0) {
@@ -222,8 +225,10 @@ export class MountLand {
         polish = STEP[s][1];
         stone = 1;
       }
-    } else if (rr >= TERRACES[0].r) {
+    } else if (rr >= TERRACES[0].r && r >= TERRACES[0].r) {
       // ── The great cliff, that closes it round ───────────────────────────
+      // (its top wanders out over the ledge, but its foot never in over the
+      // first terrace: that is as wide all round as it was cut)
       const t = (R.cliff - rr) / (R.cliff - TERRACES[0].r);
       h = lerp(H.ledge, TERRACES[0].h, lerp(t, smooth(clamp(t, 0, 1)), BANK_ROUND)) + fine * 0.3;
       col = ROCK;
@@ -368,7 +373,10 @@ export class MountLand {
     if (across > CLEFT.half + CLEFT.side) return h;
     const t = clamp((R.foot - r) / (R.foot - CLEFT.r1), 0, 1);
     const tread = lerp(H.foot, H.terrace, lerp(t, smooth(t), 0.25));
-    return lerp(h, Math.min(h, tread), 1 - smoothstep(CLEFT.half, CLEFT.half + CLEFT.side, across));
+    // (its floor is the tread itself, however the rock it's cut through lies;
+    // its sides fall to it)
+    const side = lerp(h, Math.min(h, tread), 1 - smoothstep(CLEFT.half, CLEFT.half + CLEFT.side, across));
+    return lerp(side, tread, 1 - smoothstep(CLEFT.half * 0.7, CLEFT.half, across));
   }
 
   // The ways up the banks (plan.WAYS): where one is cut through, the

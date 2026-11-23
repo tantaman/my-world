@@ -20,6 +20,9 @@ import { clearOf as trackClear } from '../../src/racetrack/site.js';
 import { findBerth, clearOf as berthClear, HOME_REACH as BERTH_REACH } from '../../src/cruise/site.js';
 import { Roads } from '../../src/roads/roads.js';
 import { firstThere } from '../../src/roads/clear.js';
+import { earthAtFirst } from './earth.js';
+// The real Earth under the world, as the game has it when it opens (world/earth.js).
+const EARTH = await earthAtFirst();
 
 const CARDS = HIKES.map(({ load, ...card }) => card);
 const worlds = new Map();
@@ -28,7 +31,7 @@ const worlds = new Map();
 export function roadsWorld(seed, land = 1, fresh = false) {
   const key = `${seed}:${land}`;
   if (worlds.has(key) && !fresh) return worlds.get(key);
-  const gen = growWorld(seed, [], land);
+  const gen = growWorld(seed, [], land, [], EARTH);
   const start = gen.findSpawn(0, 0);
   const landforms = new Landforms(HIKES);
   const keepHike = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);

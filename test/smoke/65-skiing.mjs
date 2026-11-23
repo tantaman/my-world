@@ -1,18 +1,20 @@
-// Skiing: walk down a steep snowy slope and find your skis on, ski on down,
+// Skiing: walk down a steep snowy slope on the mountain the High Country ski
+// run is on (Olympus, over the start) and find your skis on, ski on down,
 // brake, turn, jump, hear it, swap them for a snowboard, fall into a boulder,
-// and take them off again. Then the descent, on the adventures board: sent to
-// the top of a run in the high country, and timed down it. And the forest's
-// other runs, out in the high country, are on the map, snow on their tops.
+// and take them off again. Then the descent, on the adventures board: none to
+// be had down in the valley, and from the mountain, sent to the top of the
+// run and timed down it. And the other runs, out in the high country, are on
+// the map, snow on their tops.
 //
 // Leaves: you on foot, on the mountain.
 
 import assert from 'node:assert/strict';
 
 export default async function ({ page, step, key, frames, shot }) {
-  // Somewhere steep with snow on it and more below, near the start, and
-  // nothing in the way for a good way down.
+  // Somewhere steep with snow on it and more below, on the High Country ski
+  // run's mountain, and nothing in the way for a good way down.
   const spots = await page.evaluate(() => {
-    const { gen, player } = world;
+    const { gen } = world;
     const h = (x, z) => gen.height(x, z);
     const fall = (x, z) => {
       const gx = (h(x + 1, z) - h(x - 1, z)) / 2;
@@ -21,9 +23,9 @@ export default async function ({ page, step, key, frames, shot }) {
       return { g, x: -gx / g, z: -gz / g };
     };
     const snowy = (x, z) => gen.snow(x, z, h(x, z)) > 0.9;
-    const s0 = player.start;
+    const s0 = world.skiing.home;
     const found = [];
-    for (let r = 60; r < 2000 && found.length < 20; r += 15) {
+    for (let r = 0; s0 && r < 2000 && found.length < 20; r += 15) {
       const n = Math.ceil((Math.PI * 2 * r) / 15);
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2;
@@ -44,7 +46,7 @@ export default async function ({ page, step, key, frames, shot }) {
     }
     return found;
   });
-  assert.ok(spots.length, 'there is steep snow within reach of the start');
+  assert.ok(spots.length, 'there is steep snow on the mountain the High Country ski run is on');
   let spot = null;
   for (const s of spots) {
     const clear = await page.evaluate(async (s) => {
@@ -232,36 +234,25 @@ export default async function ({ page, step, key, frames, shot }) {
   });
 
   // ── The descent ───────────────────────────────────────────────────────────
-  await step('no descent to be had in the woods', async () => {
-    // From where the skiing left us, which is the forest's own mountain and
-    // not the high country. Nothing is moved: this part leaves the hiker on
-    // the mountain, and the parts after it begin there.
+  await step('no descent to be had down in the valley', async () => {
+    // From the start, on the floor of the Hoh, under the snow but a long way
+    // under it; then back to the mountain, where this part leaves the hiker
+    // and the parts after it begin.
+    const was = await page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z, yaw: world.player.yaw }));
     const got = await page.evaluate(async () => {
-      const p = world.player.pos;
-      // nothing of the high country within the reach it searches
-      let most = 0;
-      for (let x = -3000; x <= 3000; x += 250) for (let z = -3000; z <= 3000; z += 250) most = Math.max(most, world.gen.country(p.x + x, p.z + z).alp);
-      return { most, why: world.adventures.begin('descent') };
+      const s = world.player.start;
+      await world.teleport(s.x, s.z, s.yaw);
+      await T.frames(5);
+      return { why: world.adventures.begin('descent') };
     });
-    assert.ok(got.most < 0.5, `no high country round the mountain we are on (${got.most.toFixed(2)})`);
     assert.match(got.why, /high country/, 'and it says where to go for one');
+    await page.evaluate(async (w) => void (await world.teleport(w.x, w.z, w.yaw)), was);
     return got;
   });
 
   await step('sent to the top of a run, and timed down it', async () => {
     const was = await page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z, yaw: world.player.yaw }));
-    // the high country, found from the country field alone (cheap: no water)
-    const top = await page.evaluate(() => {
-      let best = null;
-      for (let x = -45000; x <= 45000; x += 1000) for (let z = -45000; z <= 45000; z += 1000) {
-        if (world.gen.country(x, z).alp < 0.95) continue;
-        const h = world.gen.broadHeight(x, z, 0);
-        if (!best || h > best[2]) best = [x, z, h];
-      }
-      return best;
-    });
-    assert.ok(top, 'there is high country out there');
-    await page.evaluate(async (t) => void (await world.teleport(t[0], t[1], 0)), top);
+    // from the mountain the skiing left us on, the High Country ski run's
     await page.evaluate(() => T.until(() => world.game.chunks.isFullyLoaded(), 90000));
 
     // it begins, sending us to the top if we are not on one already
@@ -313,7 +304,7 @@ export default async function ({ page, step, key, frames, shot }) {
     return { foot, ...won };
   });
 
-  await step('the forest\'s other runs', async () => {
+  await step('the other runs', async () => {
     const found = await page.evaluate(() => {
       const runs = world.skiing.runs;
       for (let r = 0; r < 6; r++) {
@@ -329,7 +320,9 @@ export default async function ({ page, step, key, frames, shot }) {
     });
     assert.ok(found, 'there is a run out in the high country');
     assert.equal(found.kind, 'ski peak');
-    assert.ok(found.drop >= 220 && found.snow >= 0.6, `snow on its top, and plenty below (${JSON.stringify(found)})`);
+    // (a run on the real Earth is at its scale: a fifth as many metres of snow
+    // below it as one on a made-up land, skiing/descent.js)
+    assert.ok(found.drop >= 44 && found.snow >= 0.6, `snow on its top, and plenty below (${JSON.stringify(found)})`);
     return found;
   });
 }

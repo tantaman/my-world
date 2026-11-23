@@ -192,14 +192,14 @@ don't edit the same lines:
   `landforms.ready(box)` first and waits, and anything else grown from the
   seed keeps off a hike's reach (`landforms.reaches(box)`), as the old places
   and the caves do.
-- **The real Earth is part of the world description too.** Past the forest
-  round the middle (`EARTH` in `world/earth.js`) the land is the Earth's,
-  set in by `world/realPlaces.js` as the hikes are, from the tiles
-  `npm run earth` writes to `world/earth/`. Don't edit those, and once a
-  land is frozen don't re-run the importer to reshape them: worlds are built
-  on them. Nothing inside the middle may change for it
-  (`test/earth.test.js`), which is why the water never runs from the Earth
-  into the middle. Its tiles are fetched as they're needed, like a hike's
+- **The real Earth is part of the world description too.** Everywhere,
+  the start included, the land is the Earth's (`world/earth.js`), set in by
+  `world/realPlaces.js` as the hikes are, from the tiles `npm run earth`
+  writes to `world/earth/`. Don't edit those, and once a land is frozen
+  don't re-run the importer to reshape them: worlds are built on them. A
+  land grown without it, as the golden tests grow one, is exactly itself:
+  the Earth goes into the wrapper, never into a land, as a hike does. Its
+  tiles are fetched as they're needed, like a hike's
   land, and `landforms.ready(box)` waits for them too; anything else that
   asks about the Earth before its tile has come is thrown a `NotYet`
   (`core/notYet.ts`): a `Searches` search starts over when it has, a system

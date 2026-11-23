@@ -5,8 +5,8 @@
 // square reads only the broad land and the snow line, so it is cheap, and
 // done outright the first time it's asked.
 //
-// The High Country ski run, the one surveyed from the start (index.js), was
-// there first: none of these is within RUNS.apart of it.
+// The High Country ski run, the one surveyed from the start (index.js, out to
+// HOME.reach), was there first: none of these is within RUNS.apart of it.
 //
 // No three.js in here: the tests read it.
 //
@@ -19,6 +19,11 @@ export const RUNS = {
   step: 250, // m between the spots looked at in it
   apart: 3000, // m kept from the High Country ski run
 };
+// How far from the start the High Country ski run is looked for, and the step
+// the search walks out in (m): fine enough not to step over the snow on a
+// real summit (the Olympics' own are a few hundred metres across, at the
+// Earth's scale), and far enough to take in a range round the start.
+export const HOME = { reach: 15000, step: 250 };
 // What a run is called: a word for the mountain and one for the run, each
 // going round on a lattice (the mountain's i + 4j, of 16, so no two squares
 // within three of each other either way share one).

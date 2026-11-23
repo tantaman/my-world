@@ -1,22 +1,24 @@
 // The real Earth, under the whole world.
 //
 // The game world is the real world at the hikes' own scale, 1 : 5, laid out
-// round its middle in the Hoh rain forest (core/geo.js). Round the middle the
-// forest is the game's own; further out, the land is the Earth's: the oceans
-// are where the oceans are, at the sea's level, and as deep as they are; the
-// continents and islands rise out of them where they do, as high as they
-// are; plains are flat and mountains rugged; and every part of it is the kind
-// of country its climate makes it (country.js: EARTH_COUNTRY). A hike stands
-// on it at its real height, so its land meets the Earth's round it.
+// round its middle in the Hoh rain forest (core/geo.js), where everyone
+// starts: the oceans are where the oceans are, at the sea's level, and as
+// deep as they are; the continents and islands rise out of them where they
+// do, as high as they are; plains are flat and mountains rugged; and every
+// part of it is the kind of country its climate makes it (country.js:
+// EARTH_COUNTRY). The forest the land grows (worldgen.js) is laid over it,
+// for the hills, paths and streams you walk on. A hike stands on it at its
+// real height, so its land meets the Earth's round it.
 //
 // What is known about the Earth is a grid of cells five minutes of arc across
 // (about 9 km, so 1.85 km in the game), cut into tiles 15° square and
 // written by `npm run earth` (tools/earth.mjs) to world/earth/: for each
 // cell, the height of its land and the depth of its sea, how far it is from
 // the coast, and how rugged the land round it is (tools/earth/build.js says
-// exactly). A tile is fetched the first time something near it is grown
-// (landforms.js), as a hike's land is. The climate is a map of its own, half
-// a degree to a cell (Köppen-Geiger), fetched with the first tile.
+// exactly); and finer, round the start and round each hike (DETAIL). A tile
+// is fetched the first time something near it is grown (landforms.js), as a
+// hike's land is. The climate is a map of its own, half a degree to a cell
+// (Köppen-Geiger), fetched with the first tile.
 //
 // This file is pure, like the rest of the world description: the chunk
 // workers and the map workers each hold an Earth, handed the same tiles and
@@ -35,16 +37,6 @@ import { COUNTRY, EARTH_COUNTRY } from './country.js';
 
 export const EARTH = {
   scale: 0.2, // game metres per real metre: the hikes' own
-  // m from the middle of the world: inside `from` the forest is the game's
-  // own, and by `full` it is all the Earth's. The game's own forest is all
-  // that's grown round the start, high country and all: its massifs are a
-  // day's walk apart, and the nearest can be forty kilometres off, and its
-  // ski runs, launch sites and hunt clubs are pinned (test/golden/) as far
-  // out as seventy. So the Earth begins past them (at 1 : 5, about 400 km
-  // from the Hoh: the far side of the Cascades), and every hike out there
-  // stands in its own real country.
-  from: 80000,
-  full: 100000,
   // The coast: the land rises from the shore to its own height over this many
   // real km, and the seabed falls away to its depth over `shelf` km.
   rise: 2.5,
@@ -88,9 +80,19 @@ export const LINES = {
 };
 const lineAt = (L, lat) => Math.max(0, L.at - L.perDegree * Math.max(0, Math.abs(lat) - L.from));
 // The real heights [from, to] over which the trees give out, and over which
-// the snow comes to lie, at latitude lat in a country: its own if it says.
-export const treelineOf = (country, lat) => country.treeline || [lineAt(LINES.treeline, lat) - LINES.treeline.fade, lineAt(LINES.treeline, lat)];
-export const snowlineOf = (country, lat) => country.snowline || [lineAt(LINES.snowline, lat), lineAt(LINES.snowline, lat) + 250];
+// the snow comes to lie, at latitude lat in a country: its own if it says,
+// else the latitude's, as much higher or lower as the country's climate has
+// them (country.js, `lines`).
+export function treelineOf(country, lat) {
+  if (country.treeline) return country.treeline;
+  const at = Math.max(0, lineAt(LINES.treeline, lat) + country.lines.tree);
+  return [at - LINES.treeline.fade, at];
+}
+export function snowlineOf(country, lat) {
+  if (country.snowline) return country.snowline;
+  const at = Math.max(0, lineAt(LINES.snowline, lat) + country.lines.snow);
+  return [at, at + 250];
+}
 
 // The kind of country (country.js) a part of the Earth is, from its climate
 // class, its latitude, how high it is (real m) and how rugged (real m).
@@ -109,15 +111,17 @@ export function earthCountry(climate, lat, height, relief) {
 // Alps round a ski resort photographed in winter are under snow too.
 export const PLACE_REACH = 2500;
 
-// Round each hike out on the Earth, the land finer: a box of heights
+// Round the start and round each hike, the land finer: a box of heights
 // perDegree to a degree (15", about 460 m: 92 in the game), from elevation
-// tiles at `zoom`, for `reach` real km about it (as far as what's grown from
-// the seed round a hike is looked for: an airfield, a pier). It is the Earth
+// tiles at `zoom`, for `reach` real km about each hike (as far as what's
+// grown from the seed round a hike is looked for: an airfield, a pier) and
+// `start` about the start (what's grown round it: the towns, the railway, the
+// coast's pier and its surf, the Olympics' snow). It is the Earth
 // there, coming in over the coarse grid across `fade` real km in from the
 // box's edge: the valleys are the real valleys and the coast the real coast,
 // and the real land of the hike meets it. Its coast is worked out from its
 // heights when it comes (`coast` km, either way, at the most).
-export const DETAIL = { perDegree: 240, zoom: 10, reach: 35, fade: 4, coast: 12 };
+export const DETAIL = { perDegree: 240, zoom: 10, reach: 35, start: 90, fade: 4, coast: 12 };
 
 // The boxes there are, as a list: from { name: { box: [s, w, n, e], w, h } }
 // (earthTiles.js, EARTH_DETAILS), to [{ name, box, w, h }].
@@ -573,9 +577,9 @@ export class Earth {
 }
 
 // m round the start, and round each real place, over which what's grown from
-// the seed is looked for as the game opens (the forest's own ski run, a
-// launch site; the airfields and the hunt club round a hike): the Earth
-// there is fetched before the features that look are installed
+// the seed is looked for as the game opens (the towns, the railway, the ski
+// run, a launch site; the airfields and the hunt club round a hike): the
+// Earth there is fetched before the features that look are installed
 // (world/index.js), and a test that grows the world as the game has it
 // fetches the same.
 export const SEARCHED = { start: 80000, places: 20000 };
@@ -587,9 +591,6 @@ export function searchedAtFirst(cards) {
   return [near(0, 0, SEARCHED.start), ...cards.map((c) => near(c.at[0], c.at[1], SEARCHED.places))];
 }
 
-// How much of (x, z) is the Earth's (0..1) rather than the game's own forest.
-export const earthWeight = (x, z) => smoothstep(EARTH.from, EARTH.full, Math.hypot(x, z));
-
 // The names of the tiles anything in the square (x0, z0)–(x1, z1) of the game
 // world is grown from (and of the finer boxes round the hikes, of `details`:
 // detailList's), into `into` (a Set): the square and LOOKS_OUT m round
@@ -597,16 +598,13 @@ export const earthWeight = (x, z) => smoothstep(EARTH.from, EARTH.full, Math.hyp
 // way it runs: drainage.js; the Earth itself, a block at a time). It's walked
 // every `step` m, which is fine enough that no tile is missed between (the
 // finer boxes round the hikes are fourteen kilometres across, the tiles
-// hundreds). Nothing well inside the middle.
+// hundreds).
 const LOOKS_OUT = 2500;
 export function tilesIn(x0, z0, x1, z1, into = new Set(), details = []) {
   x0 -= LOOKS_OUT;
   z0 -= LOOKS_OUT;
   x1 += LOOKS_OUT;
   z1 += LOOKS_OUT;
-  const far = Math.max(Math.abs(x0), Math.abs(x1));
-  const farZ = Math.max(Math.abs(z0), Math.abs(z1));
-  if (Math.hypot(far, farZ) <= EARTH.from) return into;
   const ll = [0, 0];
   const step = 5000;
   const nx = Math.max(1, Math.ceil((x1 - x0) / step));

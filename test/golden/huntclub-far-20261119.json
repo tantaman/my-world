@@ -1,23 +1,51 @@
 {
- "huntclub:far:-2:0": {
-  "name": "Moose Point Hunt Club",
-  "x": -13873.783,
-  "z": 6811.708,
-  "yaw": 1.582,
-  "base": -9.626
+ "huntclub:far:0:-3": {
+  "name": "Tamarack Hill Hunt Club",
+  "x": 3584.516,
+  "z": -27014.428,
+  "yaw": 5.534,
+  "base": -31.105
+ },
+ "huntclub:far:2:-3": {
+  "name": "Timber Run Hunt Club",
+  "x": 24297.356,
+  "z": -25700.062,
+  "yaw": 2.328,
+  "base": -31.135
  },
  "huntclub:far:-1:1": {
   "name": "Elk Point Hunt Club",
-  "x": -3816.965,
-  "z": 13853.67,
-  "yaw": 1.693,
-  "base": -10.849
+  "x": -2904.57,
+  "z": 13149.476,
+  "yaw": 3.263,
+  "base": -20.866
  },
  "huntclub:far:0:1": {
   "name": "Tamarack Valley Hunt Club",
-  "x": 5831.861,
-  "z": 13877.211,
-  "yaw": 0.11,
-  "base": -16.29
+  "x": 6136.839,
+  "z": 13548.99,
+  "yaw": 1.681,
+  "base": 6.306
+ },
+ "huntclub:far:2:1": {
+  "name": "Timber Hollow Hunt Club",
+  "x": 23885.208,
+  "z": 12549.707,
+  "yaw": 3.049,
+  "base": -31.151
+ },
+ "huntclub:far:0:2": {
+  "name": "Black Spruce Point Hunt Club",
+  "x": 7155.151,
+  "z": 24873.106,
+  "yaw": 2.387,
+  "base": -15.537
+ },
+ "huntclub:far:1:2": {
+  "name": "Wapiti Valley Hunt Club",
+  "x": 14412.888,
+  "z": 24510.319,
+  "yaw": 3.683,
+  "base": -5.147
  }
 }

@@ -24,6 +24,9 @@ import { gunModel, holdOf } from '../src/skirmish/guns.js';
 import { makeFigure, setSide, poseFigure, muzzleOf } from '../src/skirmish/figures.js';
 import { roadsWorld } from './helpers/roadsWorld.js';
 import { matchesGolden } from './helpers/golden.js';
+import { earthAtFirst } from './helpers/earth.js';
+// The real Earth under the world, as the game has it when it opens (world/earth.js).
+const EARTH = await earthAtFirst();
 
 const SEED = 20261119;
 const STEP = 1 / 60;
@@ -90,7 +93,7 @@ test('the gate is grown from the seed: the same every time, on flat dry ground, 
 });
 
 test('the gate keeps off a road, a town, a dealership, the gate under the hill, and whatever else was there first', () => {
-  const gen = growWorld(SEED);
+  const gen = growWorld(SEED, [], 1, [], EARTH);
   const start = gen.findSpawn(0, 0);
   const first = findSite(gen, start);
   const b = first.box;

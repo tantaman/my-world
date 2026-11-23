@@ -24,13 +24,16 @@ import { Counter, HANDS, TERMS, DAY, dueAt, daysLate, termsOf } from '../src/vid
 import { glyph, layout } from '../src/build/font.js';
 import { matchesGolden } from './helpers/golden.js';
 import { movieDetails } from '../worker/movies.js';
+import { earthAtFirst } from './helpers/earth.js';
+// The real Earth under the world, as the game has it when it opens (world/earth.js).
+const EARTH = await earthAtFirst();
 
 const SEED = 20261119;
 
 // The world as the game has it: the things the store keeps clear of, made
 // the way their features make them.
 function worldOf(land) {
-  const gen = growWorld(SEED, [], land);
+  const gen = growWorld(SEED, [], land, [], EARTH);
   const start = gen.findSpawn(0, 0);
   const landforms = new Landforms(HIKES);
   const keepHike = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);
@@ -130,7 +133,7 @@ test('the video store is grown from the seed: the same every time, on flat dry g
 });
 
 test('the video store keeps off somewhere it is told to', () => {
-  const gen = growWorld(SEED);
+  const gen = growWorld(SEED, [], 1, [], EARTH);
   const start = gen.findSpawn(0, 0);
   const first = findSite(gen, start);
   const box = first.box;

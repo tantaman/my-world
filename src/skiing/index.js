@@ -32,14 +32,13 @@ import { Spray } from './spray.js';
 import { skiSounds } from './sound.js';
 import { Skiers } from './others.js';
 import { descent, findRunTop } from './descent.js';
-import { SkiRuns, RUNS } from './runs.js';
+import { SkiRuns, RUNS, HOME } from './runs.js';
 import * as pictures from './pictures.js';
 import { GridNearest, ListNearest, MergeNearest } from '../core/nearest.js';
 import './skiing.css';
 import { segDist, waterSample } from '../core/geom.js';
 import { clamp, smoothstep } from '../noise.js';
 
-const SURVEY = { reach: 30000, step: 750 }; // metres, for the ski run on the map
 
 // The skis go on by themselves on snow this deep (0..1), this steep (rise
 // over run, about 18°), heading down it at this many m/s.
@@ -317,7 +316,7 @@ export function installSkiing(game) {
   // same pin when someone reloads or looks for it from overseas; the rest are
   // a square at a time, wherever the high country holds snow (runs.js).
   const GLYPH = ['.......', '...#...', '..#.#..', '..###..', '.#####.', '.#####.', '#######'];
-  const top = findRunTop(gen, landforms, player.start, SURVEY.reach, SURVEY.step);
+  const top = findRunTop(gen, landforms, player.start, HOME.reach, HOME.step);
   const peak = top && snowAt(top.x, top.z) >= CLIP_IN.snow
     ? { id: `ski:${Math.round(top.x)}:${Math.round(top.z)}`, x: top.x, z: top.z, kind: 'ski peak', name: 'High Country ski run', note: 'A snowy run in the forest. Head downhill to clip in.', glyph: GLYPH }
     : null;
@@ -507,7 +506,9 @@ export function installSkiing(game) {
     },
     skier,
     run,
-    // the forest's ski runs, away from the start: runs.cell(i, j), runs.byId(id)
+    // the High Country ski run's top ({ x, z, drop }), or null; and the rest,
+    // away from it: runs.cell(i, j), runs.byId(id)
+    home: top,
     runs,
     snowAt,
     on(k = kind) {

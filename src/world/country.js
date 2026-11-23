@@ -93,12 +93,16 @@
 //            country (world/earth.js), as a share of the forest's own woods:
 //            a desert none, a savanna a few trees out in the grass. (A hike
 //            says how wooded it is for itself, on its card.)
+//   lines    { tree, snow }: where the Earth is this country and it says
+//            nothing of a treeline or a snow line of its own, how many real
+//            metres higher (or lower) than the Earth's own by latitude they
+//            lie: a wet coast's snow comes far lower than the latitude's (the
+//            Olympics' glaciers), a dry interior's lines stand higher
 //
-// Out past the forest round the middle of the world the land is the real
-// Earth's (world/earth.js), and each part of it is a country by its climate:
-// EARTH_COUNTRY, at the end, says which. Where one of those says nothing of a
-// treeline or a snow line, the Earth has its own, by how far from the equator
-// it is.
+// The land is the real Earth's (world/earth.js), and each part of it is a
+// country by its climate: EARTH_COUNTRY, at the end, says which. Where one of
+// those says nothing of a treeline or a snow line, the Earth has its own, by
+// how far from the equator it is.
 //
 // Each also gets an id, its place in the table: the ground carries it vertex
 // by vertex, so the shaders, which are handed every country's colours, know
@@ -140,16 +144,24 @@ const FOREST = {
   moss: {},
   tidal: false,
   woods: 1,
+  lines: { tree: 0, snow: 0 },
 };
+
+// The lines on a wet coast, as the forest's own is (the Pacific north-west):
+// the snow lies far lower than the latitude says: from about 1,670 m on the
+// Olympics, where their glaciers hold it through the summer (the drier
+// Cascades' hold it from 2,000 m or so, but come lower still), and the trees
+// give out a little lower.
+const WET_COAST = { tree: -250, snow: -900 };
 
 const kind = (over) => ({ ...FOREST, ...over, ground: { ...FOREST.ground, ...over.ground }, clouds: { ...FOREST.clouds, ...over.clouds } });
 
 export const COUNTRY = {
-  forest: FOREST,
+  forest: { ...FOREST, lines: WET_COAST },
 
   // The Pacific north-west: big conifers over ferns and moss, which is what
   // the forest is anyway.
-  'temperate rainforest': kind({}),
+  'temperate rainforest': kind({ lines: WET_COAST }),
 
   // The windward side of a tropical island, up in the rain: every ridge
   // green to the top, the tops in cloud, the paths red clay.
@@ -366,14 +378,15 @@ export const COUNTRY = {
   }),
 
   // ── The Earth's own ─────────────────────────────────────────────────────
-  // What the real Earth is, climate by climate, out past the forest round the
-  // middle (EARTH_COUNTRY, below, says which climate is which). Broad strokes:
+  // What the real Earth is, climate by climate (EARTH_COUNTRY, below, says
+  // which climate is which). Broad strokes:
   // each stands for a great deal of the world.
 
   // Tropical rainforest (the Amazon, the Congo, Borneo): tall broadleaves,
   // closed overhead, palms and tree ferns under them, red clay, and thick wet
   // air under a broken sky.
   jungle: kind({
+    lines: { tree: -300, snow: 0 },
     ground: { tint: [0.9, 1.15, 0.66], dirt: [0.26, 0.11, 0.055], rock: [0.1, 0.085, 0.07], bare: [[0.26, 0.11, 0.055], [0.14, 0.065, 0.04]] },
     trees: [['broad', 0.8], ['palm', 0.12], ['ironwood', 0.08]],
     under: { fern: [['fern', 0.55], ['treefern', 0.45]], bush: [['bush', 0.7], ['treefern', 0.3]] },
@@ -389,6 +402,7 @@ export const COUNTRY = {
   // Top End): tall tawny grass, red earth, and flat-topped trees standing
   // well apart.
   savanna: kind({
+    lines: { tree: 0, snow: 300 },
     ground: { tint: [1.45, 1.1, 0.48], dirt: [0.34, 0.14, 0.06], rock: [0.3, 0.16, 0.09], bare: [[0.36, 0.15, 0.065], [0.3, 0.17, 0.09]], sand: [0.4, 0.26, 0.15], barren: 0.15 },
     trees: [['broad', 1]],
     under: { fern: [['bush', 0.3]], bush: [['bush', 0.8]] },
@@ -406,6 +420,7 @@ export const COUNTRY = {
   // Hot desert (the Sahara, Arabia, the Mojave): sand and stone, the odd
   // bush, clear dry air and no cloud.
   desert: kind({
+    lines: { tree: 500, snow: 700 },
     ground: { tint: [1.5, 1.15, 0.6], dirt: [0.42, 0.3, 0.18], rock: [0.36, 0.22, 0.13], bare: [[0.5, 0.36, 0.21], [0.4, 0.27, 0.15]], sand: [0.52, 0.4, 0.25], barren: 0.94 },
     trees: [],
     under: { fern: [], bush: [['bush', 0.25]] },
@@ -419,6 +434,7 @@ export const COUNTRY = {
   // Cold desert and sagebrush steppe (the Great Basin, Patagonia, the Gobi):
   // grey-green sage over pale ground, a juniper here and there, wide skies.
   sagebrush: kind({
+    lines: { tree: 700, snow: 700 },
     ground: { tint: [1.2, 1.05, 0.7], dirt: [0.3, 0.25, 0.18], rock: [0.26, 0.22, 0.18], bare: [[0.32, 0.27, 0.2], [0.24, 0.2, 0.15]], sand: [0.38, 0.32, 0.23], barren: 0.5 },
     trees: [['pine', 1]],
     sizes: { pine: 0.3 },
@@ -437,6 +453,7 @@ export const COUNTRY = {
   // the Sahel's edge): rolling grass, a line of trees along a creek, a big
   // sky with fair-weather cloud.
   prairie: kind({
+    lines: { tree: 500, snow: 500 },
     ground: { tint: [1.3, 1.12, 0.62], dirt: [0.26, 0.19, 0.11], rock: [0.24, 0.2, 0.16], bare: [[0.28, 0.21, 0.13], [0.2, 0.15, 0.1]], barren: 0.08 },
     trees: [['broad', 0.85], ['pine', 0.15]],
     riparian: { reach: 30, trees: [['broad', 1]], dry: 0.35 },
@@ -452,6 +469,7 @@ export const COUNTRY = {
   // Summer-dry hills (California, the Mediterranean, the Cape): golden grass
   // and dark scrub, oaks spread out over it and pines on the ridges.
   chaparral: kind({
+    lines: { tree: 200, snow: 300 },
     ground: { tint: [1.4, 1.12, 0.55], dirt: [0.32, 0.22, 0.13], rock: [0.3, 0.26, 0.21], bare: [[0.34, 0.24, 0.14], [0.26, 0.18, 0.1]], sand: [0.42, 0.34, 0.24], barren: 0.12 },
     trees: [['broad', 0.75], ['pine', 0.25]],
     under: { fern: [['bush', 0.5]], bush: [['bush', 1]] },
@@ -469,6 +487,7 @@ export const COUNTRY = {
   // Europe east of the Rhine, Japan): oaks and maples, birch and a few pines,
   // in a fresher green.
   'deciduous forest': kind({
+    lines: { tree: 0, snow: -150 },
     ground: { tint: [1.05, 1.08, 0.82] },
     trees: [['broad', 0.68], ['birch', 0.12], ['pine', 0.2]],
     under: { fern: [['fern', 0.6], ['bush', 0.3]], bush: [['bush', 1]] },
@@ -483,6 +502,7 @@ export const COUNTRY = {
   // Siberia): slim dark spruces close together, birches where it's burned,
   // moss underfoot, and a grey sky low over it.
   'boreal forest': kind({
+    lines: { tree: 100, snow: -150 },
     ground: { tint: [0.82, 0.95, 0.85], dirt: [0.16, 0.12, 0.08] },
     trees: [['pine', 0.85], ['birch', 0.15]],
     under: { fern: [['fern', 0.5], ['bush', 0.3]], bush: [['bush', 1]] },
@@ -581,7 +601,7 @@ COUNTRIES.forEach((c, id) => {
 });
 
 // The country of that name, or the forest.
-export const countryOf = (name) => COUNTRY[name] || FOREST;
+export const countryOf = (name) => COUNTRY[name] || COUNTRY.forest;
 
 // One of [[kind, share], ...] for r in 0..1, or null where the shares run out.
 export function pick(shares, r) {

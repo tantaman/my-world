@@ -17,9 +17,12 @@ import { makeCreature, CREATURE_NAMES } from '../src/hell/creatures.js';
 import { buildCave, finish } from '../src/caves/build.js';
 import { layoutCave, cellOf } from '../src/caves/sites.js';
 import { matchesGolden } from './helpers/golden.js';
+import { earthAtFirst } from './helpers/earth.js';
+// The real Earth under the world, as the game has it when it opens (world/earth.js).
+const EARTH = await earthAtFirst();
 
 const SEED = 20261119;
-const gen = growWorld(SEED, [], 1);
+const gen = growWorld(SEED, [], 1, [], EARTH);
 const gate = findGate(gen);
 const land = new HellLand({ seed: SEED, ...gate.hell });
 const o = {};
@@ -33,7 +36,7 @@ const at = (r, th, full = false) => {
 // ── The gate ────────────────────────────────────────────────────────────────
 for (const n of LANDS) for (const seed of [SEED, 42]) {
   test(`seed ${seed}, land ${n}: where the gate is`, () => {
-    const g = seed === SEED && n === 1 ? gen : growWorld(seed, [], n);
+    const g = seed === SEED && n === 1 ? gen : growWorld(seed, [], n, [], EARTH);
     const found = findGate(g);
     assert.ok(found, 'there is a hillside for it');
     const d = Math.hypot(found.x, found.z);
@@ -45,7 +48,7 @@ for (const n of LANDS) for (const seed of [SEED, 42]) {
 
 test('the gate is found the same way twice, and leaves the land as it was', () => {
   const before = [gate.x, gate.z, gate.x + 30, gate.z - 12].map((v, i, a) => gen.height(a[i & 2], a[(i & 2) + 1]));
-  const again = findGate(growWorld(SEED, [], 1));
+  const again = findGate(growWorld(SEED, [], 1, [], EARTH));
   assert.deepEqual([again.x, again.z, again.hell], [gate.x, gate.z, gate.hell]);
   const after = [gate.x, gate.z, gate.x + 30, gate.z - 12].map((v, i, a) => gen.height(a[i & 2], a[(i & 2) + 1]));
   assert.deepEqual(after, before);
@@ -178,9 +181,9 @@ test('a circle does not close: one turn on is another place over the same land',
   assert.notEqual(a.pass[0] - k * SECTOR, b.pass[0] - far * SECTOR, 'its way down is somewhere else in it');
   // where one turn has a way down, the turn above it has the cliff
   const s = STEPS[0];
-  const here = at(s.at, a.pass[0]).h;
-  const there = at(s.at, a.pass[0] + TAU * 2).h;
-  assert.ok(Math.abs(here - there) > 5, `the ramp (${here.toFixed(0)}) is the cliff (${there.toFixed(0)}) a turn on`);
+  let most = 0;
+  for (let r = s.at - s.w / 2; r <= s.at + s.w / 2; r += 2) most = Math.max(most, Math.abs(at(r, a.pass[0]).h - at(r, a.pass[0] + TAU * 2).h));
+  assert.ok(most > 5, `the ramp is the cliff a turn on (${most.toFixed(0)} m apart across it, at the most)`);
   // away from its sights the land is the same on every turn...
   const calm = (k + 0.5) * SECTOR;
   for (const r of [R.c2 - 100, R.c3 - 100, R.wood + 100]) assert.ok(Math.abs(at(r, calm).h - at(r, calm + TAU * 5).h) < 1e-6);

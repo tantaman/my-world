@@ -128,7 +128,7 @@ export function installCruise(game) {
   const fields = airports.airports;
   const mauiRegion = fields.regions.find((g) => g.hikes.includes(PORTS[1].hike)) || null;
   const homeWays = [...regionsInTheWay(fields.regions, player.start), ...clubWays(fields.regions, player.start)];
-  const mauiWays = mauiRegion ? regionsInTheWay(fields.regions, mauiRegion, true) : [];
+  const mauiWays = mauiRegion ? regionsInTheWay(fields.regions, mauiRegion) : [];
   const known = (list) => list.every((g) => fields.site(g.id, false) !== undefined);
   const common = { landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, airfields: fields };
   // Every launch site, video store, hunt club and abandoned building, the far
@@ -144,7 +144,7 @@ export function installCruise(game) {
   let voyage = null;
   function search(i) {
     if (searches[i] || !from[i]) return;
-    searches[i] = { steps: berthSearch(gen, from[i], keepOff, { round: i > 0 }) };
+    searches[i] = { steps: berthSearch(gen, from[i], keepOff) };
   }
   // Port i's berth, found now if it hasn't been (the airfields in its way
   // asked about then and there): for when she's about to be there.

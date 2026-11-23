@@ -15,13 +15,19 @@
 // nothing of the world that the adventures' kit doesn't already hand it, but
 // its keys, its physics and its tally are here.
 
+import { EARTH } from '../world/earth.js';
+
 // m from you that a top may be found, and the step the search walks out in.
 const REACH = 2500;
 const STEP = 100;
 // How much high country (worldgen.js) makes a top worth sending you to, and
-// how much snow there must be under it for it to be a run at all (m).
+// how much snow there must be under it for it to be a run at all (m). On the
+// real Earth (world/earth.js) its mountains are at its scale, and so is a run:
+// as many real metres of snow, so a fifth as many in the game.
 const ALPINE = 0.5;
 const DROP_LEAST = 220;
+const onEarth = (gen, x, z) => !!gen.earthAt(x, z);
+const leastAt = (gen, x, z) => (onEarth(gen, x, z) ? DROP_LEAST * EARTH.scale : DROP_LEAST);
 // m round a top that must be clear of a real place: a hike brings its own
 // snow and its own weather, and this is the forest's run.
 const OFF = 120;
@@ -45,14 +51,9 @@ export function runDrop(gen, landforms, x, z) {
   if (gen.country(x, z).alp < ALPINE && !onEarth(gen, x, z)) return 0;
   // the broad height and the snow line, which are cheap: no water
   const drop = gen.broadHeight(x, z, 0) - gen.snowline(x, z);
-  if (drop < DROP_LEAST) return 0;
+  if (drop < leastAt(gen, x, z)) return 0;
   return landforms.reaches(x - OFF, z - OFF, x + OFF, z + OFF) ? 0 : drop;
 }
-
-const onEarth = (gen, x, z) => {
-  const e = gen.earthAt(x, z);
-  return !!e && e.w >= 0.5;
-};
 
 // Find a snowy start on the forest's own terrain, for the race or the map.
 export function findRunTop(gen, landforms, from, reach = REACH, step = STEP) {
@@ -95,7 +96,7 @@ class Descent {
     this.onSkis = onSkis;
     this.top = kit.ground(at.x, at.z);
     this.foot = kit.gen.snowline(at.x, at.z) + FOOT_OVER;
-    this.fall = Math.max(DROP_LEAST, this.top - this.foot);
+    this.fall = Math.max(leastAt(kit.gen, at.x, at.z), this.top - this.foot);
     this.limit = SLACK + this.fall / PACE;
     this.t = 0;
     this.low = this.top; // the lowest you have got to

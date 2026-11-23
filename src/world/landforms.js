@@ -4,8 +4,8 @@
 //
 // A hike is two things (see hikes.js): a card, which says what and where it
 // is and is always here, and its land (the heights, lakes and trails, about
-// 200 kB), which is fetched the first time it's needed. The Earth out past
-// the forest round the middle is a tile 15° square at a time, and its
+// 200 kB), which is fetched the first time it's needed. The Earth under the
+// world is a tile 15° square at a time, and its
 // climate (earthTiles.js), each fetched the first time something on it is
 // grown. Nothing is grown within reach of a hike, or on the Earth, until
 // what it's grown from has arrived: the chunks, the map and the far view

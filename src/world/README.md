@@ -193,12 +193,13 @@ grown bare, as the golden tests grow it, a land is exactly itself. The one
 thing asked of a land is that its own workings ask `forestHeight()` rather
 than `broadHeight()`, which hikes change: the water, for one, is routed over
 the land without the hikes in it, so a hike can't send a river somewhere
-else. Out on the real Earth (below) a hike stands at its real height, so its
-land meets the Earth's round it, and where its sea runs on past its edge it
-opens onto the Earth's sea rather than stopping at a bank. In the forest
-round the middle a real place stands at the height of the forest round it,
-except that one that would be under the sea stands a little over it
-instead, as an island (`datumLevel()`); the forest's sea keeps off land a
+else. On the real Earth (below), which is under all of the game's world, a
+hike stands at its real height, so its land meets the Earth's round it, and
+where its sea runs on past its edge it opens onto the Earth's sea rather
+than stopping at a bank. In a land grown bare, without the Earth under it
+(as the tests grow one), a real place stands at the height of the forest
+round it, except that one that would be under the sea stands a little over
+it instead, as an island (`datumLevel()`); the forest's sea keeps off land a
 real place holds entirely, and meets it round its edge.
 
 Each hike is a small *card* that is always here (`hikes.js`: what it is and
@@ -222,24 +223,27 @@ of its own, where it lay when the photo was taken in winter.
 
 ## The real Earth
 
-Out past the forest round the middle, the land is the real Earth's, at the
-hikes' own scale, 1 : 5, laid out round the Hoh as the hikes are
-(`core/geo.js`): the oceans are where the oceans are and as deep, the
-continents and islands rise out of them where they do and as high, plains
-are flat and mountains rugged, and every part of it is the kind of country
-its climate makes it. A swamp on the Gulf of Mexico is in the delta's
-bayous, Zion stands in red rock country, Maui is an island in the Pacific,
-and the snow lies on the Alps. The forest round the middle is the game's
-own, with all that is grown from the seed round the start, out to about
-80 km (`EARTH` in `earth.js`; about 400 km of the real world, out past the
-Cascades), and gives way to the Earth over the next 20.
+The land is the real Earth's, everywhere, at the hikes' own scale, 1 : 5,
+laid out round the Hoh as the hikes are (`core/geo.js`): the oceans are
+where the oceans are and as deep, the continents and islands rise out of
+them where they do and as high, plains are flat and mountains rugged, and
+every part of it is the kind of country its climate makes it. You start in
+the Hoh rain forest, in the valley under Mount Olympus, with the Pacific a
+few kilometres west and the Strait of Juan de Fuca to the north; a swamp on
+the Gulf of Mexico is in the delta's bayous, Zion stands in red rock
+country, Maui is an island in the Pacific, and the snow lies on the Alps.
+Everything grown from the seed (the towns, the roads and railways, the old
+places, the caves, the airfields) is grown on it, wherever the real land
+lets it be: the towns in the lowlands, the surf on the real coast, the High
+Country ski run on Olympus. What is far from the start is reached by rail
+and by air.
 
 **What it's made of.** A grid of the whole Earth five minutes of arc to a
 cell (about 9 km; 1.85 km in the game): each cell's land and seabed, how far
-it is from the coast, and how rugged the land round it is; and round each
-hike, the land finer, a height every 460 m, for 35 km about it, from the
-same elevation the hike's own land is, so the real valleys and coast are
-there and the hike meets them. The climate is the Köppen-Geiger map, half a
+it is from the coast, and how rugged the land round it is; and round the
+start (90 km about it) and each hike (35 km), the land finer, a height every
+460 m, from the same elevation the hike's own land is, so the real valleys
+and coast are there and the hike meets them. The climate is the Köppen-Geiger map, half a
 degree to a cell. `npm run earth` (`tools/earth.mjs`) builds all of it from
 AWS Terrain Tiles and the climate map, and writes it to `earth/`, a file a
 tile 15° square (`earthTiles.js` lists them), about 7 MB in all; a tile is
@@ -259,8 +263,7 @@ goes below it; along a low coast a hollow below its level is the sea, and a
 beach of the country's own sand runs along it, unless its shore is rock. The
 forest's hills calm down toward a shore and die away out at sea, so a coast
 keeps one line rather than shattering into islands. Water runs over the
-Earth's land as over the forest's, except that it never runs from the Earth
-into the forest's own middle, which is left exactly as it was.
+Earth's land as over the forest's.
 
 **What kind of country.** Each climate is a country (`country.js`,
 `EARTH_COUNTRY`): jungle, savanna, desert, sagebrush, prairie, chaparral,
@@ -278,8 +281,9 @@ are its country's (the country feature).
 a lake that stands above the sea (the Great Lakes, Baikal) is land at its
 floor, and Greenland's and Antarctica's ice is down at the rock under it.
 Land under the sea's level behind its dykes (New Orleans, the Netherlands)
-is under the sea. And away from the hikes the Earth is only as fine as its
-nine-kilometre cells: a mountain's top is rounded off.
+is under the sea. And away from the start and the hikes the Earth is only as
+fine as its nine-kilometre cells: a mountain's top is rounded off (Rainier
+stands about 3,000 m, not 4,392).
 
 ## Settings
 
@@ -302,7 +306,7 @@ water.js              streams, rivers, ponds, lakes and the sea on the ground, f
 landform.js           a piece of real land (a hike): its heights, trails, lakes, streams
 realPlaces.js         a land with real places set into it (the real Earth, the hikes): grown from any land, wraps what it says
 earth.js              the real Earth under the world: its tiles, what it is at a point, its kinds of country
-earthTiles.js         its tiles, and the finer boxes round the hikes (written by npm run earth)
+earthTiles.js         its tiles, and the finer boxes round the start and the hikes (written by npm run earth)
 earth/                each tile's land (fetched when needed)
 hikes.js              the hikes in the game, as cards (written by npm run hike)
 hikes/                each one's land (fetched when needed)

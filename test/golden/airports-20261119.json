@@ -1,12 +1,12 @@
 [
  {
-  "id": "airfield:-961:557",
+  "id": "airfield:-3510:1051",
   "region": "home",
   "name": "Thibodeau Airstrip",
-  "x": -960.849,
-  "z": 556.603,
-  "yaw": 2.094,
-  "mid": 10.121,
+  "x": -3509.665,
+  "z": 1050.872,
+  "yaw": 1.047,
+  "mid": 1.41,
   "clear": [
    true,
    true

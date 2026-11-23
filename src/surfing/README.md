@@ -9,9 +9,10 @@ first, for as far as you scroll (*Kelp Point*, *Gull Sands*, *Osprey Reef*),
 each with what it is and how big it runs; they're on the map too, and *go
 here* stands you on the beach looking out at it. Boards stood up in the
 sand at the top of the beach show you where, from along the shore. There's one in about one
-square in four of the forest, a square being a kilometre and a half across,
-wherever the coast will take a break; the nearest is usually within a walk
-of the start.
+square in four along the coast, a square being a kilometre and a half
+across, wherever the real coast will take a break; from the start in the
+Hoh, the nearest are on the Pacific shore, seven kilometres or more to the
+west.
 
 What a break is like comes from where it is. The waves are bigger, and
 longer between, where the beach looks out over a long way of open sea, and

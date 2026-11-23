@@ -298,6 +298,7 @@ export const CLIMATE = () => import('./earth/climate.js');
 // Finer, round the hikes: box [south, west, north, east] (degrees), w × h
 // heights from the north-west, DETAIL.perDegree to a degree (earth.js).
 export const EARTH_DETAILS = {
+  'd-start': { box: [47.0375,-125.15833333333333,48.6625,-122.74166666666666], w: 580, h: 390, load: () => import('./earth/d-start.js') },
   'd-waihee-ridge': { box: [20.391666666666666,-156.92916666666667,21.345833333333335,-155.64166666666668], w: 309, h: 229, load: () => import('./earth/d-waihee-ridge.js') },
   'd-angels-landing': { box: [36.954166666666666,-113.34583333333333,37.5875,-112.55], w: 191, h: 152, load: () => import('./earth/d-angels-landing.js') },
   'd-cascade-canyon': { box: [43.454166666666666,-111.225,44.0875,-110.35], w: 210, h: 152, load: () => import('./earth/d-cascade-canyon.js') },

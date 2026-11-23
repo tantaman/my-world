@@ -21,6 +21,9 @@ import { HIKES } from '../src/world/hikes.js';
 import { Landforms, reachOf } from '../src/world/landforms.js';
 import { mulberry32 } from '../src/noise.js';
 import { matchesGolden } from './helpers/golden.js';
+import { earthAtFirst } from './helpers/earth.js';
+// The real Earth under the world, as the game has it when it opens (world/earth.js).
+const EARTH = await earthAtFirst();
 
 const SEED = 20261119;
 const AREA = 3500; // m either side of the middle
@@ -29,7 +32,7 @@ const TRUNK = { pine: 0.3, broad: 0.4, birch: 0.2, bush: 0, fern: 0, rock: 0.7, 
 // The seed on each land (src/world/lands.js): the towns stand on whatever
 // land they find, so the rules about where are checked on every one.
 const WORLDS = LANDS.map((land) => {
-  const gen = growWorld(SEED, [], land);
+  const gen = growWorld(SEED, [], land, [], EARTH);
   const sites = new Sites(gen);
   const towns = new Towns(gen, { sites });
   return { land, on: land > 1 ? ` (land ${land})` : '', gen, sites, towns, all: towns.within(-AREA, -AREA, AREA, AREA) };
@@ -47,7 +50,7 @@ const footprint = (lot) =>
   ].map(([x, z]) => toWorld(lot, x, z));
 
 test('the same seed puts the same towns in the same places', () => {
-  const again = new Towns(growWorld(SEED, [], 1)).within(-1500, -1500, 1500, 1500);
+  const again = new Towns(growWorld(SEED, [], 1, [], EARTH)).within(-1500, -1500, 1500, 1500);
   const first = all.filter((t) => t.box[2] >= -1500 && t.box[0] <= 1500 && t.box[3] >= -1500 && t.box[1] <= 1500);
   assert.ok(first.length > 3);
   assert.deepEqual(again, first);
@@ -57,7 +60,7 @@ test('the same seed puts the same towns in the same places', () => {
 // visited or are tracking are saved by id.
 for (const land of LANDS) for (const seed of [SEED, 42]) {
   test(`seed ${seed}${land > 1 ? ` on land ${land}` : ''}: where the towns are`, () => {
-    const t = seed === SEED ? WORLDS[land - 1].towns : new Towns(growWorld(seed, [], land));
+    const t = seed === SEED ? WORLDS[land - 1].towns : new Towns(growWorld(seed, [], land, [], EARTH));
     const list = t.within(-1500, -1500, 1500, 1500).map(({ id, kind, name, x, z, yaw, len, people, lots }) => ({
       id, kind, name, x, z, yaw, len, people,
       lots: lots.map(({ type, u, v, r, ruin }) => [type, u, v, r, ruin]),
@@ -147,7 +150,7 @@ for (const { on, gen, all, sites } of WORLDS) {
 }
 
 for (const land of LANDS) test(`finding them leaves the forest as the seed grows it${land > 1 ? ` (land ${land})` : ''}`, () => {
-  const fresh = growWorld(SEED, [], land);
+  const fresh = growWorld(SEED, [], land, [], EARTH);
   const before = generateVegetation(fresh, 3, -4, 64, TRUNK);
   const ground = generateTerrain(fresh, 3, -4, 2, 64).heights;
   new Towns(fresh).within(-1500, -1500, 1500, 1500);
@@ -175,7 +178,7 @@ test('no town is grown where a real place reaches, and everywhere else they are 
 });
 
 test("a town's id finds it again, and nothing else", () => {
-  const other = new Towns(growWorld(SEED, [], 1));
+  const other = new Towns(growWorld(SEED, [], 1, [], EARTH));
   for (const t of all.slice(0, 6)) assert.deepEqual(other.byId(t.id), t);
   for (const bad of ['', 'town', 'town:1', 'town:x:y', 'cabin:0:0', 'castle:0:0', 42, null]) assert.equal(other.byId(bad), null, String(bad));
   const [ci, cj] = all[0].id.split(':').slice(1).map(Number);
@@ -183,7 +186,7 @@ test("a town's id finds it again, and nothing else", () => {
 });
 
 test('the map hears of them a few at a time, and catches up', () => {
-  const t = new Towns(growWorld(SEED, [], 1));
+  const t = new Towns(growWorld(SEED, [], 1, [], EARTH));
   assert.deepEqual(t.within(-2500, -2500, 2500, 2500, false), [], 'nothing known yet');
   assert.ok(t.queue.size > 10);
   while (t.pump(50) > 0);
