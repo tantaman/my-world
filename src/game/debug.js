@@ -8,8 +8,11 @@
 
 import { CONFIG } from '../config.js';
 
+// m round where you're set down that's in hand first (the ground there, and what stands on it)
+const SET_DOWN = 200;
+
 export function installDebug(game) {
-  const { renderer, pipeline, chunks, grass, player, hud } = game;
+  const { renderer, pipeline, chunks, grass, player, hud, landforms } = game;
   let show = CONFIG.debug;
   let seconds = 0;
   let frames = 0;
@@ -39,6 +42,8 @@ export function installDebug(game) {
   Object.assign(game.api, {
     // Resolves once the destination has streamed in.
     async teleport(x, z, yaw = player.yaw) {
+      // (the land there first, where it's fetched: a hike's, the real Earth's)
+      while (landforms && !landforms.ready(x - SET_DOWN, z - SET_DOWN, x + SET_DOWN, z + SET_DOWN)) await frame();
       player.spawn(x, z, yaw, yaw + Math.PI);
       do await frame();
       while (!chunks.isFullyLoaded());

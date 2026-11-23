@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 
 export default async function ({ page, key, frames, step, shot, open }) {
   await step('inside the abandoned wards', async () => {
-    const sites = await page.evaluate(() => world.abandoned.sites);
+    // (the four round the start: any of the districts' further out that
+    // earlier parts came near on their travels are counted among the sites too)
+    const sites = (await page.evaluate(() => world.abandoned.sites)).filter((s) => !s.id.startsWith('abandoned:district:'));
     assert.equal(sites.length, 4, 'four regional destinations found dry ground');
     for (const s of sites) {
       await key('KeyM');
