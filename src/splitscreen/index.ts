@@ -74,8 +74,17 @@ const TOO_FAR = 1500;
 const RIPPLE_EASE = 4;
 // Water this near the sea's level (m) is the sea, for the colour of its fog.
 const SEA_NEAR = 0.02;
+// While everyone is within this far (m) of the middle of them all, one map
+// of the sun's shadows, drawn round that middle, does for every part. It
+// reaches CONFIG.shadowExtent (60 m) each way from there, so round each of
+// them at least that less this. Further apart, each part draws its own,
+// round its own hiker. (A hiker is a hundred or so pieces, every one of them
+// casting a shadow, and so is every hiker in every part: drawing that once
+// a frame and not once a part is most of what there is to save.)
+const SHADOWS_SHARED = 12;
 
 const _w = waterSample();
+const _middle = new THREE.Vector3();
 
 interface Someone {
   pad: number;
@@ -93,7 +102,7 @@ interface Someone {
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player'];
 export function installSplitscreen(game: Game) {
-  const { scene, camera, chunks, gen, solids, spaces, basins, sky, hud, commands, settings, views, pads, player, followed, focus } = game;
+  const { scene, camera, origin, chunks, grass, gen, solids, spaces, basins, sky, hud, commands, settings, views, pads, player, followed, focus } = game;
 
   const others: Someone[] = [];
   let everyone: Player[] = [player];
@@ -179,11 +188,31 @@ export function installSplitscreen(game: Game) {
   // ── Each part as it's drawn ───────────────────────────────────────────────
   // Yours is drawn first, as the frame left everything; each other part is
   // drawn as it would be if its hiker were you, and then everything is put
-  // back as it was.
+  // back as it was. Each part draws only the grass round its own hiker; and
+  // while everyone is close together, the sun's shadows are drawn once, for
+  // all of them, with the first part (SHADOWS_SHARED).
   const yourWater = { wade: 0, flowX: 0, flowZ: 0, under: 0, level: 0, sea: 0 };
+  let together = false;
+  // Is everyone close enough together for one map of the sun's shadows, and
+  // where is the middle of them? Once a frame, before the parts are drawn.
+  function gather() {
+    _middle.set(0, 0, 0);
+    for (const h of everyone) _middle.add(h.pos);
+    _middle.multiplyScalar(1 / everyone.length);
+    // (not while you look out of your own eyes: your body isn't drawn in
+    // your part, nor would its shadow be in theirs)
+    together = !player.fromEye;
+    for (const h of everyone) together &&= Math.hypot(h.pos.x - _middle.x, h.pos.z - _middle.z) <= SHADOWS_SHARED;
+  }
+  // Would the scene be drawn from where it was for the part before (so that
+  // the shadows drawn then still fall where they did)? origin.js moves only
+  // for a camera more than its snap away.
+  const sameOrigin = (eye: THREE.Vector3) => Math.abs(eye.x - origin.x) <= origin.snap && Math.abs(eye.z - origin.z) <= origin.snap;
   function look(k: number) {
     const me = everyone[k];
     for (const h of everyone) h.character.hips.visible = !(h === me && h.fromEye);
+    grass.only(me.pos.x, me.pos.z);
+    if (together) sky.aim(_middle, (k === 0 ? camera : others[k - 1].camera).position);
     if (k === 0) {
       yourWater.wade = WADE.uWade.value;
       yourWater.flowX = WADE.uWadeFlow.value.x;
@@ -196,7 +225,8 @@ export function installSplitscreen(game: Game) {
     const o = others[k - 1];
     const eye = o.camera.position;
     SHARED.uPlayer.value.copy(me.pos);
-    sky.aim(me.pos, eye);
+    if (!together) sky.aim(me.pos, eye);
+    else if (sameOrigin(eye)) sky.freshShadows(false);
     WADE.uWade.value = o.ripple;
     WADE.uWadeFlow.value.set(me.current.x - me.vel.x, me.current.z - me.vel.z);
     // (as underwater/ has it for you: the camera under the surface, not in a
@@ -211,7 +241,9 @@ export function installSplitscreen(game: Game) {
   }
   function restore() {
     SHARED.uPlayer.value.copy(player.pos);
+    sky.freshShadows(true);
     sky.aim(focus, camera.position);
+    grass.only(null);
     WADE.uWade.value = yourWater.wade;
     WADE.uWadeFlow.value.set(yourWater.flowX, yourWater.flowZ);
     UNDER.uUnder.value = yourWater.under;
@@ -371,6 +403,7 @@ export function installSplitscreen(game: Game) {
         o.hiker.update(dt);
         o.ripple += (o.hiker.ripple - o.ripple) * (1 - Math.exp(-dt * RIPPLE_EASE));
       }
+      gather();
     },
   });
 

@@ -130,6 +130,18 @@ export class Grass {
     }
   }
 
+  // Draw only the tiles that can be seen round (x, z), or all of them again
+  // (null). The blades fade out by the grass radius from whoever they're
+  // drawn for (uPlayer, materials.js), so a tile further off than that would
+  // be drawn as nothing: on a split screen, the grass round the others.
+  only(x, z = 0) {
+    const T = CONFIG.grassTile;
+    const reach = CONFIG.grassRadius + T * 0.72; // (to the nearest corner of a tile)
+    for (const tile of this.tiles.values()) {
+      if (tile.mesh) tile.mesh.visible = x === null || Math.hypot((tile.tx + 0.5) * T - x, (tile.tz + 0.5) * T - z) <= reach;
+    }
+  }
+
   // The ground changed around (x, z): regrow the turf there. Changes that keep
   // coming (a long dig) are gathered up and regrown a few times a second.
   touch(x, z, pad = 1) {

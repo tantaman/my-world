@@ -137,3 +137,23 @@ test('a pad of their own walks someone else, and leaves you be', () => {
   controls.read();
   assert.equal(controls.jumped(), false, "your A isn't theirs");
 });
+
+test("each part draws only the grass round its own hiker, which is all it could show", async () => {
+  const { Grass } = await import('../src/world/grass.js');
+  const { CONFIG } = await import('../src/config.js');
+  const grass = new Grass(new THREE.Scene(), {}, null, 1);
+  const T = CONFIG.grassTile;
+  const R = CONFIG.grassRadius;
+  // a tile round each of two hikers, 300 m apart, and one at the edge of the first's grass
+  const tile = (tx, tz) => ({ tx, tz, mesh: { visible: true } });
+  const mine = tile(0, 0);
+  const theirs = tile(Math.floor(300 / T), 0);
+  const edge = tile(Math.floor((R + T * 0.5) / T), 0);
+  for (const t of [mine, theirs, edge]) grass.tiles.set(`${t.tx},${t.tz}`, t);
+  grass.only(T / 2, T / 2);
+  assert.equal(mine.mesh.visible, true);
+  assert.equal(theirs.mesh.visible, false, 'not the grass round someone 300 m off');
+  assert.equal(edge.mesh.visible, true, 'but a tile any corner of which is near enough to show');
+  grass.only(null);
+  assert.ok([mine, theirs, edge].every((t) => t.mesh.visible), 'and all of it again after');
+});

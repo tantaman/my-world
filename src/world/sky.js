@@ -219,4 +219,12 @@ export class Sky {
     this.sun.position.copy(center).addScaledVector(lightDir, 200);
     this.sun.target.updateMatrixWorld();
   }
+
+  // Whether the sun's shadows are drawn afresh with each picture (on, as
+  // always), or the ones drawn last are kept (off): for another picture of
+  // the same place from nearby (another part of a split screen), with the
+  // sun aimed where it was and the scene drawn from the same origin.
+  freshShadows(on) {
+    this.sun.shadow.autoUpdate = on;
+  }
 }
