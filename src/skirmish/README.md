@@ -17,6 +17,18 @@ In a world you share (see [Building together](../save/README.md)) everyone
 who walks in is in the same match, and you can end up on either side of each
 other.
 
+**Who is who** you tell by what they wear. A Raider is in a faded red field
+shirt and sand trousers, a canvas rig of magazine pouches, a checked scarf
+wound round the head and across the face, dark glasses. A Warden is in slate
+blue and grey, knee pads and gloves, dark webbing, a hood and amber goggles
+under a peaked cap. Whoever has bought a vest is wearing it, and whoever has
+bought a helmet has it on, so you can see what a shot will meet. They are the
+hikers' own bodies in other clothes: they walk and run as a hiker does, step
+sideways round a corner with the gun still on its aim, go down on a knee when
+they crouch, and what they hold points exactly where they are aiming. Someone
+hit falls where they stand and lies there, with what they carried beside
+them. What's in your own hands is the same gun, in your own sleeves.
+
 It's played in rounds, and nobody comes back until the next one:
 
 - **The Raiders** carry a charge. They win a round by setting it at one of
@@ -166,8 +178,12 @@ match.js      a match: ten fighters, shots, the charge, grenades; the host's sid
 bots.js       the bots: finding their way, seeing, aiming, playing a side
 net.js        who is in the town, and whose browser runs the match
 townLook.js   what the town looks like: walls, doors, crates, palms, the desert, the sky
-figures.js    what the fighters and the things they carry look like
-look.js       the scene: fighters, your hands, shots, smoke, the charge, the view
+guns.js       what they carry, as models: the six guns, the knife, the grenades, the charge
+outfits.js    who the fighters are: a Raider's clothes and a Warden's, cut the way the hikers' are, on the hikers' body
+heads.js      their heads: a scarf and dark glasses, a hood and goggles, a cap, a helmet
+figures.js    a fighter as you see them: the hikers' walk under a body turned to its aim, the arms bent to the gun, a fall
+hands.js      what's in your own hands, from your own eyes: the gun, and your arms up to it
+look.js       the scene: the town, the fighters, shots, smoke, the charge, the view
 hud.js        the match's HUD: crosshair, radar, clock and score, the shop, the scores
 sound.js      the guns, footfalls, grenades, the charge, the round
 skirmish.css  the HUD

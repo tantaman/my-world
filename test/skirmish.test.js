@@ -2,8 +2,8 @@
 // a place on the map people track), that the town can be walked the way the
 // bots mean to walk it, how you move in it, what the guns do, the rules of a
 // round and what it pays, what happens when fighters meet, that the bots can
-// play a whole match, and that a match can be shared: joined, handed on when
-// its host leaves.
+// play a whole match, that a match can be shared (joined, handed on when its
+// host leaves), and that what you see of a fighter is what they're doing.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,6 +18,10 @@ import { Rounds, RULES, PAY } from '../src/skirmish/rounds.js';
 import { Match, TEAM, ROSTER } from '../src/skirmish/match.js';
 import { sees, wayTo, clearWalk } from '../src/skirmish/bots.js';
 import { Session } from '../src/skirmish/net.js';
+import * as THREE from 'three';
+import { aim } from '../src/skirmish/mover.js';
+import { gunModel, holdOf } from '../src/skirmish/guns.js';
+import { makeFigure, setSide, poseFigure, muzzleOf } from '../src/skirmish/figures.js';
 import { roadsWorld } from './helpers/roadsWorld.js';
 import { matchesGolden } from './helpers/golden.js';
 
@@ -937,3 +941,141 @@ test('two who start a match at the same moment end up in one', () => {
   assert.equal(host.match.fighters.filter((f) => f.owner).length, 2);
   assert.ok(guest.match.mine, 'and the guest has a place in it');
 });
+
+// ── The fighters, as you see them ───────────────────────────────────────────
+
+// A fighter standing at a spawn, to pose a figure by: the match's own, so it
+// has everything a fighter has.
+function someone(over = {}) {
+  const m = new Match();
+  const f = m.fighters[0];
+  const at = SPAWNS.attack[2];
+  Object.assign(f.body.pos, { x: at.x, y: floorAt(at.x, at.z, 50), z: at.z });
+  f.body.vel.x = f.body.vel.y = f.body.vel.z = 0;
+  f.body.grounded = true;
+  f.body.crouch = 0;
+  f.yaw = f.pitch = 0;
+  return Object.assign(f, over);
+}
+// Let a figure settle into how its fighter is.
+function settle(v, f, kind, frames = 70) {
+  for (let i = 0; i < frames; i++) poseFigure(v, f, kind, STEP);
+  v.group.updateMatrixWorld(true);
+}
+const _a = new THREE.Vector3();
+const _b = new THREE.Vector3();
+const headOf = (v) => v.c.head.getWorldPosition(new THREE.Vector3());
+
+test('each thing a fighter carries is a model of it: held at the grip, pointing ahead, with somewhere for the other hand', () => {
+  for (const kind of [...Object.keys(GUNS), 'frag', 'flash', 'smoke', 'charge']) {
+    const g = gunModel(kind);
+    let meshes = 0;
+    g.traverse((o) => o.isMesh && meshes++);
+    assert.ok(meshes >= 5, `${kind} is made of parts (${meshes})`);
+    const box = new THREE.Box3().setFromObject(g);
+    assert.ok(box.containsPoint(_a.set(0, 0, 0)), `${kind} is held somewhere on it`);
+    const gun = GUNS[kind];
+    if (!gun) continue;
+    const { muzzle, fore } = g.userData;
+    assert.ok(muzzle.z < -0.1 && Math.abs(muzzle.x) < 1e-6, `${kind} points along −z`);
+    assert.ok(Math.abs(box.min.z - muzzle.z) < 0.02, `${kind}'s shots leave the end of it`);
+    // a long gun is held by its fore-end, a pistol in both hands, a knife in one
+    if (holdOf(kind) === 'long') assert.ok(fore && fore.z < -0.1 && fore.z > muzzle.z, `${kind} has a fore-end to hold`);
+    if (holdOf(kind) === 'knife') assert.equal(fore, null);
+  }
+  // (the longer the gun, the further its shots leave it from the hand)
+  const reach = (kind) => -gunModel(kind).userData.muzzle.z;
+  assert.ok(reach('sidearm') < reach('smg') && reach('smg') < reach('rifle') && reach('rifle') < reach('longrifle'));
+});
+
+test('a fighter is one of the hikers’ own bodies, dressed for their side, in what they have bought', () => {
+  const v = makeFigure(1);
+  const f = someone();
+  settle(v, f, 'sidearm', 5);
+  assert.equal(v.c.who.name, 'a Raider');
+  const worn = () => Object.fromEntries(Object.entries(v.parts).map(([k, o]) => [k, o.visible]));
+  assert.deepEqual(worn(), { armour: false, rig: true, helmet: false, hat: true }, 'as they come: a rig of pouches, a scarf');
+  f.kit.armor = 100;
+  f.kit.helmet = true;
+  settle(v, f, 'sidearm', 2);
+  assert.deepEqual(worn(), { armour: true, rig: false, helmet: true, hat: false }, 'a vest and a helmet, once bought');
+  // the sides change over at half time, and they change their clothes
+  setSide(v, 'defend');
+  settle(v, f, 'sidearm', 2);
+  assert.equal(v.c.who.name, 'a Warden');
+  assert.deepEqual(worn(), { armour: true, rig: false, helmet: true, hat: false }, 'still in what they bought');
+  // no two of a side are the same size
+  const sizes = [0, 1, 2, 3, 4].map((n) => makeFigure(n).c.size);
+  assert.equal(new Set(sizes).size, 5);
+  // whoever carries the charge has it on their back, until it's in their hands
+  f.charge = true;
+  f.held = 'main';
+  settle(v, f, 'sidearm', 2);
+  assert.equal(v.carried.visible, true);
+  f.held = 'charge';
+  settle(v, f, 'charge', 2);
+  assert.equal(v.carried.visible, false);
+});
+
+test('what a fighter holds points where they aim, with their hands on it; a shot leaves its muzzle', () => {
+  const v = makeFigure(0);
+  for (const kind of ['rifle', 'sidearm', 'shotgun', 'longrifle', 'smg', 'magnum']) {
+    for (const [yaw, pitch] of [[0, 0], [1.2, 0.45], [-2.4, -0.5]]) {
+      const f = someone({ yaw, pitch });
+      settle(v, f, kind);
+      const grip = v.held.localToWorld(new THREE.Vector3());
+      const muzzle = muzzleOf(v, new THREE.Vector3());
+      // along the bore: from over the grip to the muzzle
+      const bore = v.held.localToWorld(new THREE.Vector3(0, v.held.userData.muzzle.y, 0));
+      const d = aim(yaw, pitch);
+      const off = muzzle.clone().sub(bore).normalize().angleTo(_a.set(d.x, d.y, d.z));
+      assert.ok(off < 0.02, `${kind} at ${yaw}, ${pitch}: it points where they aim (${off.toFixed(3)} rad off)`);
+      // up at the shoulder or in front of the eyes, not at the hip
+      const up = grip.y - f.body.pos.y;
+      assert.ok(up > 1.05 && up < 1.8, `${kind}: held up (${up.toFixed(2)} m)`);
+      // the right hand on the grip, the left where the gun is held by
+      const right = v.c.armR.elbow.localToWorld(_a.set(0, -0.265, 0));
+      assert.ok(right.distanceTo(grip) < 0.03, `${kind}: the right hand is on the grip (${right.distanceTo(grip).toFixed(3)} m off)`);
+      const fore = v.held.localToWorld(_b.copy(v.held.userData.fore));
+      const left = v.c.armL.elbow.localToWorld(_a.set(0, -0.265, 0));
+      assert.ok(left.distanceTo(fore) < 0.05, `${kind}: the left hand is on it too (${left.distanceTo(fore).toFixed(3)} m off)`);
+    }
+  }
+});
+
+test('a fighter crouches, runs the way they are going, falls where they are hit, and is up again next round', () => {
+  const v = makeFigure(2);
+  const f = someone();
+  const floor = f.body.pos.y;
+  settle(v, f, 'rifle');
+  const standing = headOf(v).y - floor;
+  assert.ok(standing > 1.45 && standing < 1.75, `standing, their head is where a head is (${standing.toFixed(2)} m)`);
+  f.body.crouch = 1;
+  settle(v, f, 'rifle');
+  const crouched = headOf(v).y - floor;
+  assert.ok(standing - crouched > 0.3, `crouched, a good deal lower (${crouched.toFixed(2)} m)`);
+  assert.ok(crouched > 0.7, 'but not on the ground');
+  f.body.crouch = 0;
+  // stepping sideways, the legs turn to go that way and the gun stays on its aim
+  f.body.vel.x = 4;
+  settle(v, f, 'rifle');
+  assert.ok(Math.abs(v.twist) > 0.6, `their legs are turned the way they go (${v.twist.toFixed(2)} rad)`);
+  const d = aim(f.yaw, f.pitch);
+  const bore = v.held.localToWorld(new THREE.Vector3(0, v.held.userData.muzzle.y, 0));
+  assert.ok(muzzleOf(v, new THREE.Vector3()).sub(bore).normalize().angleTo(_a.set(d.x, d.y, d.z)) < 0.02, 'and they still aim where they aim');
+  f.body.vel.x = 0;
+  // hit: down, and what they held beside them
+  f.alive = false;
+  settle(v, f, 'rifle', 90);
+  const down = headOf(v).y - floor;
+  assert.ok(down < 0.45, `down, their head is on the ground (${down.toFixed(2)} m)`);
+  assert.ok(muzzleOf(v, new THREE.Vector3()).y - floor < 0.4, 'and their rifle is lying by them');
+  const lay = headOf(v);
+  settle(v, f, 'rifle', 30);
+  assert.ok(headOf(v).distanceTo(lay) < 1e-6, 'they lie still');
+  // the next round
+  f.alive = true;
+  settle(v, f, 'rifle');
+  assert.ok(Math.abs(headOf(v).y - floor - standing) < 0.05, 'and are up again');
+});
+

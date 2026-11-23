@@ -2,11 +2,9 @@
 // forest while you're in the town.
 //
 //   the town       townLook.js's, standing still
-//   the fighters   figures.js's, each where the match says they are, in
-//                  their side's colours; a mark over the heads of your own
-//   your hands     what you're holding, at the bottom right of the view: it
-//                  comes up when you change to it, kicks when it fires, dips
-//                  while you reload, sways as you run
+//   the fighters   figures.js's, each where the match says they are, as
+//                  they are; a mark over the heads of your own
+//   your hands     hands.js's: what you're holding, and your arms on it
 //   what happens   a streak for every shot and a puff of dust where it
 //                  lands, a mark left in the wall; smoke that can't be seen
 //                  through; the flash and the dust of a grenade; the charge,
@@ -23,13 +21,16 @@
 import * as THREE from 'three';
 import { BOXES } from './town.js';
 import { MOVE, eyeOf, heightOf, aim, rayBoxes } from './mover.js';
-import { GUNS, DRAW } from './arms.js';
+import { GUNS } from './arms.js';
 import { buildTown } from './townLook.js';
-import { makeFigure, setSide, poseFigure, gunModel, SIDE_COLOURS } from './figures.js';
+import { gunModel } from './guns.js';
+import { makeFigure, setSide, poseFigure, kickFigure, muzzleOf, SIDE_COLOURS } from './figures.js';
+import { Hands } from './hands.js';
 
 const FOV = 70; // degrees, top to bottom
-const HANDS = 0.5; // what's in your hands is drawn this size, that much nearer: the same on the screen, and less of it through a wall you're up against
-const REST = { long: [0.15, -0.16, -0.4], short: [0.13, -0.14, -0.38], knife: [0.15, -0.15, -0.34], thrown: [0.15, -0.17, -0.34], charge: [0.02, -0.19, -0.4] };
+const TEAM = 5; // a side
+const NADES = { frag: 1, flash: 1, smoke: 1 };
+const NADE_SIZE = 1.5; // a grenade in the air is drawn this much bigger than life, to be seen coming
 const STREAKS = 48; // shots on show at once
 const STREAK_LIFE = 0.07; // s
 const PUFFS = 320;
@@ -64,72 +65,15 @@ export class SkirmishLook {
     this.time = 0;
     this.figures = new Map(); // fighter id -> figure
     this.marks = new Map(); // fighter id -> the mark over a team-mate's head
-    this.kick = 0; // your gun's recoil, 1 just fired .. 0
     this.dip = 0; // the view's dip on landing hard (m)
     this.bob = 0;
     this.shake = 0; // the ground shaking (the charge)
     this.sway = { x: 0, y: 0 };
     this.fov = FOV;
     this.first = true; // seeing from your own eyes
-    this._hands();
+    this.hands = new Hands(camera);
     this._effects();
     this._charge();
-  }
-
-  // ── Your hands ────────────────────────────────────────────────────────────
-  _hands() {
-    this.hands = new THREE.Group();
-    this.hands.scale.setScalar(HANDS);
-    this.camera.add(this.hands);
-    this.held = new Map(); // kind -> its model
-    this.heldKind = '';
-    this.muzzle = new THREE.Object3D(); // on whichever is up, where its shots leave it
-    // your arm, up from the corner of the view to whatever you're holding
-    this.arm = new THREE.Group();
-    const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.075, 0.34), new THREE.MeshStandardMaterial({ color: 0x8a7a5c, roughness: 0.9 }));
-    sleeve.position.set(0.02, -0.07, 0.2);
-    sleeve.rotation.set(0.35, -0.12, 0);
-    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.085, 0.07), new THREE.MeshStandardMaterial({ color: 0xc79a72, roughness: 0.8 }));
-    hand.position.set(0, -0.035, 0.01);
-    this.arm.add(sleeve, hand);
-    const flare = new THREE.MeshBasicMaterial({ color: new THREE.Color(6, 4.2, 1.6), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
-    this.flare = new THREE.Group();
-    for (const turn of [0, Math.PI / 2]) {
-      const quad = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.22), flare);
-      quad.rotation.z = turn;
-      this.flare.add(quad);
-    }
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.3, 6).rotateX(-Math.PI / 2), flare);
-    cone.position.z = -0.12;
-    this.flare.add(cone);
-    this.flare.visible = false;
-    this.muzzle.add(this.flare);
-    this.flareLeft = 0;
-    this.flareLight = new THREE.PointLight(0xffc880, 0, 14, 1.6);
-    this.camera.add(this.flareLight);
-  }
-
-  _hold(kind) {
-    if (kind === this.heldKind) return;
-    const was = this.held.get(this.heldKind);
-    if (was) was.visible = false;
-    this.heldKind = kind;
-    let model = this.held.get(kind);
-    if (!model) {
-      model = gunModel(kind);
-      model.traverse((o) => {
-        if (!o.isMesh) return;
-        o.castShadow = false;
-        o.frustumCulled = false;
-      });
-      this.hands.add(model);
-      this.held.set(kind, model);
-    }
-    model.visible = true;
-    model.add(this.muzzle, this.arm);
-    this.muzzle.position.set(0, 0.03, model.userData.muzzle);
-    const gun = GUNS[kind];
-    this.rest = REST[kind === 'knife' ? 'knife' : kind === 'charge' ? 'charge' : !gun ? 'thrown' : gun.slot === 'side' ? 'short' : 'long'];
   }
 
   // ── Streaks, puffs, marks, smoke ──────────────────────────────────────────
@@ -172,15 +116,13 @@ export class SkirmishLook {
     this.smokeGeo = new THREE.IcosahedronGeometry(1, 2);
     // (unlit: a bank of smoke has no bright side, and from inside it there's nothing to see but grey)
     this.smokeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.49, 0.46), side: THREE.DoubleSide });
-    this.thrown = new Map(); // grenade id -> its mesh
-    this.nadeGeo = new THREE.IcosahedronGeometry(0.06, 1);
-    this.nadeMats = { frag: new THREE.MeshStandardMaterial({ color: 0x58603a }), flash: new THREE.MeshStandardMaterial({ color: 0xd8d8d0 }), smoke: new THREE.MeshStandardMaterial({ color: 0x8a8d90 }) };
+    this.thrown = new Map(); // grenade id -> what it looks like, in the air
   }
 
   // ── The charge ────────────────────────────────────────────────────────────
   _charge() {
     this.charge = gunModel('charge');
-    this.charge.scale.setScalar(1.5);
+    this.charge.scale.setScalar(1.25);
     this.charge.visible = false;
     this.scene.add(this.charge);
     this.chargeLight = new THREE.PointLight(0xff3020, 0, 7, 1.8);
@@ -201,16 +143,12 @@ export class SkirmishLook {
     const mine = match.mine;
     const own = !!mine && f === mine && this.first;
     const gun = GUNS[e.gun];
-    if (gun.slot === 'knife') {
-      if (own) this.kick = 1;
-      return;
-    }
-    const from = own ? this.muzzleAt(_v) : this.muzzleOf(f, _v);
-    if (own) {
-      this.kick = 1;
-      this.flareLeft = 0.045;
-      this.flare.rotation.z = Math.random() * Math.PI;
-    } else this._glow(from.x, from.y, from.z, 0.16, 0.05, 0, _c.setRGB(5, 3.4, 1.2));
+    const figure = this.figures.get(f.id);
+    if (figure) kickFigure(figure);
+    if (own) this.hands.fired(gun.slot === 'knife');
+    if (gun.slot === 'knife') return;
+    const from = own ? this.hands.muzzleAt(_v) : this.muzzleOf(f, _v);
+    if (!own) this._glow(from.x, from.y, from.z, 0.16, 0.05, 0, _c.setRGB(5, 3.4, 1.2));
     for (const ray of e.rays) {
       const s = this.streaks[this._streak];
       this._streak = (this._streak + 1) % STREAKS;
@@ -297,18 +235,14 @@ export class SkirmishLook {
     this.burstLeft = this.burstLife = life;
   }
 
-  // Where your shots come from: the muzzle of what's in your hands.
-  muzzleAt(out) {
-    this.camera.updateMatrixWorld(true);
-    return this.muzzle.getWorldPosition(out);
-  }
-
-  // Where someone else's come from: the gun held out in front of them.
+  // Where someone's shots come from: the muzzle of what they're seen to hold
+  // (or, before they've been seen, about where it would be).
   muzzleOf(f, out) {
+    const figure = this.figures.get(f.id);
+    if (figure && figure.held) return muzzleOf(figure, out);
     aim(f.yaw, f.pitch, _d);
     const p = f.body.pos;
-    out.set(p.x + Math.cos(f.yaw) * 0.16 + _d.x * 0.8, p.y + eyeOf(f.body) - 0.22 + _d.y * 0.8, p.z - Math.sin(f.yaw) * 0.16 + _d.z * 0.8);
-    return out;
+    return out.set(p.x + Math.cos(f.yaw) * 0.16 + _d.x * 0.8, p.y + eyeOf(f.body) - 0.22 + _d.y * 0.8, p.z - Math.sin(f.yaw) * 0.16 + _d.z * 0.8);
   }
 
   // ── Each frame ────────────────────────────────────────────────────────────
@@ -320,8 +254,8 @@ export class SkirmishLook {
     const first = !!me && me.alive;
     this.first = first;
     this._view(dt, match, me, first ? null : watch);
-    this._inHand(dt, me, first);
-    this._figures(dt, match, me, first);
+    this._inHand(dt, match, me, first);
+    this._figures(dt, match, me, first, first ? null : watch);
     this._things(dt, match);
     this._fade(dt);
   }
@@ -374,38 +308,25 @@ export class SkirmishLook {
     }
   }
 
-  // What's in your hands: up when you change to it, kicking as it fires,
-  // down and round while you reload, swaying as you go.
-  _inHand(dt, me, first) {
-    const gun = me && GUNS[kindOf(me)];
-    const show = first && !(me.sighted && gun && gun.zoom);
-    this.hands.visible = show;
-    this.flareLeft -= dt;
-    this.flare.visible = show && this.flareLeft > 0;
-    this.flareLight.intensity = this.flare.visible ? 9 : 0;
-    if (!show) return;
+  // What's in your hands (not through the long rifle's sight, where there's
+  // only the sight to see).
+  _inHand(dt, match, me, first) {
+    if (!first) return this.hands.update(dt, null, '', false, 0);
     const kind = kindOf(me);
-    this._hold(kind);
-    const model = this.held.get(kind);
-    const b = me.body;
-    const speed = Math.hypot(b.vel.x, b.vel.z);
-    this.kick = Math.max(0, this.kick - dt / (gun && gun.slot === 'knife' ? 0.3 : 0.14));
-    const kk = this.kick * this.kick;
-    const up = Math.min(1, me.draw / DRAW); // 1 just changed to .. 0 ready
-    const load = gun && me.reloading > 0 ? Math.sin(Math.min(1, (gun.reload - me.reloading) / gun.reload) * Math.PI) : 0;
-    const walk = Math.min(1, speed / 5);
-    const r = this.rest;
-    const s = 1 / HANDS;
-    model.position.set((r[0] + Math.cos(this.bob * 0.5) * 0.006 * walk) * s, (r[1] + Math.abs(Math.sin(this.bob * 0.5)) * 0.007 * walk - up * up * 0.28 - load * 0.12 + kk * 0.012) * s, (r[2] + kk * 0.05) * s);
-    if (kind === 'knife') model.rotation.set(-0.5 - kk * 1.1, 0.5 + kk * 0.9, 0.3);
-    else model.rotation.set(kk * 0.14 + up * 0.9 + load * 0.5, 0.05 + load * 0.5, load * -0.6);
+    const gun = GUNS[kind];
+    this.hands.dress(match.sideOf(me), me.id % TEAM);
+    this.hands.update(dt, me, kind, !(me.sighted && gun && gun.zoom), this.bob);
   }
 
-  _figures(dt, match, me, first) {
+  _figures(dt, match, me, first, watch) {
+    let made = false;
     for (const f of match.fighters) {
       let v = this.figures.get(f.id);
       if (!v) {
-        v = makeFigure();
+        // (dressing someone takes a moment: one a frame, as the match is first seen)
+        if (made) continue;
+        made = true;
+        v = makeFigure(f.id % TEAM);
         this.figures.set(f.id, v);
         this.scene.add(v.group);
         const mark = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.16, 4).rotateX(Math.PI), new THREE.MeshBasicMaterial());
@@ -414,11 +335,12 @@ export class SkirmishLook {
       }
       const side = match.sideOf(f);
       setSide(v, side);
-      poseFigure(v, f, kindOf(f), dt);
+      poseFigure(v, f, kindOf(f), dt, match);
       // you don't see yourself, from your own eyes
       v.group.visible = !(first && f === me);
       const mark = this.marks.get(f.id);
-      mark.visible = !!me && f !== me && f.alive && f.team === me.team;
+      // (not over whoever you're watching from behind: it would be in the way)
+      mark.visible = !!me && f !== me && f !== watch && f.alive && f.team === me.team;
       if (mark.visible) {
         mark.material.color.set(SIDE_COLOURS[side].css).multiplyScalar(1.6);
         mark.position.set(f.body.pos.x, f.body.pos.y + heightOf(f.body) + 0.32 + Math.sin(this.time * 3 + f.id) * 0.03, f.body.pos.z);
@@ -448,14 +370,15 @@ export class SkirmishLook {
       seen.add(n.id);
       let mesh = this.thrown.get(n.id);
       if (!mesh) {
-        mesh = new THREE.Mesh(this.nadeGeo, this.nadeMats[n.kind] || this.nadeMats.frag);
+        mesh = gunModel(n.kind in NADES ? n.kind : 'frag');
+        mesh.scale.setScalar(NADE_SIZE);
         mesh.position.set(n.p.x, n.p.y, n.p.z);
-        mesh.castShadow = true;
         this.scene.add(mesh);
         this.thrown.set(n.id, mesh);
       }
       mesh.position.lerp(_v.set(n.p.x, n.p.y, n.p.z), Math.min(1, dt * 30));
       mesh.rotation.x += dt * 9;
+      mesh.rotation.z += dt * 4;
     }
     for (const [id, mesh] of this.thrown) {
       if (seen.has(id)) continue;

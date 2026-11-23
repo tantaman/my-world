@@ -1,221 +1,351 @@
-// The fighters and what they carry, as things to draw.
+// The fighters, as you see them: each is the hikers' own body
+// (player/character.js) dressed as a Raider or a Warden (outfits.js), with
+// what they're holding (guns.js) in their hands.
 //
-//   a figure   a fighter seen from outside: jacket and trousers in their
-//              side's colours (Raiders rust red, Wardens slate blue), a cap
-//              or a helmet, arms out to the gun, legs that run, knees that
-//              bend to crouch; lying where they fell when they're down
-//   a gun      each of the guns, the knife, the grenades and the charge, as
-//              a little model built along −z from its grip: the same one in
-//              a figure's hands and, bigger on the screen, in yours
+// The legs are the hiker's walk: feet that plant and roll, a run with a
+// flight in it, knees that take a landing. They go the way the fighter is
+// *moving*; the body above them is turned to where the fighter is *aiming*,
+// so someone stepping sideways round a corner steps sideways. Crouched, the
+// hips come down and the walk goes on under them.
 //
-// Everything is boxes and cylinders in flat colours: made in code, like the
-// rest of the world.
+// The gun is put where it would be (a long one in the shoulder, a pistol out
+// in front of the eyes in both hands) and pointed exactly where the fighter
+// is aiming, up or down; then each arm is bent to bring its hand to it. So a
+// shot leaves the muzzle you see. It comes down a little on the run, kicks
+// when it fires, and is tipped over to be loaded.
+//
+// Someone hit falls where they stand, backwards or on their face, and lies
+// there with what they were carrying beside them.
+//
+//   const v = makeFigure(n)          n: which of their side they are (0..4)
+//   poseFigure(v, f, kind, dt, m)    stand it where fighter f is, as it is
+//                                    (kind: what's in its hands; m: the match)
+//   kickFigure(v)                    it has just fired
+//   muzzleOf(v, out)                 where its shots leave it, in the world
+//   v.group                          what to put in the scene
+//   reach(arm, to, pole)             an arm bent to bring its hand somewhere
+//                                    (your own, too: hands.js)
 
 import * as THREE from 'three';
+import { Character, definePose } from '../player/character.js';
 import { MOVE } from './mover.js';
+import { floorAt } from './town.js';
+import { GUNS } from './arms.js';
+import { gunModel, holdOf } from './guns.js';
+import { outfit, SIDE_COLOURS } from './outfits.js';
 
-export const SIDE_COLOURS = {
-  attack: { jacket: 0xa8452e, trousers: 0xb8a078, head: 0x7a2f1f, css: '#e2674a' },
-  defend: { jacket: 0x47607e, trousers: 0x6d7480, head: 0x39485c, css: '#6aa2e0' },
+export { SIDE_COLOURS };
+
+// ── The body's own measurements (player/character.js), in its metres ────────
+const UPPER = 0.28; // shoulder to elbow
+const FORE = 0.265; // elbow to the middle of the hand
+const SHOULDER = { x: 0.201, y: 0.42 }; // the shoulder joints, in the chest's frame
+
+// Crouched: how far the hips come down (m) and the back leans (radians).
+const DUCK = { drop: 0.4, lean: 0.3 };
+definePose('skirmish-ready', [
+  [0, { sh: 0, el: 0, tool: 0, sp: 0.02, inw: 0, drop: 0 }],
+  [1, { sh: 0, el: 0, tool: 0, sp: DUCK.lean, inw: 0, drop: DUCK.drop }],
+]);
+
+// How each kind of thing is held: where it is (`at`, from `pivot` in the
+// chest's frame, in the frame of the aim: x to the left, y up, z ahead), how
+// far the chest is turned from the aim to hold it (`blade`: negative, the
+// right shoulder back), which way each elbow goes, and how far it comes down
+// on the run (`low`: m, and radians of muzzle).
+const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const HOLD = {
+  long: { pivot: P(-0.13, 0.405, 0.04), at: P(0.02, -0.035, 0), blade: -0.72, tilt: -0.1, low: [0.06, 0.32], poleR: P(-0.75, -0.65, -0.1), poleL: P(0.35, -0.9, 0.1) },
+  short: { pivot: P(0, 0.44, 0.02), at: P(0, 0.075, 0.46), blade: 0, tilt: 0, low: [0.16, 0.5], poleR: P(-0.6, -0.75, 0), poleL: P(0.6, -0.75, 0) },
+  knife: { pivot: P(-0.2, 0.3, 0.04), at: P(0, -0.06, 0.34), blade: -0.2, tilt: 0, low: [0.06, 0.2], poleR: P(-0.5, -0.8, -0.2), poleL: null },
+  thrown: { pivot: P(-0.2, 0.42, 0.02), at: P(-0.03, 0.02, 0.2), blade: -0.25, tilt: 0, low: [0.1, 0], poleR: P(-0.7, -0.6, -0.2), poleL: null },
+  charge: { pivot: P(0, 0.2, 0.06), at: P(0.06, -0.02, 0.3), blade: 0, tilt: 0, low: [0, 0], poleR: P(-0.7, -0.6, 0), poleL: P(0.7, -0.6, 0) },
 };
-const SKIN = 0xc79a72;
-const STEEL = 0x3d4248;
-const WOOD = 0x7a5232;
+const FEND = { at: P(0.16, 0.2, 0.3), pole: P(0.5, -0.8, 0) }; // the free hand, with a knife in the other: up in front
+// How far ahead of the shoulder each long gun's grip is (m): its stock, less
+// what of the butt is tucked in under the arm.
+const STOCK = { rifle: 0.335, shotgun: 0.365, longrifle: 0.36, smg: 0.335 };
+// Standing still, a fighter stands to shoot: the left foot forward, the
+// right back and turned out, the knees a little bent (Character.stance takes
+// it: feet [x to the left, z ahead], and how far each toe turns out).
+const STAND = { feet: [[0.12, 0.04], [-0.13, -0.13]], out: [0.06, -0.42], crouch: -0.09 };
+// ...and crouched still, down over the right heel, the left knee up.
+const SQUAT = { feet: [[0.14, 0.15], [-0.14, -0.24]], crouch: 1.25 };
+const STILL = 0.35; // m/s: slower than this is standing still
+const LEGS_TURN = 1.15; // radians the legs turn from the aim, at the most, to go the way they're going
+const BACKWARDS = 1.9; // ...and past this far from it, they walk backwards instead
+const FALL = 0.6; // s to fall
+const KICK = 9; // 1/s the kick dies away
 
-const mat = (color, rough = 0.8) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0.05 });
-const SHARED = { skin: mat(SKIN), steel: mat(STEEL, 0.45), wood: mat(WOOD, 0.7), dark: mat(0x1c1d20, 0.6), olive: mat(0x58603a), grey: mat(0x8a8d90, 0.5), white: mat(0xd8d8d0, 0.6), stick: mat(0x8c3a2a), red: new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.25, 0.15) }) };
+const _v = new THREE.Vector3();
+const _w = new THREE.Vector3();
+const _n = new THREE.Vector3();
+const _u = new THREE.Vector3();
+const _e = new THREE.Vector3();
+const _U = new THREE.Vector3();
+const _F = new THREE.Vector3();
+const _x = new THREE.Vector3();
+const _y = new THREE.Vector3();
+const _z = new THREE.Vector3();
+const _m = new THREE.Matrix4();
+const _q = new THREE.Quaternion();
+const _q2 = new THREE.Quaternion();
+const _eu = new THREE.Euler();
+const X = new THREE.Vector3(1, 0, 0);
+const Y = new THREE.Vector3(0, 1, 0);
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const ease = (t) => t * t * (3 - 2 * t);
+const wrap = (a) => a - Math.round(a / (Math.PI * 2)) * Math.PI * 2;
 
-function part(parent, geo, material, x, y, z) {
-  const mesh = new THREE.Mesh(geo, material);
-  mesh.position.set(x, y, z);
-  mesh.castShadow = true;
-  parent.add(mesh);
-  return mesh;
+// Bend an arm (A: { shoulder, elbow }, bones as the body's are) so its hand
+// is at `to`, the elbow going the way of `pole` as near as it can: both in
+// the frame the shoulder is in (the chest's).
+export function reach(A, to, pole) {
+  _n.subVectors(to, A.shoulder.position);
+  const d = clamp(_n.length(), Math.abs(UPPER - FORE) + 0.03, UPPER + FORE - 0.003);
+  _n.normalize();
+  const along = (UPPER * UPPER - FORE * FORE + d * d) / (2 * d);
+  const out = Math.sqrt(Math.max(0, UPPER * UPPER - along * along));
+  _u.copy(pole).addScaledVector(_n, -pole.dot(_n));
+  if (_u.lengthSq() < 1e-6) _u.set(0, -1, 0.01).addScaledVector(_n, _n.y);
+  _u.normalize();
+  _e.copy(_n).multiplyScalar(along).addScaledVector(_u, out); // the elbow, from the shoulder
+  _U.copy(_e).normalize();
+  _F.copy(_n).multiplyScalar(d).sub(_e).normalize();
+  // the upper arm lies along the bone's −y; the forearm bends from it towards its +z
+  _y.copy(_U).negate();
+  _z.copy(_F).addScaledVector(_U, -_F.dot(_U));
+  if (_z.lengthSq() < 1e-8) _z.copy(_u).negate();
+  _z.normalize();
+  _x.crossVectors(_y, _z);
+  A.shoulder.quaternion.setFromRotationMatrix(_m.makeBasis(_x, _y, _z));
+  A.elbow.rotation.set(-Math.acos(clamp(_U.dot(_F), -1, 1)), 0, 0);
 }
-const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
-const tube = (r, len, r2 = r) => new THREE.CylinderGeometry(r2, r, len, 8).rotateX(Math.PI / 2);
 
-// What `kind` looks like (a gun's id, 'knife', a grenade, 'charge'): a group
-// built along −z from the grip, with `muzzle` where its shots leave it.
-export function gunModel(kind) {
-  const g = new THREE.Group();
-  const { steel, wood, dark, olive, grey, white } = SHARED;
-  let muzzle = -0.3;
-  if (kind === 'sidearm' || kind === 'magnum') {
-    const long = kind === 'magnum' ? 0.26 : 0.2;
-    part(g, box(0.034, 0.045, long), kind === 'magnum' ? grey : steel, 0, 0.03, -long / 2);
-    part(g, box(0.032, 0.11, 0.045), kind === 'magnum' ? wood : dark, 0, -0.035, -0.01).rotation.x = 0.25;
-    if (kind === 'magnum') part(g, tube(0.024, 0.05), grey, 0, 0.02, -0.07);
-    muzzle = -long;
-  } else if (kind === 'smg') {
-    part(g, box(0.05, 0.07, 0.34), steel, 0, 0.02, -0.17);
-    part(g, tube(0.014, 0.14), dark, 0, 0.025, -0.4);
-    part(g, box(0.034, 0.16, 0.045), dark, 0, -0.09, -0.16).rotation.x = 0.1;
-    part(g, box(0.034, 0.1, 0.04), dark, 0, -0.05, 0.0).rotation.x = 0.3;
-    part(g, box(0.03, 0.05, 0.16), dark, 0, 0.0, 0.09);
-    muzzle = -0.47;
-  } else if (kind === 'shotgun') {
-    part(g, tube(0.02, 0.62), steel, 0, 0.035, -0.4);
-    part(g, tube(0.018, 0.4), steel, 0, 0.0, -0.3);
-    part(g, box(0.05, 0.05, 0.2), wood, 0, 0.0, -0.36);
-    part(g, box(0.05, 0.075, 0.2), steel, 0, 0.015, -0.02);
-    part(g, box(0.045, 0.09, 0.3), wood, 0, -0.02, 0.2).rotation.x = -0.12;
-    muzzle = -0.71;
-  } else if (kind === 'rifle') {
-    part(g, box(0.05, 0.075, 0.42), steel, 0, 0.02, -0.14);
-    part(g, tube(0.013, 0.34), steel, 0, 0.03, -0.5);
-    part(g, box(0.045, 0.05, 0.24), wood, 0, 0.005, -0.42);
-    part(g, box(0.036, 0.2, 0.06), steel, 0, -0.1, -0.16).rotation.x = 0.28;
-    part(g, box(0.036, 0.1, 0.045), wood, 0, -0.05, 0.04).rotation.x = 0.3;
-    part(g, box(0.04, 0.08, 0.26), wood, 0, -0.005, 0.2).rotation.x = -0.08;
-    part(g, box(0.012, 0.03, 0.012), steel, 0, 0.06, -0.62);
-    muzzle = -0.67;
-  } else if (kind === 'longrifle') {
-    part(g, box(0.05, 0.07, 0.5), olive, 0, 0.015, -0.12);
-    part(g, tube(0.014, 0.6), steel, 0, 0.03, -0.62);
-    part(g, tube(0.028, 0.3), dark, 0, 0.085, -0.14);
-    part(g, tube(0.034, 0.05), dark, 0, 0.085, -0.3);
-    part(g, box(0.036, 0.1, 0.045), olive, 0, -0.05, 0.06).rotation.x = 0.3;
-    part(g, box(0.045, 0.09, 0.3), olive, 0, -0.01, 0.26).rotation.x = -0.06;
-    part(g, box(0.03, 0.07, 0.05), dark, 0, -0.05, -0.2);
-    muzzle = -0.92;
-  } else if (kind === 'knife') {
-    part(g, box(0.008, 0.035, 0.2), grey, 0, 0.01, -0.16);
-    part(g, box(0.026, 0.03, 0.11), dark, 0, 0, 0);
-    part(g, box(0.05, 0.012, 0.015), steel, 0, 0, -0.06);
-    muzzle = -0.26;
-  } else if (kind === 'charge') {
-    // sticks bound together, a clock on the front, a light on top
-    for (const x of [-0.07, 0, 0.07]) part(g, tube(0.032, 0.26), SHARED.stick, x, 0, -0.02);
-    part(g, box(0.24, 0.02, 0.05), dark, 0, 0.035, -0.02);
-    part(g, box(0.1, 0.05, 0.08), dark, 0, 0.05, -0.02);
-    const light = part(g, new THREE.SphereGeometry(0.018, 8, 6), SHARED.red, 0.06, 0.085, -0.02);
-    light.castShadow = false;
-    g.userData.light = light;
-    muzzle = 0;
-  } else {
-    // a grenade: a can for the smoke, a ball for the others
-    const body = kind === 'smoke' ? grey : kind === 'flash' ? white : olive;
-    if (kind === 'frag') part(g, new THREE.SphereGeometry(0.045, 10, 8), body, 0, 0, -0.03);
-    else part(g, new THREE.CylinderGeometry(0.034, 0.034, 0.12, 10), body, 0, 0, -0.03);
-    part(g, box(0.02, 0.03, 0.02), steel, 0, 0.07, -0.03);
-    muzzle = -0.05;
+// The bones a fall moves, and how they lie at the end of it: on the back,
+// and on the face. [x, y, z] of each bone's own turn (radians).
+const LIMBS = (c) => [c.spine, c.head, c.armL.shoulder, c.armL.elbow, c.armR.shoulder, c.armR.elbow, c.legL.hip, c.legL.knee, c.legR.hip, c.legR.knee, c.hips];
+const LAID = {
+  back: [[-0.06, 0.08, 0.04], [-0.1, 0.55, 0.12], [-0.25, 0, 1.15], [-0.45, 0, 0], [-0.1, 0, -0.75], [-1.0, 0, 0], [-0.12, 0, 0.2], [0.3, 0, 0], [0.04, 0, -0.26], [0.1, 0, 0], [0, 0, 0]],
+  face: [[0.05, -0.1, 0.03], [-0.25, -0.95, 0], [-2.5, 0, 0.5], [-0.6, 0, 0], [-0.5, 0, -0.9], [-1.3, 0, 0], [0.06, 0, 0.16], [0.12, 0, 0], [0.12, 0, -0.3], [0.5, 0, 0], [0, 0, 0]],
+};
+// ...how far over the body goes, how high off the ground its feet end up, and where what it held lies (in its own frame).
+const LIE = { back: { turn: -Math.PI / 2 + 0.03, up: 0.14, gun: P(-0.5, 1.08, -0.1) }, face: { turn: Math.PI / 2 - 0.03, up: 0.17, gun: P(-0.55, 1.2, 0.13) } };
+
+// A fighter to draw: the nth of whichever side it turns out to be on.
+export function makeFigure(n = 0) {
+  const c = new Character(outfit('attack', n));
+  const mount = new THREE.Group(); // what's in their hands: placed in the body's own frame
+  c.root.add(mount);
+  // (how they stand while they're still: said to the body, and changed as they crouch)
+  const stand = { feet: [[0, 0], [0, 0]], out: STAND.out, crouch: 0, lean: 0, arms: 'out' };
+  const v = { group: c.root, c, n, side: 'attack', mount, models: new Map(), held: null, heldKind: '', carried: null, kick: 0, twist: 0, kneel: 0, low: 0, yaw: null, feet: 0, fell: null, from: null, parts: null, stand, limbs: LIMBS(c) };
+  // (their feet find the town's floor: a step up, a crate's edge)
+  c.groundAt = (x, z) => floorAt(x, z, v.feet + MOVE.step + 0.1, 0.02);
+  parts(v);
+  return v;
+}
+
+// (the things that are put on and taken off, found again each time they're dressed)
+function parts(v) {
+  const find = (name) => v.c.root.getObjectByName(name);
+  v.parts = { armour: find('armour'), rig: find('rig'), helmet: find('helmet'), hat: find('hat') };
+  // the charge, on the back of whoever carries it
+  if (!v.carried) {
+    v.carried = gunModel('charge');
+    v.carried.rotation.set(Math.PI / 2, 0, Math.PI / 2);
+    v.carried.position.set(0, 0.02, -0.03);
+    v.carried.visible = false;
+    v.c.addOnBack(v.carried);
   }
-  g.userData.muzzle = muzzle;
-  return g;
 }
 
-// A fighter, feet at 0, facing −z. Its colours are its side's (setSide).
-export function makeFigure() {
-  const group = new THREE.Group();
-  const cloth = { jacket: mat(0xffffff), trousers: mat(0xffffff), head: mat(0xffffff, 0.6) };
-  const { skin, dark } = SHARED;
-  // everything above the hips leans and sinks as one when they crouch
-  const upper = new THREE.Group();
-  upper.position.y = 0.92;
-  group.add(upper);
-  part(upper, box(0.5, 0.56, 0.28), cloth.jacket, 0, 0.3, 0);
-  part(upper, box(0.44, 0.14, 0.26), dark, 0, 0.0, 0);
-  part(upper, box(0.36, 0.3, 0.1), dark, 0, 0.3, 0.17); // a pack
-  const head = new THREE.Group();
-  head.position.set(0, 0.64, 0);
-  upper.add(head);
-  part(head, box(0.22, 0.24, 0.24), skin, 0, 0.12, 0);
-  const cap = part(head, box(0.26, 0.12, 0.28), cloth.head, 0, 0.24, 0);
-  const brim = part(head, box(0.24, 0.03, 0.12), cloth.head, 0, 0.2, -0.18);
-  const helmet = part(head, new THREE.SphereGeometry(0.17, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), cloth.head, 0, 0.16, 0);
-  part(head, box(0.2, 0.05, 0.03), dark, 0, 0.14, -0.125); // goggles
-  const arms = new THREE.Group();
-  arms.position.set(0, 0.46, 0);
-  upper.add(arms);
-  part(arms, box(0.12, 0.12, 0.46), cloth.jacket, 0.27, -0.06, -0.16).rotation.y = 0.25;
-  part(arms, box(0.12, 0.12, 0.5), cloth.jacket, -0.25, -0.06, -0.2).rotation.y = -0.45;
-  const hand = new THREE.Group();
-  hand.position.set(0.14, -0.06, -0.4);
-  arms.add(hand);
-  const legs = [-1, 1].map((s) => {
-    const hip = new THREE.Group();
-    hip.position.set(s * 0.13, 0.9, 0);
-    group.add(hip);
-    part(hip, box(0.19, 0.46, 0.2), cloth.trousers, 0, -0.23, 0);
-    const knee = new THREE.Group();
-    knee.position.y = -0.46;
-    hip.add(knee);
-    part(knee, box(0.17, 0.44, 0.18), cloth.trousers, 0, -0.2, 0);
-    part(knee, box(0.18, 0.1, 0.28), dark, 0, -0.41, -0.04);
-    return { hip, knee };
-  });
-  // the charge on the back of whoever carries it
-  const carried = gunModel('charge');
-  carried.position.set(0, 0.3, 0.26);
-  carried.rotation.x = Math.PI / 2;
-  carried.visible = false;
-  upper.add(carried);
-  return { group, upper, head, arms, hand, legs, cloth, cap, brim, helmet, carried, held: null, heldKind: '', side: '', stride: 0, down: 0, fallYaw: 0 };
-}
-
+// Raiders or Wardens: the sides change over at half time, and the fighters
+// change their clothes.
 export function setSide(v, side) {
   if (v.side === side) return;
   v.side = side;
-  const c = SIDE_COLOURS[side];
-  v.cloth.jacket.color.set(c.jacket);
-  v.cloth.trousers.color.set(c.trousers);
-  v.cloth.head.color.set(c.head);
-  // Wardens wear helmets, Raiders caps
-  v.helmet.visible = side === 'defend';
-  v.cap.visible = v.brim.visible = side !== 'defend';
+  v.c.dress(outfit(side, v.n));
+  parts(v);
 }
 
-// Put what a fighter holds in the figure's hands.
-export function setHeld(v, kind) {
+function setHeld(v, kind) {
   if (v.heldKind === kind) return;
+  if (v.held) v.held.visible = false;
   v.heldKind = kind;
-  if (v.held) v.hand.remove(v.held);
-  v.held = gunModel(kind);
-  v.hand.add(v.held);
+  let model = v.models.get(kind);
+  if (!model) {
+    model = gunModel(kind);
+    v.models.set(kind, model);
+    v.mount.add(model);
+  }
+  model.visible = true;
+  v.held = model;
 }
 
-// Stand a figure where its fighter is, as it is: running, crouched, aiming,
-// or down. kind: what's in its hands.
-export function poseFigure(v, f, kind, dt) {
+// It has just fired.
+export function kickFigure(v) {
+  v.kick = 1;
+}
+
+// Where its shots leave it, in the world.
+export function muzzleOf(v, out) {
+  if (!v.held) return v.group.getWorldPosition(out);
+  v.group.updateWorldMatrix(true, false);
+  v.mount.updateWorldMatrix(false, true);
+  return v.held.localToWorld(out.copy(v.held.userData.muzzle));
+}
+
+// Stand a figure where its fighter is, as it is. kind: what's in its hands.
+// match: the match (for where the charge is, to someone pulling its fuse).
+export function poseFigure(v, f, kind, dt, match = null) {
+  const c = v.c;
   const b = f.body;
-  const g = v.group;
   setHeld(v, kind);
-  v.carried.visible = f.charge && f.held !== 'charge';
-  if (!f.alive) {
-    // down: over backwards, the way they were facing, and still
-    v.down = Math.min(1, v.down + dt * 3);
-    const k = v.down * v.down * (3 - 2 * v.down);
-    g.position.set(b.pos.x, b.pos.y + 0.12 * k, b.pos.z);
-    g.rotation.set(0, v.fallYaw, 0);
-    g.rotateX((Math.PI / 2 - 0.08) * k);
-    v.upper.position.y = 0.92;
-    v.upper.rotation.x = 0;
-    v.arms.rotation.x = -0.5 * k;
-    for (const l of v.legs) {
-      l.hip.rotation.x = 0.1 * k;
-      l.knee.rotation.x = 0.25 * k;
-    }
-    return;
-  }
-  v.down = 0;
-  v.fallYaw = f.yaw;
-  g.position.set(b.pos.x, b.pos.y, b.pos.z);
-  g.rotation.set(0, f.yaw, 0);
-  const duck = b.crouch;
+  const P = v.parts;
+  if (P.armour) P.armour.visible = f.kit.armor > 0;
+  if (P.rig) P.rig.visible = !(f.kit.armor > 0);
+  if (P.helmet) P.helmet.visible = !!f.kit.helmet;
+  if (P.hat) P.hat.visible = !f.kit.helmet;
+  v.carried.visible = !!f.charge && f.held !== 'charge';
+  if (!f.alive) return lie(v, f, dt);
+  if (v.fell) rise(v);
+
+  // ── The legs: the way they're going ──
+  const facing = f.yaw + Math.PI; // (the body looks along +z, a fighter along −z)
   const speed = Math.hypot(b.vel.x, b.vel.z);
-  v.stride += dt * speed * 2.1;
-  const swing = b.grounded ? Math.sin(v.stride) * Math.min(0.75, speed * 0.14) : 0.4;
-  // crouched: the hips come down, the knees fold
-  const sink = duck * (MOVE.height - MOVE.low) * 0.85;
-  v.upper.position.y = 0.92 - sink;
-  v.upper.rotation.x = -duck * 0.18 - Math.min(0.12, speed * 0.015);
-  v.legs.forEach((l, i) => {
-    const s = i ? -swing : swing;
-    l.hip.position.y = 0.9 - sink;
-    l.hip.rotation.x = s - duck * 1.0;
-    l.knee.rotation.x = Math.max(0, -s) * 0.9 + duck * 1.7 + (b.grounded ? 0 : 0.5);
-  });
-  v.head.rotation.x = f.pitch * 0.6;
-  v.arms.rotation.x = f.pitch + (f.reloading > 0 ? -0.5 : 0);
+  let twist = 0;
+  let ahead = 1;
+  if (speed > 0.3) {
+    const going = wrap(Math.atan2(b.vel.x, b.vel.z) - facing);
+    if (Math.abs(going) > BACKWARDS) {
+      ahead = -1;
+      twist = wrap(going - Math.PI);
+    } else twist = going;
+    twist = clamp(twist, -LEGS_TURN, LEGS_TURN) * Math.min(1, (speed - 0.3) / 1.2);
+  }
+  v.twist += wrap(twist - v.twist) * (1 - Math.exp(-dt * 10));
+  const turn = v.yaw === null ? 0 : wrap(facing - v.yaw) / Math.max(dt, 1e-3);
+  v.yaw = facing;
+  // down on one knee to set the charge, or to pull its fuse
+  const busy = f.planting > 0 || f.defusing > 0;
+  v.kneel += ((busy ? 1 : 0) - v.kneel) * (1 - Math.exp(-dt * 9));
+  const duck = Math.max(b.crouch, v.kneel);
+  c.hold('skirmish-ready', duck);
+  // (still, and on the ground: feet planted to shoot from; else the walk)
+  if (speed < STILL && b.grounded && Math.abs(turn) < 2.5) {
+    const S = v.stand;
+    for (let i = 0; i < 2; i++) for (let k = 0; k < 2; k++) S.feet[i][k] = STAND.feet[i][k] + (SQUAT.feet[i][k] - STAND.feet[i][k]) * duck;
+    S.crouch = STAND.crouch + (SQUAT.crouch - STAND.crouch) * duck;
+    c.stance(S);
+  } else c.stance(null);
+  v.feet = b.pos.y;
+  c.root.position.set(b.pos.x, b.pos.y, b.pos.z);
+  c.root.rotation.y = facing + v.twist;
+  c.update(dt, ahead * speed, b.grounded, b.vel.y, clamp(turn, -6, 6));
+
+  // ── The body above them: turned to the aim ──
+  const hold = HOLD[holdOf(kind)];
+  const gun = GUNS[kind];
+  v.kick = Math.max(0, v.kick - dt * KICK);
+  const kick = v.kick * v.kick;
+  // (on the run, and not shooting, what's held comes down a little)
+  const hurry = !f.sighted && f.reloading <= 0 && speed > MOVE.speed * 0.72 && b.grounded ? 1 : 0;
+  v.low += ((kick > 0.01 ? 0 : hurry) - v.low) * (1 - Math.exp(-dt * (hurry ? 5 : 12)));
+  const loading = gun && f.reloading > 0 ? Math.sin(clamp(1 - f.reloading / gun.reload, 0, 1) * Math.PI) : 0;
+  const pitch = clamp(f.pitch + f.punch.pitch, -1.35, 1.35) * (1 - v.kneel) - hold.low[1] * v.low - loading * 0.3 - v.kneel * 0.5;
+  // (into the gun a little, always)
+  const lean = 0.3 + c.spine.rotation.x * 0.4 + duck * DUCK.lean * 0.4 - pitch * 0.32 + v.kneel * 0.35;
+  c.spine.rotation.set(lean, hold.blade - v.twist - c.hips.rotation.y, c.spine.rotation.z * 0.5);
+  c.head.rotation.set(-pitch * 0.68 - lean + (hold.blade ? 0.08 : 0), -hold.blade * 0.92, hold.tilt);
+
+  // ── What's in their hands: where it would be, pointing where they aim ──
+  c.root.updateMatrixWorld(true);
+  const aim = _q.setFromAxisAngle(Y, -v.twist).multiply(_q2.setFromAxisAngle(X, -pitch - kick * 0.05));
+  // (the chest's frame in the body's: the gun hangs from a place on the chest)
+  _v.copy(hold.pivot);
+  c.chest.localToWorld(_v);
+  c.root.worldToLocal(_v);
+  const stock = STOCK[kind] || 0;
+  _w.set(hold.at.x, hold.at.y - hold.low[0] * v.low, hold.at.z + stock - kick * 0.03 - loading * 0.04).applyQuaternion(aim);
+  v.mount.position.copy(_v).add(_w);
+  // (a model points along its −z; tipped over on its side to be loaded)
+  v.mount.quaternion.copy(aim).multiply(_q2.setFromEuler(_eu.set(0, Math.PI, loading * 0.5 + (kind === 'knife' ? 0.5 : 0), 'XYZ')));
+  const model = v.held;
+  model.visible = !(f.defusing > 0);
+  model.position.set(0, 0, 0);
+  model.rotation.set(0, 0, 0);
+  if (holdOf(kind) === 'thrown') model.rotation.set(0.3, 0, 0);
+  if (kind === 'charge') model.rotation.set(0, Math.PI / 2, 0);
+  if (busy) {
+    // set down in front of them, or reaching down to where it lies
+    if (f.defusing > 0 && match) c.root.worldToLocal(_v.set(match.charge.x, match.charge.y + 0.1, match.charge.z));
+    else _v.set(0, 0.1, 0.42).applyAxisAngle(Y, -v.twist);
+    v.mount.position.lerp(_v, v.kneel);
+  }
+  v.mount.updateWorldMatrix(false, true);
+
+  // ── The arms: a hand to each place it's held by ──
+  const at = model.userData;
+  _v.set(0, 0, 0);
+  if (kind === 'charge') _v.set(0.11, 0, 0);
+  if (busy && f.defusing > 0) _v.set(0.07, 0, 0);
+  c.chest.worldToLocal(model.localToWorld(_v));
+  reach(c.armR, _v, hold.poleR);
+  if (hold.poleL && (at.fore || busy)) {
+    // the other hand: where it holds the gun, or at the magazine while it's changed
+    if (busy && f.defusing > 0) _v.set(-0.07, 0, 0);
+    else {
+      _v.copy(at.fore);
+      if (loading && gun) _v.lerp(_w.set(0, -0.14, _v.z * 0.4), loading);
+    }
+    c.chest.worldToLocal(model.localToWorld(_v));
+    reach(c.armL, _v, hold.poleL);
+  } else if (kind === 'knife') {
+    // the free hand up in front, to fend with
+    reach(c.armL, FEND.at, FEND.pole);
+  }
+}
+
+// Down: falling, and then lying there.
+function lie(v, f, dt) {
+  const c = v.c;
+  if (!v.fell) {
+    c.stance(null);
+    // which way: shot from in front they go over backwards, more often than not
+    const how = (f.id * 7 + Math.floor(f.body.pos.x * 3)) % 3 === 0 ? 'face' : 'back';
+    v.fell = { how, t: 0, yaw: c.root.rotation.y };
+    v.from = { bones: v.limbs.map((bone) => bone.quaternion.clone()), hips: c.hips.position.clone(), gun: v.mount.position.clone(), gunQ: v.mount.quaternion.clone() };
+    c.stop();
+  }
+  const F = v.fell;
+  F.t += dt;
+  const k = ease(Math.min(1, F.t / FALL));
+  const L = LIE[F.how];
+  const b = f.body;
+  c.root.position.set(b.pos.x, b.pos.y + L.up * k, b.pos.z);
+  // (knees first, then over)
+  c.root.rotation.set(L.turn * k * k, F.yaw, 0);
+  const laid = LAID[F.how];
+  for (let i = 0; i < v.limbs.length; i++) {
+    const bone = v.limbs[i];
+    bone.quaternion.copy(v.from.bones[i]).slerp(_q.setFromEuler(_eu.set(laid[i][0], laid[i][1], laid[i][2], bone.rotation.order)), k);
+  }
+  c.hips.position.lerpVectors(v.from.hips, _v.set(0, 0.94, 0), k);
+  // what they held, dropped beside them, flat on the ground
+  v.mount.position.lerpVectors(v.from.gun, L.gun, k);
+  v.mount.quaternion.copy(v.from.gunQ).slerp(_q.setFromEuler(_eu.set(0, Math.PI / 2, F.how === 'back' ? 0.7 : -0.7, 'ZYX')), k);
+  if (v.held) v.held.visible = holdOf(v.heldKind) !== 'thrown';
+}
+
+// Up again, for the next round.
+function rise(v) {
+  const c = v.c;
+  v.fell = null;
+  v.from = null;
+  v.kneel = v.low = v.kick = v.twist = 0;
+  v.yaw = null;
+  c.root.rotation.set(0, 0, 0);
+  for (const bone of v.limbs) bone.quaternion.identity();
+  c.hips.position.set(0, 0.94, 0);
 }

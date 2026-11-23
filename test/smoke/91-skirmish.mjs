@@ -1,8 +1,9 @@
 // Dry Wells: walk up to the gate and into the light, and you're in the
 // town, one of ten, with the town's own keys (the forest's do nothing in
-// there); B buys at home, W runs, the use button fires and a round to the
-// head counts; E sets the charge at a site and its fuse runs down; L, L
-// walks you back out to the forest.
+// there); B buys at home, and what you bought is on you and in your hands;
+// W runs, the use button fires and a round to the head counts; E sets the
+// charge at a site and its fuse runs down; L, L walks you back out to the
+// forest.
 //
 // Needs: nothing in particular (the gate is a walk from where you first
 // arrive, and go() takes you there from anywhere).
@@ -65,8 +66,25 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.deepEqual(bought, { main: 'rifle', armor: 100, helmet: true, kit: false, cash: 1300, held: 'main', mag: 30 }, 'a rifle, a vest and a helmet; no fuse kit for a Raider');
     await key('KeyB');
     assert.ok(await shop.isHidden(), 'and B puts it away');
+    // what there is to see of it: all ten are there, dressed for their sides; you have your vest and helmet on, and the rifle in your hands
+    await page.evaluate(() => T.until(() => world.skirmish.look.figures.size === 10, 30000));
+    await frames(3);
+    const seen = await match(() => {
+      const m = world.skirmish.match;
+      const look = world.skirmish.look;
+      const mine = look.figures.get(m.mine.id);
+      return {
+        dressed: m.fighters.every((f) => look.figures.get(f.id).c.who.name === (m.sideOf(f) === 'attack' ? 'a Raider' : 'a Warden')),
+        armed: m.fighters.every((f) => !!look.figures.get(f.id).held),
+        vest: mine.parts.armour.visible,
+        helmet: mine.parts.helmet.visible,
+        inHand: look.hands.kind,
+        arms: !!look.hands.arms,
+      };
+    });
+    assert.deepEqual(seen, { dressed: true, armed: true, vest: true, helmet: true, inHand: 'rifle', arms: true }, 'and it shows');
     await shot('at-home');
-    return bought;
+    return { ...bought, ...seen };
   });
 
   await step('a round in the town', async () => {
