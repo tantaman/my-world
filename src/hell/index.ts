@@ -90,8 +90,10 @@ export interface Hell {
   // Stand inside the door; or at radius r, angle th (land.js).
   enter(): void;
   go(r: number, th: number, yaw?: number): void;
-  // Say where the road out by the bottom comes up instead of the hillside.
+  // Say where the road out by the bottom comes up instead of the hillside;
+  // and whether another place has.
   leadOut(onward: Onward): void;
+  readonly leads: boolean;
   [more: string]: unknown;
 }
 
@@ -225,8 +227,8 @@ export function installHell(game: Game) {
       else {
         const yaw = Math.atan2(-gate.ux, -gate.uz);
         player.spawn(gate.x - gate.ux * 9, gate.z - gate.uz * 9, yaw, yaw + Math.PI);
-        card.show({ lines: [SAID.stars], canto: 'XXXIV' }, 12000);
       }
+      card.show({ lines: [SAID.stars], canto: 'XXXIV' }, onward ? 7000 : 12000);
     } else {
       const d = way.doorAt;
       const back = d.yaw + Math.PI;
@@ -524,6 +526,9 @@ export function installHell(game: Game) {
     },
     leadOut(to: Onward) {
       onward = to;
+    },
+    get leads() {
+      return !!onward;
     },
   };
   game.provide('hell', api);

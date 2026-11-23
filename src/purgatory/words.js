@@ -1,0 +1,314 @@
+// What the poem says of each place on the mountain, and at other moments:
+// lines from Longfellow's translation of the Purgatorio (1867), as they
+// stand in it. test/purgatory.test.js keeps their spelling.
+//
+// A place's words, as the card shows them (core/card.js):
+//   title   what the place is
+//   who     who is there, purging what
+//   canto   where the poem comes to it
+//   lines   the poem's own words for it, a line to a string
+//   book    if not the Purgatorio's (the road up out of Hell is the Inferno's)
+
+// By a region's id (plan.REGIONS).
+export const WORDS = {
+  shore: {
+    title: 'The Shore of Purgatory',
+    canto: 'I',
+    lines: ['This little island round about its base', 'Below there, yonder, where the billow beats it,', 'Doth rushes bear upon its washy ooze;'],
+  },
+  plain: {
+    title: 'The Solitary Plain',
+    canto: 'I',
+    lines: ['Along the solitary plain we went', 'As one who unto the lost road returns,', 'And till he finds it seems to go in vain.'],
+  },
+  foot: {
+    title: 'The Foot of the Mountain',
+    who: 'those who died in contumacy of the Church',
+    canto: 'III',
+    lines: ['As sheep come issuing forth from out the fold', 'By ones and twos and threes, and the others stand', 'Timidly, holding down their eyes and nostrils,'],
+  },
+  terrace: {
+    title: 'Ante-Purgatory',
+    who: 'the negligent, who put off repenting till the last',
+    canto: 'IV',
+    lines: ['And he to me: “This mount is such, that ever', 'At the beginning down below ’tis tiresome,', 'And aye the more one climbs, the less it hurts.'],
+  },
+  slope: {
+    title: 'Ante-Purgatory',
+    who: 'those who died by violence, repenting at the last',
+    canto: 'V',
+    lines: ['Meanwhile along the mountain-side across', 'Came people in advance of us a little,', 'Singing the Miserere verse by verse.'],
+  },
+  valley: {
+    title: 'The Valley of the Princes',
+    who: 'the negligent princes',
+    canto: 'VII',
+    lines: ['Gold and fine silver, and scarlet and pearl-white,', 'The Indian wood resplendent and serene,', 'Fresh emerald the moment it is broken,'],
+  },
+  ledge: {
+    title: 'The Gate of Purgatory',
+    canto: 'IX',
+    lines: ['Thou hast at length arrived at Purgatory;', 'See there the cliff that closes it around;', 'See there the entrance, where it seems disjoined.'],
+  },
+  pride: {
+    title: 'The First Terrace',
+    who: 'the proud, bent under stones',
+    canto: 'X',
+    lines: ['From where its margin borders on the void,', 'To foot of the high bank that ever rises,', 'A human body three times told would measure;'],
+  },
+  envy: {
+    title: 'The Second Terrace',
+    who: 'the envious, their eyes sewn shut',
+    canto: 'XIII',
+    lines: ['Shade is there none, nor sculpture that appears;', 'So seems the bank, and so the road seems smooth,', 'With but the livid colour of the stone.'],
+  },
+  wrath: {
+    title: 'The Third Terrace',
+    who: 'the wrathful, in the smoke',
+    canto: 'XVI',
+    lines: [
+      'Darkness of hell, and of a night deprived',
+      'Of every planet under a poor sky,',
+      'As much as may be tenebrous with cloud,',
+      'Ne’er made unto my sight so thick a veil,',
+      'As did that smoke which there enveloped us,',
+    ],
+  },
+  sloth: {
+    title: 'The Fourth Terrace',
+    who: 'the slothful, running',
+    canto: 'XVIII',
+    lines: [
+      '“Mary in haste unto the mountain ran,',
+      'And Caesar, that he might subdue Ilerda,',
+      'Thrust at Marseilles, and then ran into Spain.”',
+      '“Quick! quick! so that the time may not be lost',
+      'By little love!” forthwith the others cried,',
+    ],
+  },
+  avarice: {
+    title: 'The Fifth Terrace',
+    who: 'the avaricious and the prodigal, face down',
+    canto: 'XIX',
+    lines: ['On the fifth circle when I had come forth,', 'People I saw upon it who were weeping,', 'Stretched prone upon the ground, all downward turned.', '“Adhaesit pavimento anima mea,”'],
+  },
+  gluttony: {
+    title: 'The Sixth Terrace',
+    who: 'the gluttonous, starving',
+    canto: 'XXIII',
+    lines: ['Each in his eyes was dark and cavernous,', 'Pallid in face, and so emaciate', 'That from the bones the skin did shape itself.'],
+  },
+  lust: {
+    title: 'The Seventh Terrace',
+    who: 'the lustful, in the fire',
+    canto: 'XXV',
+    lines: ['There the embankment shoots forth flames of fire,', 'And upward doth the cornice breathe a blast', 'That drives them back, and from itself sequesters.'],
+  },
+  eden: {
+    title: 'The Earthly Paradise',
+    canto: 'XXVIII',
+    lines: ['Eager already to search in and round', 'The heavenly forest, dense and living-green,', 'Which tempered to the eyes the new-born day,'],
+  },
+};
+
+// Coming out of the burrow, the first time (after the Inferno's last line,
+// which is Hell's to say): the Purgatorio's first light.
+export const ARRIVAL = {
+  title: 'Purgatory',
+  canto: 'I',
+  lines: [
+    'Sweet colour of the oriental sapphire,',
+    'That was upgathered in the cloudless aspect',
+    'Of the pure air, as far as the first circle,',
+    'Unto mine eyes did recommence delight',
+    'Soon as I issued forth from the dead air,',
+  ],
+};
+
+// At each stair's foot an angel, who wipes a P from your brow with a wing
+// as you pass, and what is sung there; by the terrace the stair goes up from
+// (plan.WAYS[i + 1]).
+export const ANGELS = [
+  { title: 'The Angel of Humility', canto: 'XII', lines: ['As we were turning thitherward our persons,', '“Beati pauperes spiritu,” voices', 'Sang in such wise that speech could tell it not.'] },
+  { title: 'The Angel of Mercy', canto: 'XV', lines: ['We mounting were, already thence departed,', 'And “Beati misericordes” was', 'Behind us sung, “Rejoice, thou that o’ercomest!”'] },
+  { title: 'The Angel of Peace', canto: 'XVII', lines: ['Near me perceived a motion as of wings,', 'And fanning in the face, and saying, “‘Beati', 'Pacifici,’ who are without ill anger.”'] },
+  {
+    title: 'The Angel of Zeal',
+    canto: 'XIX',
+    lines: ['He moved his pinions afterwards and fanned us,', 'Affirming those ‘qui lugent’ to be blessed,', 'For they shall have their souls with comfort filled.'],
+  },
+  { title: 'The Angel of Justice', canto: 'XXII', lines: ['And those who have in justice their desire', 'Had said to us, “Beati,” in their voices,', 'With “sitio,” and without more ended it.'] },
+  {
+    title: 'The Angel of Abstinence',
+    canto: 'XXIV',
+    lines: ['And heard it said: “Blessed are they whom grace', 'So much illumines, that the love of taste', 'Excites not in their breasts too great desire,'],
+  },
+  { title: 'The Angel of Chastity', canto: 'XXVII', lines: ['Outside the flame he stood upon the verge,', 'And chanted forth, “Beati mundo corde,”', 'In voice by far more living than our own.'] },
+];
+
+// The dreams that come to whoever sleeps on the mountain, one a night, in
+// the poem's order; after them, sleep and no more.
+export const DREAMS = [
+  {
+    title: 'The Eagle',
+    canto: 'IX',
+    lines: [
+      ...['In dreams it seemed to me I saw suspended', 'An eagle in the sky, with plumes of gold,', 'With wings wide open, and intent to stoop,'],
+      ...['Then wheeling somewhat more, it seemed to me,', 'Terrible as the lightning he descended,', 'And snatched me upward even to the fire.'],
+    ],
+  },
+  {
+    title: 'The Siren',
+    canto: 'XIX',
+    lines: [
+      ...['There came to me in dreams a stammering woman,', 'Squint in her eyes, and in her feet distorted,', 'With hands dissevered and of sallow hue.'],
+      ...['“I am,” she sang, “I am the Siren sweet', 'Who mariners amid the main unman,'],
+    ],
+  },
+  {
+    title: 'Leah',
+    canto: 'XXVII',
+    lines: [
+      ...['Youthful and beautiful in dreams methought', 'I saw a lady walking in a meadow,', 'Gathering flowers; and singing she was saying:'],
+      ...['“Know whosoever may my name demand', 'That I am Leah, and go moving round', 'My beauteous hands to make myself a garland.'],
+    ],
+  },
+];
+export const SLEEP = { canto: 'XXVII', lines: ['Thus ruminating, and beholding these,', 'Sleep seized upon me,—sleep, that oftentimes', 'Before a deed is done has tidings of it.'] };
+
+// Said at other moments, each where the poem says it.
+export const SAID = {
+  // the four stars, over the shore at night
+  four: { canto: 'I', lines: ['To the right hand I turned, and fixed my mind', 'Upon the other pole, and saw four stars', 'Ne’er seen before save by the primal people.'] },
+  // Cato, beside the burrow
+  cato: { canto: 'I', lines: ['I saw beside me an old man alone,', 'Worthy of so much reverence in his look,', 'That more owes not to father any son.'] },
+  // what Cato bids: the rush, and the dew
+  rush: { canto: 'I', lines: ['Go, then, and see thou gird this one about', 'With a smooth rush, and that thou wash his face,', 'So that thou cleanse away all stain therefrom,'] },
+  // going back down the burrow
+  return: { canto: 'I', lines: ['Thereafter be not this way your return;', 'The sun, which now is rising, will direct you', 'To take the mount by easier ascent.”'] },
+  // up the cleft
+  cleft: { canto: 'IV', lines: ['We mounted upward through the rifted rock,', 'And on each side the border pressed upon us,', 'And feet and hands the ground beneath required.'] },
+  // Belacqua, behind his rock
+  belacqua: { canto: 'IV', lines: ['And one of them, who seemed to me fatigued,', 'Was sitting down, and both his knees embraced,', 'Holding his face low down between them bowed.'] },
+  // a soul sees your shadow
+  shadow: { canto: 'III', lines: ['“Without your asking, I confess to you', 'This is a human body which you see,', 'Whereby the sunshine on the ground is cleft.'] },
+  // the princes, singing
+  salve: { canto: 'VII', lines: ['“Salve Regina,” on the green and flowers', 'There seated, singing, spirits I beheld,', 'Which were not visible outside the valley.'] },
+  // the serpent, in the valley at evening
+  serpent: { canto: 'VIII', lines: ['’Twixt grass and flowers came on the evil streak,', 'Turning at times its head about, and licking', 'Its back like to a beast that smoothes itself.'] },
+  // and the angels who drive it off
+  angels: { canto: 'VIII', lines: ['Green as the little leaflets just now born', 'Their garments were, which, by their verdant pinions', 'Beaten and blown abroad, they trailed behind.'] },
+  // after the sun is gone, nobody climbs
+  night: { canto: 'VII', lines: ['And on the ground the good Sordello drew', 'His finger, saying, “See, this line alone', 'Thou couldst not pass after the sun is gone;'] },
+  // ...but down and round
+  down: { canto: 'VII', lines: ['We might indeed therewith return below,', 'And, wandering, walk the hill-side round about,', 'While the horizon holds the day imprisoned.”'] },
+  // asleep in the valley, carried to the gate
+  lucia: { canto: 'IX', lines: ['There came a Lady and said: ‘I am Lucia;', 'Let me take this one up, who is asleep;', 'So will I make his journey easier for him.’'] },
+  // the three steps
+  steps: {
+    canto: 'IX',
+    lines: [
+      'Thither did we approach; and the first stair',
+      'Was marble white, so polished and so smooth,',
+      'I mirrored myself therein as I appear.',
+      'The second, tinct of deeper hue than perse,',
+      'Was of a calcined and uneven stone,',
+      'Cracked all asunder lengthwise and across.',
+      'The third, that uppermost rests massively,',
+      'Porphyry seemed to me, as flaming red',
+      'As blood that from a vein is spirting forth.',
+    ],
+  },
+  // the angel at the gate
+  cut: { canto: 'IX', lines: ['Seven P’s upon my forehead he described', 'With the sword’s point, and, “Take heed that thou wash', 'These wounds, when thou shalt be within,” he said.'] },
+  // the door
+  enter: { canto: 'IX', lines: ['Then pushed the portals of the sacred door,', 'Exclaiming: “Enter; but I give you warning', 'That forth returns whoever looks behind.”'] },
+  // and through it
+  deum: { canto: 'IX', lines: ['At the first thunder-peal I turned attentive,', 'And “Te Deum laudamus” seemed to hear'] },
+  // nothing falls above the gate
+  weather: { canto: 'XXI', lines: ['Because that neither rain, nor hail, nor snow,', 'Nor dew, nor hoar-frost any higher falls', 'Than the short, little stairway of three steps.'] },
+  // the needle's eye
+  needle: { canto: 'X', lines: ['We mounted upward through a rifted rock,', 'Which undulated to this side and that,', 'Even as a wave receding and advancing.'] },
+  // each P gone, the climb is lighter
+  lighter: { canto: 'XII', lines: ['We now were hunting up the sacred stairs,', 'And it appeared to me by far more easy', 'Than on the plain it had appeared before.'] },
+  // the proud under their stones
+  bent: {
+    canto: 'X',
+    lines: ['True is it, they were more or less bent down,', 'According as they more or less were laden;', 'And he who had most patience in his looks', 'Weeping did seem to say, “I can no more!”'],
+  },
+  // the carvings in the bank
+  carved: { canto: 'X', lines: ['To be of marble white, and so adorned', 'With sculptures, that not only Polycletus,', 'But Nature’s self, had there been put to shame.'] },
+  // the envious
+  wired: { canto: 'XIII', lines: ['For all their lids an iron wire transpierces,', 'And sews them up, as to a sparhawk wild', 'Is done, because it will not quiet stay.'] },
+  // in the smoke
+  agnus: { canto: 'XVI', lines: ['Still “Agnus Dei” their exordium was;', 'One word there was in all, and metre one,', 'So that all harmony appeared among them.'] },
+  // the mountain trembles
+  quake: { canto: 'XX', lines: ['When I perceived, like something that is falling,', 'The mountain tremble, whence a chill seized on me,', 'As seizes him who to his death is going.'] },
+  // and the cry
+  gloria: { canto: 'XX', lines: ['“Gloria in excelsis Deo,” all', 'Were saying, from what near I comprehended,'] },
+  // the tree on the sixth terrace
+  tree: {
+    canto: 'XXII',
+    lines: [
+      'And even as a fir-tree tapers upward',
+      'From bough to bough, so downwardly did that;',
+      'I think in order that no one might climb it.',
+      'On that side where our pathway was enclosed',
+      'Fell from the lofty rock a limpid water,',
+      'And spread itself abroad upon the leaves.',
+    ],
+  },
+  // its voice
+  scarcity: { canto: 'XXII', lines: ['And from among the foliage a voice', 'Cried: “Of this food ye shall have scarcity.”'] },
+  // between the fire and the fall
+  edge: { canto: 'XXV', lines: ['Hence we must needs go on the open side,', 'And one by one; and I did fear the fire', 'On this side, and on that the falling down.'] },
+  // in the fire
+  summae: { canto: 'XXV', lines: ['“Summae Deus clementiae,” in the bosom', 'Of the great burning chanted then I heard,', 'Which made me no less eager to turn round;'] },
+  // the wall of fire
+  fire: { canto: 'XXVII', lines: ['Then: “No one farther goes, souls sanctified,', 'If first the fire bite not; within it enter,', 'And be not deaf unto the song beyond.”'] },
+  // in it
+  glass: { canto: 'XXVII', lines: ['When I was in it, into molten glass', 'I would have cast me to refresh myself,', 'So without measure was the burning there!'] },
+  // the last stair, the sun going down
+  departs: { canto: 'XXVII', lines: ['“The sun departs,” it added, “and night cometh;', 'Tarry ye not, but onward urge your steps,', 'So long as yet the west becomes not dark.”'] },
+  // at the top: Virgil can come no further
+  crown: {
+    canto: 'XXVII',
+    lines: ['Expect no more or word or sign from me;', 'Free and upright and sound is thy free-will,', 'And error were it not to do its bidding;', 'Thee o’er thyself I therefore crown and mitre!”'],
+  },
+  // the stream
+  lethe: {
+    canto: 'XXVIII',
+    lines: [
+      'All waters that on earth most limpid are',
+      'Would seem to have within themselves some mixture',
+      'Compared with that which nothing doth conceal,',
+      'Although it moves on with a brown, brown current',
+      'Under the shade perpetual, that never',
+      'Ray of the sun lets in, nor of the moon.',
+    ],
+  },
+  // over the stream
+  matilda: { canto: 'XXVIII', lines: ['A lady all alone, who went along', 'Singing and culling floweret after floweret,', 'With which her pathway was all painted over.'] },
+  // what Lethe does, and Eunoë
+  forget: { canto: 'XXVIII', lines: ['Upon this side with virtue it descends,', 'Which takes away all memory of sin;', 'On that, of every good deed done restores it.'] },
+  // Eunoë before Lethe
+  first: { canto: 'XXVIII', lines: ['Here Lethe, as upon the other side', 'Eunoe, it is called; and worketh not', 'If first on either side it be not tasted.'] },
+  // Eunoë
+  eunoe: { canto: 'XXXIII', lines: ['But Eunoe behold, that yonder rises;', 'Lead him to it, and, as thou art accustomed,', 'Revive again the half-dead virtue in him.”'] },
+  // the last lines
+  end: {
+    canto: 'XXXIII',
+    lines: ['From the most holy water I returned', 'Regenerate, in the manner of new trees', 'That are renewed with a new foliage,', 'Pure and disposed to mount unto the stars.'],
+  },
+  // the angel's boat
+  pilot: { canto: 'II', lines: ['Upon the stern stood the Celestial Pilot;', 'Beatitude seemed written in his face,', 'And more than a hundred spirits sat within.'] },
+  // and the souls in it
+  exitu: { canto: 'II', lines: ['“In exitu Israel de Aegypto!”', 'They chanted all together in one voice,'] },
+};
+
+// The voices that fly past over the second terrace, unseen (Canto XIII).
+export const VOICES = [
+  ['“Vinum non habent,” said in accents loud,', 'And went reiterating it behind us.'],
+  ['“I am Orestes!” and it also stayed not.'],
+  ['Saying: “Love those from whom ye have had evil!”'],
+];

@@ -10,12 +10,13 @@ import type { Solids } from './solids.js';
 import type { Breakers } from './breakers.js';
 import type { Spaces } from './spaces.js';
 import type { Basins } from './basins.js';
-import type { Vector3 } from 'three';
+import type { Vector3, Material } from 'three';
 import type { growWorld } from './lands.js';
 
 declare module '../game/game.ts' {
   interface Services {
     gen: ReturnType<typeof growWorld>;
+    materials: { vegetation: Material; vegetationShadow: Material; [name: string]: Material };
     chunks: ChunkManager;
     grass: Grass;
     sky: Sky;

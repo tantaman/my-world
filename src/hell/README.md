@@ -39,8 +39,11 @@ you came by: a ramp cut into each cliff of the upper circles, the ruin, the
 boats, Geryon, Antaeus, the door. Anything that carries you takes you when
 you **stand still** where it waits; come to the end it isn't at, and it comes
 over for you. The other way out is the poem's too: go on to the middle of the
-ice, past Lucifer, and you come out on the hillside by the gate, *to
-rebehold the stars*.
+ice, past Lucifer, and up the hidden road beyond, and you come out *to
+rebehold the stars*: on the shore of an island in the southern ocean, under
+the mountain of Purgatory (see [Purgatory](../purgatory/README.md)). (In a
+game without it, you come out on the hillside by the gate; another place says
+where the road comes up with `game.hell.leadOut`.)
 
 **It doesn't end.** "Thou knowest the place is round," Virgil says on the
 burning sand, "and notwithstanding thou hast journeyed far … thou hast not

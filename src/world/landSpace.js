@@ -40,16 +40,19 @@ const _seg = { d: 0, t: 0, nx: 0, nz: 0 };
 export class LandSpace {
   // land: as above · id: the space's name · lid: m over land.top that it
   // reaches up to (as high as anything flies) · wade: m of liquid you can
-  // still wade, deeper being a wall
-  constructor(land, { id, lid, wade }) {
+  // still wade, deeper being a wall · reach: m from the land's middle that
+  // you can be (the land's own reach unless it is drawn further than it can
+  // be gone: a sea to the horizon)
+  constructor(land, { id, lid, wade, reach = land.reach }) {
     this.land = land;
     this.id = id;
     this.wade = wade;
+    this.reach = reach;
     this.surface = 'rock';
-    this.x0 = land.cx - land.reach;
-    this.z0 = land.cz - land.reach;
-    this.x1 = land.cx + land.reach;
-    this.z1 = land.cz + land.reach;
+    this.x0 = land.cx - reach;
+    this.z0 = land.cz - reach;
+    this.x1 = land.cx + reach;
+    this.z1 = land.cz + reach;
     this.lid = land.top + lid;
     this.ref = 0;
     this.solids = new Solids();
@@ -97,7 +100,7 @@ export class LandSpace {
   inside(x, z, y, out) {
     if (!(y < this.lid) || x < this.x0 || z < this.z0 || x > this.x1 || z > this.z1) return false;
     const s = this._land(x, z);
-    if (s.r > this.land.reach) return false;
+    if (s.r > this.reach) return false;
     let floor = s.h;
     let roof = this.lid;
     if (this.land.deck && this.land.deck(s.r, s.th, _d)) {
@@ -159,13 +162,18 @@ export class LandSpace {
   air(x, y, z, m = 0) {
     if (!(y < this.lid) || x < this.x0 || z < this.z0 || x > this.x1 || z > this.z1) return false;
     const s = this._land(x, z);
-    if (s.r > this.land.reach) return false;
+    if (s.r > this.reach) return false;
     if (this.land.deck && this.land.deck(s.r, s.th, _d) && y > _d.under - m && y < _d.top + m) return false;
     return y > Math.max(s.h, s.liq > -1e8 ? s.liq - 0.2 : s.h) + m;
   }
 
   // How deep whatever lies at (x, z) is (m; 0 on dry ground), and in
   // out.kind which liquid it is.
+  /**
+   * @param {number} x
+   * @param {number} z
+   * @param {{ kind: number } | null} [out]
+   */
   depth(x, z, out = null) {
     const s = this._land(x, z);
     if (out) out.kind = s.kind;
