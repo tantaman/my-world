@@ -34,9 +34,9 @@
 //   materials  { outside, inside, glow }: inside is lit from within (the gun room)
 
 import * as THREE from 'three';
-import { Kit } from '../videostore/store.js';
-import { layout } from '../videostore/font.js';
-import { toWorld } from '../landmarks/sites.js';
+import { Kit } from '../build/kit.js';
+import { layout } from '../build/font.js';
+import { toWorld } from '../world/frame.js';
 import { CLUB, EDGE, TREAD } from './site.js';
 import { STATIONS, HOUSES, FIELD } from './skeet.js';
 

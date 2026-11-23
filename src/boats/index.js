@@ -105,6 +105,7 @@ export function installBoats(game) {
   // ── In a boat ─────────────────────────────────────────────────────────────
   player.character.addHeld('paddle', makePaddle(), PADDLE_HELD);
   let aboard = null; // { boat, def, launch: { from, to, t } | null }
+  let hold = null; // what you're held by while you're in it (player/rides.ts)
   let stroke = null; // how far through a stroke the paddle was last frame
   let slipAt = -Infinity; // when you were told F again slips you over the side
   let time = 0;
@@ -114,8 +115,8 @@ export function installBoats(game) {
     if (aboard) return false;
     const live = boats.get(b.id);
     if (!live || live.out) return false;
-    if (player.carrier || player.aboard) {
-      hud.flash('get down first: you can’t climb into a boat from here');
+    if (!player.rides.free) {
+      hud.flash(`${player.rides.why()}: you can’t climb into a boat from here`);
       return false;
     }
     const def = BOATS[live.kind];
@@ -127,9 +128,11 @@ export function installBoats(game) {
         return false;
       }
     }
+    // taken from you some other way than by getting out: it's left where it floats
+    hold = player.rides.take({ by: 'boats', what: `the ${def.name}`, carrier: { ...def.carrier }, lost: () => aboard && leave(aboard.boat.x, aboard.boat.z, aboard.boat.yaw) });
+    if (!hold) return false;
     boats.setOut(live, 'you');
     aboard = { boat: live, def, launch: null };
-    player.carrier = { ...def.carrier };
     player.vel.set(0, 0, 0);
     player.yaw = live.yaw;
     player.grounded = true;
@@ -139,7 +142,7 @@ export function installBoats(game) {
       // pushed off, down the bank and out until it floats
       const from = { x: live.x, z: live.z, yaw: live.yaw };
       aboard.launch = { from, to, t: 0 };
-      player.aboard = {
+      const slide = {
         place(out) {
           const k = clamp(aboard.launch.t / LAUNCH_TIME, 0, 1);
           const e = k * k * (3 - 2 * k);
@@ -149,6 +152,7 @@ export function installBoats(game) {
           out.yaw = from.yaw + Math.atan2(Math.sin(to.yaw - from.yaw), Math.cos(to.yaw - from.yaw)) * e;
         },
       };
+      hold.set({ aboard: slide });
       sound.sfx('launch');
     } else sound.sfx('board');
     hud.flash(`in the ${def.name} · W A S D to paddle, shift to paddle hard · F to get out`, SAY);
@@ -186,8 +190,8 @@ export function installBoats(game) {
     const { boat } = aboard;
     aboard = null;
     stroke = null;
-    player.aboard = null;
-    player.carrier = null;
+    if (hold) hold.release();
+    hold = null;
     const ch = player.character;
     ch.seat(null);
     if (ch.action && ch.action.kind === 'paddle') ch.stop();
@@ -209,7 +213,7 @@ export function installBoats(game) {
       pitch = rest(world, def, player.pos.x, player.pos.z, player.yaw).pitch * clamp(1 - a.launch.t / LAUNCH_TIME, 0, 1);
       if (a.launch.t >= LAUNCH_TIME) {
         a.launch = null;
-        player.aboard = null;
+        hold.set({ aboard: null });
         player.vel.set(0, 0, 0);
         splash(player.pos.x + Math.sin(player.yaw) * def.len * 0.4, player.pos.z + Math.cos(player.yaw) * def.len * 0.4, 40, 1.6);
       }
@@ -267,7 +271,7 @@ export function installBoats(game) {
     id: 'boat',
     at() {
       if (aboard) return { d: 0, word: 'get out', run: getOut };
-      if (player.carrier || player.aboard) return null;
+      if (!player.rides.free) return null;
       const b = nearest();
       return b ? { d: hullDistance(b, player.pos.x, player.pos.z), word: 'get in', run: () => board(b) } : null;
     },
@@ -277,7 +281,6 @@ export function installBoats(game) {
 
   // What F would do here, said in place of the tool's prompt (unless the tool
   // has something to say, or something under way: the rod, its float out).
-  let cued = false;
   function cue() {
     const K = (w) => act.key(w);
     let html = '';
@@ -288,7 +291,7 @@ export function installBoats(game) {
         else if (!player.swimming) html = `aground: paddle out into deeper water · <b>${out}</b> get out`;
         else html = `<b>${out}</b> get out · <b>shift</b> paddle hard`;
       }
-    } else if (!player.carrier && !player.aboard) {
+    } else if (player.rides.free) {
       const b = nearest();
       if (b) {
         const go = K('get in');
@@ -296,9 +299,7 @@ export function installBoats(game) {
         if (!t || (!t.prompt && !t.type)) html = `<b>${go}</b> get in the ${BOATS[b.kind].name}`;
       }
     }
-    if (html) hud.cue({ html });
-    else if (cued) hud.cue(null);
-    cued = !!html;
+    hud.cue(html ? { html } : null, 'boats');
   }
 
   // ── Everyone else here ────────────────────────────────────────────────────

@@ -32,9 +32,10 @@
 //   'done'      ()
 
 import { Emitter } from '../core/events.js';
-import { toWorld } from '../landmarks/sites.js';
+import { toWorld } from '../world/frame.js';
 import { HALF, topAt } from './airports.js';
 import { PARK } from './airfield.js';
+import { wrapAngle as wrap } from '../core/geom.js';
 
 export const FLY = {
   board: 3, // s climbing the steps and shutting the door
@@ -555,7 +556,6 @@ function sample(list, t, out) {
   return out;
 }
 
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const smooth = (f) => f * f * (3 - 2 * f);
 
 export { PHASES };

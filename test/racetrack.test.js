@@ -8,7 +8,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { growWorld, LANDS } from '../src/world/lands.js';
-import { Sites, toLocal } from '../src/landmarks/sites.js';
+import { toLocal } from '../src/world/frame.js';
+import { Sites } from '../src/landmarks/sites.js';
 import { Towns } from '../src/towns/towns.js';
 import { Caves } from '../src/caves/caves.js';
 import { Lines, clearOfPlaces, clearOfCaves } from '../src/railway/lines.js';
@@ -19,7 +20,8 @@ import { findSite as findStore, clearOf as storeClear } from '../src/videostore/
 import { Branches } from '../src/videostore/branches.js';
 import { findBuildings, overlaps } from '../src/abandoned/sites.js';
 import { Airports } from '../src/airports/airports.js';
-import { mayReach, RING as CLUB_RING, PLAN as CLUB_PLAN } from '../src/huntclub/site.js';
+import { RING as CLUB_RING, PLAN as CLUB_PLAN } from '../src/huntclub/site.js';
+import { mayReach } from '../src/airports/airports.js';
 import { LAYOUTS, FOR_STYLE, Circuit, circuitOf, KERB } from '../src/racetrack/layouts.js';
 import { clearOf, surfaceOf, surfaceAt, onGrounds, paddockOf, lay, LIFT, CAMBER, PADDOCK } from '../src/racetrack/site.js';
 import { Tracks, layoutFor, hasTrack, TRACK } from '../src/racetrack/tracks.js';

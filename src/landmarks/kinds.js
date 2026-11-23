@@ -151,13 +151,3 @@ export const KINDS = {
 };
 
 export const KIND_IDS = Object.keys(KINDS);
-
-// Family names for sites, made up in the way that old places are named for
-// whoever lived or hunted there.
-export const SURNAMES = [
-  'Hollis', 'Ashby', 'Mercer', 'Pruitt', 'Calloway', 'Hadley', 'Burke', 'Dunmore', 'Tolliver', 'Whitcomb',
-  'Kessler', 'Lindqvist', 'Marsh', 'Garrity', 'Abernathy', 'Fenwick', 'Haskins', 'Ostrander', 'Pike', 'Rourke',
-  'Sorensen', 'Talbot', 'Vance', 'Wexford', 'Yates', 'Bramwell', 'Corliss', 'Dacey', 'Ellery', 'Frame',
-  'Gilchrist', 'Hartigan', 'Iverson', 'Jessup', 'Kincaid', 'Larkin', 'Mabry', 'Nyland', 'Orcutt', 'Pellerin',
-  'Quimby', 'Rasmussen', 'Starkweather', 'Thibodeau', 'Underhill', 'Vickery', 'Winslow', 'Aldous', 'Birdsall', 'Coombs',
-];

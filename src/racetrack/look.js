@@ -30,8 +30,8 @@
 //   materials { outside, glow, lamp: [5 materials] }
 
 import * as THREE from 'three';
-import { Kit } from '../videostore/store.js';
-import { toWorld } from '../landmarks/sites.js';
+import { Kit } from '../build/kit.js';
+import { toWorld } from '../world/frame.js';
 import { mulberry32 } from '../noise.js';
 import { circuitOf, KERB } from './layouts.js';
 import { PADDOCK, BANK, paddockOf } from './site.js';

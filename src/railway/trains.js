@@ -29,7 +29,8 @@ import { anchor } from '../render/origin.js';
 import { phash } from '../noise.js';
 import { pointAt, ahead } from './lines.js';
 import { CONSIST, GAP } from './timetable.js';
-import { GAUGE, box, beam } from './track.js';
+import { GAUGE } from './track.js';
+import { box, beam } from '../build/faces.js';
 
 const lin = (hex) => new THREE.Color(hex);
 const COL = {

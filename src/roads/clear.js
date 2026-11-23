@@ -35,7 +35,7 @@
 //              been surveyed (the roads cross it, so Roads looks at it itself)
 //   start      where people first arrive
 
-import { mayReach } from '../huntclub/site.js';
+import { mayReach } from '../airports/airports.js';
 import { CELL as LINE_CELL } from '../railway/lines.js';
 import { BRANCH_OUT } from '../videostore/branches.js';
 

@@ -10,7 +10,7 @@ import { CarModel } from '../src/cars/models.js';
 import { Dealers, hasDealer, lotTop, clearOf, LOT, SKIRT, DEALER } from '../src/cars/dealers.js';
 import { buildLot } from '../src/cars/lot.js';
 import { nearest, WIDE } from '../src/roads/roads.js';
-import { onPlan, toWorld } from '../src/landmarks/sites.js';
+import { onPlan, toWorld } from '../src/world/frame.js';
 import { KINDS as TOWN_KINDS } from '../src/towns/kinds.js';
 import { LANDS } from '../src/world/lands.js';
 import { roadsWorld } from './helpers/roadsWorld.js';

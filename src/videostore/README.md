@@ -126,7 +126,6 @@ floorplan.js    what's where inside: the shelving and its slots, the counter, th
 catalog.js      generated films, VHS and DVD editions, and which slots they fill
 lineup.js       the curated 2004 lineup and each film's TMDB ID
 covers.js       a cover painted in pixels, small for the shelves (all of them in one atlas) and big in hand
-font.js         letters made of little squares, for the signs and the titles on the covers
 store.js        what it looks like: the building, the car park, the sign, the shelving and its boxes, the counter
 browse.js       the rules: what's in your hands, renting, due dates, returning, late fees
 card.js         the box in your hands, its TMDB details, and the till receipt

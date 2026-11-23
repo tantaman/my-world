@@ -8,7 +8,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { growWorld, LANDS } from '../src/world/lands.js';
-import { Sites, onPlan } from '../src/landmarks/sites.js';
+import { onPlan } from '../src/world/frame.js';
+import { Sites } from '../src/landmarks/sites.js';
 import { Lines, CELL, DS, GRADE, BED, PLATFORM, clearOfPlaces, clearOfCaves, pointAt, nearest, ahead } from '../src/railway/lines.js';
 import { Caves } from '../src/caves/caves.js';
 import { CAVE } from '../src/caves/sites.js';

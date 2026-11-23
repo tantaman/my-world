@@ -27,7 +27,7 @@
 
 import * as THREE from 'three';
 import { Mesher } from '../build/geometry.js';
-import { toWorld } from '../landmarks/sites.js';
+import { toWorld } from '../world/frame.js';
 import { PAD, SKIRT, ROCKET_AT, TOWER_AT } from './site.js';
 
 const col = (hex) => new THREE.Color(hex);

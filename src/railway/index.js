@@ -40,7 +40,7 @@ import { Train, Smoke, COACHES, SEATS, CAR_BOX } from './trains.js';
 import { trainSounds } from './sound.js';
 import { railLayer, STATION_GLYPH } from './onMap.js';
 import { StationPanel } from './panel.js';
-import { onPlan, planDiscs, toWorld } from '../landmarks/sites.js';
+import { onPlan, planDiscs, toWorld } from '../world/frame.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { SEAT_HIPS } from '../player/character.js';
 import { SHARED } from '../render/uniforms.js';
@@ -54,7 +54,6 @@ const TRAINS_SHOW = 480; // m: trains this close are drawn
 const LOOK_EVERY = 0.5; // s between looks round for track to stand up
 const BUILD_MS = 4; // ms a frame spent standing track up, when there's some to do
 const REACH = 7000; // m round you whose stations the panel lists
-const PUMP_MS = [0.8, 6]; // ms a frame surveying lines further off: usually, and with the map open
 const PREFETCH_EVERY = 2; // s between asking for the lines round you
 const BOARD = 3.5; // m from the side of a car you can climb into it
 const STOOD = 0.25; // m/s: slower than this, a train is standing
@@ -310,6 +309,7 @@ export function installRailway(game) {
 
   // ── Riding ────────────────────────────────────────────────────────────────
   let aboard = null; // { key, line, j, car, seat }
+  let hold = null; // what you're held by while you're aboard (player/rides.ts)
   builder.idleWhile(() => aboard !== null);
   const seatPlace = {
     place(out) {
@@ -332,8 +332,22 @@ export function installRailway(game) {
   const nextStop = (e) => e.line.stations[e.w.at >= 0 ? (e.w.at + 1) % e.line.stations.length : e.w.next];
 
   function board(e, car, seat) {
+    // not on a horse, nor in anything else: and taken off the train some
+    // other way than by getting off, your seat is simply empty
+    const taken = player.rides.take({
+      by: 'railway',
+      what: 'the train',
+      aboard: seatPlace,
+      lost() {
+        aboard = hold = null;
+        player.character.seat(null);
+        save.touch();
+        tell();
+      },
+    });
+    if (!taken) return void hud.flash(player.rides.why());
+    hold = taken;
     aboard = { key: e.key, line: e.line, j: e.j, car, seat };
-    player.aboard = seatPlace;
     player.vel.set(0, 0, 0);
     player.character.seat(BENCH);
     hud.flash(`aboard, on ${e.line.name} · next stop ${nextStop(e).name}`, SAY);
@@ -356,7 +370,8 @@ export function installRailway(game) {
     }
     const was = aboard;
     aboard = null;
-    player.aboard = null;
+    if (hold) hold.release();
+    hold = null;
     player.character.seat(null);
     player.vel.set(0, 0, 0);
     if (st) {
@@ -437,7 +452,7 @@ export function installRailway(game) {
     id: 'train',
     at() {
       if (aboard) return { d: 0, word: 'get off', run: () => leave() };
-      if (player.carrier || player.aboard) return null;
+      if (!player.rides.free) return null;
       const c = coachNear();
       if (!c) return null;
       return { d: c.d, word: 'get on', run: () => (c.e.w.v < STOOD ? board(c.e, c.car, c.seat) : hud.flash('wait for it to stop at a station')) };
@@ -450,8 +465,8 @@ export function installRailway(game) {
     const st = lines.byId(id);
     const line = st && lineOf(st);
     if (!st || !line || !stands(line)) return false;
-    if (player.carrier) {
-      hud.flash('get down first (Z)');
+    if (!aboard && !player.rides.free) {
+      hud.flash(player.rides.why());
       return false;
     }
     if (aboard) leave(true);
@@ -626,8 +641,10 @@ export function installRailway(game) {
   let lookIn = 0;
   let prefetchIn = 0;
   let panelIn = 0;
-  let cued = false;
   const reached = new Set();
+  // Where the lines are further off is looked for a little at a time, out of
+  // what the frame can spare (game/budget.ts).
+  game.budget.add({ name: 'railway', work: (ms) => lines.pump(ms) });
   game.addSystem({
     name: 'railway',
     phase: 'world',
@@ -655,7 +672,6 @@ export function installRailway(game) {
         prefetchIn = PREFETCH_EVERY;
         lines.prefetch(at.x, at.z, REACH);
       }
-      if (lines.queue.size) lines.pump(map.isOpen ? PUMP_MS[1] : PUMP_MS[0]);
       if (showing()) {
         panelIn -= dt;
         if (panelIn <= 0) refreshPanel();
@@ -759,9 +775,7 @@ export function installRailway(game) {
       if (c && c.e.w.v < STOOD) html = `<b>${K('get on')}</b> get on · ${c.e.line.name} · next stop ${nextStop(c.e).name}`;
       else if (c) html = 'the train is moving';
     }
-    if (html) hud.cue({ html });
-    else if (cued) hud.cue(null);
-    cued = !!html;
+    hud.cue(html ? { html } : null, 'railway');
   }
 
   // The panel's list: the stations within reach, nearest first, and when

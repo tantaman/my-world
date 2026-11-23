@@ -2,7 +2,7 @@
 // on the inner wall or look out through the observation windows on the right.
 import * as THREE from 'three';
 import { Metalwork } from './stationHull.js';
-import { Body } from '../towns/people.js';
+import { Body } from '../people/body.js';
 import { wrapAngle } from '../core/geom.js';
 
 const TAU = Math.PI * 2;

@@ -36,7 +36,7 @@ import { tubeSounds } from './sound.js';
 import { Tubers } from './others.js';
 import './tubing.css';
 import { SEAT_HIPS } from '../player/character.js';
-import { segDist, waterSample } from '../core/geom.js';
+import { segDist, waterSample, wrapAngle as wrap } from '../core/geom.js';
 import { formatDistance } from '../core/format.js';
 import { clamp } from '../noise.js';
 
@@ -55,7 +55,8 @@ const WADE = 0.45;
 const CLIFF = 1.2;
 const SLIP = 4;
 // Put somewhere else by something else (back to the start): moved further
-// than this (m) in a frame, you're out of the tube.
+// than this (m) from where the tube had you, you're out of it (the mover's
+// slack: player/rides.ts).
 const MOVED = 4;
 // How you sit in it: your hips this far (m) under the tube's middle and
 // back of it, your feet this far under it (where you are, to the rest of
@@ -104,7 +105,6 @@ const _seg = { d: 0, nx: 0, nz: 0, t: 0 };
 const _h = { nx: 0, nz: 0, depth: 0, what: '' };
 const _v = new THREE.Vector3();
 const round = (v, f) => Math.round(v * f) / f;
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 // which way (dx, dz) points, as a compass point (north is -z)
 const way = (dx, dz) => WAYS[Math.round((((Math.atan2(dx, -dz) * 180) / Math.PI + 360) % 360) / 45) % 8];
 function duration(s) {
@@ -220,7 +220,7 @@ export function installTubing(game) {
   sound.addLayer(tubeSounds(heard));
   let active = false;
   let hop = null; // { from: { x, y, z }, t } hopping in
-  let moved = false; // put somewhere else while in it
+  let hold = null; // what you're held by while you're in it (player/rides.ts)
   let float = { far: 0, t: 0 }; // this float: how far (m), and when it began
   let best = 0; // your longest float in this world (m)
   let time = 0;
@@ -235,29 +235,20 @@ export function installTubing(game) {
   let owed = 0; // spray owed
   let stroke = 0; // how far through the stroke the hands were last frame
   let target = null; // a river to float down, pointed to: { x, z, t (when) }
-  const last = { x: 0, z: 0 };
   const c = { x: 0, z: 0, hard: false };
   // with the fishing rod in hand you drift and fish, your hands off the water
   const fishing = () => !!(builder.current && builder.current.afloat && !builder.idle);
   builder.idleWhile(() => active && !(builder.current && builder.current.afloat));
 
   const mover = {
+    slack: MOVED,
     place(out, dt) {
-      // moved by something else (R, a teleport): that's the end of it
-      if (Math.hypot(player.pos.x - last.x, player.pos.z - last.z) > MOVED) {
-        out.x = player.pos.x;
-        out.y = player.pos.y;
-        out.z = player.pos.z;
-        out.yaw = player.yaw;
-        moved = true;
-        return;
-      }
       if (hop) {
         hop.t += dt;
         const k = clamp(hop.t / HOP.time, 0, 1);
         const e = k * k * (3 - 2 * k);
-        out.x = last.x = hop.from.x + (tube.x - hop.from.x) * e;
-        out.z = last.z = hop.from.z + (tube.z - hop.from.z) * e;
+        out.x = hop.from.x + (tube.x - hop.from.x) * e;
+        out.z = hop.from.z + (tube.z - hop.from.z) * e;
         out.y = hop.from.y + (tube.y - FEET - hop.from.y) * e + Math.sin(k * Math.PI) * HOP.up;
         out.yaw = tube.yaw;
         out.heading = heading;
@@ -265,8 +256,8 @@ export function installTubing(game) {
       }
       readControls();
       tube.step(dt, c);
-      out.x = last.x = tube.x;
-      out.z = last.z = tube.z;
+      out.x = tube.x;
+      out.z = tube.z;
       out.y = tube.y - FEET;
       out.yaw = tube.yaw;
       if (tube.speed > 0.08) heading += wrap(Math.atan2(tube.vx, tube.vz) - heading) * (1 - Math.exp(-dt * TURNS));
@@ -297,17 +288,16 @@ export function installTubing(game) {
   // with hop false, there already (back where you left off).
   function getIn(at, { hop: hopping = true } = {}) {
     if (active) return false;
+    // (put somewhere else while you're in it, R or a teleport, that's the end of the float)
+    hold = player.rides.take({ by: 'tubing', what: 'your tube', aboard: mover, lost: (why) => (stow(), why === 'moved' && finish('out of your tube')) });
+    if (!hold) return false;
     const p = player.pos;
     const flowing = chunks.waterAt(at.x, at.z, _w) && Math.hypot(_w.flowX, _w.flowZ) >= STILL;
     const yaw = flowing ? Math.atan2(_w.flowX, _w.flowZ) : Math.hypot(at.x - p.x, at.z - p.z) > 0.3 ? Math.atan2(at.x - p.x, at.z - p.z) : player.yaw;
     tube.launch(at.x, at.z, yaw);
     heading = yaw;
     active = true;
-    moved = false;
     hop = hopping ? { from: { x: p.x, y: p.y, z: p.z }, t: 0 } : null;
-    last.x = p.x;
-    last.z = p.z;
-    player.aboard = mover;
     player.vel.set(0, 0, 0);
     player.character.seat(SEAT);
     SEAT.stroke = null;
@@ -355,7 +345,8 @@ export function installTubing(game) {
     if (!active) return;
     active = false;
     hop = null;
-    if (player.aboard === mover) player.aboard = null;
+    if (hold) hold.release();
+    hold = null;
     const ch = player.character;
     ch.seat(null);
     SEAT.stroke = null;
@@ -475,7 +466,7 @@ export function installTubing(game) {
     id: 'tube',
     at() {
       if (active) return { d: 0, word: 'get out', run: getOut };
-      if (player.carrier || player.aboard || player.space) return null;
+      if (!player.rides.free || player.space) return null;
       const spot = waterBy(player.pos.x, player.pos.z);
       return spot ? { d: FLOAT_AT, word: 'float', run: () => getIn(spot) } : null;
     },
@@ -487,7 +478,7 @@ export function installTubing(game) {
   function whereToFloat() {
     const p = player.pos;
     if (active) return hud.flash(input.isTouch ? 'you’re floating · “get out” climbs out' : 'you’re floating · F climbs out');
-    if (!player.space && !player.carrier && !player.aboard && waterBy(p.x, p.z)) return hud.flash(input.isTouch ? 'water deep enough to float in, here · “float”' : 'water deep enough to float in, here · F to float');
+    if (!player.space && player.rides.free && waterBy(p.x, p.z)) return hud.flash(input.isTouch ? 'water deep enough to float in, here · “float”' : 'water deep enough to float in, here · F to float');
     if (player.space) {
       hud.flash('no river to float down in here');
       return false;
@@ -513,7 +504,7 @@ export function installTubing(game) {
     if (time < noticeAt) return floatable;
     noticeAt = time + NOTICE.every;
     floatable = false;
-    if (player.carrier || player.aboard || player.space) return false;
+    if (!player.rides.free || player.space) return false;
     const p = player.pos;
     for (let i = 0; i <= 8 && !floatable; i++) {
       const a = (i / 8) * Math.PI * 2;
@@ -525,7 +516,6 @@ export function installTubing(game) {
     return floatable;
   }
 
-  let cued = false;
   function cue() {
     const touch = input.isTouch;
     let html = '';
@@ -545,9 +535,7 @@ export function installTubing(game) {
       const t = builder.tgt;
       if (!t || (!t.prompt && !t.type)) html = `<b>${K('float')}</b> float down it in your inner tube`;
     }
-    if (html) hud.cue({ html });
-    else if (cued) hud.cue(null);
-    cued = !!html;
+    hud.cue(html ? { html } : null, 'tubing');
   }
 
   const readout = document.createElement('div');
@@ -616,12 +604,7 @@ export function installTubing(game) {
     update({ dt }) {
       time += dt;
       if (active) {
-        // something else has you now (a horse, a train), or has put you somewhere
-        if (player.aboard !== mover || player.carrier || moved) {
-          const far = moved;
-          stow();
-          if (far) finish('out of your tube');
-        } else if (!hop && tube.dry) {
+        if (!hop && tube.dry) {
           // run out of water: out onto whatever's there
           const at = bankBy(tube.x, tube.z, tube.level) || { x: tube.x, z: tube.z };
           stow();

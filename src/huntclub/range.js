@@ -22,7 +22,7 @@
 // of a broken one are the builder's chips.
 
 import { Emitter } from '../core/events.js';
-import { toLocal, toWorld } from '../landmarks/sites.js';
+import { toLocal, toWorld } from '../world/frame.js';
 import { Round, housesOf, launch, fly, pattern, meeting, missedBy, FIELD, HOUSE_NAME, TARGETS } from './skeet.js';
 import { PLAN } from './site.js';
 import { makeClay } from './models.js';

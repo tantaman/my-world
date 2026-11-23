@@ -27,15 +27,18 @@
 //           towards the start, where people come from
 //   top     the height of the top of the pad
 //   low     the lowest ground under its skirt
-//   plan    [[x0, z0, x1, z1]]: the pad's top in its own frame (landmarks/sites.js's
+//   plan    [[x0, z0, x1, z1]]: the pad's top in its own frame (world/frame.js's
 //           toWorld, onPlan); cleared, the same and its sloping sides
 //   box     [x0, z0, x1, z1] in the world, round the pad and its skirt
 //   name    what it's called; livery, its colours ({ tower, band }: 0xRRGGBB;
 //           Skyhook has none, and its own)
 //   seed    for anything else that differs from one to the next
 
-import { samplesNear, CELL as LINE_CELL } from '../railway/lines.js';
+import { railsNear, NEAR } from '../railway/lines.js';
+import { caveMouths } from '../caves/sites.js';
+import { keepClear, landOf, placesOf } from '../world/claims.ts';
 import { mulberry32, hash2i } from '../noise.js';
+import { Searches } from '../core/searches.ts';
 
 export const PAD = 9; // m from the middle of the pad to its edge (18 m square)
 export const SKIRT = 2.2; // m the sloping sides run out past the top's edge
@@ -166,31 +169,7 @@ const EDGES = [
 // not, so a search far out can wait for it rather than stall.
 const MOUTH_CLEAR = 30; // m from a cave's mouth
 export function clearOf({ landforms, sites, towns, caves, lines }) {
-  const keepOff = (x0, z0, x1, z1) => {
-    if (landforms.reaches(x0, z0, x1, z1)) return true;
-    if (sites.within(x0, z0, x1, z1).length) return true;
-    if (towns.within(x0, z0, x1, z1).length) return true;
-    for (const c of caves.inBox(x0, z0, x1, z1)) {
-      const m = c.mouth;
-      if (m.x > x0 - MOUTH_CLEAR && m.x < x1 + MOUTH_CLEAR && m.z > z0 - MOUTH_CLEAR && m.z < z1 + MOUTH_CLEAR) return true;
-    }
-    const cx = (x0 + x1) / 2;
-    const cz = (z0 + z1) / 2;
-    for (const line of lines.within(x0, z0, x1, z1)) {
-      let near = false;
-      samplesNear(line, cx, cz, (x1 - x0) / 2, () => (near = true));
-      if (near) return true;
-    }
-    return false;
-  };
-  keepOff.ready = (x0, z0, x1, z1) => {
-    let known = true;
-    for (let j = Math.floor(z0 / LINE_CELL); j <= Math.floor(z1 / LINE_CELL); j++) {
-      for (let i = Math.floor(x0 / LINE_CELL); i <= Math.floor(x1 / LINE_CELL); i++) if (lines.peek(i, j) === undefined) known = false;
-    }
-    return known;
-  };
-  return keepOff;
+  return keepClear([landOf(landforms), placesOf(sites), placesOf(towns), caveMouths(caves, MOUTH_CLEAR), railsNear(lines, NEAR.width)]);
 }
 
 // ── Further out ──────────────────────────────────────────────────────────────
@@ -243,7 +222,7 @@ export function farSpot(seed, i, j) {
 export function* farSite(gen, spot, keepOff = () => false, patient = () => false) {
   const found = yield* flats(gen, spot, FAR.ring, FAR.step);
   const r = FAR_REACH + CLEAR;
-  while (patient() && keepOff.ready && !keepOff.ready(spot.x - r, spot.z - r, spot.x + r, spot.z + r)) yield;
+  while (patient() && keepOff.ready && !keepOff.ready(spot.x - r, spot.z - r, spot.x + r, spot.z + r)) yield 'wait'; // (not gone round and round on: core/searches.ts)
   const best = choose(found, keepOff);
   if (!best) return null;
   return siteAt(best, spot.yaw, `spaceport:far:${spot.i}:${spot.j}`, { name: spot.name, livery: spot.livery, seed: spot.seed });
@@ -262,10 +241,24 @@ export class LaunchSites {
     this.home = home;
     this.keepOff = keepOff;
     this.away = away;
-    this.cells = new Map(); // "i:j" -> site or null
-    this.growing = new Map(); // "i:j" -> a search under way
-    this.queue = new Set(); // squares asked about and not yet looked over
-    this.patient = true; // a search may wait for the railway (not when one's wanted outright)
+    // looked for outright (cell) or a little at a time (peek, then pump): core/searches.ts
+    this.search = new Searches({
+      grow: (k) => {
+        const [i, j] = k.split(':').map(Number);
+        return this._grow(i, j);
+      },
+    });
+    this.cells = this.search.known; // "i:j" -> site or null
+  }
+
+  // Squares asked about and not yet looked over.
+  get queue() {
+    return this.search.queue;
+  }
+
+  // A search may wait for the railway (not when one's wanted outright).
+  get patient() {
+    return this.search.patient;
   }
 
   // The spot square (i, j) is looked for round, or null if it has none.
@@ -279,16 +272,7 @@ export class LaunchSites {
 
   // The launch site in square (i, j), or null; looked for now if it hasn't been.
   cell(i, j) {
-    const k = `${i}:${j}`;
-    const known = this.cells.get(k);
-    if (known !== undefined) return known;
-    const run = this.growing.get(k) || this._grow(i, j);
-    this.patient = false;
-    try {
-      return this._done(k, finish(run));
-    } finally {
-      this.patient = true;
-    }
+    return this.search.get(`${i}:${j}`);
   }
 
   // ...or undefined if it hasn't been, and it's queued for pump().
@@ -296,30 +280,13 @@ export class LaunchSites {
     const k = `${i}:${j}`;
     const known = this.cells.get(k);
     if (known !== undefined) return known;
-    if (!this.spot(i, j)) return this._done(k, null);
-    this.queue.add(k);
-    return undefined;
+    if (!this.spot(i, j)) return this.search.set(k, null);
+    return this.search.peek(k);
   }
 
   // Look over queued squares for up to `ms` milliseconds. -> how many are left.
   pump(ms) {
-    const t0 = performance.now();
-    for (const k of this.queue) {
-      let run = this.growing.get(k);
-      if (!run) {
-        const [i, j] = k.split(':').map(Number);
-        this.growing.set(k, (run = this._grow(i, j)));
-      }
-      for (;;) {
-        const r = run.next();
-        if (r.done) {
-          this._done(k, r.value);
-          break;
-        }
-        if (performance.now() - t0 > ms) return this.queue.size;
-      }
-    }
-    return this.queue.size;
+    return this.search.pump(ms);
   }
 
   // Ask for the squares whose sites could be within r of (x, z) to be looked
@@ -363,12 +330,5 @@ export class LaunchSites {
   *_grow(i, j) {
     const spot = this.spot(i, j);
     return spot ? yield* farSite(this.gen, spot, this.keepOff, () => this.patient) : null;
-  }
-
-  _done(k, site) {
-    this.growing.delete(k);
-    this.queue.delete(k);
-    this.cells.set(k, site);
-    return site;
   }
 }

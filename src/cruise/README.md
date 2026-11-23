@@ -152,7 +152,7 @@ voyage.js    where she is by the clock: alongside, leaving, at sea, arriving; th
 cabins.js    what's in each stateroom, grown from the seed; which is yours
 lifts.js     a ride in a lift: the doors, speeding up, slowing down
 slides.js    the two waterslides, and a ride down one
-kit.js       building blocks: the video store's Kit, and cylinders, rods, tubes, lofts; laying a surface on what's drawn
+kit.js       building blocks: the Kit (build/kit.js), and cylinders, rods, tubes, lofts; laying a surface on what's drawn
 hull.js      her outside: the hull, the promenade, the decks of balconies, the bridge, the funnel, the lifeboats, her name
 decks.js     one deck from its plan: floors, ceilings, walls, windows, stairs, doors, and what each kind of room is laid with; what's solid; what the camera can't see through
 textures.js  her carpets, marble, panelling, wallpaper and ceilings, painted in code into one array of textures, a little a frame

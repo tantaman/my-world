@@ -9,9 +9,9 @@
 // that into a walk, a trot or a gallop.
 
 import { Quad } from './quadruped.js';
-import { disposeAnimal } from './rig.js';
+import { disposeAnimal } from '../render/rig.js';
 import { clamp, lerp } from '../noise.js';
-import { rand, wrapAngle as wrap } from '../core/geom.js';
+import { rand, wrapAngle as wrap, rayCapsule } from '../core/geom.js';
 
 const range = (r) => rand(r[0], r[1]);
 const FRIGHT = new Set(['flee', 'leave', 'toTree', 'climb', 'toCover', 'hide', 'stand', 'watch', 'freeze']);
@@ -27,36 +27,6 @@ const BOLTING = new Set(['toTree', 'climb', 'toCover', 'hide']);
 const BODY = { rump: -0.82, brisket: 0.72, girth: 0.27, girthByLength: 0.2, centre: 0.95 };
 const _A = { x: 0, y: 0, z: 0 };
 const _B = { x: 0, y: 0, z: 0 };
-
-// Where a ray from o along d (unit) first meets a capsule round the segment
-// a–b of radius r, within `far`: -> t, or null. (The entry point is taken
-// as the closest approach, less how far the ray runs inside the radius
-// there: exact for a ray square on to the capsule, near enough otherwise.)
-export function rayCapsule(o, d, a, b, r, far = Infinity) {
-  const ux = b.x - a.x;
-  const uy = b.y - a.y;
-  const uz = b.z - a.z;
-  const wx = o.x - a.x;
-  const wy = o.y - a.y;
-  const wz = o.z - a.z;
-  const bb = d.x * ux + d.y * uy + d.z * uz;
-  const cc = ux * ux + uy * uy + uz * uz;
-  const dd = d.x * wx + d.y * wy + d.z * wz;
-  const ee = ux * wx + uy * wy + uz * wz;
-  const den = cc - bb * bb;
-  // the closest points: u along the segment, t along the ray
-  let u = cc < 1e-12 ? 0 : den > 1e-9 ? clamp((ee - bb * dd) / den, 0, 1) : 0;
-  let t = Math.max(0, u * bb - dd);
-  if (cc > 1e-12) u = clamp((ee + t * bb) / cc, 0, 1);
-  t = Math.max(0, u * bb - dd);
-  const px = o.x + d.x * t - (a.x + ux * u);
-  const py = o.y + d.y * t - (a.y + uy * u);
-  const pz = o.z + d.z * t - (a.z + uz * u);
-  const miss = px * px + py * py + pz * pz;
-  if (miss > r * r) return null;
-  const at = Math.max(0, t - Math.sqrt(r * r - miss));
-  return at <= far ? at : null;
-}
 
 function pickWeighted(w) {
   let total = 0;

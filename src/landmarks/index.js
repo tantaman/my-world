@@ -22,7 +22,8 @@
 // src/hikes/): what is there is what is really there.
 
 import * as THREE from 'three';
-import { Sites, onPlan, planDiscs } from './sites.js';
+import { onPlan, planDiscs } from '../world/frame.js';
+import { Sites } from './sites.js';
 import { KINDS } from './kinds.js';
 import { buildSite } from './models.js';
 import { VEG_STRIDE } from '../world/flora.js';
@@ -210,6 +211,9 @@ export function installLandmarks(game) {
   // ── Each frame ────────────────────────────────────────────────────────────
   let lookIn = 0;
   let queue = [];
+  // Where the old places are further off is looked for a little at a time, out of
+  // what the frame can spare (game/budget.ts).
+  game.budget.add({ name: 'landmarks', work: (ms) => sites.pump(ms) });
   game.addSystem({
     name: 'landmarks',
     phase: 'world',
@@ -226,8 +230,6 @@ export function installLandmarks(game) {
       }
       // one a frame: a cabin is a good few thousand logs and shakes
       if (queue.length) show(queue.shift());
-      // look ahead for the map, more of it while it's open (nothing else is drawn)
-      if (sites.queue.size) sites.pump(map.isOpen ? 6 : 0.75);
 
       const t = now / 1000;
       const p = player.pos;

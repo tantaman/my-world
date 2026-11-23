@@ -8,7 +8,7 @@ import { buildInstitution } from '../src/abandoned/building.js';
 import { Visit } from '../src/abandoned/visit.js';
 import { Solids } from '../src/world/solids.js';
 import { segDist } from '../src/core/geom.js';
-import { toWorld } from '../src/landmarks/sites.js';
+import { toWorld } from '../src/world/frame.js';
 
 const land = { seed: 758, height: () => 2, water: { edge: 50 }, padClearance: () => 100 };
 const start = { x: 0, z: 0 };

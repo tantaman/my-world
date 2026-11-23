@@ -99,7 +99,7 @@ export function installGliding(game) {
   const heard = { on: false, speed: 0, luff: 0 };
   sound.addLayer(glideSounds(heard));
   let active = false;
-  let moved = false; // put somewhere else while flying
+  let hold = null; // what you're held by while you fly (player/rides.ts)
   let flight = null; // { far (m flown), t (when you let go) }
   let time = 0;
   let runOut = null; // { steer, t } running it out after landing
@@ -107,15 +107,8 @@ export function installGliding(game) {
   builder.idleWhile(() => active);
 
   const mover = {
+    slack: MOVED,
     place(out, dt) {
-      if (Math.hypot(player.pos.x - glider.x, player.pos.z - glider.z) > MOVED || Math.abs(player.pos.y - glider.y) > MOVED) {
-        out.x = player.pos.x;
-        out.y = player.pos.y;
-        out.z = player.pos.z;
-        out.yaw = player.yaw;
-        moved = true;
-        return;
-      }
       readControls();
       glider.step(dt, c);
       out.x = glider.x;
@@ -147,18 +140,19 @@ export function installGliding(game) {
   // Open it over you, falling from (x, y, z) at (vx, vy, vz), facing yaw:
   // by default wherever you are, going the way you're going.
   function open(at = null) {
-    if (active || player.carrier) return false;
+    if (active) return false;
+    // (something else has you, or has put you somewhere: it's put away at once)
+    hold = player.rides.take({ by: 'gliding', what: 'your hang glider', aboard: mover, lost: () => stow() });
+    if (!hold) return false;
     const p = player.pos;
     const v = player.vel;
     const a = at || { x: p.x, y: p.y, z: p.z, vx: v.x, vy: v.y, vz: v.z, yaw: player.yaw };
     glider.launch(a.x, a.y, a.z, a.vx, a.vy, a.vz, a.yaw);
     player.pos.set(a.x, a.y, a.z);
-    player.aboard = mover;
     player.character.hang(spec);
     wing.pose(a.x, a.y + HANG, a.z, glider.heading, 0, 0, 0);
     scene.add(wing.mesh);
     active = true;
-    moved = false;
     flight = { far: 0, t: time };
     sound.sfx('sail-open');
     tell();
@@ -169,7 +163,8 @@ export function installGliding(game) {
   function stow() {
     if (!active) return;
     active = false;
-    if (player.aboard === mover) player.aboard = null;
+    if (hold) hold.release();
+    hold = null;
     player.character.hang(null);
     unhang(player.character.root);
     scene.remove(wing.mesh);
@@ -248,13 +243,8 @@ export function installGliding(game) {
   }
 
   const extras = [];
-  let cued = false;
   function cue() {
-    if (!active) {
-      if (cued) hud.cue(null);
-      cued = false;
-      return;
-    }
+    if (!active) return hud.cue(null, 'gliding');
     const touch = input.isTouch;
     let html;
     if (glider.open < 1) html = 'the sail fills…';
@@ -264,8 +254,7 @@ export function installGliding(game) {
       const more = f();
       if (more) html += ` · ${more}`;
     }
-    hud.cue({ html });
-    cued = true;
+    hud.cue({ html }, 'gliding');
   }
 
   // ── Every frame ───────────────────────────────────────────────────────────
@@ -285,9 +274,7 @@ export function installGliding(game) {
         }
       }
       if (active) {
-        // something else has you now (a mount, a train), or has put you somewhere
-        if (player.aboard !== mover || player.carrier || moved) stow();
-        else if (glider.down) land(glider.down);
+        if (glider.down) land(glider.down);
       }
       if (active) {
         const hy = glider.y + HANG;

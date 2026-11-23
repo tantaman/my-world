@@ -46,27 +46,27 @@ import { planeSounds } from './sound.js';
 import { FlightsPanel } from './panel.js';
 import { routeLayer, FIELD_GLYPH } from './onMap.js';
 import { clearOf } from '../spaceport/site.js';
-import { toWorld, toLocal } from '../landmarks/sites.js';
+import { toWorld, toLocal } from '../world/frame.js';
 import { VEG_STRIDE, VEG_KINDS } from '../world/flora.js';
 import { SEAT_HIPS } from '../player/character.js';
 import { SHARED, SKY } from '../render/uniforms.js';
 import { rayBox } from '../core/geom.js';
 import { formatDistance } from '../core/format.js';
 import { createBuildingMaterial } from '../build/surfaces.js';
+import { WIND as PREVAILING } from '../world/wind.js';
 
 const SHOW = 750; // m: an airfield this close is stood up...
 const HIDE = 950; // ...and taken down again past this
 const AT = 320; // m from the middle of its strip that counts as being at an airfield
 const ARRIVE = 140; // m: coming this near one on foot, you're told its name
-const PUMP_MS = [1.5, 8]; // ms a frame looking for airfields: usually, and with the map open
 const BOARD_NEAR = 5; // m from the foot of the parked plane's steps, the HUD says P would fly
 const GO_TO = { x: 27, z: -13 }; // where you're put, going to an airfield: on its apron, in the field's frame
 const BACK = 16; // m further back the camera sits, to take the plane in
 const BEHIND = 0.8; // 1/s: how quickly the camera swings round behind it, left alone
 const SAY = 4200; // ms a sentence stays on the screen
-// Which way the wind blows, as the grass leans (world/materials.js): planes
-// take off and land into it where they can.
-const WIND = { x: 1 / Math.hypot(1, 0.45), z: 0.45 / Math.hypot(1, 0.45) };
+// Which way the wind blows (world/wind.js): planes take off and land into it
+// where they can.
+const WIND = { x: PREVAILING.x, z: PREVAILING.y };
 // How far (m) plants of each kind are kept back from the plan (a rock and a
 // fallen log by their size); on the banks, anything the bank covers goes.
 const KEEP = { pine: 3, broad: 3.4, birch: 2.6, bush: 1.4, fern: 0.6, rock: 1.2, log: 2.4 };
@@ -266,6 +266,7 @@ export function installAirports(game) {
 
   // ── Flying ────────────────────────────────────────────────────────────────
   let trip = null; // { flight, from, to, plane, km }
+  let hold = null; // what you're held by while you fly (player/rides.ts)
   let wasVisible = true;
   const deckMid = { x: 0, z: 0 }; // where the cloud's billows are measured from
   builder.idleWhile(() => trip !== null);
@@ -306,8 +307,8 @@ export function installAirports(game) {
       return false;
     }
     if (!to || to === from || !stands(to)) return false;
-    if (player.carrier || player.aboard) {
-      hud.flash('get down first (Z)');
+    if (!player.rides.free) {
+      hud.flash(player.rides.why());
       return false;
     }
     map.close();
@@ -323,7 +324,7 @@ export function installAirports(game) {
     park(show(from));
     wasVisible = player.character.root.visible;
     player.character.root.visible = false;
-    player.aboard = seatPlace;
+    hold = player.rides.take({ by: 'airports', what: 'the plane', aboard: seatPlace });
     player.vel.set(0, 0, 0);
     flight.on('phase', (phase) => said(phase));
     flight.on('liftoff', () => hud.flash(`off the ground · ${to.name} next`, SAY));
@@ -363,7 +364,8 @@ export function installAirports(game) {
     plane.object.traverse((m) => m.isMesh && m.geometry.dispose());
     trip = null;
     park(show(to));
-    player.aboard = null;
+    if (hold) hold.release();
+    hold = null;
     player.character.root.visible = wasVisible;
     const foot = doorFoot(pose);
     // (the camera out in front, looking back at you and the plane behind)
@@ -379,8 +381,8 @@ export function installAirports(game) {
   // out at the plane.
   async function goTo(site) {
     if (!site || !stands(site)) return false;
-    if (player.carrier || player.aboard) {
-      hud.flash('get down first (Z)');
+    if (!player.rides.free) {
+      hud.flash(player.rides.why());
       return false;
     }
     map.close();
@@ -608,15 +610,15 @@ export function installAirports(game) {
   });
 
   let lookIn = 0;
-  let cued = false;
   const reached = new Set();
+  // Where the airfields are further off is looked for a little at a time, out of
+  // what the frame can spare (game/budget.ts).
+  game.budget.add({ name: 'airports', work: (ms) => airports.pump(ms) });
   game.addSystem({
     name: 'airports',
     phase: 'world',
     update({ dt, time }) {
       const at = game.focus;
-      // looking for the airfields, a little at a time
-      if (airports.queue.size) airports.pump(map.isOpen ? PUMP_MS[1] : PUMP_MS[0]);
       // what's stood up round you
       lookIn -= dt;
       if (lookIn <= 0) {
@@ -696,9 +698,7 @@ export function installAirports(game) {
         if (Math.hypot(foot.x - player.pos.x, foot.z - player.pos.z) < BOARD_NEAR) html = `${K}fly from ${s.name}`;
       }
     }
-    if (html) hud.cue({ html });
-    else if (cued) hud.cue(null);
-    cued = !!html;
+    hud.cue(html ? { html } : null, 'airports');
   }
 
   // ── From the console ──────────────────────────────────────────────────────

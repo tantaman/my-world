@@ -16,7 +16,7 @@
 // the group it ends up in is what's put in the world (render/origin.js).
 
 import * as THREE from 'three';
-import { Kit } from '../videostore/store.js';
+import { Kit } from '../build/kit.js';
 
 const _n = [0, 0, 0];
 

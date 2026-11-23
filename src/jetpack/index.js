@@ -216,7 +216,7 @@ export function installJetpack(game) {
   // Takes it down and straps it on, or hangs it back up: what's at hand, as
   // everywhere.
   // at its rack, on your feet
-  const atRack = () => !!rack && nearRack() && !jets.on && !player.carrier && !player.aboard;
+  const atRack = () => !!rack && nearRack() && !jets.on && player.rides.free;
   act.offer({
     id: 'jetpack',
     at() {
@@ -247,7 +247,6 @@ export function installJetpack(game) {
   // ── Each frame ────────────────────────────────────────────────────────────
   // After you've moved: whether the jets fire or cut out, how hard they go,
   // and how you hang under them.
-  let cued = false;
   game.addSystem({
     name: 'jetpack',
     phase: 'update',
@@ -278,13 +277,7 @@ export function installJetpack(game) {
       let html = null;
       if (jets.on) html = input.isTouch ? `tap jump: climb · let go to come down · ${Math.round(player.height)} m up` : `<b>space</b> climb · <b>shift</b> dive · let go to come down · ${Math.round(player.height)} m up`;
       else if (atRack()) html = jets.worn ? `<b>${act.key('hang up')}</b> hang the jetpack back up` : `<b>${act.key('strap on')}</b> strap on the jetpack`;
-      if (html) {
-        hud.cue({ html });
-        cued = true;
-      } else if (cued) {
-        hud.cue(null);
-        cued = false;
-      }
+      hud.cue(html ? { html } : null, 'jetpack');
     },
   });
 

@@ -85,7 +85,6 @@ butterflies`.
 index.js              plugs it into the game
 wildlife.js           who's about: arrivals, departures, what animals can sense
 species.js            habitat, hours, rarity, group size, temperament
-rig.js                primitives → one skinned mesh per animal
 quadruped.js          shared skeleton + gaits + leg IK for four-legged animals
 mammals.js            what each mammal looks like
 beasts.js             how mammals behave (graze, alert, flee, climb, howl...)

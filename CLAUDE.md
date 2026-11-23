@@ -70,6 +70,31 @@ starts with the contract.
   must not: the golden tests grow the forest.
 - Import direction: `core` ← `render` ← `world` ← features. `world/` does
   not import from feature folders.
+- When a second feature needs a helper that lives in another feature's
+  folder, move it down into `core/`, `render/` or `world/` rather than
+  import it across. `npm test` fails once a file in a feature's folder is
+  imported by three others, unless the README's table lists it as something
+  features plug into.
+- Something that carries or moves the hiker asks for them:
+  `player.rides.take({ by, what, carrier | aboard, lost })` (and
+  `hold.release()` to let go). Never set `player.carrier` or `player.aboard`.
+  Offer a ride only while `player.rides.free`, and say `player.rides.why()`
+  when it isn't. What moves you gives a `slack`, and is told (`lost`) when a
+  teleport takes the hiker out of it: don't watch for that each frame.
+- A cue on the HUD is yours: `hud.cue({ html }, 'yourfeature')` while it
+  applies and `hud.cue(null, 'yourfeature')` when it doesn't. No flag to
+  remember whether it's up.
+- Something grown from the seed and found a little at a time keeps its
+  answers in a `Searches` (`core/searches.ts`), or is a `PerTown`
+  (`towns/perTown.ts`), and registers one job:
+  `game.budget.add({ name, work: (ms) => it.pump(ms) })`. Don't slice time
+  by hand or keep an allowance of the frame of your own.
+- What a search keeps clear of is put together from claims
+  (`world/claims.ts`). How a thing is kept clear of is said once, beside the
+  thing (`railsNear`, `caveMouths`, `airfieldsOver`): add a claim for a new
+  thing there, don't write its loop into each search. Which claims an
+  existing search uses, and how near, is part of what the seed grows: leave
+  those lists as they are.
 
 TypeScript is for where things join (`tsconfig.json` says how it is run):
 

@@ -70,7 +70,7 @@ import { buildLido } from './lido.js';
 import { buildPier, gangwayChain } from './pier.js';
 import { buildWake } from './wake.js';
 import { shipSounds } from './sound.js';
-import { onPlan, planDiscs, toWorld, toLocal } from '../landmarks/sites.js';
+import { onPlan, planDiscs, toWorld, toLocal } from '../world/frame.js';
 import { regionsInTheWay as clubWays } from '../huntclub/site.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { SEA } from '../world/sea.js';
@@ -83,7 +83,6 @@ const NEAR = 260; // m: within this, what's solid on all her decks is there
 const PIER_SOLID = 900; // m: within this of a pier, what's solid of it is there
 const ARRIVE = 40; // m from the gangway's foot that counts as there
 const SEA_FOG = SEA_LEG.fog; // s in the thick of the fog
-const SEARCH_MS = 6; // ms a frame given to looking for a berth
 const MAUI_AFTER = 20; // s after the world opens that Maui's berth is looked for (or as soon as she's bound there)
 const FOG_HAZE = 24; // how thick the air is in the thick of the fog at sea (1: the forest's)
 const FOG_HORN = 30; // s between blasts of her horn in fog
@@ -160,8 +159,10 @@ export function installCruise(game) {
     found(i, r.value);
     return berths[i];
   }
-  function stepSearches() {
-    const until = performance.now() + SEARCH_MS;
+  // A berth being looked for is looked for a little at a time, out of what
+  // the frame can spare (game/budget.ts). -> whether there's more to do
+  function stepSearches(ms) {
+    const until = performance.now() + ms;
     for (let i = 0; i < 2; i++) {
       const sr = searches[i];
       if (!sr || sr === 'done') continue;
@@ -173,7 +174,9 @@ export function installCruise(game) {
         break;
       }
     }
+    return searches.some((sr) => sr && sr !== 'done');
   }
+  game.budget.add({ name: 'cruise', work: stepSearches });
   function found(i, b) {
     berths[i] = b;
     if (!b) return;
@@ -895,6 +898,7 @@ export function installCruise(game) {
   // in a car: { core, x (across her), z (along, its middle), state: 'here' |
   // 'choose' | 'ride', pick (the deck chosen), ride, from, held (where you stand) }
   let car = null;
+  let liftHeld = null; // what you're held by in it, while you choose and while it goes
   let carGroup = null;
   let pickWait = 0;
   let camBefore = null;
@@ -963,10 +967,12 @@ export function installCruise(game) {
     car = { core, x: room.liftX, z: core.z + (CORE.lifts.z0 + CORE.lifts.z1) / 2, deck: where.deck, state: 'here', pick: where.deck, ride: null, held };
   }
   function choose() {
+    // (held in the car while you choose and while it goes: player/rides.ts)
+    liftHeld = player.rides.take({ by: 'cruise', what: 'the lift', aboard: liftHold, lost: () => leaveCar() });
+    if (!liftHeld) return;
     car.state = 'choose';
     car.pick = car.deck;
     car.held = { x: where.x, z: where.z };
-    player.aboard = liftHold;
     camBefore = camBefore ?? player.camDist;
     player.camDist = Math.min(player.camDist, 2);
     showCar();
@@ -978,7 +984,8 @@ export function installCruise(game) {
     ship.add(carGroup);
   }
   function leaveCar() {
-    if (player.aboard === liftHold) player.aboard = null;
+    if (liftHeld) liftHeld.release();
+    liftHeld = null;
     if (carGroup) ship.remove(carGroup);
     carGroup = null;
     if (camBefore !== null) player.camDist = camBefore;
@@ -1015,7 +1022,7 @@ export function installCruise(game) {
 
   function lifts(dt) {
     const room = where.room;
-    if (!car && room && room.kind === 'lift' && !player.aboard) enterCar(room);
+    if (!car && room && room.kind === 'lift' && player.rides.free) enterCar(room);
     if (!car) return;
     if (car.state === 'here') {
       if (!room || room.kind !== 'lift') {
@@ -1064,7 +1071,8 @@ export function installCruise(game) {
       car.state = 'here';
       car.ride = null;
       car.dinged = false;
-      if (player.aboard === liftHold) player.aboard = null;
+      if (liftHeld) liftHeld.release();
+      liftHeld = null;
       if (carGroup) ship.remove(carGroup);
       carGroup = null;
       if (camBefore !== null) player.camDist = camBefore;
@@ -1082,7 +1090,7 @@ export function installCruise(game) {
   };
 
   // ── Slides ────────────────────────────────────────────────────────────────
-  let slide = null; // { ride, start, rider }
+  let slide = null; // { ride, rider, held }
   function slides() {
     if (slide) return;
     if (!outside || where.y < deckY(16)) return;
@@ -1108,22 +1116,19 @@ export function installCruise(game) {
         at.back = 1;
       },
     };
-    slide = { ride, rider };
-    player.aboard = rider;
+    // (taken off it some other way than by coming out at the bottom: you're just off it)
+    const held = player.rides.take({ by: 'cruise', what: 'the water slide', aboard: rider, lost: () => (player.character.seat(null), (slide = null)) });
+    if (!held) return;
+    slide = { ride, rider, held };
     player.character.seat(SLIDE_SEAT);
     sound.sfx('slide-rush', { length: s.slide.tube ? 18 : 8 });
   }
   function slideOn() {
     if (!slide) return;
-    if (player.aboard !== slide.rider) {
-      player.character.seat(null);
-      slide = null;
-      return;
-    }
     if (!slide.ride.done) return;
     // into the pool at the bottom
     const a = slide.ride.at;
-    player.aboard = null;
+    slide.held.release();
     player.character.seat(null);
     const w = toWorld(now, a.x, a.z, {});
     player.pos.set(w.x, now.y + a.y - 0.6, w.z);
@@ -1136,7 +1141,6 @@ export function installCruise(game) {
 
   // ── What a click does, here ───────────────────────────────────────────────
   let cueText = null;
-  let cued = false;
   const cue = (html) => {
     cueText = html;
   };
@@ -1313,7 +1317,6 @@ export function installCruise(game) {
         const bound = (t.to === 1 && t.phase !== 'leaving') || (t.phase === 'docked' && t.port === 1) || t.port === 1;
         if ((elapsed > MAUI_AFTER || bound || Math.hypot(game.focus.x - mauiRegion.x, game.focus.z - mauiRegion.z) < 20000) && known(mauiWays)) search(1);
       }
-      stepSearches();
       if (!voyage) return;
       if (!voy.phase) place();
       // aboard, bound somewhere, the berth there is wanted before she's carried across
@@ -1333,8 +1336,7 @@ export function installCruise(game) {
       putShip();
       locate();
       if (!shown) {
-        if (cued) hud.cue(null);
-        cued = false;
+        hud.cue(null, 'cruise');
         overhead.intensity = 0;
         heard.inside = heard.club = heard.lido = heard.atrium = heard.lap = heard.underway = 0;
         if (player.deck === deckFrame) player.deck = null;
@@ -1487,13 +1489,7 @@ export function installCruise(game) {
         cabinsNear();
       } else if (car) leaveCar();
       slideOn();
-      if (cueText) {
-        hud.cue({ html: cueText });
-        cued = true;
-      } else if (cued) {
-        hud.cue(null);
-        cued = false;
-      }
+      hud.cue(cueText ? { html: cueText } : null, 'cruise');
     },
   });
 

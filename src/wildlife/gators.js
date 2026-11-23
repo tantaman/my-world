@@ -26,7 +26,7 @@
 // going to be pointed out.
 
 import * as THREE from 'three';
-import { RigBuilder, lin, at, along, ellipsoid, cone } from './rig.js';
+import { RigBuilder, lin, at, along, ellipsoid, cone } from '../render/rig.js';
 import { spineBones } from './crawlers.js';
 import { clamp, lerp } from '../noise.js';
 import { rand, wrapAngle as wrap } from '../core/geom.js';

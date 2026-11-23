@@ -32,8 +32,8 @@ import { CarModel } from './models.js';
 import { Car } from './drive.js';
 import { KINDS, priceOf } from './kinds.js';
 import { carSounds } from './sound.js';
-import { Body } from '../towns/people.js';
-import { onPlan, planDiscs, toWorld } from '../landmarks/sites.js';
+import { Body } from '../people/body.js';
+import { onPlan, planDiscs, toWorld } from '../world/frame.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { GridNearest, ListNearest, MergeNearest } from '../core/nearest.js';
 import { segDist, wrapAngle, waterSample } from '../core/geom.js';
@@ -45,7 +45,10 @@ import { mulberry32 } from '../noise.js';
 const SHOW = 260; // m: a dealership this close is stood up...
 const HIDE = 330; // ...and taken down past this
 const REACH = 3000; // m round you whose dealerships are looked for, in the background
-const PUMP_MS = [0.8, 4]; // ms a frame looking for them: usually, and with the map open
+// Put somewhere else by something else (R, the map's `go here`), further than
+// this (m) from where the car had you: out you get, and it stays (the mover's
+// slack: player/rides.ts).
+const MOVED = 3;
 const PREFETCH_EVERY = 2; // s between asking for the ones round you
 const BUY_REACH = 1.6; // m from the side of a car on a lot that you can buy it from
 const DOOR_REACH = 1.8; // m from the side of your car that you can get in from
@@ -355,19 +358,11 @@ export function installCars(game) {
   });
 
   const c = { throttle: 0, brake: 0, steer: 0 };
-  let last = { x: 0, z: 0 };
+  let hold = null; // what you're held by while you drive (player/rides.ts)
   let savedIn = 0;
   const mover = {
+    slack: MOVED,
     place(out, dt) {
-      // moved by something else (R, the map's `go here`): out you get, and it stays
-      if (Math.hypot(player.pos.x - last.x, player.pos.z - last.z) > 3) {
-        out.x = player.pos.x;
-        out.y = player.pos.y;
-        out.z = player.pos.z;
-        out.yaw = player.yaw;
-        getOut(true, false);
-        return;
-      }
       lookRound(car.x, car.z);
       if (input.blocked) Object.assign(c, { throttle: 0, brake: car.speed > 0.5 ? 1 : 0, steer: 0 });
       else {
@@ -382,9 +377,9 @@ export function installCars(game) {
       if (car.wet > 0.15 && wasWet <= 0.15 && car.speed > 2) sound.sfx('car-splash');
       model.place(car);
       model.seat(_s);
-      out.x = last.x = _s.x;
+      out.x = _s.x;
       out.y = _s.y - SEAT_HIPS;
-      out.z = last.z = _s.z;
+      out.z = _s.z;
       out.yaw = car.yaw;
       out.heading = car.yaw;
       out.grounded = !car.flying;
@@ -401,19 +396,20 @@ export function installCars(game) {
 
   function getIn() {
     if (!mine || driving) return false;
-    if (player.carrier || player.aboard) {
-      hud.flash('get down first');
+    if (!player.rides.free) {
+      hud.flash(player.rides.why());
       return false;
     }
+    // (taken over by something else, or put somewhere else: out of the car, which stays where it is)
+    hold = player.rides.take({ by: 'cars', what: () => `your ${nameOf(mine.kind)}`, aboard: mover, lost: () => getOut(true, false) });
+    if (!hold) return false;
     settle();
     solids.clear(parked);
     parkedSolid = null;
     driving = true;
     model.seat(_s);
-    last = { x: _s.x, z: _s.z };
     player.pos.set(_s.x, _s.y - SEAT_HIPS, _s.z);
     player.vel.set(0, 0, 0);
-    player.aboard = mover;
     player.character.seat(DRIVE);
     sound.sfx('car-door');
     setTimeout(() => driving && sound.sfx('car-start'), 450);
@@ -437,10 +433,9 @@ export function installCars(game) {
     mine.z = car.z;
     mine.yaw = car.yaw;
     // (unless something else has you now)
-    if (player.aboard === mover) {
-      player.aboard = null;
-      player.vel.set(0, 0, 0);
-    }
+    if (hold && hold.held) player.vel.set(0, 0, 0);
+    if (hold) hold.release();
+    hold = null;
     if (player.character.seated === DRIVE) player.character.seat(null);
     park();
     if (place) {
@@ -487,7 +482,7 @@ export function installCars(game) {
   }
   // how far you are from your car's side, if you're beside it and could get in
   const besideMine = () => {
-    if (driving || !mine || player.aboard || player.carrier || Math.abs(player.pos.y - car.y) >= 2) return null;
+    if (driving || !mine || !player.rides.free || Math.abs(player.pos.y - car.y) >= 2) return null;
     const d = fromSide(mine.kind, car.x, car.z, car.yaw);
     return d < DOOR_REACH ? d : null;
   };
@@ -591,7 +586,7 @@ export function installCars(game) {
   }
   // the car on the lot you're beside, if any: { car, d }
   function onLot() {
-    if (!at || driving || player.aboard || player.carrier) return null;
+    if (!at || driving || !player.rides.free) return null;
     let best = null;
     for (const c2 of at.cars) {
       if (c2.gone) continue;
@@ -622,7 +617,6 @@ export function installCars(game) {
       return door === null ? null : { d: door, word: 'get in', run: getIn };
     },
   });
-  let cued = false;
   function cue() {
     let html = '';
     if (driving) {
@@ -633,9 +627,7 @@ export function installCars(game) {
       if (lot) html = `<b>${act.key(mine ? 'trade' : 'buy')}</b> ${mine ? `trade in your ${nameOf(mine.kind)} for` : 'buy'} the ${nameOf(lot.car.kind)} · ${priceOf(lot.car.kind)} · ${KINDS[lot.car.kind].blurb}`;
       else if (besideMine() !== null) html = `<b>${act.key('get in')}</b> get into your ${nameOf(mine.kind)}`;
     }
-    if (html) hud.cue({ html });
-    else if (cued) hud.cue(null);
-    cued = !!html;
+    hud.cue(html ? { html } : null, 'cars');
   }
   commands.describe({ group: 'CARS', help: 'F', pad: ['PadY'], label: 'at a dealership: buy the car beside you · beside your car: get in · stopped: get out' });
   commands.describe({ group: 'CARS', help: 'W S · A D', pad: ['PadLS'], label: 'driving: go, brake and back up · steer' });
@@ -780,13 +772,14 @@ export function installCars(game) {
   const beam = new THREE.SpotLight(0xfff2d8, 0, 60, 0.5, 0.6, 1.5);
   beam.layers.enableAll();
   scene.add(beam, beam.target);
+  // Where the dealerships are further off is looked for a little at a time, out
+  // of what the frame can spare (game/budget.ts).
+  game.budget.add({ name: 'cars', work: (ms) => dealers.pump(ms) });
   game.addSystem({
     name: 'cars',
     phase: 'world',
     update({ dt }) {
       clock += dt;
-      // taken over by something else (a train, a flight): out of the car, which stays where it is
-      if (driving && player.aboard !== mover) getOut(true, false);
       const f = game.focus;
       // the dealerships further off, a little at a time
       prefetchIn -= dt;
@@ -794,7 +787,6 @@ export function installCars(game) {
         prefetchIn = PREFETCH_EVERY;
         dealers.prefetch(f.x, f.z, REACH);
       }
-      if (dealers.queue.size) dealers.pump(map.isOpen ? PUMP_MS[1] : PUMP_MS[0]);
       // the one you're at
       let nearest = null;
       let nd = SHOW;

@@ -197,7 +197,6 @@ export function installHell(game) {
   let region = null;
   let ditch = -1; // which ditch of Malebolge you're over, and which zone of the ice
   let zone = -1;
-  let cued = false;
   let fell = 0; // how fast you were falling, last frame
   const brought = () => [player.character.root, ...(game.headlamp ? [game.headlamp.beam, game.headlamp.beam.target, game.headlamp.glow] : [])];
   const isIn = (p) => p.y < space.lid && Math.hypot(p.x - land.cx, p.z - land.cz) < land.reach;
@@ -214,8 +213,7 @@ export function installHell(game) {
     if (!now) {
       region = null;
       heard.inside = 0;
-      if (cued) hud.cue(null);
-      cued = false;
+      hud.cue(null, 'hell');
     }
   }
   game.coverWhen(() => inside);
@@ -317,7 +315,7 @@ export function installHell(game) {
         if (z > 0) card.show({ title: `Cocytus · ${ZONE_WORDS[z].title}`, who: ZONE_WORDS[z].who }, 6000);
       }
       // a long fall, and you are still here
-      if (player.grounded && fell > FALL && !player.aboard) hud.flash(SAID.fall, 4500);
+      if (player.grounded && fell > FALL && player.rides.free) hud.flash(SAID.fall, 4500);
       fell = player.grounded ? 0 : -player.vel.y;
       // at the bottom of everything, the way out
       if (_p.r < CENTRE && !passing) pass('stars');
@@ -332,9 +330,7 @@ export function installHell(game) {
       built.update(_p.r, _p.th);
       denizens.update(dt, _p.r, _p.th);
       const cue = rides.update(dt, player, _p.r, _p.th);
-      if (cue) hud.cue({ html: `stand still · <b>${cue.text}</b>`, progress: cue.progress });
-      else if (cued) hud.cue(null);
-      cued = !!cue;
+      hud.cue(cue ? { html: `stand still · <b>${cue.text}</b>`, progress: cue.progress } : null, 'hell');
       // shut in, as under any rock: the forest overhead is not heard
       sound.setEnclosed(1);
       heard.inside = 1;
@@ -352,7 +348,7 @@ export function installHell(game) {
   // boat's landing, the ramp, the ford, Geryon, a bridge, the giant's hand.
   const way_ = { id: 'hell:way', label: '', color: '#c96a4a', x: 0, z: 0 };
   function wayOn() {
-    if (!inside || !region || player.aboard) return null;
+    if (!inside || !region || !player.rides.free) return null;
     const r = _p.r;
     const th = _p.th;
     const sec = land.sector(land.sectorOf(th));

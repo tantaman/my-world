@@ -81,6 +81,7 @@ export class Jets {
     this.worn = false; // the jetpack is on your back
     this.on = false; // the jets are burning: you're flying
     this.carrier = null; // what carries you while they are (jetCarrier)
+    this.hold = null; // ...and what you're held by (player/rides.ts)
     this.thrust = 0; // 0..1 how hard they're going, eased
     this.pitch = 0; // radians the body is tipped forward
     this.roll = 0; // ...and banked to the right
@@ -96,12 +97,13 @@ export class Jets {
   // -> 'ignite' | 'landed' | 'lost' | null
   step(dt, player, controls) {
     if (this.on) {
-      if (player.carrier !== this.carrier) {
+      // something else has you now (it's theirs to carry you, and left alone)
+      if (!this.hold.held || player.carrier !== this.carrier) {
         this.#out();
         return 'lost';
       }
       if (player.grounded) {
-        player.carrier = null;
+        this.hold.release();
         this.#out();
         return 'landed';
       }
@@ -110,13 +112,16 @@ export class Jets {
     const was = this.aloft;
     this.aloft = !player.grounded && !player.swimming;
     this.air = this.aloft ? this.air + dt : 0;
-    if (!this.worn || !this.aloft || player.carrier || player.aboard || controls.blocked) return null;
+    if (!this.worn || !this.aloft || !player.rides.free || controls.blocked) return null;
     // held since the jump (or the step off the edge), or pressed again up there
     // (not the press that jumped: that frame you weren't up yet)
     if ((controls.held && this.air >= HOLD) || (was && controls.pressed())) {
+      const carrier = jetCarrier(player.size);
+      const hold = player.rides.take({ by: 'jetpack', what: 'your jetpack', carrier });
+      if (!hold) return null;
       this.on = true;
-      this.carrier = jetCarrier(player.size);
-      player.carrier = this.carrier;
+      this.carrier = carrier;
+      this.hold = hold;
       player.vel.y = Math.max(player.vel.y, KICK);
       return 'ignite';
     }
@@ -126,13 +131,14 @@ export class Jets {
   // Cut them out now, wherever you are (taken off, moved somewhere else).
   stop(player) {
     if (!this.on) return;
-    if (player.carrier === this.carrier) player.carrier = null;
+    this.hold.release();
     this.#out();
   }
 
   #out() {
     this.on = false;
     this.carrier = null;
+    this.hold = null;
     this.pitch = 0;
     this.roll = 0;
     this.aloft = false;

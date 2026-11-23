@@ -21,7 +21,7 @@
 //   materials  { paint, metal, dark, glass }: vertex-coloured standard materials
 
 import * as THREE from 'three';
-import { Kit } from '../videostore/store.js';
+import { Kit } from '../build/kit.js';
 
 const col = (hex) => new THREE.Color(hex);
 const PAL = {

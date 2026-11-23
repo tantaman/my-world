@@ -6,7 +6,7 @@
 // you step onto it and stand a moment, carries you to the other end and sets
 // you down there, where it waits to take you back. Come to the end it isn't
 // at and it comes over for you. While it has you it is what moves you
-// (player.aboard: player/player.js).
+// (asked for with player.rides.take: player/rides.ts).
 //
 // The boats and Geryon belong to a sector of the circles they serve (every
 // sector has its own: the circles don't end), and are made as you come near.
@@ -40,6 +40,7 @@ class Ride {
     this.t = 0; // where it is along its way, 0..1
     this.going = 0; // +1 toward B, -1 toward A, 0 waiting
     this.rider = false;
+    this.hold = null; // what you're held by while it carries you (player/rides.ts)
     this.armed = true;
     this.dwell = 0;
     this.object = new THREE.Group();
@@ -78,7 +79,8 @@ class Ride {
       if (!this.going) {
         // there: set down
         const to = this.sets[this.end];
-        player.aboard = null;
+        if (this.hold) this.hold.release();
+        this.hold = null;
         player.pos.set(to.x, to.y, to.z);
         player.vel.set(0, 0, 0);
         if (to.yaw !== undefined) player.yaw = to.yaw;
@@ -91,14 +93,18 @@ class Ride {
       const here = this.end;
       if (Math.min(d[0], d[1]) > REARM) this.armed = true;
       // come over for someone waiting at the other end
-      if (here >= 0 && d[1 - here] < CALL && d[1 - here] < d[here] && !player.aboard) this.going = here === 0 ? 1 : -1;
-      if (here >= 0 && this.armed && d[here] < REACH && !player.aboard) {
+      if (here >= 0 && d[1 - here] < CALL && d[1 - here] < d[here] && player.rides.free) this.going = here === 0 ? 1 : -1;
+      if (here >= 0 && this.armed && d[here] < REACH && player.rides.free) {
         this.dwell += dt;
         if (this.dwell >= DWELL) {
           this.dwell = 0;
+          // (taken off it some other way than by being set down at the far
+          // end: it goes on across without you)
+          const hold = player.rides.take({ by: 'hell', what: this.name, aboard: this.aboard, lost: () => ((this.rider = false), (this.hold = null)) });
+          if (!hold) return null;
+          this.hold = hold;
           this.rider = true;
           this.going = here === 0 ? 1 : -1;
-          player.aboard = this.aboard;
           return null;
         }
         this._pose();

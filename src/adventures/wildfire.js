@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { Flames, Puffs } from './fx.js';
 import { findWater } from './places.js';
-import { WIND } from '../fires/look.js';
+import { WIND } from '../world/wind.js';
 import { SPECIES } from '../build/forestry.js';
 import { TREE_KINDS } from '../world/flora.js';
 import { rand, waterSample } from '../core/geom.js';

@@ -47,8 +47,9 @@
 //   box       [x0, z0, x1, z1] in the world, round all of that
 
 import { mulberry32, hash2i } from '../noise.js';
-import { Sites, toWorld } from '../landmarks/sites.js';
-import { SURNAMES } from '../landmarks/kinds.js';
+import { toWorld } from '../world/frame.js';
+import { Sites } from '../landmarks/sites.js';
+import { SURNAMES } from '../core/names.js';
 import { layoutCave, cellOf } from '../caves/sites.js';
 import { segDist } from '../core/geom.js';
 import { KINDS, KIND_IDS, STYLES, BUILDINGS, NAMES } from './kinds.js';

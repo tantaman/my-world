@@ -6,7 +6,7 @@
 // different colours (a crow is black both ways; a hawk is pale beneath).
 
 import * as THREE from 'three';
-import { RigBuilder, lin, at, along, ellipsoid, stick, cone } from './rig.js';
+import { RigBuilder, lin, at, along, ellipsoid, stick, cone } from '../render/rig.js';
 import { clamp, lerp } from '../noise.js';
 
 // A flat wing panel along +x: chord c0 at the root, c1 at the tip, swept

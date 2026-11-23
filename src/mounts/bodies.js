@@ -24,7 +24,7 @@
 //   dispose()
 
 import * as THREE from 'three';
-import { RigBuilder, lin, at, along, ellipsoid, stick, cone, disposeAnimal } from '../wildlife/rig.js';
+import { RigBuilder, lin, at, along, ellipsoid, stick, cone, disposeAnimal } from '../render/rig.js';
 import { quadSkeleton, Quad } from '../wildlife/quadruped.js';
 import { torso, legs, hooves, tail, eyes, ears, neck, mix } from '../wildlife/mammals.js';
 import { buildBird, BirdAnim } from '../wildlife/birds.js';

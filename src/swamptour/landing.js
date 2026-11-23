@@ -30,7 +30,7 @@
 //   ground           (x, z) -> the world height of the ground
 
 import * as THREE from 'three';
-import { Kit } from '../videostore/store.js';
+import { Kit } from '../build/kit.js';
 import { buildGator } from '../wildlife/gators.js';
 
 const col = (hex) => new THREE.Color(hex);

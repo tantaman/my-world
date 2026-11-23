@@ -4,7 +4,7 @@
 // weaves from side to side as it goes; salamanders add four splayed legs.
 
 import * as THREE from 'three';
-import { RigBuilder, lin, at, along, ellipsoid, stick } from './rig.js';
+import { RigBuilder, lin, at, along, ellipsoid, stick } from '../render/rig.js';
 import { clamp, lerp } from '../noise.js';
 import { wrapAngle as wrap } from '../core/geom.js';
 

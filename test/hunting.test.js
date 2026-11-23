@@ -10,7 +10,7 @@ import { QUARRY, isGame, yieldOf } from '../src/hunting/quarry.js';
 import { traceShot, RANGE, Targets } from '../src/hunting/shot.js';
 import { Carcasses, the } from '../src/hunting/carcasses.js';
 import { Spits, ROAST, doneness, roastPace, cutColour, validateSpits } from '../src/hunting/roasting.js';
-import { rayCapsule } from '../src/wildlife/beasts.js';
+import { rayCapsule } from '../src/core/geom.js';
 import { Wildlife } from '../src/wildlife/wildlife.js';
 import { SPECIES } from '../src/wildlife/species.js';
 import { Player } from '../src/player/player.js';

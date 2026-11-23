@@ -76,3 +76,33 @@ export function rayBox(origin, dir, { inv, half }) {
   const inside = Math.abs(o[0]) < half[0] && Math.abs(o[1]) < half[1] && Math.abs(o[2]) < half[2];
   return inside ? Infinity : t0;
 }
+
+// Where a ray from o along d (unit) first meets a capsule round the segment
+// a–b of radius r, within `far`: -> t, or null. (The entry point is taken
+// as the closest approach, less how far the ray runs inside the radius
+// there: exact for a ray square on to the capsule, near enough otherwise.)
+export function rayCapsule(o, d, a, b, r, far = Infinity) {
+  const ux = b.x - a.x;
+  const uy = b.y - a.y;
+  const uz = b.z - a.z;
+  const wx = o.x - a.x;
+  const wy = o.y - a.y;
+  const wz = o.z - a.z;
+  const bb = d.x * ux + d.y * uy + d.z * uz;
+  const cc = ux * ux + uy * uy + uz * uz;
+  const dd = d.x * wx + d.y * wy + d.z * wz;
+  const ee = ux * wx + uy * wy + uz * wz;
+  const den = cc - bb * bb;
+  // the closest points: u along the segment, t along the ray
+  let u = cc < 1e-12 ? 0 : den > 1e-9 ? Math.min(1, Math.max(0, (ee - bb * dd) / den)) : 0;
+  let t = Math.max(0, u * bb - dd);
+  if (cc > 1e-12) u = Math.min(1, Math.max(0, (ee + t * bb) / cc));
+  t = Math.max(0, u * bb - dd);
+  const px = o.x + d.x * t - (a.x + ux * u);
+  const py = o.y + d.y * t - (a.y + uy * u);
+  const pz = o.z + d.z * t - (a.z + uz * u);
+  const miss = px * px + py * py + pz * pz;
+  if (miss > r * r) return null;
+  const at = Math.max(0, t - Math.sqrt(r * r - miss));
+  return at <= far ? at : null;
+}

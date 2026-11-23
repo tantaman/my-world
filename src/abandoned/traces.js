@@ -1,7 +1,7 @@
 // Blood is printed onto the architecture at human scale. Each mark samples
 // an atlas of broken palm ridges, worn boot tread, pooled blood and wipe marks.
 import * as THREE from 'three';
-import { Kit } from '../videostore/store.js';
+import { Kit } from '../build/kit.js';
 import { mulberry32 } from '../noise.js';
 
 const N = 192,

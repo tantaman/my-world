@@ -62,7 +62,9 @@
 //   tower       whether it has a water tower
 
 import { mulberry32, hash2i, lerp } from '../noise.js';
-import { SURNAMES } from '../landmarks/kinds.js';
+import { Searches } from '../core/searches.ts';
+import { SURNAMES } from '../core/names.js';
+import { wrapAngle as wrap } from '../core/geom.js';
 
 export const CELL = 3000; // m, the side of the square each line has to itself
 const CHANCE = 0.62; // that a square has a line at all (if one can be surveyed)
@@ -108,7 +110,6 @@ const BY_WATER = '{s} Landing';
 const LINE_FORMS = ['the {s} line', 'the {s} loop', 'the {s} Valley line', 'the {s} & {t} line'];
 
 const key = (ci, cj) => `${ci}:${cj}`;
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const named = (form, s, t = '') => form.replace('{s}', s).replace('{t}', t);
 
 // ── Along a line ─────────────────────────────────────────────────────────────
@@ -178,31 +179,28 @@ export class Lines {
     this.start = start;
     this.keepClear = keepClear;
     this.keepOff = keepOff;
-    this.cells = new Map(); // "ci:cj" -> line, or null
-    this.growing = new Map(); // "ci:cj" -> a survey under way
-    this.queue = new Set(); // cells asked about and not yet surveyed
     this.ids = new Map(); // station id -> station
+    // surveyed outright (cell) or a little at a time (peek, then pump): core/searches.ts
+    this.search = new Searches({
+      grow: (k) => {
+        const [ci, cj] = k.split(':').map(Number);
+        return this._grow(ci, cj);
+      },
+      found: (k, line) => {
+        if (line) for (const st of line.stations) this.ids.set(st.id, st);
+      },
+    });
+    this.cells = this.search.known; // "ci:cj" -> line, or null
+  }
+
+  // Cells asked about and not yet surveyed.
+  get queue() {
+    return this.search.queue;
   }
 
   // The line in square (ci, cj), or null. Surveyed now if it hasn't been.
   cell(ci, cj) {
-    const k = key(ci, cj);
-    let line = this.cells.get(k);
-    if (line !== undefined) return line;
-    let run = this.growing.get(k);
-    if (!run) run = this._grow(ci, cj);
-    let r;
-    do r = run.next();
-    while (!r.done);
-    return this._done(k, r.value);
-  }
-
-  _done(k, line) {
-    this.growing.delete(k);
-    this.queue.delete(k);
-    this.cells.set(k, line);
-    if (line) for (const st of line.stations) this.ids.set(st.id, st);
-    return line;
+    return this.search.get(key(ci, cj));
   }
 
   // Lines whose box overlaps a rectangle of the world. With wait = false,
@@ -228,10 +226,7 @@ export class Lines {
   // The line in square (ci, cj) if it has been surveyed (null: none), or
   // undefined if not yet, and then it's queued for pump().
   peek(ci, cj) {
-    const k = key(ci, cj);
-    const line = this.cells.get(k);
-    if (line === undefined) this.queue.add(k);
-    return line;
+    return this.search.peek(key(ci, cj));
   }
 
   // Lines known so far within r of (x, z); the rest are queued.
@@ -258,25 +253,7 @@ export class Lines {
   // Survey queued squares for up to `ms` milliseconds, nearest-asked first.
   // -> how many are left.
   pump(ms) {
-    const t0 = performance.now();
-    for (const k of this.queue) {
-      let run = this.growing.get(k);
-      if (!run) {
-        const [ci, cj] = k.split(':').map(Number);
-        run = this._grow(ci, cj);
-        this.growing.set(k, run);
-      }
-      for (;;) {
-        const r = run.next();
-        if (r.done) {
-          this._done(k, r.value);
-          break;
-        }
-        if (performance.now() - t0 > ms) return this.queue.size;
-      }
-      if (performance.now() - t0 > ms) break;
-    }
-    return this.queue.size;
+    return this.search.pump(ms);
   }
 
   // The line or station with this id, or null.
@@ -959,3 +936,41 @@ export function samplesNear(line, x, z, r, fn) {
     }
   }
 }
+
+// ── For what's grown after the railway ──────────────────────────────────────
+// The rails, as something to keep clear of (world/claims.ts): a box holds
+// them if a sample of a line is within `near` of its middle. How far that
+// is, each search that keeps clear of the railway has always said for
+// itself, and they don't agree: half the box's width, half its longer side,
+// or half its diagonal. Which one a search uses is part of what it grows, so
+// each keeps its own; a new one wants `corner`, which misses nothing.
+export const NEAR = {
+  width: (x0, z0, x1, z1) => (x1 - x0) / 2,
+  longer: (x0, z0, x1, z1) => Math.max(x1 - x0, z1 - z0) / 2,
+  corner: (x0, z0, x1, z1) => Math.hypot(x1 - x0, z1 - z0) / 2,
+};
+
+// Whether the railway in a box has been surveyed, asking for it if not: so
+// a search far off can wait for it rather than stall.
+export const surveyed = (lines) => (x0, z0, x1, z1) => {
+  let known = true;
+  for (let j = Math.floor(z0 / CELL); j <= Math.floor(z1 / CELL); j++) {
+    for (let i = Math.floor(x0 / CELL); i <= Math.floor(x1 / CELL); i++) if (lines.peek(i, j) === undefined) known = false;
+  }
+  return known;
+};
+
+export const railsNear = (lines, near) => ({
+  holds(x0, z0, x1, z1) {
+    const cx = (x0 + x1) / 2;
+    const cz = (z0 + z1) / 2;
+    const r = near(x0, z0, x1, z1);
+    for (const line of lines.within(x0, z0, x1, z1)) {
+      let found = false;
+      samplesNear(line, cx, cz, r, () => (found = true));
+      if (found) return true;
+    }
+    return false;
+  },
+  ready: surveyed(lines),
+});

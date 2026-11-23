@@ -186,17 +186,22 @@ export function installMounts(game) {
 
   // ── Riding ────────────────────────────────────────────────────────────────
   let riding = null; // the mount carrying you
+  let hold = null; // ...and what you're held by while it does (player/rides.ts)
   let last = null; // the kind you rode last
   builder.idleWhile(() => riding !== null);
 
   function ride(m) {
     if (!m.body) m.show(scene, ctx).onStep = stepSound(m);
     gliding.stow(); // (caught in the air: off the glider and onto its back)
+    const c = m.def.carrier;
+    // In a boat, on a train: not from there. (Taken from you some other way
+    // than by getting off, it's left where it stands.)
+    const taken = player.rides.take({ by: 'mounts', what: `your ${m.def.name}`, carrier: { ...c, fly: c.fly ? { ...c.fly } : null, landing: false }, lost: () => left() });
+    if (!taken) return void hud.flash(player.rides.why());
+    hold = taken;
     riding = m;
     m.riding = true;
     m.caught = false;
-    const c = m.def.carrier;
-    player.carrier = { ...c, fly: c.fly ? { ...c.fly } : null, landing: false };
     player.pos.set(m.x, m.y, m.z);
     if (m.flying) player.vel.set(m.vx, m.vy, m.vz);
     else player.vel.set(0, 0, 0);
@@ -228,12 +233,30 @@ export function installMounts(game) {
     spot = spot || { x: m.x, z: m.z };
     riding = null;
     m.riding = false;
-    player.carrier = null;
+    hold.release();
+    hold = null;
     player.flying = false;
     player.character.seat(null);
     player.pos.set(spot.x, player.groundAt(spot.x, spot.z), spot.z);
     player.vel.set(0, 0, 0);
     player.grounded = true;
+    m.flying = false;
+    m.speed = 0;
+    m.settle(ctx);
+    m.rest();
+    save.touch();
+    tell();
+  }
+
+  // No longer on it, though you never got off (see ride): it stays where it is.
+  function left() {
+    const m = riding;
+    if (!m) return;
+    riding = null;
+    hold = null;
+    m.riding = false;
+    player.flying = false;
+    player.character.seat(null);
     m.flying = false;
     m.speed = 0;
     m.settle(ctx);
@@ -250,7 +273,8 @@ export function installMounts(game) {
     const p = player.pos;
     riding = null;
     m.riding = false;
-    player.carrier = null;
+    hold.release();
+    hold = null;
     player.flying = false;
     player.character.seat(null);
     player.character.root.rotation.x = 0;
@@ -416,7 +440,7 @@ export function installMounts(game) {
     id: 'mount',
     at() {
       if (riding) return player.carrier && player.carrier.landing ? null : { d: 0, word: dismounting(), run: dismount };
-      if (gliding.active || player.carrier || player.aboard) return null;
+      if (gliding.active || !player.rides.free) return null;
       const mine = nearest(tameOnes(), REACH + 0.6);
       if (mine) return { d: Math.hypot(mine.x - player.pos.x, mine.z - player.pos.z), word: 'ride', run: () => ride(mine) };
       const wild = wildInReach();
@@ -707,7 +731,6 @@ export function installMounts(game) {
   // and what Z would do, in a word (`doing`: 'call', with a mount of your own
   // to whistle for and nothing else to say), which is what the pack lists it
   // by and a touch screen's button says.
-  let cued = false;
   function cue(wild) {
     const touch = input.isTouch;
     let html = '';
@@ -723,7 +746,7 @@ export function installMounts(game) {
       const eagle = mounts.eagle;
       if (eagle && eagle.tame && eagle.mode !== 'catch') K('call');
       doing = word;
-      cued = false;
+      hud.cue(null, 'mounts');
       return;
     }
     // (on and off: the act key, whose button on a touch screen says so)
@@ -745,14 +768,12 @@ export function installMounts(game) {
         progress = wild.taming.trust > 0 ? wild.taming.trust : null;
       }
     } else {
-      const mine = nearest(tameOnes(), REACH + 0.6);
+      // (not from a boat or a train: whatever has you says what its own key does)
+      const mine = player.rides.free ? nearest(tameOnes(), REACH + 0.6) : null;
       if (mine) html = `<b>${A('ride')}</b> ride your ${mine.def.name}`;
       else if (tameOnes().length) K('call');
     }
-    // (and leave the prompt alone when there's nothing to say, for whoever else has)
-    if (html) hud.cue({ html, bad, progress });
-    else if (cued) hud.cue(null);
-    cued = !!html;
+    hud.cue(html ? { html, bad, progress } : null, 'mounts');
     doing = word;
   }
 

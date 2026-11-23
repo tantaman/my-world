@@ -42,9 +42,11 @@
 //           of sight of land
 
 import { SEA } from '../world/sea.js';
-import { toWorld } from '../landmarks/sites.js';
-import { samplesNear } from '../railway/lines.js';
-import { mayReach } from '../huntclub/site.js';
+import { toWorld } from '../world/frame.js';
+import { railsNear, NEAR } from '../railway/lines.js';
+import { caveMouths } from '../caves/sites.js';
+import { mayReach, airfieldsOver } from '../airports/airports.js';
+import { keepClear, landOf, placesOf, boxesOf } from '../world/claims.ts';
 import { HALF_BEAM, BOW, STERN, DRAFT } from './plan.js';
 
 // The pier head, in her frame (m): it runs along her port side, FENDER off
@@ -296,33 +298,10 @@ function boxOf(f) {
 // fieldsKnown() says, or they're found then and there).
 // -> keepOff for findBerth.
 export function clearOf({ landforms, sites, towns, caves, lines, boxes = () => [], airfields = null }) {
-  const over = (b, x0, z0, x1, z1) => b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0;
-  return (x0, z0, x1, z1) => {
-    if (landforms.reaches(x0, z0, x1, z1)) return true;
-    for (const b of boxes()) if (b && over(b, x0, z0, x1, z1)) return true;
-    if (sites.within(x0, z0, x1, z1).length) return true;
-    if (towns.within(x0, z0, x1, z1).length) return true;
-    for (const c of caves.inBox(x0, z0, x1, z1)) {
-      const m = c.mouth;
-      if (m.x > x0 - MOUTH_CLEAR && m.x < x1 + MOUTH_CLEAR && m.z > z0 - MOUTH_CLEAR && m.z < z1 + MOUTH_CLEAR) return true;
-    }
-    const cx = (x0 + x1) / 2;
-    const cz = (z0 + z1) / 2;
-    for (const line of lines.within(x0, z0, x1, z1)) {
-      let near = false;
-      samplesNear(line, cx, cz, Math.max(x1 - x0, z1 - z0) / 2, () => (near = true));
-      if (near) return true;
-    }
-    if (airfields) {
-      const half = Math.hypot(x1 - x0, z1 - z0) / 2;
-      for (const g of airfields.regions) {
-        if (!mayReach(g, Math.hypot(cx - g.x, cz - g.z), half)) continue;
-        const field = airfields.site(g.id);
-        if (field && over(field.box, x0, z0, x1, z1)) return true;
-      }
-    }
-    return false;
-  };
+  const claims = [landOf(landforms), boxesOf(() => boxes()), placesOf(sites), placesOf(towns), caveMouths(caves, MOUTH_CLEAR), railsNear(lines, NEAR.longer)];
+  if (airfields) claims.push(airfieldsOver(airfields));
+  // (a berth's search doesn't wait for what it keeps clear of: see the top)
+  return keepClear(claims, { waits: false });
 }
 
 // How far from where it's looked for round a berth can reach (m): from the

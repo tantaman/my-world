@@ -18,7 +18,7 @@ import { Landforms } from '../src/world/landforms.js';
 import { SEA } from '../src/world/sea.js';
 import { Basins } from '../src/world/basins.js';
 import { standHeight, SWIM_DEPTH } from '../src/player/player.js';
-import { toWorld } from '../src/landmarks/sites.js';
+import { toWorld } from '../src/world/frame.js';
 import { findSite as findPad, clearOf as padClear } from '../src/spaceport/site.js';
 import { findSite as findStore, clearOf as storeClear } from '../src/videostore/site.js';
 import { Airports } from '../src/airports/airports.js';
@@ -34,7 +34,7 @@ import * as THREE from 'three';
 import { stateroom, describe, pickYours, PALETTES } from '../src/cruise/cabins.js';
 import { LiftRide, LIFT, travelTime, moveAt, moveTime } from '../src/cruise/lifts.js';
 import { SLIDES, path, Ride, RIDE } from '../src/cruise/slides.js';
-import { glyph } from '../src/videostore/font.js';
+import { glyph } from '../src/build/font.js';
 import { matchesGolden } from './helpers/golden.js';
 
 const SEED = 20261119;

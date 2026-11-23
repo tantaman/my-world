@@ -21,7 +21,7 @@ import { FACES, RACKS, SECTIONS, SOLIDS, HALF_W, BACK, FRONT, CEILING, DOOR, QUE
 import { Catalog, STORE, STAFF, GENRES, sortKey, plural } from '../src/videostore/catalog.js';
 import { paintCover, Atlas, COVER, titleBand } from '../src/videostore/covers.js';
 import { Counter, HANDS, TERMS, DAY, dueAt, daysLate, termsOf } from '../src/videostore/browse.js';
-import { glyph, layout } from '../src/videostore/font.js';
+import { glyph, layout } from '../src/build/font.js';
 import { matchesGolden } from './helpers/golden.js';
 import { movieDetails } from '../worker/movies.js';
 

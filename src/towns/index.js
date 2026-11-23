@@ -30,7 +30,7 @@ import { Towns, OPEN, bodyOf } from './towns.js';
 import { KINDS, BUILDINGS } from './kinds.js';
 import { buildLot, buildStreet, makeTumbleweed } from './buildings.js';
 import { Townsfolk } from './people.js';
-import { onPlan, planDiscs, toWorld } from '../landmarks/sites.js';
+import { onPlan, planDiscs, toWorld } from '../world/frame.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { SKY, SHARED } from '../render/uniforms.js';
 import { rayBox } from '../core/geom.js';
@@ -321,6 +321,9 @@ export function installTowns(game) {
   // ── Each frame ────────────────────────────────────────────────────────────
   let lookIn = 0;
   let pending = [];
+  // Where the towns are further off is looked for a little at a time, out of
+  // what the frame can spare (game/budget.ts).
+  game.budget.add({ name: 'towns', work: (ms) => towns.pump(ms) });
   game.addSystem({
     name: 'towns',
     phase: 'world',
@@ -338,8 +341,6 @@ export function installTowns(game) {
       let first = null;
       for (const e of shown.values()) if (e.queue.length && (!first || boxDist(e.town.box, at.x, at.z) < boxDist(first.town.box, at.x, at.z))) first = e;
       if (first) buildNext(first);
-      // look ahead for the map, more of it while it's open (nothing else is drawn)
-      if (towns.queue.size) towns.pump(map.isOpen ? 8 : 1);
 
       // windows lit after dark
       const night = SKY.uNight.value;

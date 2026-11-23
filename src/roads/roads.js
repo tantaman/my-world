@@ -65,10 +65,11 @@
 // ds, h } (the road from the street to the gate) }
 
 import { mulberry32, hash2i } from '../noise.js';
-import { toWorld, onPlan } from '../landmarks/sites.js';
+import { toWorld, onPlan } from '../world/frame.js';
 import { CELL } from '../towns/towns.js';
 import { KINDS } from '../towns/kinds.js';
 import { nearest as railNearest } from '../railway/lines.js';
+import { Searches } from '../core/searches.ts';
 
 export { CELL };
 export const DS = 4; // m between samples along a road
@@ -135,8 +136,9 @@ const MOVES = [
   [2, -1],
 ];
 const key = (ci, cj, dir) => `${ci}:${cj}:${dir}`;
-// What a survey yields while it waits for what it keeps clear of to be found.
-const WAIT = Symbol('wait');
+// What a survey yields while it waits for what it keeps clear of to be found:
+// the others in line are gone on with (core/searches.ts).
+const WAIT = 'wait';
 const _r = { d: 0, s: 0, i: 0, side: 0 };
 
 // ── A town's gate ────────────────────────────────────────────────────────────
@@ -215,11 +217,28 @@ export class Roads {
     this.lines = lines;
     this.clear = clear;
     this.ready = ready;
-    this.links = new Map(); // "ci:cj:dir" -> road, or null
-    this.growing = new Map(); // "ci:cj:dir" -> a survey under way
-    this.queue = new Set(); // links asked about and not yet surveyed
-    this.patient = true; // a survey may wait for what it keeps clear of (not when one's wanted outright)
     this.listeners = [];
+    // surveyed outright (link) or a little at a time (peek, then pump): core/searches.ts
+    this.search = new Searches({
+      grow: (k) => {
+        const [ci, cj, dir] = k.split(':');
+        return this._grow(Number(ci), Number(cj), dir);
+      },
+      found: (k, road) => {
+        if (road) for (const fn of this.listeners) fn(road);
+      },
+    });
+    this.links = this.search.known; // "ci:cj:dir" -> road, or null
+  }
+
+  // Links asked about and not yet surveyed.
+  get queue() {
+    return this.search.queue;
+  }
+
+  // A survey may wait for what it keeps clear of (not when one's wanted outright).
+  get patient() {
+    return this.search.patient;
   }
 
   // fn(road) whenever a road has been surveyed (and is there).
@@ -230,37 +249,12 @@ export class Roads {
   // The road from square (ci, cj) the way `dir` ('e', 's'), or null.
   // Surveyed now if it hasn't been.
   link(ci, cj, dir) {
-    const k = key(ci, cj, dir);
-    const known = this.links.get(k);
-    if (known !== undefined) return known;
-    const run = this.growing.get(k) || this._grow(ci, cj, dir);
-    this.growing.set(k, run);
-    const was = this.patient;
-    this.patient = false;
-    try {
-      let r;
-      do r = run.next();
-      while (!r.done);
-      return this._done(k, r.value);
-    } finally {
-      this.patient = was;
-    }
+    return this.search.get(key(ci, cj, dir));
   }
 
   // ...or undefined if it hasn't been surveyed yet, and then it's queued for pump().
   peek(ci, cj, dir) {
-    const k = key(ci, cj, dir);
-    const known = this.links.get(k);
-    if (known === undefined) this.queue.add(k);
-    return known;
-  }
-
-  _done(k, road) {
-    this.growing.delete(k);
-    this.queue.delete(k);
-    this.links.set(k, road);
-    if (road) for (const fn of this.listeners) fn(road);
-    return road;
+    return this.search.peek(key(ci, cj, dir));
   }
 
   // The links that could come within a rectangle of the world: [ci, cj, dir].
@@ -318,27 +312,7 @@ export class Roads {
 
   // Survey queued links for up to `ms` milliseconds. -> how many are left.
   pump(ms) {
-    const t0 = performance.now();
-    for (const k of this.queue) {
-      let run = this.growing.get(k);
-      if (!run) {
-        const [ci, cj, dir] = k.split(':');
-        run = this._grow(Number(ci), Number(cj), dir);
-        this.growing.set(k, run);
-      }
-      for (;;) {
-        const r = run.next();
-        if (r.done) {
-          this._done(k, r.value);
-          break;
-        }
-        if (performance.now() - t0 > ms) return this.queue.size;
-        // waiting for what it keeps clear of to be found: on to the next
-        if (r.value === WAIT) break;
-      }
-      if (performance.now() - t0 > ms) break;
-    }
-    return this.queue.size;
+    return this.search.pump(ms);
   }
 
   // The road with this id, or null.

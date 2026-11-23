@@ -10,7 +10,7 @@
 // lives elsewhere (a horse, src/mounts/) is made the same way.
 
 import * as THREE from 'three';
-import { RigBuilder, lin, at, along, ellipsoid, limb, stick, cone } from './rig.js';
+import { RigBuilder, lin, at, along, ellipsoid, limb, stick, cone } from '../render/rig.js';
 import { quadSkeleton } from './quadruped.js';
 
 const ss = THREE.MathUtils.smoothstep;

@@ -2,7 +2,7 @@
 // is shared by everyone on the seed. What you catch in a doorway is local.
 import * as THREE from 'three';
 import { clearOf } from '../videostore/site.js';
-import { boxOf, toLocal, toWorld, onPlan, planDiscs } from '../landmarks/sites.js';
+import { boxOf, toLocal, toWorld, onPlan, planDiscs } from '../world/frame.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { rayBox } from '../core/geom.js';
 import { findBuildings, OutlyingBuildings, overlaps, DISTRICT } from './sites.js';
@@ -11,6 +11,7 @@ import { buildInstitution } from './building.js';
 import { Visit } from './visit.js';
 import { institutionMaterial } from './surfaces.js';
 import { hauntingScore } from './sound.js';
+import { airfieldsOver } from '../airports/airports.js';
 
 const GLYPH = ['...#...', '..###..', '#######', '#.#.#.#', '###.###', '#.#.#.#', '###.###'];
 const SHOW = 220,
@@ -20,18 +21,11 @@ export const after = ['videostore', 'airports'];
 export function installAbandoned(game) {
   const { gen, player, landforms, landmarks, towns, caves, railway, spaceport, videostore, airports, builder, chunks, grass, spaces, scene, camera, sky, solids, map, sound, save, hud } = game;
   const reserved = clearOf({ landforms, sites: landmarks.sites, towns: towns.towns, caves, lines: railway.lines, spaceport: spaceport.sites });
+  // (asked about by the middle of the box, as it always has been: airports.js)
+  const airfieldIn = airfieldsOver(airports.airports, { wide: false });
   function keepOff(...box) {
     if (videostore.stores(...box).length || reserved(...box)) return true;
-    const x = (box[0] + box[2]) / 2,
-      z = (box[1] + box[3]) / 2;
-    const fields = airports.airports;
-    for (const region of fields.regions) {
-      const d = Math.hypot(x - region.x, z - region.z);
-      if (d < region.r0 - 170 || d > region.r1 + 4200) continue;
-      const field = fields.site(region.id);
-      if (field && overlaps(box, field.box)) return true;
-    }
-    return false;
+    return airfieldIn.holds(...box);
   }
   const home = findBuildings(gen, player.start, keepOff);
   const districts = new OutlyingBuildings(gen, player.start, keepOff);

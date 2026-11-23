@@ -52,14 +52,13 @@ import { ArenaHud, named } from './arenaHud.js';
 import { tripSounds } from './sound.js';
 import { NAME } from './orrery.js';
 import { RULES } from './match.js';
-import { onPlan, planDiscs, toWorld } from '../landmarks/sites.js';
+import { onPlan, planDiscs, toWorld } from '../world/frame.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { DECK, UNDER, SKY } from '../render/uniforms.js';
 
 const BEEN_KEPT = 500; // launch sites you've been to, the most remembered
 const NEAREST_AFTER = 0.5; // s between looks for the nearest launch site, on the ground
 const PREFETCH = 5000; // m round you within which far launch sites are looked for ahead of time
-const PUMP_MS = [1.5, 6]; // ms a frame spent looking for them: about, and while the map is open
 const SHOW = 520; // m: the site is stood up this close...
 const HIDE = 680; // ...and taken down past this
 const ARRIVE = 16; // m from the middle of the pad that counts as there
@@ -263,6 +262,7 @@ export function installSpaceport(game) {
   const ambience = { ambience: 1, wildlife: 1 }; // the levels to put back
   const seat = { x: 0, y: 0, z: 0 };
   let wasVisible = true;
+  let hold = null; // what you're held by for the trip (player/rides.ts)
   // Where the hiker is while the trip carries them: in the capsule.
   const aboard = {
     get posesCharacter() {
@@ -289,15 +289,15 @@ export function installSpaceport(game) {
   game.on('panel', (which) => { if (which !== 'rocket') manifest.close(); });
   function chooseFlight() {
     if (flight.phase !== 'ground' || !nearRocket()) return;
-    if (player.aboard || player.carrier) return hud.flash('get off first');
+    if (!player.rides.free) return hud.flash(player.rides.why());
     game.emit('panel', 'rocket');
     manifest.open();
   }
 
   function board(destination = 'orrery') {
     if (!site || flight.phase !== 'ground' || !Object.hasOwn(DESTINATIONS, destination)) return false;
-    if (player.aboard || player.carrier) {
-      hud.flash('not while you’re riding something');
+    if (!player.rides.free) {
+      hud.flash(player.rides.why());
       return false;
     }
     manifest.close();
@@ -307,7 +307,7 @@ export function installSpaceport(game) {
     built.rocket.position.y = 0;
     wasVisible = player.character.root.visible;
     seatIn(ROCKET_AT.x, ROCKET_AT.z, ROCKET.seat);
-    player.aboard = aboard;
+    hold = player.rides.take({ by: 'spaceport', what: 'the rocket', aboard });
     flight.board(destination);
     ui.say(`all aboard<small>${DESTINATIONS[destination].name}</small>`, 1600);
     return true;
@@ -363,7 +363,7 @@ export function installSpaceport(game) {
       ambience[bus] = sound.levels[bus] ?? 1;
       sound.volume(bus, 0);
     }
-    hud.cue(null);
+    hud.cue(null, 'spaceport');
     heard.orbit = true;
   }
 
@@ -378,7 +378,8 @@ export function installSpaceport(game) {
   }
 
   function landed() {
-    player.aboard = null;
+    if (hold) hold.release();
+    hold = null;
     player.character.root.visible = wasVisible;
     // step out beside the capsule, which stays where it came down
     const c = capsule;
@@ -513,7 +514,7 @@ export function installSpaceport(game) {
     id: 'rocket',
     at() {
       if (flight.phase === 'orbit') return { d: 0, word: 'fly home', run: leave };
-      if (flight.phase !== 'ground' || player.aboard || player.carrier || !nearRocket()) return null;
+      if (flight.phase !== 'ground' || !player.rides.free || !nearRocket()) return null;
       const r = atSite(ROCKET_AT.x, ROCKET_AT.z);
       return { d: Math.hypot(player.pos.x - r.x, player.pos.z - r.z), word: 'aboard', run: chooseFlight };
     },
@@ -577,7 +578,6 @@ export function installSpaceport(game) {
   });
 
   let arrived = false;
-  let cued = false;
   let lookIn = 0;
   // The nearest launch site found so far, and how far: Skyhook, or one of
   // the others looked over round about.
@@ -590,6 +590,9 @@ export function installSpaceport(game) {
     }
     return best && { site: best, d: bd };
   }
+  // Where the launch sites are further off is looked for a little at a time, out of
+  // what the frame can spare (game/budget.ts).
+  game.budget.add({ name: 'spaceport', work: (ms) => sites.pump(ms) });
   game.addSystem({
     name: 'spaceport',
     phase: 'world',
@@ -597,7 +600,6 @@ export function installSpaceport(game) {
       const p = game.focus;
       // the far ones round about looked for ahead of time, and, on the
       // ground, the nearest stood up in place of the last
-      if (sites.queue.size) sites.pump(map.isOpen ? PUMP_MS[1] : PUMP_MS[0]);
       lookIn -= dt;
       if (lookIn <= 0) {
         lookIn = NEAREST_AFTER;
@@ -623,16 +625,10 @@ export function installSpaceport(game) {
       }
       if (d > ARRIVE * 4) arrived = false;
       // F, by the rocket
-      const can = flight.phase === 'ground' && nearRocket() && !player.aboard && !player.carrier;
+      const can = flight.phase === 'ground' && nearRocket() && player.rides.free;
       ui.launchTouch.hidden = !input.isTouch || input.blocked || !(can || arena);
       if (!ui.launchTouch.hidden) ui.launchTouch.textContent = can ? 'Choose destination' : 'Fly home';
-      if (can) {
-        hud.cue({ html: `<b>${act.key('aboard')}</b> climb aboard the rocket · choose destination` });
-        cued = true;
-      } else if (cued) {
-        hud.cue(null);
-        cued = false;
-      }
+      hud.cue(can ? { html: `<b>${act.key('aboard')}</b> climb aboard the rocket · choose destination` } : null, 'spaceport');
       if (!shown) return;
       flight.update(dt);
       const phase = flight.phase;

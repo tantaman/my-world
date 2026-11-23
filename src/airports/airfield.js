@@ -30,9 +30,9 @@
 
 import * as THREE from 'three';
 import { Mesher } from '../build/geometry.js';
-import { quad, beam } from '../railway/track.js';
+import { quad, beam } from '../build/faces.js';
 import { phash } from '../noise.js';
-import { toWorld } from '../landmarks/sites.js';
+import { toWorld } from '../world/frame.js';
 import { HALF, STRIP, APRON, BANK, PLAN, topAt, bearingOf } from './airports.js';
 
 const col = (hex) => new THREE.Color(hex);

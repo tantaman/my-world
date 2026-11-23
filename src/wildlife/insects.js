@@ -6,7 +6,7 @@
 // tiny skinned mesh whose two wings clap open and shut as it flutters about.
 
 import * as THREE from 'three';
-import { RigBuilder, lin, at, ellipsoid } from './rig.js';
+import { RigBuilder, lin, at, ellipsoid } from '../render/rig.js';
 import { clamp, lerp } from '../noise.js';
 import { rand } from '../core/geom.js';
 
