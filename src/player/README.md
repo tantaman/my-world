@@ -7,8 +7,9 @@ world see you as them.
 - **The hiker** wears an orange rain shell with the hood gathered at the
   collar, a loaded daypack with a hydration hose, tan trousers, a brown
   snapback with a maroon brim, white sunglasses and a beard.
-- **Lauren** is about 1.6 m tall. She wears a royal-blue ribbed tank top
-  with a fine gold chain at her neck, black leggings, grey wool socks and
+- **Lauren** is about 1.6 m tall, slim, with narrower shoulders than the
+  hiker's and a slim waist. She wears a royal-blue ribbed tank top with a
+  fine gold chain at her neck, black leggings, grey wool socks and trim
   charcoal hiking boots with mint at the heel. She carries a black
   packable daypack, its blue hydration hose looped across her chest, and has
   her blue-violet down jacket tied round her waist by its sleeves. Her white cap is
@@ -41,10 +42,11 @@ water floats them sooner, and wading drags at them sooner too.
 The grown-ups' faces are drawn from photos of them. The hiker has a
 real-sized head with a lean face and a long, straight nose, smiling, a full
 dark beard and short dark hair at the sides, and square white frames with
-dark lenses that catch the sky. Lauren has high cheekbones, a small nose and
-a wide smile showing her teeth, with her hair drawn back behind her ears.
-Beard, hair and eyebrows are layers of strands you can make out up close,
-which become a solid mass of hair further off. Lauren's ponytail hangs
+dark lenses that catch the sky. Lauren has an oval face with high
+cheekbones, a small straight nose, a neat chin and full lips parted in a
+smile. Beard, short hair and eyebrows are layers of strands you can make out
+up close, which become a solid mass of hair further off. Lauren's long hair
+is drawn back smooth and glossy behind her ears. Her ponytail hangs
 from where it's gathered: it falls, trails and bobs as she goes, swings
 from side to side when she runs, and springs back to lie down her back over
 her pack.
@@ -140,13 +142,15 @@ A feature gives a command a pad button by listing it with its keys
 
 A hiker is a file in `hikers/` and a line in `HIKERS` (`hikers.js`), which
 is also the order they're offered in. The file exports
-`{ id, name, size, dress(body) }`: what each of those is, and what `dress`
+`{ id, name, size, dress(body) }`, and `shoulders` if theirs aren't the
+grown-up's: what each of those is, and what `dress`
 hangs clothes on and has to say back, is at the top of `Character` in
 `character.js`. For a grown-up, `lauren.js` is the one to start from; for a
 child, `oliver.js`. A grown-up's head is built by `head.js` to a look: the
-eggs the skull is made of, the nose, the mouth and how far the face's
-features stand out, where hair grows and how long and which way it lies, and
-the colours. Sunglasses and a cap are built there too, to each one's own
+eggs the skull is made of (each round the middle of the head, or the skin
+has a seam where one ends), the nose, the mouth and how far the face's
+features stand out, where hair grows and how long and which way it lies (or
+drawn back smooth, for long hair), and the colours. Sunglasses and a cap are built there too, to each one's own
 frames and shape. A child's head is built round the eyes by `child.js`, to
 a look of its own: how big the skull is, where the face sits on it, where
 the hair stops and how it lies, and the colours. Oliver's clothes reuse the grown-up's patterns taken in; Elliott's
@@ -171,7 +175,7 @@ hikers/oliver.js      Oliver: his look, henley, joggers and trainers
 hikers/elliott.js     Elliott: his look, puffer jacket, henley at the neck, joggers and trainers
 hikers/child.js       what the children share: a head built to a look, patterns taken in, trainers
 clothing.js           garment sections, cloth folds, boots and generated weave, and putting them on the bones
-head.js               a grown-up's head to a look: face, ears, hair and beard (strands in layers); sunglasses and caps
+head.js               a grown-up's head to a look: face, ears, hair and beard (strands in layers, or long hair drawn back smooth); sunglasses and caps
 input.js              keyboard, mouse, touch, and a pad's buttons as keys
 gamepad.js            game controllers: reading them, what their buttons are called, typing into panels
 peers.js              everyone else, drawn as whoever they are and eased between messages
