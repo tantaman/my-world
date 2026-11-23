@@ -80,42 +80,46 @@ const PONY_ROOT = new THREE.Vector3(0, 0.016, -0.097);
 const PONY_LENGTH = 0.26;
 const HAIR_COLOUR = new THREE.Color(HAIR);
 
-// Her jawline: the eggs of her face are cut back (`cut` in head.js) to a
-// ball either side, so the side of her face turns under at an edge; the
-// cranium behind isn't, so under her ear the jaw's angle meets her skull.
-// Each ball's surface runs from where her chin's broad underside turns up at
-// the side (JAW_CHIN) back to the angle of her jaw, a little below and in
-// front of her ear lobe (JAW_ANGLE), facing down and out at JAW_TURN from
-// straight down, and is big enough (JAW_BALL) to be all but flat along her
-// jaw. Under her chin it's cut flat by a bigger one, rising back gently from
-// CHIN_UNDER to her throat.
+// Her jawline: the eggs of her face are cut back (`cut` in head.js) to balls
+// either side, so the side of her face turns under at an edge; the cranium
+// behind isn't. Along the bottom of her jaw, a ball's surface runs from where
+// her chin's broad underside turns up at the side (JAW_CHIN) back, rising
+// gently, to the angle of her jaw (JAW_ANGLE), facing down and out at
+// JAW_TURN from straight down. Up the back of her jaw another runs from the
+// angle towards the front of her ear lobe (JAW_BACK), facing back and out at
+// JAW_BACK_TURN from straight back, so the jaw turns up there rather than
+// running on under her ear. Each is big enough (JAW_BALL) to be all but flat
+// along her jaw. Under her chin it's cut flat by a bigger one, rising back
+// gently from CHIN_UNDER to her throat.
 const JAW_CHIN = [0.026, -0.101, 0.06]; // m: x either side of the middle, y, z
-const JAW_ANGLE = [0.047, -0.062, -0.014];
+const JAW_ANGLE = [0.047, -0.079, -0.01];
+const JAW_BACK = [0.052, -0.036, -0.018];
 const JAW_TURN = 0.5; // radians
+const JAW_BACK_TURN = 0.5; // radians
 const JAW_BALL = 0.3; // m, radius
 const CHIN_UNDER = [-0.103, 0.06]; // m: y, z in the middle
 const CHIN_RISE = 0.15; // radians, back from it
 const CHIN_BALL = 0.6; // m, radius
 
 // A ball of radius r (as a skull's egg) whose surface goes through `from` and
-// `to`, facing down and out at `turn` from straight down; on her left (side
-// 1) or right (-1).
-function jawSide(from, to, turn, r, side) {
-  const d = to.map((v, i) => v - from[i]);
-  const out = Math.sin(turn);
-  const down = Math.cos(turn);
-  // the way it faces has no part along the jaw
-  const n = new THREE.Vector3(out, -down, (d[1] * down - d[0] * out) / d[2]).normalize();
+// `to`, facing as nearly the way `face` as it can; on her left (side 1) or
+// mirrored on her right (-1).
+function ballThrough(from, to, face, r, side) {
+  const along = new THREE.Vector3(...to).sub(new THREE.Vector3(...from)).normalize();
+  const n = new THREE.Vector3(...face);
+  n.addScaledVector(along, -n.dot(along)).normalize();
   return [[side * (from[0] - n.x * r), from[1] - n.y * r, from[2] - n.z * r], [r, r, r]];
 }
+const downAndOut = (turn) => [Math.sin(turn), -Math.cos(turn), 0];
+const backAndOut = (turn) => [Math.sin(turn), 0, -Math.cos(turn)];
 
 // A ball of radius r whose surface goes under (0, y, z), rising back at `rise`.
 const underside = ([y, z], rise, r) => [[0, y + r * Math.cos(rise), z + r * Math.sin(rise)], [r, r, r]];
 
 // What the eggs of her face are cut back to.
 const JAW = [
-  jawSide(JAW_CHIN, JAW_ANGLE, JAW_TURN, JAW_BALL, 1),
-  jawSide(JAW_CHIN, JAW_ANGLE, JAW_TURN, JAW_BALL, -1),
+  ...[1, -1].map((side) => ballThrough(JAW_CHIN, JAW_ANGLE, downAndOut(JAW_TURN), JAW_BALL, side)),
+  ...[1, -1].map((side) => ballThrough(JAW_ANGLE, JAW_BACK, backAndOut(JAW_BACK_TURN), JAW_BALL, side)),
   underside(CHIN_UNDER, CHIN_RISE, CHIN_BALL),
 ];
 
