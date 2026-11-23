@@ -31,9 +31,18 @@ export default async function ({ page, step, key, frames, shot }) {
 
   await step('fly', async () => {
     const from = await page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z }));
-    // jump, and keep holding space
-    await page.keyboard.down('Space');
-    const lit = await page.evaluate(() => T.until(() => world.jetpack.flying, 30000));
+    // jump, and keep holding space. (A press that lands on a frame you aren't
+    // quite on the ground is lost, as it is for anyone at the keys, who would
+    // press again: so does this.)
+    let lit = false;
+    for (let tries = 0; tries < 5 && !lit; tries++) {
+      await page.keyboard.down('Space');
+      lit = await page.evaluate(() => T.until(() => world.jetpack.flying, 5000));
+      if (!lit) {
+        await page.keyboard.up('Space');
+        await frames(10);
+      }
+    }
     // (if they don't, what is in the way: something else has you, or has the keys)
     const why = lit ? '' : await page.evaluate(() => {
       const p = world.player;

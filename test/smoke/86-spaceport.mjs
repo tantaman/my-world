@@ -55,7 +55,7 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.ok(ran > 0.5, `W runs in the arena (${ran.toFixed(2)} m)`);
     assert.ok(Math.hypot(after.hiker.x - before.hiker.x, after.hiker.z - before.hiker.z) < 0.01, 'and not the hiker in the forest');
     // stand a bot still in front of you, and fire as a visitor does
-    await page.evaluate(() => {
+    const target = await page.evaluate(() => {
       const a = world.spaceport.arena;
       const me = a.me;
       const bot = a.fighters.find((f) => !f.me && f.alive);
@@ -65,10 +65,14 @@ export default async function ({ page, step, key, frames, shot }) {
       me.yaw = Math.PI / 2;
       me.pitch = Math.atan2(1.2 - 1.6, 12);
       me.reload = 0;
+      return { id: bot.id, deaths: a.match.byId.get(bot.id).deaths };
     });
     await page.evaluate(() => T.tap('use'));
-    const fight = await page.evaluate(() => ({ frags: world.spaceport.arena.match.byId.get('you').frags, feed: document.querySelector('#space .feed').textContent }));
-    assert.equal(fight.frags, 1, 'one rail, one frag');
+    const fight = await page.evaluate(({ id, deaths }) => ({ frags: world.spaceport.arena.match.byId.get('you').frags, got: world.spaceport.arena.match.byId.get(id).deaths - deaths, feed: document.querySelector('#space .feed').textContent }), target);
+    // (a rail goes through everyone in its way, and where the others were
+    // standing when they were stopped is anyone's guess: now and then one of
+    // them is in the line too)
+    assert.ok(fight.frags >= 1 && fight.got === 1, `one rail, and whoever it was aimed at is fragged (${JSON.stringify(fight)})`);
     assert.match(fight.feed, /You railed/, 'and the feed says so');
     await shot('railed');
     return fight;
