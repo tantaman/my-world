@@ -65,6 +65,17 @@ Nothing else knows about it. It uses things other features offer:
   under the water the fog is the water's. Looking out of your own eyes
   hides your body only from your own part.
 - `game.followed`: the ground and the grass grown round each of them
+- Drawing the forest four times costs more than once, so each part leaves
+  out what it can't show. Its grass is only the grass round its own hiker
+  (`grass.only`): the blades fade out at the grass radius from whoever
+  they're drawn for, so the rest would be drawn as nothing. While everyone
+  is within 12 m of the middle of them all, the sun's shadows are drawn once,
+  round that middle, with the first part, and the others use the same map
+  (`sky.freshShadows`). Each hiker is a hundred or so pieces, each casting a
+  shadow, so that's most of what there is to save. Drawing four parts with
+  everyone together then costs about five times one picture's draw calls
+  and three times its triangles. Most of the rest is the hikers themselves:
+  every part draws all of them.
 - `#hud`'s box (`index.html`): your HUD lays itself out in your part
 
 ## Files
