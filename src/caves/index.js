@@ -24,6 +24,7 @@ import { CAVE } from './sites.js';
 import { caveKit, ROCK } from './look.js';
 import { Headlamp } from './lamp.js';
 import { caveSounds } from './sound.js';
+import * as pictures from './pictures.js';
 import { setCuts } from '../world/cuts.js';
 import { VEG_KINDS } from '../world/chunkGen.js';
 import { segDist } from '../core/geom.js';
@@ -105,6 +106,7 @@ export function installCaves(game) {
     keys: ['KeyK', 'PadLeft'],
     group: 'WANDER',
     label: 'headlamp on / off',
+    icon: pictures.HEADLAMP,
     run() {
       byHand = !lamp.on;
       hud.flash(byHand ? 'headlamp on' : 'headlamp off');

@@ -137,4 +137,5 @@ orbit.js        the station and the arena, fetched as a rocket is boarded
 arenaHud.js     the arena's HUD, and the big words of the trip
 sound.js        the rocket's roar, the railgun, the pads, the countdown
 spaceport.css   the glare, the big words, the arena's HUD
+pictures.js     what the station and the rocket look like in your pack
 ```

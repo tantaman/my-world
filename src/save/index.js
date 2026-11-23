@@ -8,6 +8,7 @@
 
 import { Peers } from '../player/peers.js';
 import { SharePanel } from './sharePanel.js';
+import * as pictures from './pictures.js';
 import { standHeight, SWIM_DEPTH } from '../player/player.js';
 
 // The features this uses, so it is installed after them (game/features.js).
@@ -27,7 +28,7 @@ export function installSave(game) {
     share.toggle();
   };
   game.on('panel', (which) => which !== 'share' && share.close());
-  commands.add({ id: 'save', keys: ['KeyL'], group: 'WANDER', label: 'save this world · get a link', run: toggle });
+  commands.add({ id: 'save', keys: ['KeyL'], group: 'WANDER', label: 'save this world · get a link', icon: pictures.SAVE, run: toggle });
   hud.button('save-btn', toggle);
 
   save.attach({ peers, where: () => ({ x: player.pos.x, z: player.pos.z, yaw: player.yaw, who: player.character.who.id }) });

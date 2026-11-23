@@ -31,6 +31,7 @@ import { SurfPose } from './pose.js';
 import { makeBoard, makeRack, BOARD } from './board.js';
 import { Lip } from './lip.js';
 import { surfSounds } from './sound.js';
+import * as pictures from './pictures.js';
 import { GridNearest } from '../core/nearest.js';
 import { waterSample } from '../core/geom.js';
 import { clamp } from '../noise.js';
@@ -356,11 +357,11 @@ export function installSurfing(game) {
   act.offer({
     id: 'surf',
     at() {
-      if (active) return { d: 0, word: 'swim', run: () => off(false, 'off the board') };
-      return canSurf() ? { d: OUT_THERE_D, word: 'surf', run: () => on() } : null;
+      if (active) return { d: 0, word: 'swim', run: () => off(false, 'off the board'), icon: pictures.SURFBOARD };
+      return canSurf() ? { d: OUT_THERE_D, word: 'surf', run: () => on(), icon: pictures.SURFBOARD } : null;
     },
   });
-  commands.add({ id: 'surf', group: 'WANDER', label: 'surf: where the surf is · take a board out, in the sea at a surf spot', run: toggle });
+  commands.add({ id: 'surf', group: 'WANDER', label: 'surf: where the surf is · take a board out, in the sea at a surf spot', icon: pictures.SURFBOARD, run: toggle });
   commands.describe({ group: 'WANDER', help: 'F', pad: ['PadY'], label: 'in the sea at a surf spot: take a board out · on it: off, and swim' });
   commands.describe({ group: 'WANDER', help: 'on a board', label: 'W paddle · A D turn · shift duck a wave · space stand up as one takes you' });
   commands.describe({ group: 'WANDER', help: 'surfing', label: 'A D carve · W pump · S stall · shift crouch, to be barrelled · space off the lip' });

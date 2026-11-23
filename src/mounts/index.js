@@ -37,6 +37,7 @@ import { Hints } from './hints.js';
 import { Mount } from './mount.js';
 import { BODIES } from './bodies.js';
 import { mountLayer } from './onMap.js';
+import * as pictures from './pictures.js';
 import { Riders } from './others.js';
 import './sound.js';
 import { standHeight } from '../player/player.js';
@@ -380,7 +381,8 @@ export function installMounts(game) {
 
   const tameOnes = () => all.filter((m) => m.tame);
   // The ones that are yours are listed in your pack, with where each is.
-  pack.have(() => tameOnes().map((m) => ({ label: `your ${m.def.name}`, note: m.riding ? 'carrying you' : bearing(player.pos.x, player.pos.z, m.x, m.z).words })));
+  const PICTURE_OF = { horse: pictures.HORSE, turtle: pictures.TURTLE, eagle: pictures.EAGLE };
+  pack.have(() => tameOnes().map((m) => ({ label: `your ${m.def.name}`, note: m.riding ? 'carrying you' : bearing(player.pos.x, player.pos.z, m.x, m.z).words, icon: PICTURE_OF[m.kind] })));
   const nearest = (list, within) => {
     let best = null;
     let bd = within;
@@ -439,12 +441,12 @@ export function installMounts(game) {
   act.offer({
     id: 'mount',
     at() {
-      if (riding) return player.carrier && player.carrier.landing ? null : { d: 0, word: dismounting(), run: dismount };
+      if (riding) return player.carrier && player.carrier.landing ? null : { d: 0, word: dismounting(), run: dismount, icon: PICTURE_OF[riding.kind] };
       if (gliding.active || !player.rides.free) return null;
       const mine = nearest(tameOnes(), REACH + 0.6);
-      if (mine) return { d: Math.hypot(mine.x - player.pos.x, mine.z - player.pos.z), word: 'ride', run: () => ride(mine) };
+      if (mine) return { d: Math.hypot(mine.x - player.pos.x, mine.z - player.pos.z), word: 'ride', run: () => ride(mine), icon: PICTURE_OF[mine.kind] };
       const wild = wildInReach();
-      if (wild) return { d: Math.hypot(wild.x - player.pos.x, wild.z - player.pos.z), word: 'calm', run() {}, hold: () => (held = true) };
+      if (wild) return { d: Math.hypot(wild.x - player.pos.x, wild.z - player.pos.z), word: 'calm', run() {}, hold: () => (held = true), icon: PICTURE_OF[wild.kind] };
       return null;
     },
   });
@@ -527,6 +529,7 @@ export function installMounts(game) {
     group: 'WANDER',
     help: 'Z',
     label: 'whistle for your mount · with none yet: where to look for one',
+    icon: pictures.HORSESHOE,
     run: press,
     now: () => doing,
   });

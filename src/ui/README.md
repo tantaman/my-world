@@ -30,4 +30,5 @@ index.js              plugs it into the game: the help and settings keys and but
 hud.js                coordinates, prompts, tool bar and its kits, help panel, buttons
 settingsPanel.js      the settings panel, written from what features put on it
 settings.css          its look
+pictures.js           what settings look like in your pack
 ```

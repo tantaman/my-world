@@ -182,7 +182,7 @@ place in that order, not at the end:
 
 | in | to add… | …call |
 |---|---|---|
-| `act/index.js` | something at hand that the act key (F) does: get in or out, on or off, buy, ask | `game.act.offer({ id, at })`, and `game.act.key(word)` in its prompt |
+| `act/index.js` | something at hand that the act key (F) does: get in or out, on or off, buy, ask | `game.act.offer({ id, at })`, `at()` saying `{ d, word, run, icon }`, and `game.act.key(word)` in its prompt |
 | `adventures/adventures.js` | an adventure to start from the board | `game.adventures.define({ id, title, blurb, where?, start })` |
 | `airports/airports.js` | the airfields, as something grown later keeps clear of | `airfieldsOver(airports)`, with `keepClear` (`world/claims.ts`) |
 | `audio/calls.js` | an animal's voice | `defineCall(kind, reach, play)` |
@@ -198,7 +198,7 @@ place in that order, not at the end:
 | `build/font.js` | words made of little squares | `layout(text)` → `{ width, height, dots }`, or `kit.words(…)` |
 | `build/forestry.js` | what a kind of tree is called, and what felling one yields | `SPECIES[kind]`, `treeName(kind)` |
 | `build/geometry.js` | whole geometries welded into one mesh, each saying what it's made of | `new Mesher()`, `m.add(geometry, matrix, color)`, `m.build()` |
-| `build/inventory.js` | a material to carry (`optional`: on the HUD only while you have some) | `game.builder.stock.define({ id, label, optional })` |
+| `build/inventory.js` | a material to carry (`optional`: on the HUD only while you have some) | `game.builder.stock.define({ id, label, optional, icon })` |
 | `build/kit.js` | flat-sided things from quads, boxes and panels, for a plain vertex-coloured material | `new Kit()`, `k.box(…, skip)`, `k.panel(…)`, `k.build()` |
 | `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)` |
 | `build/surfaces.js` | what something built is made of: bark, grain, paint, stone, shingles, tin, glass | `mesher.surf = SURF.paint` (and `mesher.wear`), drawn with `createBuildingMaterial()` |
@@ -209,7 +209,7 @@ place in that order, not at the end:
 | `far/index.js` | land drawn past where the forest is streamed in, to be seen from high ground | `game.far.want(id, x0, z0, x1, z1, step)`, `far.drop(id)` |
 | `game/budget.ts` | work that can wait (a search, a survey), done a little each frame out of one allowance | `game.budget.add({ name, work(ms) })` |
 | `game/commands.js` | a key or a pad's button, and its line on the help panel | `game.commands.add({ keys, run, group, label })` |
-| `game/commands.js` | something to do that needs no key: in your pack, and at hand (first there, a button on a touch screen) while it says what it would do | `game.commands.add({ run, group, label, now: () => 'float' })` |
+| `game/commands.js` | something to do that needs no key: in your pack, and at hand (first there, a button on a touch screen) while it says what it would do | `game.commands.add({ run, group, label, icon, now: () => 'float' })` |
 | `game/game.ts` | something done every frame | `game.addSystem({ name, phase, update })` |
 | `game/game.ts` | something that must be here before the hiker is set down where they were left | `game.beforeArrival(look.ready())` |
 | `game/settings.js` | a remembered preference | `game.settings.get / set` |
@@ -219,7 +219,8 @@ place in that order, not at the end:
 | `map/mapView.js` | an option under those lists (a button) | `game.map.addAction({ id, label, title, run, enabled })` |
 | `map/places.js` | a place on the map, to look up and track | `game.map.places.addSource({ within, get })` |
 | `map/places.js` | a kind of place in Routes, listed nearest first without end | `addSource({ list, nearest(x, z) })` with a `GridNearest` (`core/nearest.js`), or `destinations()` for a few |
-| `pack/things.js` | something you have, listed in your pack with what else is yours | `game.pack.have(() => [{ label, note }])` |
+| `pack/picture.js` | what something looks like in your pack: a thing to do, something yours, a material, what is at hand | pixel art in a `pictures.js` of its own, handed over as its `icon` |
+| `pack/things.js` | something you have, listed in your pack with what else is yours | `game.pack.have(() => [{ label, note, icon }])` |
 | `people/body.js` | someone who isn't a hiker: a clerk, a steward, a guard | `new Body(lookOf(style, rnd), seed)`, `body.pose(…)` |
 | `player/character.js` | something the hiker holds up to the face | `character.addRaised(name, object, { stowed })`, `raise(name)` |
 | `player/character.js` | sitting astride what carries you, or in it with your arms over the sides | `character.seat({ spread, hang, lean, rest, stroke })` |

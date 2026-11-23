@@ -13,8 +13,9 @@
 // the other things it does (Z whistles for your mount, Y lists the stations).
 //
 //   game.act.offer({ id, at })   at() -> null, or { d (m from you; 0 if you're
-//                                in or on it), word ('get in'), run(), and
-//                                hold(dt) if it's done by holding the key }
+//                                in or on it), word ('get in'), run(),
+//                                hold(dt) if it's done by holding the key, and
+//                                icon, a picture of what it's done to }
 //   game.act.key(word)    how a prompt names the key: <b>F</b>, or on a touch
 //                         screen the word on its button
 //   game.act.here()       what the key would do now, or null
@@ -24,6 +25,7 @@
 //   world.act.press()     do it
 
 import { Offers } from './offers.js';
+import * as pictures from './pictures.js';
 
 const NOTHING_MS = 2200; // ms "nothing at hand" stays on the screen
 
@@ -37,6 +39,9 @@ export function installAct(game) {
   // What it would do here, in a word, is what the pack lists it by while
   // there's something at hand, and what its button on a touch screen says
   // (src/pack/: held down there as the key would be, to calm a wild horse).
+  // Its picture is of what that would be done to, as its offer drew it: the
+  // pack asks for the picture just after the word, so it's the same one.
+  let at = null;
   commands.add({
     id: 'act',
     keys: ['KeyF', 'PadY'],
@@ -45,7 +50,8 @@ export function installAct(game) {
     label: 'act on what’s at hand: get in or out, on or off · ride, calm (hold) · buy, rent, ask · in orbit: fly home',
     run: () => offers.press() || hud.flash('nothing at hand here to get into, or onto, or act on', NOTHING_MS),
     hold: (dt) => offers.hold(dt),
-    now: () => offers.here()?.word || '',
+    now: () => (at = offers.here())?.word || '',
+    icon: () => at?.icon || pictures.HAND,
   });
 
   game.provide('act', {

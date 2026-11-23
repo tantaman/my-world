@@ -112,4 +112,5 @@ sound.js              the engines, the air, the chime, the door, the tyres; tarm
 panel.js              where to fly from here (a tab beside the map)
 onMap.js              the routes between the airfields, and your plane on yours
 airports.css          the flights tab's look, and the white of the cloud
+pictures.js           what flying looks like in your pack
 ```

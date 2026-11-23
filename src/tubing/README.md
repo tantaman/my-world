@@ -73,4 +73,5 @@ model.js              the tube: black rubber, sun-faded on top, a valve and a pa
 sound.js              water slapping the rubber; getting in, hand strokes, bumps, drops, getting out
 others.js             other people here in theirs
 tubing.css            the readout
+pictures.js           what the tube looks like in your pack
 ```

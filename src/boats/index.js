@@ -37,6 +37,7 @@ import { STROKE, CATCH, EXIT, passed } from './paddle.js';
 import { floats, launch, rest, restHeight, site, stepOut } from './shore.js';
 import { Paddlers } from './others.js';
 import { boatLayer } from './onMap.js';
+import * as pictures from './pictures.js';
 import './sound.js';
 import { SEAT_HIPS } from '../player/character.js';
 import { waterSample } from '../core/geom.js';
@@ -267,13 +268,14 @@ export function installBoats(game) {
 
   // ── Getting in and out: the act key (F) ───────────────────────────────────
   const nearest = () => boats.near(player.pos.x, player.pos.z, BOARD_REACH);
+  const PICTURE_OF = { canoe: pictures.CANOE, raft: pictures.RAFT };
   act.offer({
     id: 'boat',
     at() {
-      if (aboard) return { d: 0, word: 'get out', run: getOut };
+      if (aboard) return { d: 0, word: 'get out', run: getOut, icon: PICTURE_OF[aboard.boat.kind] };
       if (!player.rides.free) return null;
       const b = nearest();
-      return b ? { d: hullDistance(b, player.pos.x, player.pos.z), word: 'get in', run: () => board(b) } : null;
+      return b ? { d: hullDistance(b, player.pos.x, player.pos.z), word: 'get in', run: () => board(b), icon: PICTURE_OF[b.kind] } : null;
     },
   });
   commands.describe({ group: 'BOATS', help: 'F', label: 'get into the boat beside you · get out of it' });

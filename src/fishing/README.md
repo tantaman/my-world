@@ -59,4 +59,5 @@ catch.js              what bites where, and when; how big it is and how hard it 
 look.js               the float, and the line from the rod's tip
 models.js             the rod, and a fish held up to look at
 sound.js              the cast, the plop, a nibble, the bite, the strike, the reel, the drag, a snap, a fish landed
+pictures.js           what a fish looks like in your pack
 ```

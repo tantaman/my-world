@@ -32,6 +32,7 @@ import { CarModel } from './models.js';
 import { Car } from './drive.js';
 import { KINDS, priceOf } from './kinds.js';
 import { carSounds } from './sound.js';
+import * as pictures from './pictures.js';
 import { Body } from '../people/body.js';
 import { onPlan, planDiscs, toWorld } from '../world/frame.js';
 import { VEG_STRIDE } from '../world/flora.js';
@@ -610,11 +611,11 @@ export function installCars(game) {
   act.offer({
     id: 'car',
     at() {
-      if (driving) return { d: 0, word: 'get out', run: () => getOut() };
+      if (driving) return { d: 0, word: 'get out', run: () => getOut(), icon: pictures.CAR };
       const lot = onLot();
       const door = besideMine();
-      if (lot && (door === null || lot.d < door)) return { d: lot.d, word: mine ? 'trade' : 'buy', run: () => buy(lot.car) };
-      return door === null ? null : { d: door, word: 'get in', run: getIn };
+      if (lot && (door === null || lot.d < door)) return { d: lot.d, word: mine ? 'trade' : 'buy', run: () => buy(lot.car), icon: pictures.CAR };
+      return door === null ? null : { d: door, word: 'get in', run: getIn, icon: pictures.CAR };
     },
   });
   function cue() {

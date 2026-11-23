@@ -4,6 +4,7 @@
 
 import { Hud } from './hud.js';
 import { SettingsPanel } from './settingsPanel.js';
+import * as pictures from './pictures.js';
 
 export function installHud(game) {
   // The settings panel has the keyboard while it's open. The keyboard comes
@@ -27,7 +28,7 @@ export function installHud(game) {
     settings.toggle();
   };
   game.on('panel', (which) => which !== 'settings' && settings.close());
-  game.commands.add({ id: 'settings', keys: ['KeyO'], group: 'LOOK', label: 'settings · the picture, sound, the hour', run: toggleSettings });
+  game.commands.add({ id: 'settings', keys: ['KeyO'], group: 'LOOK', label: 'settings · the picture, sound, the hour', icon: pictures.SETTINGS, run: toggleSettings });
   hud.button('settings-btn', toggleSettings);
 
   // The help panel lists whatever keys ended up bound, by whichever features.

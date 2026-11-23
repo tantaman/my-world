@@ -43,6 +43,7 @@ import { Range } from './range.js';
 import { buildClub, COUNTER } from './club.js';
 import { shotgunTool } from './shotgun.js';
 import { Scorecard } from './scorecard.js';
+import * as pictures from './pictures.js';
 import './sound.js';
 import { clearOf as storeClearOf } from '../videostore/site.js';
 import { isGame } from '../hunting/quarry.js';
@@ -468,7 +469,7 @@ export function installHuntclub(game) {
     give();
     say(SAYS.give);
   }
-  act.offer({ id: 'huntclub', at: () => (!owned && atCounter() ? { d: 0.5, word: 'ask', run: ask } : null) });
+  act.offer({ id: 'huntclub', at: () => (!owned && atCounter() ? { d: 0.5, word: 'ask', run: ask, icon: pictures.SHOTGUN } : null) });
 
   // ── What the field says ───────────────────────────────────────────────────
   let cardUntil = 0;

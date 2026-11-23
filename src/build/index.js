@@ -17,6 +17,7 @@ import { Forestry, forestSave, SPECIES, treeName } from './forestry.js';
 import { Buildings, buildingsSave } from './buildings.js';
 import { Inventory } from './inventory.js';
 import { GradeStake } from './stake.js';
+import * as pictures from './pictures.js';
 import { Previews } from './previews.js';
 import { Chips } from './chips.js';
 import { Obstacles } from './obstacles.js';
@@ -148,7 +149,7 @@ export function installBuild(game) {
   commands.describe({ group: 'BUILD', help: () => `1 – ${builder.kits.length}`, pad: ['PadLB', 'PadRB'], label: 'pick a tool · again: the next in its kit' });
   commands.describe({ group: 'BUILD', help: 'click', pad: ['PadRT'], label: 'use the tool (hold to keep going)' });
   commands.describe({ group: 'BUILD', help: 'right-click', pad: ['PadLT'], label: 'second action · take down' });
-  commands.add({ id: 'stake', keys: ['KeyG', 'PadRight'], group: 'BUILD', label: 'set / pull up a grade stake', run: () => builder.toggleStake() });
+  commands.add({ id: 'stake', keys: ['KeyG', 'PadRight'], group: 'BUILD', label: 'set / pull up a grade stake', icon: pictures.STAKE, run: () => builder.toggleStake() });
   hud.button('act-stake', () => builder.toggleStake());
 
   // ── Saving ────────────────────────────────────────────────────────────────

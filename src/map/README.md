@@ -99,4 +99,5 @@ places.js             places other features put on the map (an old cabin), to lo
 search.js             what a search in Routes finds: the words a place is known by
 markers.js            your marks as pennants in the world
 map.css               map styles
+pictures.js           what the map looks like in your pack
 ```

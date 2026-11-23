@@ -5,7 +5,7 @@
 // do now) and knows nothing else.
 //
 //   pages(offers, but) -> { hand: [row], rest: [{ group, rows: [row] }] }
-//   row                   { id, word, label, help, pad? }
+//   row                   { id, word, label, help, pad?, icon? }
 //
 //   hand   what is at hand: the ones with a word for here and now, as offered
 //   rest   everything else, under the headings the help panel uses
@@ -13,12 +13,14 @@
 //
 // The rows are copies: the game hands out the same offers every time.
 
+import { tag } from './picture.js';
+
 export function pages(offers, but = null) {
   const hand = [];
   const rest = [];
   for (const o of offers) {
     if (o.id === but) continue;
-    const row = { id: o.id, word: o.word || '', label: o.label, help: o.help || '', ...(o.pad ? { pad: o.pad } : {}) };
+    const row = { id: o.id, word: o.word || '', label: o.label, help: o.help || '', ...(o.pad ? { pad: o.pad } : {}), ...(o.icon ? { icon: o.icon } : {}) };
     if (row.word) {
       hand.push(row);
       continue;
@@ -34,6 +36,15 @@ export function pages(offers, but = null) {
 // there is nothing to write again.
 export function shown(offers) {
   let s = '';
-  for (const o of offers) s += `${o.id}:${o.word || ''}|`;
+  for (const o of offers) s += `${o.id}:${o.word || ''}:${o.icon ? tag(o.icon) : ''}|`;
   return s;
+}
+
+// A label as a row shows it: what it is, and the rest of what it says, from
+// the first ': ' or ' · '.
+//   'map · mark places · where to go' -> ['map', 'mark places · where to go']
+//   'back to the start'               -> ['back to the start', '']
+export function parts(label) {
+  const m = /: | · /.exec(label);
+  return m ? [label.slice(0, m.index), label.slice(m.index + m[0].length)] : [label, ''];
 }

@@ -96,4 +96,5 @@ guide.js        the guide: how they look, how they sit at the stick, what they s
 sound.js        the engine and the propeller; the starter; ear defenders going on
 others.js       other people here out on the tour, in theirs
 wake.js         the white water it leaves behind it, round the bends and out to the banks
+pictures.js     what the airboat looks like in your pack
 ```

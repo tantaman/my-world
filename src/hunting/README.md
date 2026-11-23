@@ -59,4 +59,5 @@ roasting.js           spits over the fires, how the meat on them cooks, and how 
 models.js             the rifle, the spit and the cuts on it, a roast to eat
 scope.js              the dark round view through the scope, with its cross hairs
 sound.js              the shot and its echo, the bolt, loading, the knife, the sizzle, chewing
+pictures.js           what raw and roast meat look like in your pack
 ```

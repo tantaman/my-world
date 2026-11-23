@@ -75,4 +75,5 @@ bodies.js             what they look like and how they move
 onMap.js              how they show on the map
 sound.js              whinny, plunge, scream, wingbeat; your whistle
 others.js             what other people here are riding
+pictures.js           what they look like in your pack: a horseshoe to whistle with, and each kind
 ```

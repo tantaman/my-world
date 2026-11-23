@@ -100,4 +100,5 @@ caves.js              the caves near you: found, built and let go of as you go
 look.js               the rock's material, dripstones, crystals, glowworms, boulders
 lamp.js               the headlamp: on the cap, its beam where you look
 sound.js              footsteps on rock, drips, the hush
+pictures.js           what the headlamp looks like in your pack
 ```

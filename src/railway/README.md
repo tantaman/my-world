@@ -88,4 +88,5 @@ sound.js              chuff, clatter, hiss, brakes, the whistle; ballast underfo
 onMap.js              the lines and the trains on the map
 panel.js              the stations to go to, and when the next train is due (a tab beside the map)
 railway.css           the stations tab's look
+pictures.js           what the railway looks like in your pack
 ```

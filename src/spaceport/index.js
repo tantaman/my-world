@@ -50,6 +50,7 @@ import { ArenaHud, named } from './arenaHud.js';
 import { tripSounds } from './sound.js';
 import { NAME } from './orrery.js';
 import { RULES } from './match.js';
+import * as pictures from './pictures.js';
 import { onPlan, planDiscs, toWorld } from '../world/frame.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { DECK, UNDER, SKY } from '../render/uniforms.js';
@@ -517,15 +518,15 @@ export function installSpaceport(game) {
   act.offer({
     id: 'rocket',
     at() {
-      if (flight.phase === 'orbit') return { d: 0, word: 'fly home', run: leave };
+      if (flight.phase === 'orbit') return { d: 0, word: 'fly home', run: leave, icon: pictures.ROCKET };
       if (flight.phase !== 'ground' || !player.rides.free || !nearRocket()) return null;
       const r = atSite(ROCKET_AT.x, ROCKET_AT.z);
-      return { d: Math.hypot(player.pos.x - r.x, player.pos.z - r.z), word: 'aboard', run: chooseFlight };
+      return { d: Math.hypot(player.pos.x - r.x, player.pos.z - r.z), word: 'aboard', run: chooseFlight, icon: pictures.ROCKET };
     },
   });
   commands.describe({ group: 'WANDER', help: 'F', pad: ['PadY'], label: 'by the rocket: choose a destination · in orbit: fly home' });
   commands.add({
-    id: 'station-deck', keys: ['Enter'], group: 'ORBIT', label: 'Deep Space 9: dock or view the exterior',
+    id: 'station-deck', keys: ['Enter'], group: 'ORBIT', label: 'Deep Space 9: dock or view the exterior', icon: pictures.STATION,
     run: changeDeck,
   });
   commands.describe({ group: 'ORBIT', help: 'W A S D · mouse', pad: ['PadLS', 'PadRS'], label: 'Deep Space 9: circle the station or walk the Promenade' });

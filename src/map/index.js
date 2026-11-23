@@ -12,6 +12,7 @@ import { MarkStore, marksSave } from './marks.js';
 import { MapView } from './mapView.js';
 import { Markers } from './markers.js';
 import { Places } from './places.js';
+import * as pictures from './pictures.js';
 import { SHARED } from '../render/uniforms.js';
 
 const PREFETCH_EVERY = 2000; // ms between checks
@@ -73,7 +74,7 @@ export function installMap(game) {
   }
 
   game.on('panel', (which) => which !== 'map' && map.close());
-  commands.add({ id: 'map', keys: ['KeyM', 'PadSelect'], group: 'WANDER', label: 'map · mark places · where to go', run: () => map.open() });
+  commands.add({ id: 'map', keys: ['KeyM', 'PadSelect'], group: 'WANDER', label: 'map · mark places · where to go', icon: pictures.MAP, run: () => map.open() });
   hud.button('map-btn', () => map.toggle());
 
   // The map covers the view, so the world isn't drawn under it.

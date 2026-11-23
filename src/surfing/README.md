@@ -97,6 +97,7 @@ board.js     the board, and the boards stood in the sand at a break
 lip.js       the curl of a breaking wave thrown over its face, and the spray where it lands
 sound.js     the break, the white water, the board; popping up, landing, wiping out
 surfing.css  the readout
+pictures.js  what surfing looks like in your pack
 ```
 
 The waves themselves are the world's, in `world/breakers.js`: a break is

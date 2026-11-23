@@ -3,10 +3,14 @@
 // A feature that gives you something to have says so with a source: a
 // function that returns what you have of it now, or nothing.
 //
-//   things.add(() => (worn ? [{ label: 'a jetpack', note: 'on your back' }] : null));
+//   things.add(() => (worn ? [{ label: 'a jetpack', note: 'on your back', icon: JETPACK }] : null));
 //
 //   label   what it is, as you'd say you had it: 'logs', 'a jetpack', 'your horse'
 //   note    how much of it, or how it stands: '4 m', 'on your back' (optional)
+//   icon    what it looks like: a picture (picture.js) (optional, but the
+//           pack is a poorer place without it)
+//   empty   true for what you have none of just now: a material run out.
+//           It is still listed, greyed (optional)
 //
 // A source is asked each time the pack is looked into. It reads its own
 // feature's state and nothing is kept here, so the pack saves nothing: what
@@ -15,6 +19,9 @@
 //
 // What everyone always has (the axe, the skis, the inner tube) isn't for
 // this list: those are things to do, and the commands list them.
+
+import { tag } from './picture.js';
+import { ALL } from './pictures.js';
 
 export class Things {
   constructor() {
@@ -26,13 +33,14 @@ export class Things {
     this.sources.push(source);
   }
 
-  // -> [{ label, note }], note '' where there's nothing to add
+  // -> [{ label, note, icon, empty }], note '' where there's nothing to add,
+  //    icon null where it has none
   list() {
     const out = [];
     for (const source of this.sources) {
       const got = source();
       if (!got) continue;
-      for (const t of got) if (t && t.label) out.push({ label: String(t.label), note: t.note ? String(t.note) : '' });
+      for (const t of got) if (t && t.label) out.push({ label: String(t.label), note: t.note ? String(t.note) : '', icon: t.icon || null, empty: !!t.empty });
     }
     return out;
   }
@@ -42,14 +50,17 @@ export class Things {
 // to write again.
 export function told(things) {
   let s = '';
-  for (const t of things) s += `${t.label}:${t.note}|`;
+  for (const t of things) s += `${t.label}:${t.note}:${t.icon ? tag(t.icon) : ''}:${t.empty ? 0 : 1}|`;
   return s;
 }
 
 // What you carry of each material (build/inventory.js), as things: the ones
-// the HUD's line has, one to a row.
-//   stock: { creative, kinds: [{ id, label, format, optional }], amounts }
+// the HUD's line has, one to a row, in the pictures the materials were
+// defined with.
+//   stock: { creative, kinds: [{ id, label, format, optional, icon }], amounts }
 export function materials(stock) {
-  if (stock.creative) return [{ label: 'materials', note: 'unlimited' }];
-  return stock.kinds.filter((k) => !k.optional || stock.amounts[k.id] > 1e-6).map((k) => ({ label: k.label, note: k.format(stock.amounts[k.id]) }));
+  if (stock.creative) return [{ label: 'materials', note: 'unlimited', icon: ALL }];
+  return stock.kinds
+    .filter((k) => !k.optional || stock.amounts[k.id] > 1e-6)
+    .map((k) => ({ label: k.label, note: k.format(stock.amounts[k.id]), icon: k.icon || null, empty: !(stock.amounts[k.id] > 1e-6) }));
 }

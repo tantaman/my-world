@@ -1,15 +1,31 @@
 // Your pack (src/pack/): the list of what there is to do, laid out with what
-// is at hand first, the buttons a touch screen has for what is at hand, and
-// the list of what's yours.
+// is at hand first, the buttons a touch screen has for what is at hand, the
+// list of what's yours, and the pictures everything in it is drawn in.
 // What the commands themselves say (now, offers, press) is in game.test.js.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readdirSync, existsSync } from 'node:fs';
 import { Commands } from '../src/game/commands.js';
-import { pages, shown } from '../src/pack/book.js';
+import { pages, shown, parts } from '../src/pack/book.js';
 import { HandButtons } from '../src/pack/buttons.js';
 import { Things, told, materials } from '../src/pack/things.js';
+import { parse, svg, url, tag, PALETTE } from '../src/pack/picture.js';
 import { Inventory } from '../src/build/inventory.js';
+
+// Two pictures, as a feature would draw them.
+const BOAT = `
+  ......
+  .w..w.
+  .wwww.
+  ......
+`;
+const PIE = `
+  ......
+  .yyyy.
+  .oooo.
+  ......
+`;
 
 // The commands a few features might bind, and the state they read.
 function someCommands() {
@@ -87,14 +103,25 @@ test('the list is written again only when what it shows changes', () => {
 function page(t) {
   const element = () => {
     const heard = {};
+    let text = '';
     return {
       hidden: false,
-      textContent: '',
       dataset: {},
       children: [],
+      get textContent() {
+        return text + this.children.map((c) => c.textContent).join('');
+      },
+      set textContent(v) {
+        text = v;
+        this.children = [];
+      },
       addEventListener: (type, fn) => void (heard[type] = fn),
       prepend(el) {
         this.children.unshift(el);
+      },
+      appendChild(el) {
+        this.children.push(el);
+        return el;
       },
       fire: (type) => heard[type]({ preventDefault() {}, stopPropagation() {} }),
     };
@@ -129,6 +156,21 @@ test('on a touch screen, what is at hand has a button, named for what it would d
 
   buttons.show(commands.offers(), false);
   assert.deepEqual(seen(), [], 'and there are none while something has the screen (the pack, open)');
+});
+
+test('a button on a touch screen has the picture of what it would do', (t) => {
+  const root = page(t);
+  const commands = new Commands();
+  let at = BOAT;
+  commands.add({ id: 'act', keys: ['KeyF'], group: 'WANDER', label: 'act', run() {}, now: () => (at ? 'get in' : ''), icon: () => at });
+  commands.add({ id: 'eat', keys: ['KeyU'], group: 'HUNT', label: 'eat', run() {}, now: () => 'eat' });
+  const buttons = new HandButtons({ root, press() {}, release() {} });
+  const pictures = () => root.children.map((b) => [b.dataset.do, b.children[0].hidden ? null : b.children[0].src]);
+  buttons.show(commands.offers(), true);
+  assert.deepEqual(pictures(), [['eat', null], ['act', url(BOAT)]], 'one with none has only its word');
+  at = PIE;
+  buttons.show(commands.offers(), true);
+  assert.equal(pictures()[1][1], url(PIE), 'and it changes with what is at hand');
 });
 
 test('a button held is the key held, until the finger comes up or what it was for has gone', (t) => {
@@ -174,10 +216,10 @@ test('what is yours is whatever the features say you have, asked when it is look
   assert.deepEqual(things.list(), [], 'nothing yet');
   jets.worn = true;
   tame.push('horse', 'eagle');
-  assert.deepEqual(things.list(), [
-    { label: 'a jetpack', note: 'on your back' },
-    { label: 'your horse', note: '' },
-    { label: 'your eagle', note: '' },
+  assert.deepEqual(things.list().map((t) => [t.label, t.note]), [
+    ['a jetpack', 'on your back'],
+    ['your horse', ''],
+    ['your eagle', ''],
   ], 'in the order their sources were added');
   jets.worn = false;
   assert.deepEqual(things.list().map((t) => t.label), ['your horse', 'your eagle'], 'and nothing is kept of what was');
@@ -187,7 +229,7 @@ test('a source that says nothing, or something that is not a thing, adds nothing
   const things = new Things();
   things.add(() => undefined);
   things.add(() => [null, { note: 'no name to it' }, { label: 'stone', note: 3 }]);
-  assert.deepEqual(things.list(), [{ label: 'stone', note: '3' }], 'what is listed is words');
+  assert.deepEqual(things.list(), [{ label: 'stone', note: '3', icon: null, empty: false }], 'what is listed is words');
   assert.throws(() => things.add([{ label: 'a flag' }]), /is a function/);
 });
 
@@ -206,14 +248,103 @@ test('the materials you carry are yours, as the line on the HUD has them', () =>
   stock.define({ id: 'fish', label: 'fish', optional: true });
   stock.gain('log', 4.25);
   stock.gain('stone', 3);
-  assert.deepEqual(materials(stock), [
-    { label: 'logs', note: '4.3 m' },
-    { label: 'timber', note: '0 m' },
-    { label: 'stone', note: '3' },
-    { label: 'soil', note: '0.0 m³' },
+  const said = () => materials(stock).map((t) => [t.label, t.note]);
+  assert.deepEqual(said(), [
+    ['logs', '4.3 m'],
+    ['timber', '0 m'],
+    ['stone', '3'],
+    ['soil', '0.0 m³'],
   ], 'what most people never carry is left out until there is some');
   assert.equal(materials(stock).map((t) => `${t.label} ${t.note}`).join(' · '), stock.line(), 'the same things, in the same words');
   stock.gain('fish', 2);
-  assert.deepEqual(materials(stock).at(-1), { label: 'fish', note: '2' });
-  assert.deepEqual(materials(new Inventory({ creative: true })), [{ label: 'materials', note: 'unlimited' }], 'building without gathering, there is nothing to count');
+  assert.deepEqual(said().at(-1), ['fish', '2']);
+  assert.deepEqual(materials(new Inventory({ creative: true })).map((t) => [t.label, t.note]), [['materials', 'unlimited']], 'building without gathering, there is nothing to count');
+});
+
+test('each material is in the picture it was defined with, greyed while you have none', () => {
+  const stock = new Inventory();
+  stock.define({ id: 'pie', label: 'pie', optional: true, icon: PIE });
+  stock.gain('log', 2);
+  stock.gain('pie', 1);
+  const things = materials(stock);
+  assert.ok(things.every((t) => t.icon), 'the four everyone has are drawn (build/pictures.js)');
+  assert.equal(things.find((t) => t.label === 'pie').icon, PIE, 'and one a feature adds, as it drew it');
+  assert.deepEqual(things.filter((t) => t.empty).map((t) => t.label), ['timber', 'stone', 'soil'], 'what you have none of is listed, greyed');
+  assert.ok(materials(new Inventory({ creative: true }))[0].icon, 'building without gathering has a picture too');
+});
+
+test('what is yours comes in its picture, and is written again when that changes', () => {
+  const things = new Things();
+  let mine = BOAT;
+  things.add(() => [{ label: 'your boat', icon: mine }, { label: 'a pie' }]);
+  assert.deepEqual(things.list().map((t) => t.icon), [BOAT, null], 'and nothing where it has none: the pack draws something in its place');
+  const was = told(things.list());
+  mine = PIE;
+  assert.notEqual(told(things.list()), was);
+});
+
+// ── Pictures ────────────────────────────────────────────────────────────────
+
+test('a picture is rows of letters, each a colour of the pack’s, with the outline drawn round it', () => {
+  const p = parse(BOAT);
+  assert.deepEqual({ w: p.w, h: p.h }, { w: 6, h: 4 });
+  assert.deepEqual(p.rows, ['.#..#.', '#w##w#', '#wwww#', '.####.'], 'every clear pixel beside the picture is outline, but not those only corner to corner');
+  assert.equal(parse(BOAT), p, 'read once');
+  assert.throws(() => parse('..\n...'), /row 2 of a picture is 3 long, not 2/);
+  assert.throws(() => parse('.z.'), /"z" in row 1 of a picture is not a colour/);
+  assert.throws(() => parse('\n  \n'), /no rows/);
+  assert.throws(() => parse(['.w.']), /a string/);
+  for (const ch of Object.keys(PALETTE)) assert.match(PALETTE[ch], /^#[0-9a-f]{6}$/, `${ch} is a colour`);
+});
+
+test('a picture is drawn a run of a colour at a time, and its URL made once', () => {
+  const drawn = svg(PIE);
+  assert.match(drawn, /^<svg [^>]*viewBox="0 0 6 4"/);
+  assert.equal((drawn.match(/<rect /g) || []).length, 1 + 3 + 3 + 1, 'one rect for each run of a colour along a row (the outline, yellow, the outline …), and none for nothing');
+  assert.ok(drawn.includes(`<rect x="1" y="1" width="4" height="1" fill="${PALETTE.y}"/>`));
+  assert.equal(url(PIE), url(PIE));
+  assert.ok(url(PIE).startsWith('data:image/svg+xml,'));
+  assert.equal(tag(PIE), tag(`${PIE}`), 'the same picture has the same tag');
+  assert.notEqual(tag(PIE), tag(BOAT));
+});
+
+test('every picture a feature draws is in the pack’s colours, and the size the pack lays out', async () => {
+  const src = new URL('../src/', import.meta.url);
+  let drawn = 0;
+  for (const feature of readdirSync(src)) {
+    const file = new URL(`${feature}/pictures.js`, src);
+    if (!existsSync(file)) continue;
+    for (const [name, art] of Object.entries(await import(file))) {
+      const p = parse(art);
+      assert.deepEqual([p.w, p.h], [16, 16], `${feature}/pictures.js: ${name} is 16 × 16`);
+      drawn++;
+    }
+  }
+  assert.ok(drawn > 30, `(${drawn} of them)`);
+});
+
+// ── What a row says ─────────────────────────────────────────────────────────
+
+test('a row says what it is, then the rest of its label', () => {
+  assert.deepEqual(parts('map · mark places · where to go'), ['map', 'mark places · where to go']);
+  assert.deepEqual(parts('railway: the stations to go to'), ['railway', 'the stations to go to']);
+  assert.deepEqual(parts('whistle for your mount · with none yet: where to look for one'), ['whistle for your mount', 'with none yet: where to look for one'], 'from whichever comes first');
+  assert.deepEqual(parts('back to the start'), ['back to the start', '']);
+  assert.deepEqual(parts('headlamp on / off'), ['headlamp on / off', '']);
+});
+
+test('a command’s picture goes with its row, and one of what is at hand changes with it', () => {
+  const commands = new Commands();
+  let at = null;
+  commands.add({ id: 'boat', group: 'WANDER', label: 'a boat', icon: BOAT, run() {} });
+  commands.add({ id: 'act', group: 'WANDER', label: 'act on it', run() {}, now: () => (at ? 'get in' : ''), icon: () => at });
+  commands.add({ id: 'wave', group: 'WANDER', label: 'wave', run() {} });
+  let book = pages(commands.offers());
+  assert.deepEqual(book.rest[0].rows.map((r) => [r.id, r.icon ?? 'none']), [['boat', BOAT], ['act', 'none'], ['wave', 'none']]);
+  at = BOAT;
+  const beside = shown(commands.offers());
+  book = pages(commands.offers());
+  assert.deepEqual(book.hand.map((r) => [r.id, r.word, r.icon]), [['act', 'get in', BOAT]]);
+  at = PIE;
+  assert.notEqual(shown(commands.offers()), beside, 'the same word, said of something else: written again');
 });

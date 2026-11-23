@@ -35,6 +35,7 @@ import { blueprintTool } from './tool.js';
 import { capture, survey } from './plan.js';
 import { levelling, siteGround } from './grade.js';
 import { clearable } from './clear.js';
+import * as pictures from './pictures.js';
 import { PIER } from '../build/constants.js';
 
 const RESURVEY = 0.5; // s between looks at the ground under a staked-out site
@@ -88,6 +89,7 @@ export function installBlueprints(game) {
     keys: ['KeyB'],
     group: 'BUILD',
     label: 'build the staked-out blueprint for you · pause',
+    icon: pictures.BLUEPRINT,
     run() {
       if (!foreman.site) {
         hud.flash(`stake out a blueprint first (${builder.slotOf(tool.id)}, then click)`);

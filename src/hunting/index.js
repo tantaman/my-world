@@ -28,6 +28,7 @@ import { isGame } from './quarry.js';
 import { ScopeView } from './scope.js';
 import { makeRoast } from './models.js';
 import { sizzle } from './sound.js';
+import * as pictures from './pictures.js';
 
 const EAT = 2.6; // seconds a meal takes
 const MUNCH_EVERY = 0.75; // seconds between mouthfuls
@@ -42,8 +43,8 @@ export function installHunting(game) {
 
   // ── What you carry ────────────────────────────────────────────────────────
   // On the HUD's line only while you have some.
-  builder.stock.define({ id: 'meat', label: 'raw meat', optional: true });
-  builder.stock.define({ id: 'roast', label: 'roast meat', optional: true });
+  builder.stock.define({ id: 'meat', label: 'raw meat', optional: true, icon: pictures.MEAT });
+  builder.stock.define({ id: 'roast', label: 'roast meat', optional: true, icon: pictures.ROAST });
 
   // ── Kills, and spits ──────────────────────────────────────────────────────
   const carcasses = new Carcasses({ scene, ground: (x, z) => chunks.heightAt(x, z) });
@@ -85,7 +86,7 @@ export function installHunting(game) {
   }
   // At hand while there's something to eat: listed so in the pack, with a
   // button of its own on a touch screen.
-  commands.add({ id: 'eat', keys: ['KeyU'], group: 'HUNT', label: "eat something you've roasted", run: eat, now: () => (builder.creative || builder.inv.roast > 0 ? 'eat' : '') });
+  commands.add({ id: 'eat', keys: ['KeyU'], group: 'HUNT', label: "eat something you've roasted", icon: pictures.ROAST, run: eat, now: () => (builder.creative || builder.inv.roast > 0 ? 'eat' : '') });
 
   // ── Saving ────────────────────────────────────────────────────────────────
   save.register({

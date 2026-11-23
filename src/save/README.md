@@ -210,4 +210,5 @@ who.js                the rules for a name and a password, shared with the Worke
 signIn.js             the door into a shared world: who are you?
 sharePanel.js         the save panel (L): link, name, who's here, sign out
 save.css              save panel and door styles
+pictures.js           what saving looks like in your pack
 ```

@@ -45,6 +45,7 @@ import { Flight, FLY, cruiseFor, intoWind } from './flight.js';
 import { planeSounds } from './sound.js';
 import { FlightsPanel } from './panel.js';
 import { routeLayer, FIELD_GLYPH } from './onMap.js';
+import * as pictures from './pictures.js';
 import { clearOf } from '../spaceport/site.js';
 import { toWorld, toLocal } from '../world/frame.js';
 import { VEG_STRIDE, VEG_KINDS } from '../world/flora.js';
@@ -428,7 +429,7 @@ export function installAirports(game) {
     }
     map.open('flights');
   }
-  commands.add({ id: 'flights', keys: ['KeyP'], group: 'WANDER', label: 'flights: where to fly from here · sleep through a flight', run: press });
+  commands.add({ id: 'flights', keys: ['KeyP'], group: 'WANDER', label: 'flights: where to fly from here · sleep through a flight', icon: pictures.PLANE, run: press });
 
   // Ask for the airfields to be found: the one for where you are first.
   function wantRegions() {

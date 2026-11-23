@@ -41,6 +41,7 @@ import { makeCar } from './model.js';
 import { Board, clock, ordinal } from './board.js';
 import { raceSounds } from './sound.js';
 import { Drivers } from './others.js';
+import * as pictures from './pictures.js';
 import { RING as CLUB_RING, PLAN as CLUB_PLAN } from '../huntclub/site.js';
 import { toWorld, toLocal, planDiscs } from '../world/frame.js';
 import { VEG_STRIDE } from '../world/flora.js';
@@ -155,7 +156,7 @@ export function installRacetrack(game) {
   });
   pack.have(() => {
     if (!races) return null;
-    return [{ label: 'races won', note: `${wins} of ${races}` }];
+    return [{ label: 'races won', note: `${wins} of ${races}`, icon: pictures.TROPHY }];
   });
 
   // ── The forest round them ─────────────────────────────────────────────────
@@ -610,15 +611,15 @@ export function installRacetrack(game) {
   act.offer({
     id: 'racetrack',
     at() {
-      if (driving) return stopped() ? { d: 0, word: 'get out', run: getOut } : { d: 0, word: '', run: () => hud.flash('stop first, to get out', 1600) };
+      if (driving) return stopped() ? { d: 0, word: 'get out', run: getOut, icon: pictures.RACECAR } : { d: 0, word: '', run: () => hud.flash('stop first, to get out', 1600) };
       if (!nearCar()) return null;
       const a = apronSpot();
       toWorld(site, a.x, a.z, _a);
-      return { d: Math.hypot(player.pos.x - _a.x, player.pos.z - _a.z), word: 'get in', run: getIn };
+      return { d: Math.hypot(player.pos.x - _a.x, player.pos.z - _a.z), word: 'get in', run: getIn, icon: pictures.RACECAR };
     },
   });
   // (after a race, stopped, racing again is at hand: in the pack, and a button on a touch screen)
-  commands.add({ id: 'racetrack', group: 'RACE TRACK', label: 'race track: where your car is · after a race: race again', run: press, now: () => (stopped() && over() ? 'race again' : '') });
+  commands.add({ id: 'racetrack', group: 'RACE TRACK', label: 'race track: where your car is · after a race: race again', icon: pictures.FLAG, run: press, now: () => (stopped() && over() ? 'race again' : '') });
   commands.describe({ group: 'RACE TRACK', help: 'F', pad: ['PadY'], label: 'by your car on the pit apron: get in and race · in it, stopped: get out' });
   commands.describe({ group: 'RACE TRACK', help: 'click', pad: ['PadRT'], label: 'after a race, stopped: race again' });
   commands.describe({ group: 'RACE TRACK', help: 'W S', pad: ['PadRT', 'PadLT'], label: 'in the car: throttle · brake, and back up' });

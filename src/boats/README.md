@@ -69,4 +69,5 @@ models.js             the dugout, the raft and the paddle
 others.js             other people out in boats
 onMap.js              boats on the map
 sound.js              a stroke, pushing off, lashing a raft, climbing in and out
+pictures.js           what a canoe and a raft look like in your pack
 ```

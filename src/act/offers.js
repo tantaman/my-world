@@ -12,7 +12,10 @@
 //                                hold(dt)  if it's done by holding the key
 //                                       down (calming a wild horse): each
 //                                       frame the key is held
-//   offers.here() -> what the key would do now ({ id, d, word, run, hold }), or null
+//                                icon   what it is done to, as a picture for
+//                                       your pack (src/pack/picture.js): a
+//                                       canoe, a horse
+//   offers.here() -> what the key would do now ({ id, d, word, run, hold, icon }), or null
 //   offers.press() -> do it: whether there was anything to do
 //   offers.hold(dt) -> the key held down a frame: whether that did anything
 //
@@ -35,7 +38,7 @@ export class Offers {
     for (const o of this.list) {
       const a = o.at();
       if (!a || !(a.d <= Infinity) || typeof a.run !== 'function') continue;
-      if (!best || a.d < best.d) best = { id: o.id, d: a.d, word: a.word || '', run: a.run, hold: a.hold || null };
+      if (!best || a.d < best.d) best = { id: o.id, d: a.d, word: a.word || '', run: a.run, hold: a.hold || null, icon: a.icon || null };
     }
     return best;
   }

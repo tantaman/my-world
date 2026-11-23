@@ -23,6 +23,9 @@
 //           word: it heads the list in your pack and, on a touch screen, has
 //           a button of its own, named by the word (src/pack/). Leave it out
 //           for what is done as well anywhere (the map).
+//   icon    what it looks like in your pack: a picture (src/pack/picture.js),
+//           or () => one, for a command whose picture is of whatever is at
+//           hand (the act key's: a canoe, a horse)
 //
 // A command needs no key. One with a label is done from the pack whether it
 // has one or not (offers(), below), so a new feature doesn't have to find a
@@ -121,6 +124,7 @@ export class Commands {
   //      panel has them, and within a group in the order they were added
   //   help   its keys as the help panel writes them ('' if it has none)
   //   word   what its `now` says ('' for nothing here), or null if it has none
+  //   icon   its picture as it is now, or null; only on those that have one
   // A command that is held rather than pressed (it has `hold`) and doesn't
   // say what a press would do now is left out: a list can't hold a key down.
   // The same array and rows are handed out each time, with the words as they
@@ -135,7 +139,7 @@ export class Commands {
         const group = c.group || 'OTHER';
         if (!groups.includes(group)) groups.push(group);
         const { help, pad } = written(c);
-        all.push({ c, row: { id: c.id, group, label: c.label, help, ...(pad.length ? { pad } : {}), word: null } });
+        all.push({ c, row: { id: c.id, group, label: c.label, help, ...(pad.length ? { pad } : {}), word: null, ...(c.icon ? { icon: null } : {}) } });
       }
       const rank = (g) => (GROUP_ORDER.includes(g) ? GROUP_ORDER.indexOf(g) : GROUP_ORDER.length + groups.indexOf(g));
       all.sort((a, b) => rank(a.row.group) - rank(b.row.group));
@@ -145,6 +149,8 @@ export class Commands {
     for (let i = 0; i < this._offers.length; i++) {
       const c = this._offering[i];
       this._offers[i].word = c.now ? c.now() || '' : null;
+      // (after `now`: a picture of what's at hand is of what that found)
+      if (c.icon) this._offers[i].icon = (typeof c.icon === 'function' ? c.icon() : c.icon) || null;
     }
     return this._offers;
   }

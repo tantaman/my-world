@@ -108,6 +108,7 @@ board.js        the race on the screen: the card, the speed and gear, the little
 others.js       other people here, in their cars
 sound.js        your engine and theirs, the tyres and the kerbs, the crowd, the lights, the barrier
 racetrack.css   ...how the card, the gauge and the map look
+pictures.js     what the track, your car and the races you've won look like in your pack
 ```
 
 Its rules are in `test/racetrack.test.js`, where the tracks it grows round
