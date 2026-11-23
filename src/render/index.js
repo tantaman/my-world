@@ -44,6 +44,8 @@ export function installRender(game) {
   game.provide('pipeline', pipeline);
   // light given off by things (a fire, lava): lights.js
   game.provide('lights', pipeline.lights);
+  // meshes of instances whose shadows are drawn from just what each light reaches: casters.ts
+  game.provide('casters', pipeline.casters);
 
   // What the visitor chose last time, unless the address bar says otherwise.
   const soft = settings.get('softness', 'number');

@@ -49,6 +49,7 @@ import { CONFIG } from '../config.js';
 import { SKY, DECK, UNDER, SHARED, BEHIND } from './uniforms.js';
 import { NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, UNDER_GLSL } from './glsl.js';
 import { Lights, LIGHTS_AIR } from './lights.js';
+import { Casters } from './casters.ts';
 
 // The layer that is drawn second, over a copy of everything else (see 1.,
 // above): `mesh.layers.set(OVER)`. Lights that should fall on it are on it
@@ -606,6 +607,10 @@ export class Pipeline {
     // lights, given each frame to the sources that matter most in the scene
     // being drawn, the nearest casting shadows.
     this.lights = new Lights({ count: CONFIG.lights, shadows: CONFIG.lightShadows });
+    // What is drawn into those lights' shadows, and the sun's, from just what
+    // is in each one's reach (casters.ts).
+    this.casters = new Casters();
+    for (const l of this.lights.pool) if (l.castShadow) this.casters.light(l);
 
     this.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
@@ -790,6 +795,8 @@ export class Pipeline {
     // the camera with it: where the eye is in the world is the difference.)
     _eye.copy(camera.position).sub(scene.position);
     this.lights.assign(scene, _eye, SHARED.uTime.value);
+    // ...and to each light's shadow, what it can reach from there
+    this.casters.update();
 
     // Everything but what is on OVER...
     const layers = camera.layers.mask;
@@ -808,13 +815,17 @@ export class Pipeline {
     BEHIND.uProj.value.copy(camera.projectionMatrix);
     BEHIND.uAirFog.value = FOG_DENSITY * this.haze;
     // ...and what is on OVER, over it: the same shadows, not drawn again,
-    // and the same background, not cleared again
+    // the same background, not cleared again, and everything where the
+    // first go put it (three.js would otherwise work out where every
+    // object in the scene is again, for each go)
     const shadows = r.shadowMap.autoUpdate;
     const background = scene.background;
     const clears = r.autoClear;
+    const placed = scene.matrixWorldAutoUpdate;
     r.shadowMap.autoUpdate = false;
     scene.background = null;
     r.autoClear = false;
+    scene.matrixWorldAutoUpdate = false;
     camera.layers.mask = 1 << OVER;
     try {
       r.setRenderTarget(this.rtScene);
@@ -823,6 +834,7 @@ export class Pipeline {
       camera.layers.mask = layers;
       r.autoClear = clears;
       scene.background = background;
+      scene.matrixWorldAutoUpdate = placed;
       r.shadowMap.autoUpdate = shadows;
     }
 
@@ -835,6 +847,7 @@ export class Pipeline {
       r.setClearColor(0x000000, 0);
       r.shadowMap.autoUpdate = false;
       scene.background = null;
+      scene.matrixWorldAutoUpdate = false;
       camera.layers.mask = 1 << HEAT;
       try {
         r.setRenderTarget(this.rtHeat);
@@ -843,6 +856,7 @@ export class Pipeline {
       } finally {
         camera.layers.mask = layers;
         scene.background = background;
+        scene.matrixWorldAutoUpdate = placed;
         r.shadowMap.autoUpdate = shadows;
         r.setClearColor(_clear, clear);
       }

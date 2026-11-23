@@ -6,6 +6,7 @@ import type { WebGLRenderer, Scene, PerspectiveCamera } from 'three';
 import type { Origin } from './origin.js';
 import type { Pipeline } from './pipeline.js';
 import type { Lights } from './lights.js';
+import type { Casters } from './casters.ts';
 
 declare module '../game/game.ts' {
   interface Services {
@@ -15,5 +16,6 @@ declare module '../game/game.ts' {
     camera: PerspectiveCamera;
     pipeline: Pipeline;
     lights: Lights;
+    casters: Casters;
   }
 }

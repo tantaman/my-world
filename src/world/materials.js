@@ -264,10 +264,18 @@ export function createTerrainMaterial() {
   return mat;
 }
 
+// What something is drawn with into a shadow, for it to cut its own holes
+// in. A shadow is read from the depth this leaves (three.js compares against
+// the shadow map's depth), so it writes no colour: that would be a whole
+// shadow map's worth of writing a frame, never read.
+export function createShadowDepthMaterial() {
+  return new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, colorWrite: false });
+}
+
 // The terrain as the sun sees it, for shadows: with the cuts cut out of it
 // too, or the ground that isn't there would still shade the cave mouth.
 export function createTerrainDepthMaterial() {
-  const mat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  const mat = createShadowDepthMaterial();
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, CUTS);
     shader.vertexShader = shader.vertexShader
@@ -431,7 +439,7 @@ export function createVegetationMaterial({ sway = true } = {}) {
 // needles and leaves (at the scale of the shadow map), so light comes through
 // a crown in flecks.
 export function createVegetationDepthMaterial({ sway = true } = {}) {
-  const mat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  const mat = createShadowDepthMaterial();
   mat.onBeforeCompile = (shader) => {
     plantVertex(shader, sway);
     shader.fragmentShader = shader.fragmentShader

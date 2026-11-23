@@ -241,6 +241,7 @@ place in that order, not at the end:
 | `player/rides.ts` | something that moves you itself (a train you sit in, skis you steer, a tube the river carries) | `player.rides.take({ by, what, aboard: { place(out, dt), slack }, lost })` |
 | `player/rides.ts` | whether something has you, and what to say to whoever must get off it first | `player.rides.free`, `player.rides.why()` |
 | `railway/lines.js` | the railway, as something grown later keeps clear of (and waits to have surveyed) | `railsNear(lines, NEAR.corner)`, with `keepClear` |
+| `render/casters.ts` | a mesh of instances (plants by the chunk) whose shadows are drawn from just the instances each light reaches, not the whole mesh; or a light for them to cast into | `const cast = game.casters.add(mesh)`, then `cast.on` where `mesh.castShadow` would be; `game.casters.light(light)` |
 | `render/flame.js` | a fire, as a volume of burning gas | `createFlameMaterial()` on a `flameBox()`, on the `OVER` layer |
 | `render/haze.js` | the air over something hot shimmering | `createHazeMaterial()` on a `flameBox()`, on the `HEAT` layer; `scene.userData.heat = true` |
 | `render/implicit.js` | a body melted out of balls, bones and skins over a spine | `new Melt({ cell, blend })`, `.ball / .bone / .rings`, `.mesh()` or `.steps()` |

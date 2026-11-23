@@ -3,7 +3,7 @@
 //
 //   await world.teleport(120, -40)     jump somewhere, once it has streamed in
 //   world.look(yaw, pitch, dist)       point the camera
-//   world.stats()                      draw calls, triangles, chunks
+//   world.stats()                      draw calls, triangles, chunks, plants drawn into shadows
 //   world.game.systems                 what runs each frame, in order
 
 import { CONFIG } from '../config.js';
@@ -55,7 +55,7 @@ export function installDebug(game) {
     },
     stats() {
       const i = renderer.info.render;
-      return { calls: i.calls, tris: i.triangles, ...chunks.stats(), grassTiles: grass.tiles.size, low: [pipeline.lowW, pipeline.lowH] };
+      return { calls: i.calls, tris: i.triangles, ...chunks.stats(), grassTiles: grass.tiles.size, low: [pipeline.lowW, pipeline.lowH], shadowPlants: pipeline.casters.count() };
     },
   });
 }
