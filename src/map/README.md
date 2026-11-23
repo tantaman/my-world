@@ -38,6 +38,20 @@ to the first, choose the second in *flights*, then follow the last bearing.
 *Follow route* puts the next leg on the HUD. The destination stays tracked
 when you reopen the world. Use *stop guidance* in its route to clear it.
 
+**Search** is the box over the chips: type a few words and Routes lists only
+what they find, nearest first. A place is found by the start of any word
+in its name, what kind of place it is, the line about it, or the list
+it's in, so *cab* finds the cabins, *video* the video stores, *hollis* the
+Hollis cabin. Case and accents don't matter, and every word has to match
+(*old well*). The search covers your marks, and places that aren't in any
+list (*hell* finds the Gate). A chip still narrows it to one list. Since
+something that isn't there could be looked for forever, a search looks
+3 km around you, says when it stopped there, and *look further* doubles
+that. What it finds is listed as soon as it's found, each in its place by
+distance, so the list fills in while it looks. Places known everywhere (the
+hikes) are found however far away they are. **Enter** picks the first one found; **Esc** clears the box (and
+closes the map when it's empty).
+
 **Go here** takes you to the mark or the old place you've picked, rather than
 leaving you the walk: press it on its card and you're standing there, looking
 the way you were (or, at a place with a way in, such as the doors of the
@@ -78,10 +92,11 @@ mapRender.js          pure top-down tile renderer (runs in a worker)
 mapWorker.js          Web Worker wrapper around mapRender
 tiles.js              tile cache + worker scheduling
 mapView.js            the map overlay: pan/zoom, pins, mark editor, the lists beside it (map.addTab) and the options under them (map.addAction)
-routePanel.js         the destinations, by kind and nearest first without end; directions and HUD guidance
+routePanel.js         the destinations, by kind and nearest first without end, and searched; directions and HUD guidance
 routes.js             walking and flight legs and their lines on the map
 marks.js              the marks, their icons and colours
 places.js             places other features put on the map (an old cabin), to look up, track and list in Routes
+search.js             what a search in Routes finds: the words a place is known by
 markers.js            your marks as pennants in the world
 map.css               map styles
 ```

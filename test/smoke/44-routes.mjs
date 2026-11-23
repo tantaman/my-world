@@ -1,4 +1,5 @@
-// Plan local and cross-world trips from the map without moving the player.
+// Plan local and cross-world trips from the map without moving the player,
+// and find destinations by searching for them.
 import assert from 'node:assert/strict';
 
 export default async function ({ page, step, key, frames, shot }) {
@@ -59,5 +60,45 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.click('[data-route="back"]');
     await page.click('[data-tab="places"]');
     await key('Escape');
+  });
+
+  await step('search the destinations', async () => {
+    await key('KeyM');
+    await page.click('[data-tab="routes"]');
+    await page.click('.route-lists button[data-list=""]');
+    const search = page.locator('.route-search');
+    const ids = () => page.$$eval('.route-options button', (bs) => bs.map((b) => b.dataset.destination));
+    // the gate is in no list, but a search finds it by what it leads to
+    await search.fill('hell');
+    await page.locator('.route-options button[data-destination="hell:gate"]').waitFor();
+    // a kind of place: the caves, each put in by its distance as it's found
+    await search.fill('cave');
+    await page.waitForFunction(() => document.querySelectorAll('.route-options button[data-destination^="cave:"]').length >= 3, null, { timeout: 60000 });
+    const caves = (await ids()).filter((id) => id.startsWith('cave:')).length;
+    const d = await page.$$eval('.route-options button', (bs) => bs.map((b) => Number(b.dataset.d)));
+    assert.deepEqual(d, d.slice().sort((a, b) => a - b), 'nearest first');
+    // something that isn't there is looked for only so far, and then further
+    await page.click('.route-lists button[data-list="caves"]');
+    await search.fill('qqzx');
+    await page.locator('[data-route="further"]').waitFor({ timeout: 60000 });
+    assert.match(await page.locator('.route-more').textContent(), /Nothing matching “qqzx” in caves within 3\.0 km/);
+    assert.equal((await ids()).length, 0);
+    await page.click('[data-route="further"]');
+    await page.locator('.route-more', { hasText: 'within 6.0 km.' }).waitFor({ timeout: 60000 });
+    await page.click('.route-lists button[data-list=""]');
+    // Enter goes to the first found
+    await search.fill('hell');
+    await page.locator('.route-options button[data-destination="hell:gate"]').waitFor();
+    await search.press('Enter');
+    await page.locator('.route-detail h4', { hasText: 'Gate' }).waitFor();
+    await page.click('[data-route="back"]');
+    // Esc clears the box first, and only then closes the map
+    await search.focus();
+    await page.keyboard.press('Escape');
+    assert.equal(await search.inputValue(), '');
+    assert.ok(await page.locator('#map.open').count());
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#map.open').count(), 0);
+    return { caves };
   });
 }

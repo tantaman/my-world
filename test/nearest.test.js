@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GridNearest, ListNearest, MergeNearest, PendingNearest } from '../src/core/nearest.js';
+import { GridNearest, ListNearest, MergeNearest, PendingNearest, FilterNearest, ReachNearest } from '../src/core/nearest.js';
 import { mulberry32, hash2i } from '../src/noise.js';
 
 // A made-up grid: some squares have a place or two, some spill a little out.
@@ -123,4 +123,36 @@ test('a place still being worked out holds up only what could be further than it
   assert.deepEqual(pull(s, 5).map((f) => f.place.id), ['late', 'b'], 'then in its place');
   known = null;
   assert.deepEqual(pull(merged(), 5).map((f) => f.place.id), ['a', 'b'], 'and nothing, if there is none');
+});
+
+test('a filtered grid lists only what is kept, still nearest first', () => {
+  const x = -20;
+  const z = 45;
+  const keep = (p) => p.id.endsWith(':0') && (p.x > 0) === (p.z > 0); // two quarters of the world, first of each square
+  const s = new FilterNearest(new GridNearest(x, z, { size: SIZE, spill: SPILL, at: (i, j) => placesIn(i, j, 3) }), keep);
+  const want = byDistance(everything(3).filter(keep), x, z).slice(0, 25);
+  assert.deepEqual(pull(s, 25).map((g) => g.place.id), want.map((w) => w.id));
+});
+
+test('a stream with a reach stops there, and says it was cut short', () => {
+  const x = 0;
+  const z = 0;
+  const grid = () => new GridNearest(x, z, { size: SIZE, spill: SPILL, at: (i, j) => placesIn(i, j, 4) });
+  const s = new ReachNearest(grid(), 450);
+  const got = pull(s, 1e4);
+  const want = byDistance(everything(4), x, z).filter((w) => w.d <= 450);
+  assert.deepEqual(got.map((g) => g.place.id), want.map((w) => w.id), 'everything within it');
+  assert.equal(s.work(), 'done');
+  assert.equal(s.low, Infinity);
+  assert.equal(s.cut, true, 'and there was more beyond');
+  // a short list wholly within reach isn't cut
+  const near = new ReachNearest(new ListNearest(x, z, [{ id: 'a', x: 10, z: 0 }]), 450);
+  assert.deepEqual(pull(near, 5).map((g) => g.place.id), ['a']);
+  assert.equal(near.cut, false);
+  // merged with a far list, the far place still comes, after the reach
+  const short = new ReachNearest(grid(), 300);
+  const all = pull(new MergeNearest([short, new ListNearest(x, z, [{ id: 'far', x: 90000, z: 0 }])]), 1e4).map((g) => g.place.id);
+  assert.equal(all.at(-1), 'far');
+  assert.equal(all.length, byDistance(everything(4), x, z).filter((w) => w.d <= 300).length + 1);
+  assert.equal(short.cut, true);
 });
