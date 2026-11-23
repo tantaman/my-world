@@ -1,16 +1,16 @@
 {
  "spaceport:far:-2:-2": {
   "name": "Zenith launch site",
-  "x": -43345.988,
-  "z": -51018.311,
+  "x": -43173.935,
+  "z": -51001.365,
   "yaw": 0.44,
-  "top": 20.622
+  "top": 42.83
  },
  "spaceport:far:-1:-2": {
   "name": "Aurora launch site",
   "x": -16422.064,
   "z": -44485.169,
   "yaw": 2.249,
-  "top": -30.901
+  "top": -30.942
  }
 }

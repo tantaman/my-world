@@ -240,13 +240,20 @@ and by air.
 
 **What it's made of.** A grid of the whole Earth five minutes of arc to a
 cell (about 9 km; 1.85 km in the game): each cell's land and seabed, how far
-it is from the coast, and how rugged the land round it is; and round the
-start (90 km about it) and each hike (35 km), the land finer, a height every
-460 m, from the same elevation the hike's own land is, so the real valleys
-and coast are there and the hike meets them. The climate is the Köppen-Geiger map, half a
+it is from the coast, and how rugged the land round it is. Where the land is
+a range of mountains, a height every minute of arc as well (1.85 km; 370 m in
+the game), the real height at each point rather than a mean, so the peaks
+stand about as high as they do (Rainier 4,280 m of its 4,392, Everest 8,480
+of its 8,849, the Matterhorn's needle 4,110 of its 4,478) and the valleys
+run where they run; round each range those come down to the grid's over the
+next cell. And round the start (90 km about
+it) and each hike (35 km), the land finer still, a height every 460 m, from
+the same elevation the hike's own land is, so the real valleys and coast are
+there and the hike meets them. The climate is the Köppen-Geiger map, half a
 degree to a cell. `npm run earth` (`tools/earth.mjs`) builds all of it from
 AWS Terrain Tiles and the climate map, and writes it to `earth/`, a file a
-tile 15° square (`earthTiles.js` lists them), about 7 MB in all; a tile is
+tile 15° square (`earthTiles.js` lists them) with its mountains in it,
+about 17 MB in all (Tibet's and the Himalaya's is the biggest, 550 kB); a tile is
 fetched the first time something on it is grown, as a hike's land is
 (`landforms.js`), and nothing on it grows until it has come.
 
@@ -255,9 +262,9 @@ water are still what you walk on, but laid over the Earth's land: standing
 at its real height, flattened where it's a plain (a delta stands a metre or
 so over its water) and as rugged as the forest's mountains where it's a
 range, and stretched no steeper than they are (the Earth's own heights carry
-the rest of a range's size). Where the Earth is finer, round a hike, its own
-heights have the real valleys and ridges in them, and the forest's are
-flattened to the roughness under them. The sea is the Earth's, at the one
+the rest of a range's size). Where the Earth is finer, in a range of mountains
+or round a hike, its own heights have the real valleys and ridges in them,
+and the forest's are flattened to the roughness under them. The sea is the Earth's, at the one
 level the sea stands at everywhere: inland, away from the coast, no hollow
 goes below it; along a low coast a hollow below its level is the sea, and a
 beach of the country's own sand runs along it, unless its shore is rock. The
@@ -281,9 +288,10 @@ are its country's (the country feature).
 a lake that stands above the sea (the Great Lakes, Baikal) is land at its
 floor, and Greenland's and Antarctica's ice is down at the rock under it.
 Land under the sea's level behind its dykes (New Orleans, the Netherlands)
-is under the sea. And away from the start and the hikes the Earth is only as
-fine as its nine-kilometre cells: a mountain's top is rounded off (Rainier
-stands about 3,000 m, not 4,392).
+is under the sea. A narrow ridge or a pinnacle between the mountains'
+heights a minute apart is lower than it is, and away from the ranges the
+Earth is only as fine as its nine-kilometre cells: a lone hill on a plain is
+rounded off.
 
 ## Settings
 
