@@ -231,7 +231,8 @@ place in that order, not at the end:
 | `player/character.js` | hanging in a harness under something (a hang glider) | `character.hang({ tilt, reach, spread })` |
 | `player/character.js` | something the hiker wears on the head (on the cap, if there is one) | `character.addWorn(object, { band })` |
 | `player/character.js` | something the hiker wears on the back (over the pack, if there is one) | `character.addOnBack(object)` |
-| `player/character.js` | a way of standing to the work (a rifle shouldered) | `definePose(kind, keyframes)`, `character.play(kind, dur)` |
+| `player/character.js` | a way of standing to the work (a rifle shouldered) | `definePose(kind, keyframes)`, `character.play(kind, dur)`, or `hold(kind, p)` to stay part-way through it |
+| `player/character.js` | someone who isn't one of the hikers, on the hikers' body: who they are is what they're dressed in | `new Character({ id, name, size, dress(body) })`, cut with `player/clothing.js` |
 | `player/hikers.js` | someone to hike as: their clothes, face and size | a file in `player/hikers/` (`{ id, name, size, dress }`), listed in `HIKERS` |
 | `player/player.js` | walking the hiker somewhere | `player.steer = { x, z, run }` |
 | `player/player.js` | a floor that moves, carrying whoever's on it (a ship under way) | `player.deck = { still, at }`, `player.spawnOnDeck(…)` |

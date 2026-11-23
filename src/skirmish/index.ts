@@ -21,8 +21,12 @@
 //     bots.js      the bots: finding their way, seeing, aiming, playing a side
 //     net.js       who's in the town, and whose browser runs the match
 //     townLook.js  what the town looks like
-//     figures.js   what the fighters and their guns look like
-//     look.js      the scene: fighters, your hands, shots, smoke, the view
+//     guns.js      what they carry, as models
+//     outfits.js   who the fighters are: the hikers' body, in a Raider's clothes or a Warden's
+//     heads.js     their heads: scarves, hoods, glasses, goggles, helmets
+//     figures.js   a fighter as you see them: walking, aiming, crouched, down
+//     hands.js     what's in your own hands, and your arms on it
+//     look.js      the scene: the town, the fighters, shots, smoke, the view
 //     hud.js       the match's HUD, the shop, the scores
 //     sound.js     the guns, the charge, the round
 //

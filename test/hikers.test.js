@@ -1,7 +1,8 @@
 // The hikers you can be (src/player/hikers.js): how big each is, that each
 // walks without the feet skating however small, that sitting puts the hips
 // on the seat whoever sits, that what is held, worn and carried stays on
-// when someone else is dressed, and that the others here see who you are.
+// when someone else is dressed, that the others here see who you are, and
+// that a pose can be held part-way.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -165,3 +166,31 @@ test('the others here are seen as whoever they say they are', () => {
   assert.equal(peers.get('p2').character.who, HIKERS[0], 'someone who never said is the first');
   peers.clear();
 });
+
+test('a pose can be held part-way through it, for as long as it is', () => {
+  const ch = new Character();
+  const hips = () => ch.hips.position.y;
+  for (let i = 0; i < 60; i++) ch.update(DT, 0, true, 0, 0);
+  const standing = hips();
+  // (bending down is deepest half-way through)
+  ch.hold('bend', 0.5);
+  for (let i = 0; i < 60; i++) ch.update(DT, 0, true, 0, 0);
+  const bent = hips();
+  assert.ok(standing - bent > 0.15, `held half-way, the hips are down (${(standing - bent).toFixed(2)} m)`);
+  for (let i = 0; i < 240; i++) ch.update(DT, 0, true, 0, 0);
+  assert.ok(Math.abs(hips() - bent) < 1e-3, 'and stay there: it isn’t playing on');
+  ch.hold('bend', 0.25);
+  for (let i = 0; i < 60; i++) ch.update(DT, 0, true, 0, 0);
+  assert.ok(hips() > bent + 0.03 && hips() < standing - 0.03, 'held less far, they are part of the way down');
+  // let go of, it plays out and is done with
+  ch.stop();
+  for (let i = 0; i < 180; i++) ch.update(DT, 0, true, 0, 0);
+  assert.equal(ch.acting, false);
+  assert.ok(Math.abs(hips() - standing) < 0.01, 'and they stand up again');
+  // ...and playing it takes over from holding it
+  ch.hold('bend', 0.5);
+  ch.play('bend', 1, true);
+  ch.update(DT, 0, true, 0, 0);
+  assert.ok(ch.action.t > 0 && ch.action.t < 0.1, 'played, it starts from its beginning');
+});
+

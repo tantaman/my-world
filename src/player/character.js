@@ -274,7 +274,7 @@ export class Character {
     this.#bones();
 
     this.tool = null;
-    this.action = null; // { kind, t, dur, loop }
+    this.action = null; // { kind, t, dur, loop, still: held where it is (hold()) }
     this.work = 0; // blend into the work pose
     this.raised = null; // what the left hand holds up to the face, by name
     this.lift = 0; // blend into holding it there
@@ -555,15 +555,28 @@ export class Character {
   // Start a work animation: 'chop' | 'chopLow' | 'fell' | 'dig' | 'bend' |
   // 'reach', or one a feature defined (definePose).
   play(kind, dur, loop = false) {
-    if (this.action && this.action.kind === kind && this.action.loop && loop) {
+    if (this.action && this.action.kind === kind && this.action.loop && loop && !this.action.still) {
       this.action.dur = dur;
       return;
     }
     this.action = { kind, t: 0, dur, loop };
   }
 
+  // Hold a pose part-way through it instead of playing it: p, 0 at its start
+  // .. 1 at its end. For something that is held as far as it's asked (a bow
+  // drawn, a crouch) rather than swung, said again whenever p changes; stop()
+  // lets go of it.
+  hold(kind, p) {
+    const a = this.action;
+    const t = clamp(p, 0, 1);
+    if (a && a.kind === kind && a.still) a.t = t;
+    else this.action = { kind, t, dur: 1, loop: true, still: true };
+  }
+
   stop() {
-    if (this.action) this.action.loop = false;
+    if (!this.action) return;
+    this.action.loop = false;
+    this.action.still = false;
   }
 
   get acting() {
@@ -773,7 +786,7 @@ export class Character {
 
     // ── Work poses blend over the walk ─────────────────────────────────────
     const a = this.action;
-    if (a) {
+    if (a && !a.still) {
       a.t += dt;
       if (a.t >= a.dur) {
         if (a.loop) a.t -= a.dur;

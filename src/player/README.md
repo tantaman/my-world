@@ -146,7 +146,7 @@ world are told, so don't change it once someone has played as them; the
 ```
 index.js              plugs it into the game: controls, the hiker, who you are, the camera behind you, where you arrive
 player.js             movement, collision, wading, swimming and diving, the camera: behind you (free or locked) or from your eyes
-character.js          the body anyone has: bones, IK gait (forwards or backwards), work poses, swimming, things raised to the face, a stance on skis or a board; dressed as one of the hikers, at their size
+character.js          the body anyone has: bones, IK gait (forwards or backwards), work poses (played, or held part-way), swimming, things raised to the face, a stance on skis or a board; dressed as one of the hikers, at their size, or as someone else altogether (the fighters in Dry Wells)
 hikers.js             who you can be: the hikers, in the order they're offered
 hikers/hiker.js       the hiker's clothes: rain shell, daypack, trousers and boots
 hikers/oliver.js      Oliver: his look, henley, joggers and trainers
