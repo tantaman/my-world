@@ -6,7 +6,10 @@
 // tarmac between its edges (HALF either side of the middle), with a dashed
 // yellow line down the middle and a white one along each edge, and a gravel
 // shoulder beyond; or, to a town nobody keeps up, all gravel, with two worn
-// ruts. Where it stands over the ground it's on a bank, its sides sloping
+// ruts. The paint is part of the top, strips of it across like the tarmac
+// either side, not laid over it: paint a hair over the road flickers in and
+// out of it from a little way off, where the depth buffer can't tell them
+// apart. Where it stands over the ground it's on a bank, its sides sloping
 // down to the ground and grassed over toward the foot; where it's higher than
 // BRIDGE_FROM, on a bridge: a deck on piers, with a railing each side
 // (concrete for a paved road, timber for a gravel one), its banks ending in a
@@ -18,24 +21,29 @@
 //
 //   buildPiece(road, p, ground, material) -> { object, solids }
 //   buildGate(gate, paved, ground, material) -> { object, solids }
+//   roundTop(gate, x, z, ground) -> the top of a gate's round there
 //   ground(x, z) -> height of the ground in the world (with what's been dug)
 
 import * as THREE from 'three';
 import { Mesher } from '../build/geometry.js';
 import { SURF } from '../build/surfaces.js';
 import { phash } from '../noise.js';
-import { HALF, WIDE, BRIDGE_FROM, pointAt } from './roads.js';
+import { HALF, WIDE, BED, BRIDGE_FROM, pointAt } from './roads.js';
 
 export const PIECE = 96; // m of road stood up and taken down together
 const BANK_SLOPE = 1.6; // a bank's side runs this far out for each metre down
 const TOE_MAX = 10; // m out from the edge a bank's side reaches at most
-const LINE = { w: 0.12, up: 0.012, dash: 3, gap: 6, edge: 0.2 }; // paint: width, how far over the road, the centre line's dashes and gaps, and the edge lines' distance in from the tarmac's edge (m)
+const LINE = { w: 0.12, every: 3, edge: 0.2 }; // paint: how wide (m); the centre line is painted along one stretch between samples in every this many (a dash of DS m); the edge lines' middle, in from the tarmac's edge (m)
 const RUT = [0.55, 1.55]; // m from the middle of a gravel road to the inside and outside of each rut
 const DECK = 0.7; // m from the top of a bridge's deck to its underside
 const PIER = { every: 12, w: 0.9, thick: 0.7 }; // a bridge's piers: how far apart, how wide across the road (m, besides the deck's width), how thick along it
 const RAIL = { h: 1.0, post: 0.14, every: 2.4 }; // its railings
 const SIGN = { h: 2.6, arm: 1.25, w: 0.22, off: WIDE + 0.8, out: 5 }; // a crossbuck: how high, its boards, where it stands (m off the middle, and back from the rail)
 const JUNCTION = WIDE + 1.6; // m across the round where roads meet, from its middle
+// The round: how far over the roads that meet on it it stands (m), and how
+// many rings of points it is drawn with out from its middle, for it to rise
+// over the ground under it where that comes up higher.
+const ROUND = { up: 0.02, rings: 4 };
 // What you hear underfoot.
 export const UNDERFOOT = { paved: 'tarmac', gravel: 'gravel', timber: 'boards' };
 
@@ -125,14 +133,18 @@ function box(m, cx, cy, cz, hx, hy, hz, yaw, color) {
 // A colour a little different from the next, the same every time.
 const vary = (color, a, b, spread = 0.16) => _c.copy(color).multiplyScalar(1 - spread / 2 + phash(a, b, 11) * spread).clone();
 
-// The meshes made, as one object standing at (ox, oy, oz).
-function place(m, material, ox, oy, oz) {
+// The meshes made, as one object standing at (ox, oy, oz). parts: [mesher,
+// material] for each.
+function place(parts, ox, oy, oz) {
   const object = new THREE.Group();
   object.position.set(ox, oy, oz);
-  const mesh = new THREE.Mesh(m.build({ x: ox, y: oy, z: oz }), material);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  object.add(mesh);
+  for (const [m, material] of parts) {
+    if (m.empty) continue;
+    const mesh = new THREE.Mesh(m.build({ x: ox, y: oy, z: oz }), material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    object.add(mesh);
+  }
   object.updateMatrixWorld(true);
   return object;
 }
@@ -188,8 +200,25 @@ function section(s, offs, ground) {
   return { top: offs.map((o) => at(o, s.h)), lt: toe(-1), rt: toe(1) };
 }
 
-const PAVED_OFFS = [-WIDE, -HALF, 0, HALF, WIDE];
-const GRAVEL_OFFS = [-WIDE, -RUT[1], -RUT[0], RUT[0], RUT[1], WIDE];
+// Where the strips across the top meet (m right of the middle), from the
+// left edge to the right. Paved: shoulder, tarmac, edge line, the left lane,
+// the centre line, the right lane, edge line, tarmac, shoulder. Gravel:
+// shoulder, gravel, rut, the crown between the ruts, rut, gravel, shoulder.
+const EDGE_LINE = HALF - LINE.edge;
+const PAINT = LINE.w / 2;
+const PAVED_OFFS = [-WIDE, -HALF, -EDGE_LINE - PAINT, -EDGE_LINE + PAINT, -PAINT, PAINT, EDGE_LINE - PAINT, EDGE_LINE + PAINT, HALF, WIDE];
+const GRAVEL_OFFS = [-WIDE, -HALF, -RUT[1], -RUT[0], RUT[0], RUT[1], HALF, WIDE];
+
+// The colour of each strip across the top, for the stretch after sample k:
+// a little different from one stretch to the next. edges: whether the edge
+// lines are painted on it, centre: whether the centre line's dash is.
+function strips(paved, k, edges = true, centre = k % LINE.every === 0) {
+  if (!paved) return [PAL.shoulder, vary(PAL.gravel, k, 1), vary(PAL.rut, k, 2), vary(PAL.gravel, k, 3), vary(PAL.rut, k, 4), vary(PAL.gravel, k, 5), PAL.shoulder];
+  const left = vary(PAL.tarmac, k, 1, 0.12);
+  const right = vary(PAL.tarmac, k, 2, 0.12);
+  const edge = (lane) => (edges ? PAL.white : lane);
+  return [PAL.shoulder, left, edge(left), left, centre ? PAL.yellow : left, right, edge(right), right, PAL.shoulder];
+}
 
 export function buildPiece(road, p, ground, material) {
   const [i0, i1] = pieceRange(road, p);
@@ -201,11 +230,6 @@ export function buildPiece(road, p, ground, material) {
   const oy = road.h[i0];
   const oz = road.z[i0];
   const raised = (s) => s.up > BRIDGE_FROM;
-  // the colour of each strip across the top
-  const strips = (k) =>
-    paved
-      ? [PAL.shoulder, vary(PAL.tarmac, k, 1, 0.12), vary(PAL.tarmac, k, 2, 0.12), PAL.shoulder]
-      : [PAL.shoulder, vary(PAL.gravel, k, 1), vary(PAL.rut, k, 2), vary(PAL.gravel, k, 3), vary(PAL.rut, k, 4), PAL.shoulder];
   const deckColor = paved ? PAL.concrete : PAL.timber;
 
   let prev = sample(road, i0);
@@ -214,8 +238,8 @@ export function buildPiece(road, p, ground, material) {
     const cur = sample(road, i);
     const cs = section(cur, offs, ground);
     const bridge = raised(prev) || raised(cur);
-    // the top
-    const cols = strips(prev.i);
+    // the top, with its paint
+    const cols = strips(paved, prev.i);
     for (let k = 0; k < offs.length - 1; k++) quad(m, cs.top[k], ps.top[k], ps.top[k + 1], cs.top[k + 1], cols[k]);
     if (!bridge) {
       // the bank's sides, gravel at the top and grassed toward the foot
@@ -254,11 +278,6 @@ export function buildPiece(road, p, ground, material) {
 
   const s0 = i0 * road.ds;
   const s1 = i1 * road.ds;
-  // ── the paint ──
-  if (paved) {
-    for (let s = Math.ceil(s0 / (LINE.dash + LINE.gap)) * (LINE.dash + LINE.gap); s < s1; s += LINE.dash + LINE.gap) along(m, road, s, Math.min(s + LINE.dash, s1), 0, LINE.w, PAL.yellow);
-    for (const side of [-1, 1]) along(m, road, s0, s1, side * (HALF - LINE.edge), LINE.w, PAL.white);
-  }
   // ── bridges: piers and railings ──
   for (let s = Math.ceil(s0 / PIER.every) * PIER.every; s < s1; s += PIER.every) {
     const i = Math.round(s / road.ds);
@@ -296,13 +315,12 @@ export function buildPiece(road, p, ground, material) {
     crossbuck(m, road, s, is ? 1 : -1, ground);
   }
 
-  return { object: place(m, material, ox, oy, oz), solids };
+  return { object: place([[m, material]], ox, oy, oz), solids };
 }
 
-// A strip along the road from s0 to s1, `off` m right of the middle, w wide,
-// on its top (up: how far over it its middle is, thick: how deep, for a
-// rail; 0 for paint laid on it).
-function along(m, road, s0, s1, off, w, color, up = 0, thick = 0) {
+// A rail along the road from s0 to s1, `off` m right of the middle, w wide
+// and `thick` deep, its top `up` over the road's.
+function along(m, road, s0, s1, off, w, color, up, thick) {
   const step = 2;
   const steps = Math.max(1, Math.ceil((s1 - s0) / step));
   let a = null;
@@ -313,20 +331,17 @@ function along(m, road, s0, s1, off, w, color, up = 0, thick = 0) {
     const rz = _p.dx;
     const cx = _p.x + rx * off;
     const cz = _p.z + rz * off;
-    const y = _p.y + (up || LINE.up);
+    const y = _p.y + up;
     const b = {
       l: [cx - rx * w * 0.5, y, cz - rz * w * 0.5],
       r: [cx + rx * w * 0.5, y, cz + rz * w * 0.5],
     };
     if (a) {
-      if (!thick) quad(m, b.l, a.l, a.r, b.r, color);
-      else {
-        const d = (q) => [q[0], q[1] - thick, q[2]];
-        quad(m, b.l, a.l, a.r, b.r, _c.copy(color).multiplyScalar(1.05).clone());
-        quad(m, d(a.l), d(b.l), d(b.r), d(a.r), _c.copy(color).multiplyScalar(0.6).clone());
-        quad(m, a.l, b.l, d(b.l), d(a.l), _c.copy(color).multiplyScalar(0.9).clone());
-        quad(m, b.r, a.r, d(a.r), d(b.r), _c.copy(color).multiplyScalar(0.9).clone());
-      }
+      const d = (q) => [q[0], q[1] - thick, q[2]];
+      quad(m, b.l, a.l, a.r, b.r, _c.copy(color).multiplyScalar(1.05).clone());
+      quad(m, d(a.l), d(b.l), d(b.r), d(a.r), _c.copy(color).multiplyScalar(0.6).clone());
+      quad(m, a.l, b.l, d(b.l), d(a.l), _c.copy(color).multiplyScalar(0.9).clone());
+      quad(m, b.r, a.r, d(a.r), d(b.r), _c.copy(color).multiplyScalar(0.9).clone());
     }
     a = b;
   }
@@ -384,8 +399,19 @@ function crossbuck(m, road, s, dir, ground) {
 // ── A town's gate ────────────────────────────────────────────────────────────
 // The round where its roads meet, and the stretch from it to the end of the
 // street. gate: roads.js gateOf.
-export function buildGate(gate, paved, ground, material) {
+
+// The top of a gate's round at (x, z): level, a little over the roads that
+// meet on it, but BED over the ground where that comes up higher. (The
+// roads are pinned to the gate's height, so the round rises over a hump in
+// the ground rather than the gate moving up.)
+export const roundTop = (gate, x, z, ground) => Math.max(gate.h + ROUND.up, ground(x, z) + BED);
+// The round is drawn with `over`, a material drawn in front of the road's
+// where they're as near as makes no difference (polygonOffset): it lies a
+// hair over the ends of the roads that meet on it, too little to tell them
+// apart from a little way off.
+export function buildGate(gate, paved, ground, material, over = material) {
   const m = new Mesher();
+  const r = new Mesher();
   const solids = [];
   const { approach, ax, az } = gate;
   const ox = gate.x;
@@ -407,7 +433,8 @@ export function buildGate(gate, paved, ground, material) {
     const cur = { i, x: road.x[i], z: road.z[i], h: road.h[i], up: road.h[i] - road.g[i], tx: ax, tz: az, rx, rz };
     const cs = section(cur, offs, ground);
     if (ps) {
-      const cols = paved ? [PAL.shoulder, PAL.tarmac, PAL.tarmac, PAL.shoulder] : [PAL.shoulder, PAL.gravel, PAL.rut, PAL.gravel, PAL.rut, PAL.shoulder];
+      // edge lines up to the round (which lies over their ends), and no centre line
+      const cols = strips(paved, i - 1, (i - 1) * road.ds < road.length - JUNCTION, false);
       for (let k = 0; k < offs.length - 1; k++) quad(m, cs.top[k], ps.top[k], ps.top[k + 1], cs.top[k + 1], cols[k]);
       const foot = _c.copy(PAL.grass).lerp(PAL.earth, 0.2).clone();
       const lip = _c.copy(PAL.shoulder).lerp(PAL.earth, 0.3).clone();
@@ -419,28 +446,36 @@ export function buildGate(gate, paved, ground, material) {
     ps = cs;
     prev = cur;
   }
-  if (paved) for (const side of [-1, 1]) along(m, road, 0, road.length - JUNCTION, side * (HALF - LINE.edge), LINE.w, PAL.white);
-  // the round, a little over the roads that meet on it, with its rim sloping down to the ground
+  // the round, a little over the roads that meet on it (and over the
+  // ground, where that comes up higher), with its rim sloping down to the ground
   const N = 24;
-  const top = gate.h + 0.02;
-  const ring = [];
-  for (let k = 0; k < N; k++) {
-    const a = (k / N) * Math.PI * 2;
-    const x = gate.x + Math.cos(a) * JUNCTION;
-    const z = gate.z + Math.sin(a) * JUNCTION;
-    const g = ground(x, z);
-    const out = Math.min(TOE_MAX, Math.max(0.1, top - g) * BANK_SLOPE);
-    ring.push({ x, z, a, g, out });
-  }
+  const top = gate.h + ROUND.up;
   const color = paved ? PAL.tarmac : PAL.gravel;
+  // rings of points out from the middle; the outermost is its edge
+  const rings = [];
+  for (let j = 1; j <= ROUND.rings; j++) {
+    const ring = [];
+    for (let k = 0; k < N; k++) {
+      const a = (k / N) * Math.PI * 2;
+      const x = gate.x + Math.cos(a) * ((JUNCTION * j) / ROUND.rings);
+      const z = gate.z + Math.sin(a) * ((JUNCTION * j) / ROUND.rings);
+      const g = ground(x, z);
+      const y = roundTop(gate, x, z, ground);
+      ring.push({ x, z, a, g, y, out: Math.min(TOE_MAX, Math.max(0.1, y - g) * BANK_SLOPE) });
+    }
+    rings.push(ring);
+  }
+  const middle = new THREE.Vector3(gate.x, roundTop(gate, gate.x, gate.z, ground), gate.z);
+  const foot = _c.copy(PAL.grass).lerp(PAL.earth, 0.2).clone();
+  const at = (q) => [q.x, q.y, q.z];
   for (let k = 0; k < N; k++) {
-    const a = ring[k];
-    const b = ring[(k + 1) % N];
-    m.tris([new THREE.Vector3(gate.x, top, gate.z), new THREE.Vector3(b.x, top, b.z), new THREE.Vector3(a.x, top, a.z)], (p, nrm, out) => out.copy(color));
-    const toe = (q) => [q.x + Math.cos(q.a) * q.out, Math.min(q.g, top) - 0.25, q.z + Math.sin(q.a) * q.out];
-    const foot = _c.copy(PAL.grass).lerp(PAL.earth, 0.2).clone();
-    quad(m, [a.x, top, a.z], [b.x, top, b.z], toe(b), toe(a), [PAL.shoulder, PAL.shoulder, foot, foot]);
+    const k1 = (k + 1) % N;
+    r.tris([middle, new THREE.Vector3(...at(rings[0][k1])), new THREE.Vector3(...at(rings[0][k]))], (p, nrm, out) => out.copy(color));
+    for (let j = 1; j < ROUND.rings; j++) quad(r, at(rings[j - 1][k]), at(rings[j - 1][k1]), at(rings[j][k1]), at(rings[j][k]), color);
+    const edge = rings[ROUND.rings - 1];
+    const toe = (q) => [q.x + Math.cos(q.a) * q.out, Math.min(q.g, q.y) - 0.25, q.z + Math.sin(q.a) * q.out];
+    quad(r, at(edge[k]), at(edge[k1]), toe(edge[k1]), toe(edge[k]), [PAL.shoulder, PAL.shoulder, foot, foot]);
   }
   solids.push({ ax: gate.x, az: gate.z, bx: gate.x + 0.01, bz: gate.z, r: JUNCTION, topA: top, topB: top, bottom: top - 2, step: 1.1, surface: UNDERFOOT[paved ? 'paved' : 'gravel'] });
-  return { object: place(m, material, ox, oy, oz), solids };
+  return { object: place([[m, material], [r, over]], ox, oy, oz), solids };
 }
