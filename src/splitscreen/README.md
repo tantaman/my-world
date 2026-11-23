@@ -18,9 +18,10 @@ your pack, getting into things and onto them. Your tool bar, prompts and
 panels keep to your part of the screen.
 
 **Each other pad is somebody else**, set down beside you as a different
-hiker: whichever of the hikers nobody else is (*the hiker*, Oliver, Elliott,
-and anyone added to `player/hikers.js` later). Each pad is remembered as
-whoever it was last time. They walk, run, jump, swim and dive, and look
+hiker: the first of the hikers nobody else is, in the order
+`player/hikers.js` lists them (*the hiker*, Lauren, Oliver, Elliott, and
+anyone added there later). Each pad is remembered as whoever it was last
+time. They walk, run, jump, swim and dive, and look
 about, with a camera of their own on their own part of the screen:
 
 | on the other pads | does |
