@@ -9,7 +9,7 @@
 //   hud.show(on) · hud.glare(0..1) · hud.say(text, ms) · hud.feed(html)
 //   hud.update(arena) each frame in the arena · hud.scores(arena | null)
 
-import { RELOAD } from './arena.js';
+import { RELOAD } from './match.js';
 import { ordinal } from './match.js';
 import { NAME } from './orrery.js';
 import './spaceport.css';

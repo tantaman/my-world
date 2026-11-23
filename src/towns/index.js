@@ -28,8 +28,7 @@
 import * as THREE from 'three';
 import { Towns, OPEN, bodyOf } from './towns.js';
 import { KINDS, BUILDINGS } from './kinds.js';
-import { buildLot, buildStreet, makeTumbleweed } from './buildings.js';
-import { Townsfolk } from './people.js';
+import { lazy } from '../core/lazy.ts';
 import { onPlan, planDiscs, toWorld } from '../world/frame.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { SKY, SHARED } from '../render/uniforms.js';
@@ -150,7 +149,12 @@ export function installTowns(game) {
   });
 
   // ── Standing them up and taking them down ─────────────────────────────────
+  // What a town is built from, and its people, come when the first one is
+  // about to be stood up (look.js): show() and buildNext() are only called
+  // once they're here.
+  const look = lazy(() => import('./look.js'));
   function show(t) {
+    const { buildStreet, makeTumbleweed, Townsfolk } = look.loaded;
     const object = new THREE.Group();
     object.add(buildStreet(t, ground, materials.street));
     scene.add(object);
@@ -177,7 +181,7 @@ export function installTowns(game) {
   }
   function buildNext(entry) {
     const lot = entry.queue.shift();
-    const built = buildLot(entry.town, lot, ground, materials);
+    const built = look.loaded.buildLot(entry.town, lot, ground, materials);
     entry.object.add(built.object);
     solids.set(built, built.solids);
     entry.built.set(lot, built);
@@ -336,7 +340,7 @@ export function installTowns(game) {
         for (const e of shown.values()) if (boxDist(e.town.box, at.x, at.z) > HIDE) hide(e);
         towns.prefetch(at.x, at.z, KNOWN);
       }
-      if (pending.length) show(pending.shift());
+      if (pending.length && look.want()) show(pending.shift());
       // one building a frame, the nearest town's first
       let first = null;
       for (const e of shown.values()) if (e.queue.length && (!first || boxDist(e.town.box, at.x, at.z) < boxDist(first.town.box, at.x, at.z))) first = e;

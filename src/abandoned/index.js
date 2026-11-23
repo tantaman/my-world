@@ -7,8 +7,7 @@ import { VEG_STRIDE } from '../world/flora.js';
 import { rayBox } from '../core/geom.js';
 import { findBuildings, OutlyingBuildings, overlaps, DISTRICT } from './sites.js';
 import { GridNearest, ListNearest, MergeNearest } from '../core/nearest.js';
-import { buildInstitution } from './building.js';
-import { Visit } from './visit.js';
+import { lazy } from '../core/lazy.ts';
 import { institutionMaterial } from './surfaces.js';
 import { hauntingScore } from './sound.js';
 import { airfieldsOver } from '../airports/airports.js';
@@ -114,7 +113,11 @@ export function installAbandoned(game) {
       for (const id of state.visited) visited.add(id);
       standing.clear();
       const s = byId(state.inside);
-      if (s && onPlan(s, player.arrival.x, player.arrival.z)) player.arrival.y = s.top;
+      if (s && onPlan(s, player.arrival.x, player.arrival.z)) {
+        player.arrival.y = s.top;
+        // (its floor has to be there to be set down on: so what builds it has to be here first)
+        game.beforeArrival(look.ready());
+      }
     },
   });
   const places = new WeakMap();
@@ -201,8 +204,11 @@ export function installAbandoned(game) {
     },
   });
 
+  // What one is built from, and what happens in it, come when the first is
+  // about to be stood up (look.js).
+  const look = lazy(() => import('./look.js'));
   function show(s) {
-    const built = buildInstitution(s, ground, material, lit);
+    const built = look.loaded.buildInstitution(s, ground, material, lit);
     shown.set(s, built);
     scene.add(built.object);
     solids.set(built, built.solids);
@@ -210,6 +216,7 @@ export function installAbandoned(game) {
   }
   // Have the floor in place before spawn() chooses a height on reload.
   spaces.onDemand((x, z) => {
+    if (!look.want()) return;
     for (const s of localSites(x, z)) if (onPlan(s, x, z) && !shown.has(s) && stands(s)) show(s);
   });
 
@@ -225,7 +232,7 @@ export function installAbandoned(game) {
       for (const s of new Set([...nearby, ...shown.keys()])) {
         const distance = Math.hypot(game.focus.x - s.x, game.focus.z - s.z);
         let built = shown.get(s);
-        if (!built && distance < SHOW && stands(s)) {
+        if (!built && distance < SHOW && stands(s) && look.want()) {
           built = show(s);
         } else if (built && (distance > HIDE || !stands(s))) {
           scene.remove(built.object);
@@ -262,7 +269,7 @@ export function installAbandoned(game) {
             aftermath.built.phantom.visible = false;
           }
           aftermath = null;
-          visit = new Visit(inside, shown.get(inside));
+          visit = new look.loaded.Visit(inside, shown.get(inside));
           visited.add(inside.id);
           save.touch();
         }

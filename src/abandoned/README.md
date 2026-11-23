@@ -14,5 +14,6 @@ The tread that starts on the front steps turns into a side room. Watch where it 
 - `traces.js` draws blood pools, handprints, drag marks and boot treads onto the architecture.
 - `phantom.js` builds the figures with folded garments and articulated hands.
 - `visit.js` handles sightings, pursuit, visitor belongings and the return to the woods.
+- `look.js` is those two, fetched when the first building is about to be stood up.
 - `sound.js` scores the approach and interior and synthesizes each building’s sounds.
 - `index.js` connects the buildings to the forest, lighting, map, save and player.

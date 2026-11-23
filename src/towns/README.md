@@ -87,5 +87,6 @@ towns.js              where they are, grown from the seed, and how each is laid 
 kinds.js              the kinds of town and the buildings in them, in tables: names, habitat, people
 buildings.js          what each building looks like: false fronts, a saloon, cottages, a church...
 people.js             the townsfolk: one skinned mesh each, strolling, waving, watching
+look.js               those two, fetched when the first town is about to be stood up
 sound.js              a church bell, a saloon piano, a creaking sign, a dog, a hello, a whisper
 ```

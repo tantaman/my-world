@@ -98,6 +98,9 @@ export class Game extends Emitter {
   api: Partial<Services> & { game: Game } & Record<string, unknown>;
   // Work that is done a little each frame, all of it out of one allowance.
   budget: Budget;
+  // What has to be here before the hiker is set down where they were left:
+  // see beforeArrival().
+  arrivals: Promise<unknown>[];
   running: boolean;
   private _covers: Array<() => boolean>;
   private _last: number;
@@ -113,6 +116,7 @@ export class Game extends Emitter {
     this.frame = { dt: 0, now: 0, time: 0, n: 0 };
     this.api = { game: this };
     this.budget = new Budget();
+    this.arrivals = [];
     // (The controls arrive when a feature provides them, as 'input'. The game
     // itself only asks three things of them: wasPressed(code), down(code),
     // endFrame().)
@@ -146,6 +150,14 @@ export class Game extends Emitter {
     if (!this.systems[system.phase]) throw new Error(`system "${system.name}": no such phase "${system.phase}" (${PHASES.join(', ')})`);
     this.systems[system.phase].push({ faults: 0, off: false, ...system });
     return system;
+  }
+
+  // Something that has to be here before the hiker is set down: code that is
+  // fetched when it's first wanted (core/lazy.ts), and is wanted at once,
+  // because the save says they were left standing on what it builds.
+  // main.js waits for these, a while, before they arrive.
+  beforeArrival(wait: Promise<unknown>): void {
+    this.arrivals.push(wait.catch(() => {}));
   }
 
   // While fn() is true something covers the whole view (the map, say) and the

@@ -203,6 +203,7 @@ place in that order, not at the end:
 | `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)` |
 | `build/surfaces.js` | what something built is made of: bark, grain, paint, stone, shingles, tin, glass | `mesher.surf = SURF.paint` (and `mesher.wear`), drawn with `createBuildingMaterial()` |
 | `caves/sites.js` | the mouths of caves, as something grown later keeps clear of | `caveMouths(caves, clear)`, with `keepClear` |
+| `core/lazy.ts` | code that isn't needed until you get there (what a place looks like), fetched then and once | `const look = lazy(() => import('./look.js'))`, `look.want()` → the module or null, `await look.ready()` |
 | `core/searches.ts` | answers that take a while to work out (where a thing grown from the seed is), each worked out once: outright, or a little at a time | `new Searches({ *grow(key) { …; yield; … } })`, `get`, `peek`, `pump(ms)` |
 | `country/index.js` | a layer of cloud of your own over everything, for a while (a flight's) | `game.country.cloud(() => ({ at, cover, x, z }))` |
 | `far/index.js` | land drawn past where the forest is streamed in, to be seen from high ground | `game.far.want(id, x0, z0, x1, z1, step)`, `far.drop(id)` |
@@ -210,6 +211,7 @@ place in that order, not at the end:
 | `game/commands.js` | a key or a pad's button, and its line on the help panel | `game.commands.add({ keys, run, group, label })` |
 | `game/commands.js` | something to do that needs no key: in your pack, and at hand (first there, a button on a touch screen) while it says what it would do | `game.commands.add({ run, group, label, now: () => 'float' })` |
 | `game/game.ts` | something done every frame | `game.addSystem({ name, phase, update })` |
+| `game/game.ts` | something that must be here before the hiker is set down where they were left | `game.beforeArrival(look.ready())` |
 | `game/settings.js` | a remembered preference | `game.settings.get / set` |
 | `hunting/shot.js` | something else the rifle can hit (a man, a wall that stops a shot) | `game.hunting.targets.add({ aimed, struck?, heard? })` |
 | `map/mapView.js` | something drawn on the map | `map.addLayer((pen) => …)` |
@@ -311,6 +313,14 @@ Each of those files opens with what the thing is and what it is handed.
   next time it is worked on, which is when its use of all of that starts
   being checked. The game's services are typed the same way: each feature
   says what it provides (the top of `game/game.ts`).
+- *What you may never see isn't fetched until you go.* Everything used to
+  arrive in one file, so each new place made the first load longer for
+  everyone. What a place looks like can come when you first come near it
+  instead (`core/lazy.ts`): a feature keeps what plugs it in and where its
+  places are, and leaves what builds them in a module of its own
+  (`towns/look.js`, `landmarks/models.js`, `abandoned/look.js`,
+  `spaceport/orbit.js`), asked for as the first one is about to be stood up.
+  A feature whose heavy modules are only used there should do the same.
 - *Layers point one way.* `core` knows nothing; `render` knows `core`;
   `world` knows those; the features know the world and, where they must,
   each other — and nothing reaches back down.
@@ -431,8 +441,8 @@ listing every part that failed. The last two need
 [Playwright](https://playwright.dev)'s browser, a download of its own
 (`npx playwright install chromium`).
 
-`npm test` and `npm run smoke` run on every pull request and every push to
-`main` (`.github/workflows/ci.yml`); the play-through's report, and a picture
+`npm test`, `npm run smoke` and `npm run together` run on every pull request
+and every push to `main` (`.github/workflows/ci.yml`); the play-through's report, and a picture
 of the game as each failed part left it, are kept with the run.
 
 ## Layout
@@ -447,6 +457,7 @@ src/
     storage.js            this browser's memory, and every key kept in it
     geom.js               plan-view geometry, a ray against a box or a capsule, and chance that several systems share
     format.js             how numbers are written for people
+    lazy.ts               code fetched when it's first wanted, once
     names.js              names several kinds of thing draw on
     nearest.js            places listed nearest first, without end
     searches.ts           answers that take a while to work out, each worked out once

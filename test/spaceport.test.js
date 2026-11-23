@@ -396,3 +396,22 @@ test('the rocket keeps its chosen destination until it lands', () => {
   assert.equal(flight.board(), true);
   assert.equal(flight.destination, 'orrery');
 });
+
+test('the climb waits at its top, in the glare, until what is up there is ready to arrive at', () => {
+  const f = new Flight();
+  let here = false;
+  f.mayArrive = () => here;
+  f.board('orrery');
+  f.hurry();
+  f.hurry();
+  assert.equal(f.phase, 'climb');
+  f.hurry();
+  assert.equal(f.phase, 'climb', 'not into orbit yet: it is still being fetched');
+  f.update(5);
+  assert.equal(f.phase, 'climb');
+  assert.equal(f.glare, 1, 'whited out the while');
+  assert.equal(f.rocketUp, climbHeight(FLIGHT.climb), 'and no higher than the top of the climb');
+  here = true;
+  f.update(0.016);
+  assert.equal(f.phase, 'orbit');
+});

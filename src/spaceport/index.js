@@ -45,9 +45,7 @@ import { GridNearest, ListNearest, MergeNearest } from '../core/nearest.js';
 import { buildLaunchSite, makeCapsule, makeExhaust, ROCKET, SMOKE } from './launchSite.js';
 import { Flight, DESTINATIONS } from './flight.js';
 import { FlightPanel } from './flightPanel.js';
-import { StationVisit } from './station.js';
-import { Arena } from './arena.js';
-import { ArenaLook } from './arenaLook.js';
+import { lazy } from '../core/lazy.ts';
 import { ArenaHud, named } from './arenaHud.js';
 import { tripSounds } from './sound.js';
 import { NAME } from './orrery.js';
@@ -255,6 +253,10 @@ export function installSpaceport(game) {
   }
 
   // ── The trip ──────────────────────────────────────────────────────────────
+  // What's up there is fetched as a rocket is boarded (orbit.js), and the
+  // climb goes on in the glare until it's here.
+  const orbit = lazy(() => import('./orbit.js'));
+  flight.mayArrive = () => !!orbit.want();
   let station = null; // built on the first visit, reused on later flights
   let arena = null;
   let look = null;
@@ -308,6 +310,7 @@ export function installSpaceport(game) {
     wasVisible = player.character.root.visible;
     seatIn(ROCKET_AT.x, ROCKET_AT.z, ROCKET.seat);
     hold = player.rides.take({ by: 'spaceport', what: 'the rocket', aboard });
+    orbit.want();
     flight.board(destination);
     ui.say(`all aboard<small>${DESTINATIONS[destination].name}</small>`, 1600);
     return true;
@@ -342,6 +345,7 @@ export function installSpaceport(game) {
   });
 
   function toOrbit() {
+    const { StationVisit, Arena, ArenaLook } = orbit.loaded; // (here by now: the climb waited for it)
     built.rocket.visible = false;
     seatIn(ROCKET_AT.x, ROCKET_AT.z, 0.2);
     if (flight.destination === 'ds9') {

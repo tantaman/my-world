@@ -2,8 +2,10 @@
 # checks the README describes, so a change that breaks something says so
 # before it is merged rather than after.
 #
-#   test    npm test: types, unit and golden tests, in Node
-#   smoke   npm run smoke: the play-through, in headless Chromium
+#   test       npm test: types, unit and golden tests, in Node
+#   smoke      npm run smoke: the play-through, in headless Chromium
+#   together   npm run together: two visitors in one world, against the save
+#              server run here (wrangler dev: nothing leaves the machine)
 #
 # The play-through draws with software GL, so it takes a quarter of an hour.
 # Its report, and a picture of the game as each failed part left it, are kept
@@ -53,3 +55,28 @@ jobs:
             smoke-report.json
             smoke-failures/
           if-no-files-found: ignore
+
+  together:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Start the save server
+        run: |
+          npx wrangler dev --port 8787 > wrangler.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -s -o /dev/null http://127.0.0.1:8787/; then exit 0; fi
+            sleep 2
+          done
+          cat wrangler.log
+          exit 1
+      - run: npm run together
+      - if: failure()
+        run: cat wrangler.log
