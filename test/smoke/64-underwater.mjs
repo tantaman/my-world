@@ -1,8 +1,9 @@
 // Under the water: go out to the sea, dive in it among the fish, swim along
 // under the surface, and come back up.
 //
-// Needs: a world new to this browser, grown on the newest land, which has a
-// sea a walk from the start.
+// Needs: a world new to this browser, grown on the newest land, with the
+// real Earth's sea a long walk from the start (the Pacific, 7 km and more
+// west of the Hoh).
 // Leaves: you where it found you, out of the water.
 
 import assert from 'node:assert/strict';
@@ -11,7 +12,20 @@ export default async function ({ page, step, frames, shot }) {
   await step('dive in the sea', async () => {
     const back = await page.evaluate(() => ({ x: world.player.pos.x, z: world.player.pos.z, yaw: world.player.yaw }));
     assert.ok(await page.evaluate(() => !!world.gen.sea), 'this world has a sea');
-    const spot = await page.evaluate(() => world.underwater.find('sea', { depth: 10 }));
+    // out from the start a ring at a time, a spot every 250 m, until one is
+    // sea that deep
+    const spot = await page.evaluate(() => {
+      const s = world.player.start;
+      for (let r = 0; r <= 20000; r += 250) {
+        const n = Math.max(8, Math.round((2 * Math.PI * r) / 250));
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2;
+          const got = world.underwater.find('sea', { x: s.x + Math.cos(a) * r, z: s.z + Math.sin(a) * r, depth: 10, reach: 0 });
+          if (got) return got;
+        }
+      }
+      return null;
+    });
     assert.ok(spot, 'there is sea deep enough to dive in within reach');
     await page.evaluate(async (s) => world.teleport(s.x, s.z), spot);
     await frames(10);
