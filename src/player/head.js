@@ -19,7 +19,9 @@
 // out, which the shader cuts into the cross-sections of strands at that
 // height, so together they make a pile of strands thinning to their tips,
 // combed the way they lie. Further off than a strand is a pixel, they are
-// the lumpy mass they make together instead (HAIR_GLSL).
+// the lumpy mass they make together instead (HAIR_GLSL). Long hair drawn
+// back smooth is one layer over the skin instead, glossy, its strands drawn
+// on it running back to where it's gathered (SLEEK_GLSL).
 
 import * as THREE from 'three';
 import { textile } from './clothing.js';
@@ -233,14 +235,18 @@ function skinGrid(L, { cols, rows, front, band }) {
 //           under (its height above eye level and tilt); how long it is, and
 //           how much of that it has low down; which way it's combed (`flow`),
 //           or the point it's drawn back to (`toward`); and how much flatter
-//           than a beard it lies (`comb`, 1 if not given)
+//           than a beard it lies (`comb`, 1 if not given). `sleek`: long hair
+//           drawn back smooth to `toward`, a glossy layer `len` deep rather
+//           than a pile of strands
 //   brows   { inner, span, arch, tail, drop, half: [inner, tail], len,
 //           colour }: an arch over each eye from `inner` across the middle
 //           for `span`, rising `arch` and falling `tail` at its end, set
 //           `drop` under the brow ridge; half as thick as `half`, from the
 //           inner end to the tail
 //   deepest the longest it grows (m): how many layers it needs from afar
-const _hair = { len: 0, flow: new THREE.Vector3(), color: new THREE.Color() };
+// (and for long hair drawn back smooth, `edge`: how far inside its edges
+// the point is, in metres, negative outside them)
+const _hair = { len: 0, flow: new THREE.Vector3(), color: new THREE.Color(), sleek: false, edge: -1 };
 
 // Height of the beard's upper edge at angle a round from the front (0) to
 // the ear (pi/2): under the nose, across the cheek and up the sideburn.
@@ -254,6 +260,8 @@ function hairAt(L, p, normal) {
   const a = Math.atan2(ax, p.z); // 0 ahead, pi/2 at the ear, pi behind
   const out = _hair;
   out.len = 0;
+  out.sleek = false;
+  out.edge = -1;
   let comb = 1;
   // the ear: none on it or right round it
   const ear = ((p.y - E.y) / (E.h + 0.003)) ** 2 + ((p.z - E.z + 0.004) / (E.w + 0.001)) ** 2;
@@ -297,6 +305,13 @@ function hairAt(L, p, normal) {
     else out.flow.copy(S.flow);
     out.color.copy(S.colour);
     comb = S.comb ?? 1;
+    out.sleek = !!S.sleek;
+  }
+  if (S.sleek) {
+    // as a distance, so its edge can be drawn smooth across the skin's grid:
+    // to the hairline, round to where it starts, up to the band, out to the ear
+    const r = Math.hypot(p.x, p.z);
+    out.edge = Math.min(p.y - hairline, (a - (S.from[0] + S.from[1]) / 2) * r, band - p.y, (Math.sqrt(ear) - 0.85) * E.h);
   }
 
   // Eyebrows: an arch over each eye, thick at the inner end, thin at the tail.
@@ -311,6 +326,8 @@ function hairAt(L, p, normal) {
       out.flow.set(Math.sign(p.x), 0.25 - 0.6 * t, 0);
       out.color.copy(W.colour);
       comb = 1;
+      out.sleek = false;
+      out.edge = -1;
     }
   }
   if (ear < 1) out.len *= smoothstep(0.6, 1, ear);
@@ -445,6 +462,63 @@ function hairMaterial() {
   return mat;
 }
 
+// Long hair drawn back smooth: a glossy layer over the scalp. Its strands
+// run from all round the head back to where it's gathered, so they're
+// drawn by which way round that point (an axis from the middle of the
+// head through it) each spot is, finely, with how far from it to vary
+// them; brighter and glossier along a strand, darker between. It thins
+// towards the hairline and is cut off there, where how far inside its edge
+// a point is (aEdge) comes to nothing: a distance, so the cut runs smooth
+// across the triangles rather than along them.
+const SLEEK_GLSL = /* glsl */ `
+float strands(vec3 p, vec3 axis) {
+  vec3 d = normalize(p - uHairCentre);
+  vec3 e1 = normalize(cross(axis, vec3(1.0, 0.0, 0.0)));
+  vec3 e2 = cross(axis, e1);
+  float round = atan(dot(d, e2), dot(d, e1));
+  float along = acos(clamp(dot(d, axis), -1.0, 1.0));
+  return vnoise(vec2(round * 150.0, along * 5.0)) * 0.55 + vnoise(vec2(round * 480.0, along * 11.0)) * 0.45;
+}
+`;
+const SLEEK_LIFT = 0.0003; // m the layer stands off the skin at its edge
+const SLEEK_THIN = 0.006; // m in from its edge over which it thins
+const SLEEK_CENTRE = new THREE.Vector3(0, 0.01, -0.01); // about the middle of a head
+function sleekMaterial(centre, toward) {
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0 });
+  const uniforms = {
+    uHairCentre: { value: centre.clone() },
+    uHairAxis: { value: toward.clone().sub(centre).normalize() },
+  };
+  mat.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+        attribute float aEdge;
+        varying vec3 vHead;
+        varying float vEdge;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vHead = position;
+        vEdge = aEdge;`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform vec3 uHairCentre;
+        uniform vec3 uHairAxis;
+        varying vec3 vHead;
+        varying float vEdge;
+        ${NOISE_GLSL}
+        ${SLEEK_GLSL}`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+        if (vEdge < 0.0) discard;`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        float strand = strands(vHead, uHairAxis);
+        diffuseColor.rgb *= 0.62 + 0.7 * strand;`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        roughnessFactor = mix(0.55, 0.3, strand);`);
+  };
+  mat.customProgramCacheKey = () => 'hiker-sleek-v1';
+  return mat;
+}
+
 // Lenses with a mirror coat: the sky in them, more at a glancing look.
 //   color   the lens itself, seen through the coat
 //   tint    what colour the coat turns what it mirrors, [r, g, b]
@@ -476,6 +550,15 @@ export function lensMaterial({ color = LENS.color, tint = LENS.tint, mirror = LE
   return mat;
 }
 
+// Skin for the rest of someone (arms, neck, shoulders): the face's light
+// through it, in one colour.
+export function bareSkin(hex, rough = 0.55) {
+  const mat = new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: 0 });
+  mat.onBeforeCompile = skinLight;
+  mat.customProgramCacheKey = () => 'hiker-skin-v1';
+  return mat;
+}
+
 // ── Building it ─────────────────────────────────────────────────────────────
 
 // Each look's skin and hair are the same for whoever has it; work them out
@@ -500,6 +583,33 @@ function headShapes(L, skinHex) {
     skin.setAttribute('color', new THREE.BufferAttribute(col, 3));
   }
 
+  // Long hair drawn back smooth: the skin, lifted as deep as the hair is
+  // where there's any, over the triangles that have some.
+  let sleek = null;
+  if (L.hair.scalp.sleek) {
+    const p = skin.attributes.position;
+    const nrm = skin.attributes.normal;
+    const S = L.hair.scalp;
+    const pos = new Float32Array(p.count * 3);
+    const col = new Float32Array(p.count * 3);
+    const edge = new Float32Array(p.count);
+    for (let i = 0; i < p.count; i++) {
+      _p.fromBufferAttribute(p, i);
+      _n.fromBufferAttribute(nrm, i);
+      const h = hairAt(L, _p, _n);
+      edge[i] = h.edge;
+      S.colour.toArray(col, i * 3);
+      const depth = lerp(SLEEK_LIFT, S.len, smoothstep(0, SLEEK_THIN, h.edge));
+      _p.addScaledVector(_n, depth).toArray(pos, i * 3);
+    }
+    const si = skin.index.array;
+    const index = [];
+    for (let t = 0; t < si.length; t += 3) {
+      if (edge[si[t]] > 0 || edge[si[t + 1]] > 0 || edge[si[t + 2]] > 0) index.push(si[t], si[t + 1], si[t + 2]);
+    }
+    sleek = { pos, col, edge, index };
+  }
+
   // The hair: the triangles of a coarser grid that have any, in layers. The
   // layers go in an order where every first few spread through the whole
   // depth (Van der Corput's), so drawing only the first few, from far off,
@@ -514,7 +624,7 @@ function headShapes(L, skinHex) {
     _p.fromBufferAttribute(gp, i);
     _n.fromBufferAttribute(gn, i);
     const h = hairAt(L, _p, _n);
-    len[i] = h.len;
+    len[i] = h.sleek ? 0 : h.len;
     h.flow.toArray(flow, i * 3);
     h.color.toArray(col, i * 3);
   }
@@ -554,7 +664,7 @@ function headShapes(L, skinHex) {
     });
     keep.forEach((v, t) => (hi[s * keep.length + t] = s * nv + remap.get(v)));
   }
-  const shapes = { skinHex, skin, hair: { hp, hn, hf, hc, hl, hs, hi, perShell: keep.length } };
+  const shapes = { skinHex, skin, hair: { hp, hn, hf, hc, hl, hs, hi, perShell: keep.length }, sleek };
   shapesOf.set(L, shapes);
   return shapes;
 }
@@ -654,7 +764,7 @@ const cast = (m) => {
 // The face, its hair and its ears, to look L, built onto `head`. Returns
 // the skin's material, for anything else of skin that goes on the head.
 export function buildHead(head, skin, L) {
-  const { skin: skinGeo, hair } = headShapes(L, skin.color.getHex());
+  const { skin: skinGeo, hair, sleek } = headShapes(L, skin.color.getHex());
 
   // ── Skin ──
   const skinMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.52, metalness: 0 });
@@ -677,6 +787,15 @@ export function buildHead(head, skin, L) {
     hairMesh.geometry.setDrawRange(0, layers * hair.perShell);
   };
   head.add(hairMesh);
+  if (sleek) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(sleek.pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(sleek.col, 3));
+    g.setAttribute('aEdge', new THREE.BufferAttribute(sleek.edge, 1));
+    g.setIndex(sleek.index);
+    g.computeVertexNormals();
+    head.add(cast(new THREE.Mesh(g, sleekMaterial(SLEEK_CENTRE, L.hair.scalp.toward))));
+  }
 
   // ── Ears ──
   const E = L.ear;

@@ -162,6 +162,8 @@ export const SEAT_HIPS = HIPS_Y;
 const HIP_X = 0.095; // hip joints either side of the pelvis
 const HIP_Y = -0.04;
 const NECK_Y = 0.5; // the base of the neck above the chest joint
+const SHOULDER_X = 0.201; // shoulder joints either side of the chest (who.shoulders, if they say)
+const SHOULDER_Y = 0.42;
 const NECK = 0.145; // centre of the head (eye level) above the base of the neck
 const THIGH = 0.42;
 const SHIN = 0.43;
@@ -229,6 +231,8 @@ function fit(w, crown) {
 //   size    how tall, as a share of the grown-up body the measurements here
 //           are for: the whole body is made that much smaller, and it walks
 //           the way a smaller body does, with quicker, shorter steps
+//   shoulders  (if not the grown-up's) how far either side of the middle
+//           of the chest the shoulder joints are, before it's made smaller
 //   dress(body)  puts their skin, hair and clothes on the bones (body.chest,
 //           body.neck, body.head, body.armL.shoulder and .elbow,
 //           body.legL.hip, .knee and .ankle, ...: see #bones), in metres of the
@@ -336,7 +340,7 @@ export class Character {
     this.back = group(this.chest);
 
     const arm = (side) => {
-      const shoulder = joint(this.chest, side * 0.201, 0.420);
+      const shoulder = joint(this.chest, side * SHOULDER_X, SHOULDER_Y);
       const elbow = joint(shoulder, 0, -0.28);
       return { shoulder, elbow };
     };
@@ -376,6 +380,7 @@ export class Character {
     this.who = who;
     this.size = who.size ?? 1;
     this.root.scale.setScalar(this.size);
+    for (const [A, side] of [[this.armL, 1], [this.armR, -1]]) A.shoulder.position.x = side * (who.shoulders ?? SHOULDER_X);
     // Cloth is bound to the bones as they stand, so straighten the limbs
     // while it is put on.
     const limbs = [this.armL, this.armR, this.legL, this.legR].flatMap((L) => (L.shoulder ? [L.shoulder, L.elbow] : [L.hip, L.knee]));

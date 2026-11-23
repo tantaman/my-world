@@ -16,16 +16,19 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { smoothstep, lerp, clamp } from '../../noise.js';
-import { tailored, sleeve, trouserLeg, bootUpper, outsole, handShape, textile, material as M, piece, cord, group, limb } from '../clothing.js';
-import { buildHead, buildGlasses, buildCap, lensMaterial } from '../head.js';
+import { tailored, sleeve, trouserLeg, handShape, textile, material as M, piece, cord, group, limb } from '../clothing.js';
+import { buildHead, buildGlasses, buildCap, lensMaterial, bareSkin } from '../head.js';
 
-// How tall she is beside the grown-up: about 1.62 m to 1.8.
+// How tall she is beside the grown-up: about 1.62 m to 1.8. Her shoulders
+// are narrower than his, for her size (the shoulder joints this far either
+// side of the middle of her chest, before she's made smaller).
 const SIZE = 0.9;
+const SHOULDERS = 0.18;
 
 // ── Colours (as in the photographs, out of the snow's glare) ─────────────────
-const SKIN = 0xd2a689;
-const HAIR = 0x553824;
-const HAIR_ENDS = 0x7a5436; // lighter at the ends, where the sun has had them
+const SKIN = 0xd6ae94;
+const HAIR = 0x5a3b27;
+const HAIR_ENDS = 0x7a5232; // lighter at the ends, where the sun has had them
 const TANK = 0x1f3a9e;
 const GOLD = 0xd0ab62;
 const PEARL = 0xf2eee6;
@@ -57,86 +60,89 @@ const rgb = (hex) => _d.set(hex).toArray([]);
 // brim curved down at the sides and stitched round in rows; open at the back
 // over the strap for her ponytail. (What each is, is at buildCap in head.js.)
 const CAP_SPEC = {
-  rx: 0.088, rz: 0.106, z: -0.006,
-  front: 0.096, back: 0.084,
-  square: 2.6,
-  y: 0.026, tilt: 0.04,
+  rx: 0.084, rz: 0.104, z: -0.008,
+  front: 0.094, back: 0.083,
+  square: 2.4,
+  y: 0.022, tilt: 0.05,
   colour: CAP, seam: CAP_SEAM,
-  brim: { w: 0.089, l: 0.07, attach: 1.2, colour: CAP, curve: 5, rows: 5 },
+  brim: { w: 0.085, l: 0.068, attach: 1.2, colour: CAP, curve: 7, rows: 5 },
   segments: [72, 18],
   opening: { across: 0.24, up: 0.22 },
   eyelets: EYELET,
 };
 // Where her hair is gathered into the ponytail, at the back of her head in
 // the cap's opening (in the cap's frame), and how long the ponytail is.
-const PONY_ROOT = new THREE.Vector3(0, 0.016, -0.096);
-const PONY_LENGTH = 0.2;
+const PONY_ROOT = new THREE.Vector3(0, 0.016, -0.097);
+const PONY_LENGTH = 0.26;
 const HAIR_COLOUR = new THREE.Color(HAIR);
 
 const LOOK = {
-  // the cranium; cheekbones high and wide; a narrower, softer jaw; the
-  // cheeks full; a small chin, a little pointed
+  // an oval face: the cranium, cheekbones high and wide, the jaw narrower
+  // and softly round, the cheeks full, and a small, neat chin. (Every egg
+  // takes in the middle of the head, which the skin is cast out from, so
+  // none of them ends partway across it: the chin is the end of a long egg
+  // down through the mouth.)
   skull: [
-    [[0, 0.02, -0.01], [0.0745, 0.091, 0.096]],
-    [[0, -0.02, 0.012], [0.071, 0.054, 0.075]],
-    [[0, -0.049, 0.004], [0.061, 0.052, 0.078]],
-    [[0, -0.04, 0.02], [0.067, 0.04, 0.071]],
-    [[0, -0.084, 0.037], [0.024, 0.02, 0.026]],
+    [[0, 0.018, -0.01], [0.074, 0.09, 0.095]],
+    [[0, -0.02, 0.012], [0.07, 0.052, 0.076]],
+    [[0, -0.046, 0.01], [0.057, 0.056, 0.076]],
+    [[0, -0.034, 0.016], [0.064, 0.04, 0.072]],
+    [[0, -0.046, 0.024], [0.03, 0.062, 0.062]],
   ],
-  round: 0.018,
+  round: 0.016,
   eyeX: 0.031,
   brow: 0.026,
-  // a small nose with a low bridge and a soft, round tip
+  // a small, straight nose, a low bridge and a neat, soft tip
   nose: {
-    nasion: { y: 0.012, z: 0.0868 },
-    slope: 0.56,
+    nasion: { y: 0.011, z: 0.088 },
+    slope: 0.52,
     hump: 0,
-    tip: { y: -0.0335, round: 0.007 },
-    under: { z: 0.0925, slope: 1.6 },
-    bridgeRound: 0.0052,
-    tipRound: 0.0085,
-    steep: [1.25, 2.1],
-    sideCurve: 26,
-    ala: { x: 0.0128, y: -0.0385, rx: 0.0068, ry: 0.0058, lift: 0.0082 },
-    nostril: 0.0072,
-    base: -0.0462,
+    tip: { y: -0.032, round: 0.0065 },
+    under: { z: 0.093, slope: 1.45 },
+    bridgeRound: 0.0045,
+    tipRound: 0.0075,
+    steep: [1.35, 2.2],
+    sideCurve: 28,
+    ala: { x: 0.0118, y: -0.0365, rx: 0.006, ry: 0.0052, lift: 0.0072 },
+    nostril: 0.0066,
+    base: -0.044,
   },
-  // a wide smile, the corners well up, the upper teeth all showing
-  mouth: { y: -0.0645, w: 0.029, smile: 0.0062, parted: 0.0078, teeth: [0.97, 0.84] },
+  // smiling, her lips parted on her upper teeth
+  mouth: { y: -0.062, w: 0.026, smile: 0.0048, parted: 0.0048, teeth: [0.92, 0.6] },
   relief: {
-    socket: 0.0055,
-    browRidge: 0.0016,
-    cheekbones: [0.0048, 0.046, -0.02],
-    cheeks: [0.007, 0.037, -0.028], // round, lifted by the smile
-    teeth: 0.0062,
-    lips: [0.0018, 0.0028],
-    lipW: [0.024, 0.022],
-    chin: [0.0012, -0.093],
+    socket: 0.004,
+    browRidge: 0.0012,
+    cheekbones: [0.003, 0.045, -0.018],
+    cheeks: [0.0035, 0.034, -0.03],
+    teeth: 0.0045,
+    lips: [0.0022, 0.0032], // full, the lower the fuller
+    lipW: [0.022, 0.02],
+    chin: [0.0012, -0.098],
   },
   ear: { x: 0.0715, y: -0.004, z: -0.012, h: 0.0275, w: 0.0155, flare: 0.3, lean: 0.18 },
   colour: {
-    rosy: new THREE.Color(0xc87566),
-    lip: new THREE.Color(0xa85a58),
-    brow: new THREE.Color(0xd8ad90),
-    root: new THREE.Color(0x2a1c15), // skin seen through her hair
-    nostril: new THREE.Color(0x2a1410),
-    socket: new THREE.Color(0x80604f),
-    teeth: new THREE.Color(0xece5d8),
-    mouth: new THREE.Color(0x3a1715),
+    rosy: new THREE.Color(0xd98c80), // the colour in her cheeks
+    lip: new THREE.Color(0xc4626c),
+    brow: new THREE.Color(0xdab196),
+    root: new THREE.Color(0x3a281c), // skin seen through her hair
+    nostril: new THREE.Color(0x3a1e18),
+    socket: new THREE.Color(0x9a7362),
+    teeth: new THREE.Color(0xf2ede4),
+    mouth: new THREE.Color(0x4a1c1a),
   },
   hair: {
     beard: null,
-    // drawn back behind her ears, up from the nape, to the ponytail; under
-    // the cap round the rest (its band is set high, so the hair shows in the
-    // cap's opening at the back)
+    // long, drawn back smooth behind her ears and up from the nape to the
+    // ponytail; under the cap round the rest (its band is set high, so the
+    // hair shows in the cap's opening at the back)
     scalp: {
-      line: [0.06, -0.012, -0.078], from: [1.05, 1.25], band: { y: 0.062, tilt: CAP_SPEC.tilt },
-      len: 0.0042, thin: 0.9, colour: HAIR_COLOUR, comb: 5,
+      line: [0.06, -0.006, -0.078], from: [1.12, 1.32], band: { y: 0.062, tilt: CAP_SPEC.tilt },
+      len: 0.0035, thin: 1, colour: HAIR_COLOUR, sleek: true,
       toward: new THREE.Vector3(0, CAP_SPEC.y + PONY_ROOT.y, PONY_ROOT.z),
     },
     // fine, arched
     brows: { inner: 0.01, span: 0.042, drop: 0, arch: 0.0065, tail: 0.0035, half: [0.0034, 0.0014], len: 0.0024, colour: HAIR_COLOUR },
-    deepest: 0.0042,
+    deepest: 0.0024,
   },
 };
 
@@ -197,9 +203,10 @@ function aviators(head) {
 }
 
 // A tube along `curve`, `radius(t)` across at t (0 at its start, 1 at its
-// end), squashed to `flat` of that one way (along the curve's binormal),
-// coloured `colour(t, round)` if given. Closed at the start, ending in a point.
-function taperedTube(curve, radius, { along = 24, round = 8, flat = 1, colour } = {}) {
+// end), squashed to `flat` of that one way (along the curve's binormal) and
+// to `thin` of it the other (towards the middle of its bend), coloured
+// `colour(t, round)` if given.
+function taperedTube(curve, radius, { along = 24, round = 8, flat = 1, thin = 1, colour } = {}) {
   const frames = curve.computeFrenetFrames(along, false);
   const pos = [];
   const col = [];
@@ -213,9 +220,9 @@ function taperedTube(curve, radius, { along = 24, round = 8, flat = 1, colour } 
       const n = frames.normals[i];
       const b = frames.binormals[i];
       pos.push(
-        c.x + r * (Math.cos(a) * n.x + flat * Math.sin(a) * b.x),
-        c.y + r * (Math.cos(a) * n.y + flat * Math.sin(a) * b.y),
-        c.z + r * (Math.cos(a) * n.z + flat * Math.sin(a) * b.z),
+        c.x + r * (thin * Math.cos(a) * n.x + flat * Math.sin(a) * b.x),
+        c.y + r * (thin * Math.cos(a) * n.y + flat * Math.sin(a) * b.y),
+        c.z + r * (thin * Math.cos(a) * n.z + flat * Math.sin(a) * b.z),
       );
       if (colour) col.push(...colour(t, j / round));
       if (i && j) {
@@ -233,18 +240,18 @@ function taperedTube(curve, radius, { along = 24, round = 8, flat = 1, colour } 
   return g;
 }
 
-// The ponytail, hanging down its own -y from where it's gathered, arching
-// out and back (-z) on the way: a core and locks of hair round it, a tie
-// at the top. -> its geometry, in that frame.
+// The ponytail, hanging down its own -y from where it's gathered, its end
+// lying back (-z) over the top of her pack: a core and locks of hair round
+// it. -> its geometry, in that frame.
 function ponytail() {
   const L = PONY_LENGTH;
   const spine = new THREE.CatmullRomCurve3([
-    [0, 0.004, 0.008], [0, -0.012, -0.008], [0, -0.05, -0.016], [0, -0.44 * L, -0.017],
-    [0, -0.68 * L, -0.013], [0, -0.86 * L, -0.008], [0, -L, -0.004],
+    [0, 0.004, 0.008], [0, -0.012, -0.006], [0, -0.05, -0.012], [0, -0.42 * L, -0.014],
+    [0, -0.65 * L, -0.03], [0, -0.83 * L, -0.06], [0, -0.96 * L, -0.1],
   ].map(([x, y, z]) => new THREE.Vector3(x, y, z)));
   // how thick it is at t of the way down: gathered at the tie, full below
   // it, thinning to the ends
-  const thick = (t) => lerp(0.0105, 0.017, smoothstep(0.02, 0.2, t)) * (1 - 0.8 * smoothstep(0.45, 1, t));
+  const thick = (t) => lerp(0.011, 0.02, smoothstep(0.02, 0.22, t)) * (1 - 0.78 * smoothstep(0.5, 1, t));
   const hair = new THREE.Color(HAIR);
   const ends = new THREE.Color(HAIR_ENDS);
   const c = new THREE.Color();
@@ -252,14 +259,14 @@ function ponytail() {
   pieces.push(taperedTube(spine, (t) => thick(t) * 0.78, { along: 28, round: 10, flat: 0.8, colour: () => hair.toArray([]) }));
   let seed = 4;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const LOCKS = 30;
+  const LOCKS = 36;
   const n = new THREE.Vector3();
   const b = new THREE.Vector3();
   for (let k = 0; k < LOCKS; k++) {
     const a = (k / LOCKS) * Math.PI * 2 + rnd() * 0.3;
     const out = 0.55 + 0.45 * rnd();
     const reach = 0.84 + 0.16 * rnd();
-    const wave = (rnd() - 0.5) * 0.006;
+    const wave = (rnd() - 0.5) * 0.008;
     const tone = 0.82 + 0.38 * rnd();
     const pts = [];
     for (let i = 0; i <= 10; i++) {
@@ -276,7 +283,7 @@ function ponytail() {
     const lock = new THREE.CatmullRomCurve3(pts);
     pieces.push(taperedTube(lock, (t) => lerp(0.0062, 0.0009, smoothstep(0.25, 1, t)) * (0.8 + 0.4 * smoothstep(0, 0.08, t)), {
       along: 20, round: 5, flat: 0.6,
-      colour: (t, u) => c.copy(hair).lerp(ends, 0.5 * smoothstep(0.55, 1, t)).multiplyScalar(tone * (0.9 + 0.2 * Math.sin(u * Math.PI * 2))).toArray([]),
+      colour: (t, u) => c.copy(hair).lerp(ends, 0.6 * smoothstep(0.5, 1, t)).multiplyScalar(tone * (0.88 + 0.24 * Math.sin(u * Math.PI * 2))).toArray([]),
     }));
   }
   return mergeGeometries(pieces);
@@ -310,11 +317,11 @@ function herHead(head, skin) {
   // The ponytail through the back of the cap, with its tie.
   const pony = group(hat, PONY_ROOT.x, PONY_ROOT.y, PONY_ROOT.z);
   pony.name = 'ponytail';
-  const hairMat = M(0xffffff, 0.55, { vertexColors: true });
+  const hairMat = M(0xffffff, 0.4, { vertexColors: true });
   piece(pony, ponytail(), hairMat);
   // the hair gathered up into it, filling the cap's opening
-  const gathered = piece(hat, new THREE.SphereGeometry(0.018, 14, 10), M(HAIR, 0.55), PONY_ROOT.x, PONY_ROOT.y + 0.002, PONY_ROOT.z - 0.008);
-  gathered.scale.set(1.3, 1.0, 0.55);
+  const gathered = piece(hat, new THREE.SphereGeometry(0.018, 14, 10), M(HAIR, 0.45), PONY_ROOT.x, PONY_ROOT.y + 0.003, PONY_ROOT.z - 0.006);
+  gathered.scale.set(1.25, 0.95, 0.5);
   const tie = piece(pony, new THREE.TorusGeometry(0.0098, 0.003, 6, 16), M(0x151517, 0.5), 0, -0.008, -0.004);
   tie.rotation.x = Math.PI / 2 - 0.25;
   return { brow, crown: { rx: CAP_SPEC.rx, rz: CAP_SPEC.rz, z: CAP_SPEC.z, y: at(1, 0, ph, new THREE.Vector3()).y }, pony };
@@ -387,21 +394,21 @@ function swinging(pony, chest) {
 }
 
 // ── Her body (the chest's frame) ────────────────────────────────────────────
-// Hem to neck, as tailored() takes them: her waist in, her hips and bust
-// out, her shoulders narrower than the grown-up's jacket.
+// Hem to neck, as tailored() takes them: a slim waist, her hips and bust
+// out from it, her shoulders narrow and sloping to her neck.
 const TORSO = [
-  [-0.075, 0.186, 0.116, -0.006], [-0.04, 0.176, 0.112, -0.005],
-  [0.02, 0.16, 0.104, -0.002], [0.09, 0.136, 0.097, 0.003],
-  [0.15, 0.135, 0.098, 0.007], [0.21, 0.145, 0.104, 0.011],
-  [0.26, 0.156, 0.11, 0.014], [0.31, 0.165, 0.113, 0.014],
-  [0.36, 0.172, 0.111, 0.01], [0.4, 0.177, 0.104, 0.004],
-  [0.432, 0.171, 0.094, -0.002], [0.46, 0.146, 0.083, -0.006],
-  [0.482, 0.108, 0.07, -0.01], [0.497, 0.074, 0.06, -0.012], [0.508, 0.056, 0.052, -0.012],
+  [-0.075, 0.176, 0.11, -0.008], [-0.04, 0.166, 0.106, -0.007],
+  [0.02, 0.146, 0.097, -0.004], [0.08, 0.126, 0.089, 0],
+  [0.13, 0.12, 0.087, 0.004], [0.19, 0.127, 0.091, 0.008],
+  [0.24, 0.138, 0.098, 0.011], [0.29, 0.146, 0.104, 0.013],
+  [0.34, 0.151, 0.104, 0.011], [0.385, 0.155, 0.099, 0.006],
+  [0.42, 0.152, 0.092, 0], [0.448, 0.132, 0.082, -0.005],
+  [0.472, 0.098, 0.069, -0.009], [0.49, 0.066, 0.057, -0.011], [0.505, 0.048, 0.046, -0.012],
 ];
 const TORSO_SQUARE = 0.9;
 // Her bust, standing out of the front of her chest (m), at height y, across
 // her (-1..1 round the front) and how far round to the front (front: 1).
-const bust = (y, across, front) => 0.017 * Math.exp(-(((y - 0.305) / 0.055) ** 2)) * Math.exp(-(((Math.abs(across) - 0.42) / 0.3) ** 2)) * smoothstep(0.2, 0.75, front);
+const bust = (y, across, front) => 0.018 * Math.exp(-(((y - 0.3) / 0.055) ** 2)) * Math.exp(-(((Math.abs(across) - 0.42) / 0.3) ** 2)) * smoothstep(0.2, 0.75, front);
 
 // The tank top: it stands this far off her skin, and where it isn't, it's
 // tucked this far under it. Its straps are over her shoulders this far out
@@ -410,21 +417,24 @@ const bust = (y, across, front) => 0.017 * Math.exp(-(((y - 0.305) / 0.055) ** 2
 // ARMHOLE.
 const TANK_OFF = 0.0028;
 const TANK_TUCK = -0.005;
-const STRAPS = [0.088, 0.126];
-const NECK_FRONT = 0.372;
+const STRAPS = [0.078, 0.112];
+const NECK_FRONT = 0.37;
 const NECK_BACK = 0.395;
 const ARMHOLE = 0.3;
 // How far inside the tank top (x, y) is, on the front or the back (m;
 // negative outside it): under the neckline between the straps, under the
 // armhole outside them, and the straps themselves over her shoulders.
+// (Each edge carries on steeply up past the strap it meets, so that how far
+// inside it is changes smoothly everywhere, and the edge drawn from it runs
+// smooth.)
+const EDGE_RISE = 8; // m up for each m past the strap
 function inTank(x, y, front) {
   const ax = Math.abs(x);
   const u = Math.min(1, ax / STRAPS[0]);
-  const neck = front > 0 ? lerp(NECK_FRONT, 0.452, u ** 2.2) : lerp(NECK_BACK, 0.455, u ** 3);
-  const arm = lerp(ARMHOLE, 0.43, smoothstep(0.172, STRAPS[1], ax));
-  const edge = ax < STRAPS[0] ? neck : ax > STRAPS[1] ? arm : 1;
+  const neck = (front > 0 ? lerp(NECK_FRONT, 0.452, u ** 2.2) : lerp(NECK_BACK, 0.455, u ** 3)) + EDGE_RISE * Math.max(0, ax - STRAPS[0]);
+  const arm = lerp(ARMHOLE, 0.43, smoothstep(0.155, STRAPS[1], ax)) + EDGE_RISE * Math.max(0, STRAPS[1] - ax);
   const strap = Math.min(ax - STRAPS[0], STRAPS[1] - ax);
-  return Math.max(strap, edge - y);
+  return Math.max(strap, Math.min(neck, arm) - y);
 }
 
 // The same rows with more between them from `from` up, `step` apart: where
@@ -468,30 +478,41 @@ function onTorso(y, x, side, off, out = new THREE.Vector3()) {
 }
 
 // ── Her arms (the shoulder's frame: the elbow at -0.28) ─────────────────────
-// Bare, slim, wrist to shoulder.
+// Bare and slender, wrist to shoulder: a slim wrist, the forearm fuller
+// below the elbow, a neat elbow, the upper arm rounding into her shoulder.
 const ARM = [
-  [-0.515, 0.025, 0.021], [-0.49, 0.026, 0.022], [-0.45, 0.029, 0.025],
-  [-0.4, 0.034, 0.029, 0.002], [-0.35, 0.037, 0.032, 0.003], [-0.31, 0.036, 0.032, 0.001],
-  [-0.28, 0.033, 0.032, -0.004], [-0.255, 0.034, 0.033, -0.003], [-0.2, 0.037, 0.036],
-  [-0.13, 0.04, 0.039], [-0.06, 0.043, 0.042], [-0.01, 0.047, 0.045],
-  [0.025, 0.046, 0.044], [0.05, 0.034, 0.034], [0.062, 0.013, 0.015],
+  [-0.512, 0.023, 0.019], [-0.49, 0.024, 0.02], [-0.45, 0.027, 0.023],
+  [-0.41, 0.031, 0.027, 0.002], [-0.36, 0.034, 0.03, 0.003], [-0.32, 0.033, 0.03, 0.002],
+  [-0.285, 0.03, 0.029, -0.003], [-0.26, 0.031, 0.03, -0.003], [-0.2, 0.034, 0.033],
+  [-0.14, 0.037, 0.036], [-0.08, 0.04, 0.039], [-0.02, 0.044, 0.042],
+  [0.02, 0.043, 0.041], [0.048, 0.031, 0.031], [0.061, 0.012, 0.014],
 ];
 
 // ── Her legs (the hip's frame: the knee at -0.42, the ankle at -0.85) ───────
-// Leggings, close all the way down, into her socks.
+// Leggings, close all the way down: round over her seat, her thighs
+// tapering to the knee, the calf full behind and slim at the ankle.
 const LEGGINGS_ROWS = [
-  [-0.775, 0.036, 0.04], [-0.74, 0.038, 0.042], [-0.68, 0.043, 0.049, -0.004],
-  [-0.6, 0.049, 0.057, -0.009], [-0.53, 0.049, 0.056, -0.008], [-0.47, 0.045, 0.05, -0.002],
-  [-0.42, 0.046, 0.05, 0.004], [-0.37, 0.05, 0.054, 0.004], [-0.3, 0.058, 0.064, 0.002],
-  [-0.2, 0.068, 0.075], [-0.1, 0.08, 0.086, -0.004], [-0.02, 0.092, 0.098, -0.008],
-  [0.025, 0.098, 0.104, -0.008], [0.07, 0.09, 0.098, -0.004], [0.12, 0.08, 0.092],
+  [-0.775, 0.033, 0.036], [-0.74, 0.035, 0.038], [-0.68, 0.04, 0.046, -0.006],
+  [-0.61, 0.046, 0.054, -0.012], [-0.54, 0.045, 0.052, -0.01], [-0.48, 0.041, 0.046, -0.003],
+  [-0.43, 0.042, 0.046, 0.004], [-0.38, 0.046, 0.05, 0.004], [-0.3, 0.054, 0.06, 0.003],
+  [-0.2, 0.064, 0.07, 0.001], [-0.1, 0.076, 0.082, -0.006], [-0.02, 0.088, 0.096, -0.012],
+  [0.025, 0.094, 0.1, -0.012], [0.07, 0.082, 0.092, -0.006], [0.12, 0.066, 0.084],
 ];
 // Her socks, in the knee's frame (the ankle at -0.43): up out of her boots,
 // over the leggings, the cuff turned at the top.
 const SOCK_ROWS = [
-  [-0.41, 0.038, 0.043], [-0.37, 0.039, 0.044], [-0.32, 0.042, 0.047, -0.002],
-  [-0.296, 0.045, 0.05, -0.003], [-0.272, 0.0465, 0.0515, -0.003], [-0.262, 0.0455, 0.0505, -0.003],
+  [-0.41, 0.035, 0.04], [-0.37, 0.036, 0.041], [-0.32, 0.039, 0.044, -0.002],
+  [-0.296, 0.042, 0.047, -0.003], [-0.272, 0.0435, 0.0485, -0.003], [-0.262, 0.0425, 0.0475, -0.003],
 ];
+// Her boots, in the ankle's frame (+z ahead, the sole 0.07 under it): a
+// trim women's mid, lower and narrower than his, as rows for tailored():
+// the upper, and the sole under it.
+const BOOT_UPPER = [
+  [-0.05, 0.05, 0.112, 0.042], [-0.036, 0.051, 0.112, 0.042], [-0.018, 0.049, 0.105, 0.04],
+  [0, 0.046, 0.086, 0.026], [0.024, 0.044, 0.064, 0.01], [0.052, 0.045, 0.055, 0],
+  [0.076, 0.047, 0.055, -0.002], [0.086, 0.044, 0.051, -0.002],
+];
+const BOOT_SOLE = [[-0.07, 0.05, 0.117, 0.042], [-0.063, 0.053, 0.117, 0.042], [-0.052, 0.053, 0.116, 0.042], [-0.046, 0.05, 0.113, 0.042]];
 const CUFF = -0.296;
 
 // ── Her pack (its own frame, against her back: +z towards her) ──────────────
@@ -499,9 +520,9 @@ const CUFF = -0.296;
 // its face. Bottom to top, as tailored() takes them.
 const PACK_Y = 0.25; // its middle, up the chest
 const PACK_ROWS = [
-  [-0.19, 0.098, 0.04, -0.052], [-0.178, 0.122, 0.056, -0.058], [-0.14, 0.133, 0.065, -0.064],
-  [-0.04, 0.136, 0.066, -0.066], [0.06, 0.132, 0.063, -0.064], [0.12, 0.124, 0.058, -0.06],
-  [0.158, 0.11, 0.051, -0.055], [0.18, 0.084, 0.042, -0.049], [0.193, 0.045, 0.03, -0.044], [0.198, 0.012, 0.014, -0.04],
+  [-0.19, 0.086, 0.04, -0.052], [-0.178, 0.107, 0.056, -0.058], [-0.14, 0.117, 0.065, -0.064],
+  [-0.04, 0.12, 0.066, -0.066], [0.06, 0.116, 0.063, -0.064], [0.12, 0.109, 0.058, -0.06],
+  [0.158, 0.097, 0.051, -0.055], [0.18, 0.074, 0.042, -0.049], [0.193, 0.04, 0.03, -0.044], [0.198, 0.011, 0.014, -0.04],
 ];
 const PACK_DEPTH = 0.13; // from her back to its face
 
@@ -509,11 +530,12 @@ const PACK_DEPTH = 0.13; // from her back to its face
 // The back of it hangs over her seat and the backs of her thighs, round to
 // her hips either side; its sleeves come round the front and are knotted,
 // their ends hanging.
-const TIE_Y = 0.065; // where it's tied
+const TIE_Y = 0.06; // where it's tied
+const SPINE = 0.06; // her chest's frame is this far above her hips'
 const SKIRT_ROUND = 1.72; // radians either side of the middle of her back it comes round
 const SKIRT_LONG = [0.33, 0.22]; // how far it hangs at the back, and at her hips
-const SKIRT_TOP = [0.182, 0.124, -0.01]; // half width, half depth and middle at the tie
-const SKIRT_HEM = [0.206, 0.138, -0.01]; // ...and at the hem
+const SKIRT_TOP = [0.18, 0.122, -0.01]; // half width, half depth and middle at the tie
+const SKIRT_HEM = [0.2, 0.136, -0.012]; // ...and at the hem
 const SKIRT_CHANNEL = 0.068; // between its lines of stitching
 const SKIRT_LOFT = 0.009;
 const SKIRT_LEGS = 0.6; // how much the bottom of it goes with the thigh behind it
@@ -580,46 +602,53 @@ function skirt(body, mat) {
   return mesh;
 }
 
-// Its sleeves, round the front of her waist from either side of the back,
-// knotted in the middle, the ends hanging down from the knot.
+// Its sleeves, flat bands round the front of her waist from either side of
+// the back, knotted in the middle, the ends hanging down from the knot.
 function tiedSleeves(hips, mat) {
-  const puffy = (len) => (t, u) => {
+  const puffy = (len) => (t) => {
     const tone = 0.8 + 0.2 * channel(t * len, 0.07);
     return [tone, tone, tone];
   };
+  // a point on her front at y (the hips' frame) and x across, off out from her
+  const hug = (y, x, off) => onTorso(y - SPINE, x, 1, off).add(_q.set(0, SPINE, 0));
+  // ...and on her side, round from the front (1) to the back (-1)
+  const side = (y, sx, f, off) => {
+    const [w, d, zc] = rowAt(TORSO, y - SPINE);
+    return new THREE.Vector3(sx * (w + off) * Math.sqrt(1 - f * f), y, zc + (d + off) * f);
+  };
+  const knot = hug(TIE_Y - 0.044, 0, 0.022);
   for (const sx of [1, -1]) {
-    // (from inside the back of it, where its shoulder is)
     const round = new THREE.CatmullRomCurve3([
-      [sx * 0.135, TIE_Y + 0.006, -0.05], [sx * 0.178, TIE_Y + 0.002, 0.0], [sx * 0.153, TIE_Y - 0.012, 0.072],
-      [sx * 0.093, TIE_Y - 0.03, 0.112], [sx * 0.03, TIE_Y - 0.042, 0.13],
-    ].map(([x, y, z]) => new THREE.Vector3(x, y, z)));
-    piece(hips, taperedTube(round, (t) => 0.024 - 0.003 * t, { along: 20, round: 10, flat: 0.8, colour: puffy(0.32) }), mat);
+      side(TIE_Y + 0.004, sx, -0.2, 0.016), side(TIE_Y, sx, 0.3, 0.012),
+      hug(TIE_Y - 0.014, sx * 0.11, 0.011), hug(TIE_Y - 0.032, sx * 0.05, 0.012), hug(TIE_Y - 0.042, sx * 0.014, 0.016),
+    ]);
+    piece(hips, taperedTube(round, (t) => 0.024 - 0.003 * t, { along: 24, round: 10, thin: 0.42, colour: puffy(0.32) }), mat);
     // its end, out of the knot and hanging, crossed over to the other side
     const end = new THREE.CatmullRomCurve3([
-      [sx * 0.012, TIE_Y - 0.045, 0.14], [-sx * 0.008, TIE_Y - 0.075, 0.146],
-      [-sx * 0.02, TIE_Y - 0.12, 0.144], [-sx * 0.026, TIE_Y - 0.165, 0.138],
-    ].map(([x, y, z]) => new THREE.Vector3(x, y, z)));
-    const cuff = taperedTube(end, (t) => lerp(0.025, 0.022, t) * (t > 0.9 ? 0.85 : 1), { along: 14, round: 10, flat: 0.75, colour: puffy(0.13) });
-    piece(hips, cuff, mat);
+      knot.clone().add(_q.set(sx * 0.01, -0.004, 0.006)), knot.clone().add(_q.set(-sx * 0.006, -0.035, 0.01)),
+      knot.clone().add(_q.set(-sx * 0.016, -0.08, 0.009)), knot.clone().add(_q.set(-sx * 0.022, -0.125, 0.004)),
+    ]);
+    piece(hips, taperedTube(end, (t) => lerp(0.022, 0.019, t), { along: 16, round: 10, thin: 0.5, colour: puffy(0.13) }), mat);
   }
-  const knot = piece(hips, new THREE.SphereGeometry(0.027, 14, 10), mat, 0, TIE_Y - 0.044, 0.136);
-  knot.scale.set(1.35, 0.85, 0.75);
+  const tie = piece(hips, new THREE.SphereGeometry(0.02, 14, 10), mat, knot.x, knot.y, knot.z);
+  tie.scale.set(1.35, 0.9, 0.7);
 }
 
 export const LAUREN = {
   id: 'lauren',
   name: 'Lauren',
   size: SIZE,
+  shoulders: SHOULDERS,
   dress(body) {
-    const skin = M(SKIN, 0.62);
+    const skin = bareSkin(SKIN, 0.5);
 
     // ── Head and neck ──
-    piece(body.neck, new THREE.CylinderGeometry(0.046, 0.055, 0.13, 16), skin, 0, 0.052);
+    piece(body.neck, new THREE.CylinderGeometry(0.04, 0.048, 0.13, 20), skin, 0, 0.05);
     const { brow, crown, pony } = herHead(body.head, skin);
 
     // ── Her and her tank top ──
     piece(body.chest, tailored(TORSO, { segments: 64, squareness: TORSO_SQUARE, crease: (y, across, front) => bust(y, across, front) }), skin);
-    const tank = tailored(finer(TORSO, 0.36, 0.004), {
+    const tank = tailored(finer(TORSO, 0.26, 0.004), {
       segments: 112,
       squareness: TORSO_SQUARE,
       crease: (y, across, front) => {
@@ -645,8 +674,8 @@ export const LAUREN = {
         const front = -Math.cos(a);
         const t = smoothstep(0.1, 1, front);
         // round the base of her neck behind, lying on her chest in front
-        _q.set(Math.sin(a) * 0.059, 0.497, -0.012 - Math.cos(a) * 0.056);
-        onTorso(lerp(0.488, 0.413, t ** 1.3), Math.sin(a) * 0.066, 1, 0.0012, _p);
+        _q.set(Math.sin(a) * 0.051, 0.497, -0.012 - Math.cos(a) * 0.049);
+        onTorso(lerp(0.486, 0.413, t ** 1.3), Math.sin(a) * 0.058, 1, 0.0012, _p);
         _p.lerp(_q, 1 - smoothstep(0.05, 0.55, front));
         chain.push([_p.x, _p.y, _p.z]);
       }
@@ -660,7 +689,7 @@ export const LAUREN = {
     for (const [A, side] of [[body.armL, 1], [body.armR, -1]]) {
       limb(A.shoulder, A.elbow, sleeve(side, undefined, { rows: ARM, crease: () => 0 }), skin, 0.055, -0.035);
       const hand = handShape(side);
-      hand.scale(0.88, 0.94, 0.9);
+      hand.scale(0.84, 0.92, 0.86);
       piece(A.elbow, hand, skin, 0, -0.229);
     }
 
@@ -677,16 +706,24 @@ export const LAUREN = {
       limb(L.knee, L.ankle, tailored(SOCK_ROWS, { segments: 20, surface: (x, y) => rgb(SOCK).map((c) => c * (y > CUFF ? 0.85 : 1)) }), sock, 0.03, 0);
       // charcoal suede with lighter mesh panels, mint round the heel and the
       // collar, a dark rubber toe; a pale midsole over a dark tread
-      piece(L.ankle, bootUpper((x, y, front) => {
-        if (y > 0.094) return rgb(MINT);
+      piece(L.ankle, tailored(BOOT_UPPER, { squareness: 0.76, segments: 24, surface: (x, y, front) => {
+        if (y > 0.078) return rgb(MINT);
         if (front < -0.85 && y > 0.02) return rgb(MINT);
         if (front > 0.72 && y < -0.022) return rgb(TOE);
-        if (y > -0.03 && y < 0.07 && Math.abs(front) < 0.6) return rgb(BOOT_MESH);
+        if (y > -0.03 && y < 0.065 && Math.abs(front) < 0.6) return rgb(BOOT_MESH);
         return rgb(BOOT);
-      }), boot);
-      piece(L.ankle, outsole((x, y) => rgb(y > -0.05 ? MIDSOLE : TREAD)), sole);
-      cord(L.ankle, M(LACE, 0.8), 0.0028, [[-0.031, -0.006, 0.112], [0.03, 0.008, 0.094],
-        [-0.029, 0.023, 0.082], [0.028, 0.038, 0.067], [-0.028, 0.05, 0.059], [0.026, 0.066, 0.056]]);
+      } }), boot);
+      piece(L.ankle, tailored(BOOT_SOLE, { squareness: 0.75, segments: 24, surface: (x, y) => rgb(y > -0.055 ? MIDSOLE : TREAD) }), sole);
+      // laced up the front, criss-cross, lying on it
+      const lace = [];
+      for (let k = 0; k < 6; k++) {
+        const y = 0.002 + k * 0.0135;
+        const x = (k % 2 ? 1 : -1) * 0.021;
+        const [w, d, zc] = rowAt(BOOT_UPPER, y);
+        const a = Math.pow(Math.min(1, Math.abs(x) / w), 1 / 0.76);
+        lace.push([x, y, zc + (d + 0.0015) * Math.pow(Math.sqrt(1 - a * a), 0.76)]);
+      }
+      cord(L.ankle, M(LACE, 0.8), 0.0018, lace);
     }
 
     // ── Her jacket, tied round her waist ──
@@ -728,16 +765,16 @@ export const LAUREN = {
         return [sx * (w + off) * Math.sqrt(1 - f * f), y, zc + (d + off) * f];
       };
       const strap = cord(body.chest, M(STRAP, 0.9, textile('canvas')), 0.0075, [
-        [sx * 0.074, PACK_Y + 0.16, bz - bd - 0.035],
-        at(0.452, 0.098, -1, 0.009),
-        [sx * 0.104, 0.481, -0.018],
-        at(0.452, 0.11, 1, 0.008),
-        at(0.4, 0.12, 1, 0.008),
-        at(0.33, 0.132, 1, 0.008),
-        at(0.25, 0.144, 1, 0.008),
+        [sx * 0.066, PACK_Y + 0.16, bz - bd - 0.035],
+        at(0.452, 0.088, -1, 0.009),
+        [sx * 0.094, 0.478, -0.016],
+        at(0.452, 0.098, 1, 0.008),
+        at(0.4, 0.106, 1, 0.008),
+        at(0.33, 0.117, 1, 0.008),
+        at(0.25, 0.128, 1, 0.008),
         side(0.19, 0.25, 0.008),
         side(0.14, -0.1, 0.008),
-        [sx * 0.12, PACK_Y - 0.17, bz - bd - 0.04],
+        [sx * 0.105, PACK_Y - 0.17, bz - bd - 0.04],
       ]);
       // flattened into a strap: wide across, thin through
       const g = strap.geometry;
@@ -765,16 +802,16 @@ export const LAUREN = {
     // The hydration hose: out of the top of the pack, over her right
     // shoulder, down and across her chest in a loop, clipped to her left strap.
     cord(body.chest, M(HOSE, 0.3), 0.0052, [
-      [-0.05, PACK_Y + 0.17, bz - bd - 0.04],
-      onTorso(0.455, -0.103, -1, 0.02).toArray(),
-      [-0.112, 0.492, -0.012],
-      onTorso(0.45, -0.118, 1, 0.02).toArray(),
-      onTorso(0.41, -0.1, 1, 0.014).toArray(),
-      onTorso(0.384, -0.05, 1, 0.009).toArray(),
+      [-0.045, PACK_Y + 0.17, bz - bd - 0.04],
+      onTorso(0.455, -0.092, -1, 0.02).toArray(),
+      [-0.1, 0.488, -0.012],
+      onTorso(0.45, -0.104, 1, 0.018).toArray(),
+      onTorso(0.41, -0.09, 1, 0.013).toArray(),
+      onTorso(0.384, -0.045, 1, 0.009).toArray(),
       onTorso(0.378, 0, 1, 0.008).toArray(),
-      onTorso(0.386, 0.06, 1, 0.01).toArray(),
-      onTorso(0.402, 0.104, 1, 0.018).toArray(),
-      onTorso(0.39, 0.122, 1, 0.022).toArray(),
+      onTorso(0.386, 0.055, 1, 0.01).toArray(),
+      onTorso(0.402, 0.094, 1, 0.016).toArray(),
+      onTorso(0.39, 0.108, 1, 0.02).toArray(),
     ]);
 
     // What's worn on her back goes on her pack.
