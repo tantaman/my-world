@@ -959,7 +959,10 @@ export class Player extends Emitter {
     this.current.x = at.flowX;
     this.current.z = at.flowZ;
     this.underfoot = null;
-    this.space = null;
+    // in whatever space it has carried you into (a boat on a river in Hell,
+    // a long way under the forest): the camera keeps to its air, not to the
+    // forest's ground overhead
+    this.space = this.spaces ? this.spaces.at(at.x, at.z, at.y + 0.05) : null;
     // not swimming, nor under the water, whatever you were doing before it
     // took you (it may have picked you up out of the river)
     this.under = this.surface = this.prone = this.pitch = 0;

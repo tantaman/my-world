@@ -12,6 +12,26 @@
 
 import assert from 'node:assert/strict';
 
+// m: the furthest the camera may be from the hiker while something carries
+// them (its distance behind, and the ride's own, and a little to spare). It
+// was once 3 km off: up at the forest's ground overhead, looking down into
+// fog.
+const CAMERA = 30;
+
+// In the page: wait while something carries the hiker, keeping the
+// furthest the camera got from them. -> { landed, camera (m) }
+export function inPage() {
+  const w = window.world;
+  T.carried = async (ms = 60000) => {
+    let camera = 0;
+    const landed = await T.until(() => {
+      camera = Math.max(camera, w.camera.position.distanceTo(w.player.pos));
+      return !w.player.aboard;
+    }, ms);
+    return { landed, camera };
+  };
+}
+
 export default async function ({ page, step, open, shot }) {
   await step('through the gate', async () => {
     const gate = await page.evaluate(async () => {
@@ -63,13 +83,14 @@ export default async function ({ page, step, open, shot }) {
       const aboard = await T.until(() => !!player.aboard, 60000);
       player.steer = null;
       const cued = document.getElementById('prompt').textContent;
-      const landed = await T.until(() => !player.aboard, 60000);
+      const { landed, camera } = await T.carried();
       await T.frames(10);
-      return { aboard, landed, r: hell.here.r, region: hell.region, cued, depth: hell.space.depth(player.pos.x, player.pos.z), end: ride.end };
+      return { aboard, landed, camera, r: hell.here.r, region: hell.region, cued, depth: hell.space.depth(player.pos.x, player.pos.z), end: ride.end };
     });
     assert.ok(over.aboard, 'stood in the boat until it took you');
     assert.ok(over.landed && over.end === 1, 'and it set you down on the far side');
     assert.ok(over.r < 4440 + 12 && over.depth === 0, `on the bank of Limbo (${over.r.toFixed(0)} m)`);
+    assert.ok(over.camera < CAMERA, `and the camera came over with you (${over.camera.toFixed(0)} m off at most)`);
     return over;
   });
 
@@ -119,7 +140,7 @@ export default async function ({ page, step, open, shot }) {
       const a = ride.ends[0];
       player.steer = { x: a.x, z: a.z };
       const aboard = await T.until(() => !!player.aboard, 60000);
-      const landed = await T.until(() => !player.aboard, 60000);
+      const { landed, camera } = await T.carried();
       // and on in through the gate
       const within = L.place(2720 - 30, th);
       player.steer = { x: within.x, z: within.z, run: true };
@@ -133,9 +154,10 @@ export default async function ({ page, step, open, shot }) {
       player.steer = { x: out.x, z: out.z, run: true };
       await T.frames(200);
       player.steer = null;
-      return { aboard, landed, through, region: hell.region, r: hell.here.r, things: hell.furniture.count };
+      return { aboard, landed, camera, through, region: hell.region, r: hell.here.r, things: hell.furniture.count };
     });
     assert.ok(dis.aboard && dis.landed, "Phlegyas's boat took you over");
+    assert.ok(dis.camera < CAMERA, `and the camera came with you (${dis.camera.toFixed(0)} m off at most)`);
     assert.ok(dis.through, 'in through the gate of Dis');
     assert.equal(dis.region, 'heretics');
     assert.ok(dis.r < 2722, `the wall stands (${dis.r.toFixed(1)} m)`);
@@ -157,13 +179,9 @@ export default async function ({ page, step, open, shot }) {
       player.steer = { x: a.x, z: a.z };
       const aboard = await T.until(() => !!player.aboard, 60000);
       player.steer = null;
-      let lowest = 0;
-      const landed = await T.until(() => {
-        lowest = Math.min(lowest, player.pos.y - top);
-        return !player.aboard;
-      }, 90000);
+      const { landed, camera } = await T.carried(90000);
       await T.frames(20);
-      const foot = { fell: player.pos.y - top, region: hell.region, r: hell.here.r, grounded: player.grounded };
+      const foot = { fell: player.pos.y - top, region: hell.region, r: hell.here.r, grounded: player.grounded, camera };
       // over the first bridge of Malebolge
       const spoke = L.spokes[0];
       hell.go(1350 - 8, spoke);
@@ -187,17 +205,19 @@ export default async function ({ page, step, open, shot }) {
       player.steer = { x: hand.ends[0].x, z: hand.ends[0].z };
       const taken = await T.until(() => !!player.aboard, 60000);
       player.steer = null;
-      const set = await T.until(() => !player.aboard, 60000);
+      const { landed: set, camera: lifted } = await T.carried();
       await T.frames(10);
-      return { aboard, landed, foot, ...bridge, well: { taken, set, down: player.pos.y - lip, r: hell.here.r, region: hell.region } };
+      return { aboard, landed, foot, ...bridge, well: { taken, set, camera: lifted, down: player.pos.y - lip, r: hell.here.r, region: hell.region } };
     });
     assert.ok(flown.aboard && flown.landed, 'Geryon took you and set you down');
     assert.ok(flown.foot.fell < -370 && flown.foot.grounded, `${(-flown.foot.fell).toFixed(0)} m lower`);
+    assert.ok(flown.foot.camera < CAMERA, `and the camera came down with you (${flown.foot.camera.toFixed(0)} m off at most)`);
     assert.equal(flown.foot.region, 'malebolge');
     assert.ok(flown.crossed && flown.arch > 0.8 && flown.deepest > -9, `over the bridge's arch, not through the ditch (${flown.arch.toFixed(1)} m up, ${flown.deepest.toFixed(1)} down)`);
     assert.ok(Math.abs(flown.drop + 7) < 2, 'to the next bank, a little lower');
     assert.ok(flown.well.taken && flown.well.set, 'Antaeus took you in his hand');
     assert.ok(flown.well.down < -12 && flown.well.r < 520, `and set you down in the well (${(-flown.well.down).toFixed(0)} m lower)`);
+    assert.ok(flown.well.camera < CAMERA, `and the camera came down with you (${flown.well.camera.toFixed(0)} m off at most)`);
     await shot('hell-malebolge');
     return flown;
   });
