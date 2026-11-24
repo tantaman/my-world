@@ -18,6 +18,14 @@
 // One that throws is reported, and stopped if it keeps on, like a system
 // (game.ts).
 //
+// A job can't be stopped part way through a step, so a step that runs long
+// takes the frame over its allowance. What it went over by is owed: it comes
+// out of the frames after, which do less, or nothing, until it's made up. So
+// the allowance holds over any second or so, whatever the jobs' steps are
+// like, and a job with long steps is slower for it rather than the game.
+// (The frame the long step was in is still late: keep steps short. A search
+// should yield every millisecond or two of work, not every so many rows.)
+//
 // What you are standing on is not in here: the ground and the grass stream
 // in on allowances of their own (world/index.js), because they are not work
 // that can wait.
@@ -25,8 +33,9 @@
 import { isNotYet } from '../core/notYet.ts';
 
 const USUAL_MS = 4; // ms a frame for all of it, while the world is being drawn
-const ROOMY_MS = 12; // ...and while it isn't (the map is over it): the frame has time to spare
+const ROOMY_MS = 6; // ...and while it isn't (the map is over it): the frame has time to spare, but not much, the map being moved about in it
 const LEAST_MS = 0.5; // a job's slice is never cut finer than this
+const OWED_MOST = 120; // ms owed at the most: one dreadful step doesn't stop the jobs for longer than half a second or so
 const FAULTS_BEFORE_STOPPING = 5;
 
 export interface Job {
@@ -46,6 +55,8 @@ export class Budget {
   // ms spent last frame, and by which jobs: { towns: 1.2, … } (for the stats line)
   spent = 0;
   by: Record<string, number> = {};
+  // ms the frames so far have gone over by, still to be made up
+  owed = 0;
   private jobs: Held[] = [];
   private first = 0;
   private clock: () => number;
@@ -72,11 +83,18 @@ export class Budget {
   // One frame's worth: `roomy` when nothing is being drawn under whatever
   // covers the view. (Game.tick calls this; call it yourself to step by hand.)
   run(roomy = false): void {
-    const allowance = roomy ? this.roomy : this.usual;
+    const whole = roomy ? this.roomy : this.usual;
     this.spent = 0;
     this.by = {};
     const n = this.jobs.length;
     if (!n) return;
+    // What's owed comes out of this frame first, and if that's all of it,
+    // nothing is done.
+    const allowance = whole - this.owed;
+    if (allowance < LEAST_MS) {
+      this.owed = Math.max(0, this.owed - whole);
+      return;
+    }
     // Round and round, a slice each, until the allowance is gone or nobody
     // has anything left. Whoever went first last frame goes last this one.
     this.first = (this.first + 1) % n;
@@ -86,7 +104,7 @@ export class Budget {
       const still: Held[] = [];
       for (let i = 0; i < waiting.length; i++) {
         const left = allowance - (this.clock() - t0);
-        if (left <= 0) return this._close(t0);
+        if (left <= 0) return this._close(t0, allowance);
         const job = waiting[i];
         const slice = Math.max(LEAST_MS, left / (waiting.length - i)); // an even share of what's left, among those still to go this round
         const before = this.clock();
@@ -108,11 +126,12 @@ export class Budget {
       }
       waiting = still;
     }
-    this._close(t0);
+    this._close(t0, allowance);
   }
 
-  private _close(t0: number): void {
+  private _close(t0: number, allowance: number): void {
     this.spent = this.clock() - t0;
+    this.owed = Math.min(OWED_MOST, Math.max(0, this.spent - allowance));
   }
 
   private _fault(job: Held, err: unknown): void {

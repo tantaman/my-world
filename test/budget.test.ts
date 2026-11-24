@@ -86,6 +86,44 @@ test('a job with nothing to do costs one call; one waiting on something is not a
   assert.equal(budget.spent, 0);
 });
 
+test('a step that runs long is made up for in the frames after it', () => {
+  const { budget, spend } = bench();
+  let calls = 0;
+  // every step of it takes 18 ms, whatever it is given
+  budget.add({ name: 'slow', work: () => (calls++, spend(18), true) });
+  budget.run();
+  assert.equal(calls, 1);
+  assert.equal(budget.spent, 18);
+  assert.equal(budget.owed, 18 - budget.usual);
+  // the next frames do nothing while what it went over by is being made up
+  budget.run();
+  assert.equal(calls, 1);
+  assert.equal(budget.spent, 0);
+  // ...so over a few seconds the frames give what they promised, and no more
+  let spent = 18;
+  const FRAMES = 200;
+  for (let i = 2; i < FRAMES; i++) {
+    budget.run();
+    spent += budget.spent;
+  }
+  assert.ok(spent <= FRAMES * budget.usual + 18, `${spent} ms in ${FRAMES} frames`);
+  assert.ok(spent >= FRAMES * budget.usual - 18, 'and no less: it is slower, not stopped');
+});
+
+test('a frame that owes a little does a little less', () => {
+  const { budget, job, spend } = bench();
+  let first = true;
+  budget.add({ name: 'once', work: () => (first ? ((first = false), spend(budget.usual + 1.5), false) : false) });
+  const steady = job('steady', 100);
+  budget.add(steady);
+  budget.run(); // (whichever goes first, the frame ends 1.5 ms over, or exactly spent)
+  const owed = budget.owed;
+  const before = steady.left;
+  budget.run();
+  assert.ok(Math.abs(before - steady.left - (budget.usual - owed)) < 1e-9, 'the frame after has what is left of its allowance');
+  assert.equal(budget.owed, 0);
+});
+
 test('a job that keeps throwing is stopped, and the rest carry on', (t) => {
   t.mock.method(console, 'error', () => {});
   const { budget, job } = bench();

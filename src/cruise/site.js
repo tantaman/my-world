@@ -91,15 +91,17 @@ export function findBerth(gen, start, keepOff = () => false) {
   return r.value;
 }
 
-// findBerth a step at a time: a generator that yields after each line looked
-// along and each candidate tried, and returns the berth (or null), so it can
-// be spread over frames.
+// findBerth a step at a time: a generator that yields every few dozen
+// heights it asks of the land (a millisecond or two: game/budget.ts), and
+// returns the berth (or null), so it can be spread over frames.
+const HEIGHTS_A_STEP = 32;
 export function* berthSearch(gen, start, keepOff = () => false) {
   const sea = SEA.level;
   const deep = sea - DEEP;
   const h = (x, z) => gen.height(x, z);
   const found = [];
   const spot = { x: 0, z: 0, yaw: 0 };
+  let asked = 0;
   for (let i = 0; i < ROUND.steps; i++) {
     const a = (i / ROUND.steps) * Math.PI * 2;
     const dx = Math.cos(a);
@@ -108,6 +110,7 @@ export function* berthSearch(gen, start, keepOff = () => false) {
     let shore = null;
     const step = ROUND.step;
     for (let t = LOOK.near; t <= ROUND.far; t += step) {
+      if (++asked % HEIGHTS_A_STEP === 0) yield;
       if (h(start.x + dx * t, start.z + dz * t) < sea - 0.3) {
         let lo = t - step;
         let hi = t;
@@ -141,9 +144,10 @@ export function* berthSearch(gen, start, keepOff = () => false) {
     for (let out = OUT.from; out <= OUT.to && kept < OUT.keep; out += OUT.step) {
       spot.x = shore.x + nx * out;
       spot.z = shore.z + nz * out;
+      yield;
       if (!deepAround(h, spot, deep)) continue;
       if (!pierInWater(h, spot, sea)) continue;
-      const land = landward(h, spot, sea + PIER.up - 0.3);
+      const land = yield* landward(h, spot, sea + PIER.up - 0.3);
       if (land === null) break;
       found.push({ x: spot.x, z: spot.z, yaw: spot.yaw, land, score: land - PIER.x1 + out + shore.t * NEARER });
       kept++;
@@ -157,7 +161,7 @@ export function* berthSearch(gen, start, keepOff = () => false) {
   for (const f of found) {
     const box = boxOf(f);
     if (keepOff(box[0] - CLEAR, box[1] - CLEAR, box[2] + CLEAR, box[3] + CLEAR)) continue;
-    f.lane = laneOf(h, f, deep, sea);
+    f.lane = yield* laneOf(h, f, deep, sea);
     yield;
     if (!f.lane) continue;
     const door = toWorld(f, (GANGWAY.x0 + GANGWAY.x1) / 2, GANGWAY.foot + 3);
@@ -196,7 +200,8 @@ function deepAround(h, s, deep) {
 // along her −x as far as it's deep enough either side of her, and somewhere
 // along that, as far out as can be, a spot with no land in sight.
 // -> { swing, jump } (m along −x), or null if there's no way out worth having.
-function laneOf(h, s, deep, sea) {
+// (A generator, as berthSearch is: it yields as it goes.)
+function* laneOf(h, s, deep, sea) {
   const w = {};
   const at = (x, z) => {
     toWorld(s, x, z, w);
@@ -210,14 +215,17 @@ function laneOf(h, s, deep, sea) {
       if (at(-swing + Math.cos(a) * r, Math.sin(a) * r) > deep) return null;
     }
   }
+  yield;
   // straight out
   let far = swing;
-  for (let x = swing + 20; x <= LANE.most; x += 20) {
+  for (let x = swing + 20, n = 0; x <= LANE.most; x += 20) {
+    if (++n % 10 === 0) yield;
     if ([-LANE.wide, 0, LANE.wide].some((z) => at(-x, z) > deep)) break;
     far = x;
   }
   // as far out as can be, out of sight of land
   for (let x = far; x >= LANE.least; x -= 50) {
+    yield;
     let clear = true;
     for (const r of [LANE.clear / 2, LANE.clear]) {
       for (let k = 0; k < 16 && clear; k++) {
@@ -244,9 +252,10 @@ function pierInWater(h, s, sea) {
 // How far along her +x, straight out from her middle past the pier head,
 // the ground first comes up as high as the trestle's deck (less a little)
 // all the way across it: where the trestle meets the land. null if it
-// doesn't within reach.
-function landward(h, s, top) {
-  for (let x = PIER.x1; x <= PIER.x1 + TRESTLE_MOST; x += 4) {
+// doesn't within reach. (A generator, as berthSearch is: it yields as it goes.)
+function* landward(h, s, top) {
+  for (let x = PIER.x1, n = 0; x <= PIER.x1 + TRESTLE_MOST; x += 4) {
+    if (++n % 10 === 0) yield;
     let low = Infinity;
     for (const z of [-TRESTLE.half, 0, TRESTLE.half]) {
       toWorld(s, x, z, _w);

@@ -100,6 +100,7 @@ const APART = { d: 100, a: 0.35 }; // closer than this (m, rad) to one already l
 const ROUGH = { ds: 24, wet: 46 }; // judged on the lattice: m between samples; edge (m) the lattice must show
 const CLOSE = { ds: 10, across: [-W2 - 1, -4, 0, 4, W2 + 1], apron: [15, 22, 29, 35, APRON[2] + 1] };
 const FINE = { ds: 4, step: 2 }; // the airfield's own heights: m along, m across
+const HEIGHTS_A_STEP = 32; // heights asked of the land between one yield of the survey and the next
 const SALT = 0xa1f1e1d;
 const FORMS = ['{s} Field', '{s} Airfield', '{s} Field', '{s} Strip', '{s} Airstrip'];
 
@@ -249,6 +250,7 @@ function* lattice(gen, region, r0, r1) {
   const H = new Float32Array(n * n).fill(NaN);
   const E = new Float32Array(n * n);
   const inner = Math.max(0, r0 - HALF - LAT * 2);
+  let asked = 0;
   for (let j = 0; j < n; j++) {
     const z = z0 + j * LAT;
     for (let i = 0; i < n; i++) {
@@ -257,8 +259,9 @@ function* lattice(gen, region, r0, r1) {
       if (r > R || r < inner) continue;
       H[j * n + i] = gen.height(x, z);
       E[j * n + i] = gen.water.edge;
+      // (every millisecond or two of it, not every row: game/budget.ts)
+      if (++asked % HEIGHTS_A_STEP === 0) yield;
     }
-    yield;
   }
   return { n, x0, z0, H, E };
 }

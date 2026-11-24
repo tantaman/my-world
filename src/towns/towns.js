@@ -103,7 +103,11 @@ export class Towns extends Sites {
   }
 
   // ── Growing a cell ─────────────────────────────────────────────────────────
-  _grow(ci, cj) {
+  // A generator (core/searches.ts): it yields as it goes, every millisecond
+  // or two of looking at the land, so a town found in the background is
+  // found over several frames. What it finds depends only on the seed and
+  // the square, never on how it was run.
+  *_grow(ci, cj) {
     // (as far out as anything of a town in this square can reach)
     if (this.keepOff(ci * CELL - SPILL, cj * CELL - SPILL, (ci + 1) * CELL + SPILL, (cj + 1) * CELL + SPILL)) return null;
     const rng = mulberry32(hash2i(ci, cj, (this.gen.seed ^ SALT) >>> 0));
@@ -113,7 +117,7 @@ export class Towns extends Sites {
     const seed = Math.floor(rng() * 1e9);
     const crowd = rng();
     const many = rng();
-    const spots = this._flats(ci, cj, rng);
+    const spots = yield* this._flats(ci, cj, rng);
     for (const kind of weightedOrder(KIND_IDS, (k) => KINDS[k].weight, rng)) {
       const K = KINDS[kind];
       let tried = 0;
@@ -122,6 +126,7 @@ export class Towns extends Sites {
         if (tried++ >= TRIES) break;
         const turn = (rng() - 0.5) * 0.3;
         const lay = Math.floor(rng() * 1e9);
+        yield;
         if (!this._suits(s.x, s.z)) continue;
         const town = this._layout(kind, s.x, s.z, s.yaw + turn, mulberry32(lay));
         if (!town) continue;
@@ -139,7 +144,8 @@ export class Towns extends Sites {
   // The flattest spots in a cell, flattest first: a grid of them, each a
   // little off its node, judged on the hills without their small bumps (which
   // is quick), with which way a street would run there and how wooded it is.
-  _flats(ci, cj, rng) {
+  // (A generator, as _grow is.)
+  *_flats(ci, cj, rng) {
     const gen = this.gen;
     const out = [];
     const p = {};
@@ -160,6 +166,7 @@ export class Towns extends Sites {
           }
         }
         if (hi - lo < FLAT_MOST) out.push({ x, z, yaw, rise: hi - lo, f: gen.forest(x, z) });
+        if (i % 2 === 1) yield;
       }
     }
     return out.sort((a, b) => a.rise - b.rise);
