@@ -21,7 +21,7 @@ const PAVING = {
   concrete: [0xa6a196, SURF.clay],
   'concrete:plates': [0xa09a8e, SURF.clay],
   paving_stones: [0x9c8874, SURF.stone],
-  brick: [0x8c4f3c, SURF.stone],
+  brick: [0x6e3e32, SURF.clay],
   sett: [0x7a746c, SURF.stone],
   wood: [0x7c5c3c, SURF.wood],
   gravel: [0x9a9080, SURF.stone],
@@ -31,9 +31,9 @@ const PAVING = {
   ground: [0x7a6448, SURF.clay],
 };
 const STEPS = [0xb0aca2, SURF.stone];
-const LIFT = { path: 0.2, plaza: 0.12 }; // m over the ground (paths over plazas)
+const LIFT = { path: 0.24, plaza: 0.17 }; // m over the ground (paths over plazas)
 const STEP = 1.6; // m between the points a path is laid over
-const PLAZA_EDGE = 3.2; // m: the longest side of a plaza's triangles
+const PLAZA_EDGE = 2.4; // m: the longest side of a plaza's triangles
 const DECK = { thick: 0.35, rail: 1.05, clear: 0.25 }; // a footbridge's deck, its rail (m), and how far it stays over the ground
 const _c = new THREE.Color();
 const V = (x, y, z) => new THREE.Vector3(x, y, z);

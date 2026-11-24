@@ -238,7 +238,13 @@ is a round one's shape. Distances from the middle are true everywhere, but
 the further out, the wider than life the map is across that line: a tenth at
 5,000 km, half as much again at 10,000. A hike's own land is true wherever
 it is; it's the gaps between hikes far out that are wide, and the importer
-says by how much. `--at x,z` puts one somewhere else. Like everything
+says by how much. `--at x,z` puts one somewhere else.
+
+A real place can be brought in at a scale of its own: `--scale 1` is life
+size, as [the National Zoo](../zoo/README.md) is, so that what stands on it
+is as big as it is and as far apart. It still goes where it really is, at
+the world's 1 : 5; only its own land is the bigger for it, and stands with
+its lowest ground where the Earth has that height. Like everything
 else a seed grows, a hike is part of the world description: a world built in
 near one keeps it there, so once placed it stays put. Importing it again
 (`--force`) leaves it where it is, and `npm test` checks that hikes leave the

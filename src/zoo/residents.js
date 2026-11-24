@@ -8,8 +8,13 @@
 //
 // Only those near you are moved (UPDATE), and only those you could see are
 // drawn (SHOW): the zoo has a couple of hundred animals in it.
+//
+// Emits (core/events.js):
+//   'call'  ({ kind, x, y, z })  one of them calls: the lions roar, an
+//                                elephant trumpets (its kind's voice)
 
 import * as THREE from 'three';
+import { Emitter } from '../core/events.js';
 import { Quad } from '../wildlife/quadruped.js';
 import { disposeAnimal } from '../render/rig.js';
 import { mulberry32, clamp, lerp } from '../noise.js';
@@ -25,6 +30,7 @@ const TURN = 1.6; // rad/s, how fast they turn walking
 const ARRIVE = 0.6; // m from where it's going that counts as there
 const NOTICE = 14; // m: a visitor nearer than this is looked at
 const PERCH = { h: [1.3, 2.2], post: 0x5a4430 };
+const CALLS = 1 / 70; // calls a second, for an animal with a voice, near you
 
 const hashOf = (s) => {
   let h = 2166136261;
@@ -33,10 +39,11 @@ const hashOf = (s) => {
 };
 const _seen = new Set();
 
-export class Residents {
+export class Residents extends Emitter {
   // site: site.js's; ground(x, z); water(x, z) → the level of the water
   // there, or NaN where there's none
   constructor(site, { ground, water = () => NaN }) {
+    super();
     this.site = site;
     this.ground = ground;
     this.water = water;
@@ -171,6 +178,11 @@ export class Residents {
   _step(a, dt, eye) {
     a.timer -= dt;
     const form = a.body.form;
+    // now and then, its call (and the rest of its pride or herd may answer)
+    if (a.kind.voice && a.rnd() < CALLS * dt) {
+      const m = a.body.mesh;
+      this.emit('call', { kind: a.kind.voice, x: a.x, y: m.position.y + (a.kind.look.size || 1), z: a.z });
+    }
     if (form === 'perch') return this._perch(a, dt, eye);
     if (a.state === 'idle' && a.timer <= 0 && (a.kind.pace || 0) > 0) this._wander(a);
     let want = 0;

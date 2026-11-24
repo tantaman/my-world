@@ -13,7 +13,9 @@
 // near (core/lazy.ts), not at the start:
 //
 //   exhibits.js  (written by the importer) each exhibit, and where it's seen from
-//   pictures.js  the zoo in your pack and on the map
+//   pictures.js  the zoo in your pack
+//   sound.js     its animals' voices: a lion's roar, an elephant's trumpet, a sea lion's honk
+//   onMap.js     the zoo on the map, close up: its pens, paths and buildings and on the map
 //   look.js      (fetched) a Zoo: everything stood up, and what the forest keeps off
 //     plan.js      (written by the importer) what it's built from
 //     site.js      the plan laid out in the world: what's on each square metre, the pens
@@ -37,6 +39,8 @@ import { formatDistance } from '../core/format.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { ZOO } from './exhibits.js';
 import * as pictures from './pictures.js';
+import { drawZoo } from './onMap.js';
+import './sound.js';
 
 type Zoo = import('./look.js').Zoo;
 
@@ -63,9 +67,9 @@ const ID = 'zoo:';
 // On the map's badge: an elephant, trunk down.
 const GLYPH = ['.......', '.####..', '######.', '######.', '##.##.#', '##.##..', '.......'];
 
-export const after = ['render', 'ui', 'world', 'player', 'build', 'map', 'save'];
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save'];
 export function installZoo(game: Game) {
-  const { scene, camera, gen, chunks, grass, solids, landforms, player, builder, map, hud, commands, save } = game;
+  const { scene, camera, gen, chunks, grass, solids, landforms, player, builder, map, hud, commands, save, sound } = game;
   const card = landforms.cards.find((c: { id: string }) => c.id === ZOO.hike);
   if (!card) return;
   const [cx, cz] = card.at;
@@ -110,6 +114,8 @@ export function installZoo(game: Game) {
       return d < 0 ? at : NaN;
     };
     building = new m.Zoo({ card, offset: L.offset, ground, wet, water });
+    // its animals' voices, heard from where they are
+    building.on('call', (c: { kind: string; x: number; y: number; z: number }) => sound.call(c.kind, c.x, c.y, c.z));
   }
   function putUp(z: Zoo) {
     built = z;
@@ -203,6 +209,8 @@ export function installZoo(game: Game) {
     visited: false,
   });
   const all = () => [zooPlace(), ...exhibits.map(exhibitPlace)];
+  // and, close up, its pens, paths and buildings, once it's stood up
+  map.addLayer((pen: Parameters<typeof drawZoo>[0]) => drawZoo(pen, built ? built.site : null));
   map.places.addSource({
     list: 'zoo',
     destinations: all,

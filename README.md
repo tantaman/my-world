@@ -54,6 +54,7 @@ npm run build      # static site in dist/
 npm test           # the rules, in Node (see "Checking it still works")
 npm run hike -- photo.heic   # put a hike you've done into the world (see src/hikes/README.md)
 npm run earth        # the real Earth under the world (see src/world/README.md)
+npm run zoo          # a real zoo's buildings and exhibits on its real ground (see src/zoo/README.md)
 ```
 
 The game is a static site and runs on its own; `npm run api` adds the save
@@ -499,6 +500,8 @@ tools/
   hike/                   reading photos (EXIF), elevation tiles, OpenStreetMap; building one
   earth.mjs               npm run earth: the real Earth under the world, from elevation tiles and a climate map
   earth/                  the Earth's grids: land, sea, coast, relief; the climate
+  zoo.mjs                 npm run zoo: a real zoo's buildings, exhibits and paths, from a city's roofs and OpenStreetMap
+  zoo/                    reading the city's surveyed roofs; the zoo's plan
 worker/
   index.js                the front door: mint an id, route to the world
   world.js                a world's Durable Object — the only writer, and who is who
