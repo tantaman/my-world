@@ -65,6 +65,7 @@ const GO_TO = { x: 27, z: -13 }; // where you're put, going to an airfield: on i
 const BACK = 16; // m further back the camera sits, to take the plane in
 const BEHIND = 0.8; // 1/s: how quickly the camera swings round behind it, left alone
 const SAY = 4200; // ms a sentence stays on the screen
+const FLIGHTS_FRESH = 4000; // ms after a route last asked what flights there are that the far airfields are still wanted now
 // Which way the wind blows (world/wind.js): planes take off and land into it
 // where they can.
 const WIND = { x: PREVAILING.x, z: PREVAILING.y };
@@ -484,7 +485,11 @@ export function installAirports(game) {
   });
 
   // Only offer flights between fields that actually stand in this world.
-  map.routes.flights = () => ({ fields: known(), here: fieldHere(), landing: trip?.to, surveying: airports.queue.size > 0 });
+  let flightsAsked = -Infinity; // when (ms) a route last asked what flights there are
+  map.routes.flights = () => {
+    flightsAsked = performance.now();
+    return { fields: known(), here: fieldHere(), landing: trip?.to, surveying: airports.queue.size > 0 };
+  };
 
   // ── Everyone else here ────────────────────────────────────────────────────
   // They're told when you're flying, and don't see you while you are.
@@ -607,7 +612,18 @@ export function installAirports(game) {
   const reached = new Set();
   // Where the airfields are further off is looked for a little at a time, out of
   // what the frame can spare (game/budget.ts).
-  game.budget.add({ name: 'airports', work: (ms) => airports.pump(ms) });
+  // (The airfield for where you are goes before the rest: the pier, the hunt
+  // club and every road round here wait to know where it is.)
+  const hereUnknown = () => {
+    const g = airports.regionAt(player.pos.x, player.pos.z);
+    return !!g && airports.site(g.id, false) === undefined;
+  };
+  // (And the airfields of the other parts of the world nobody is waiting
+  // for, until someone asks where they could fly: the flights tab, a route
+  // across the world. Till then they're found with what the other searches
+  // leave of a frame.)
+  const flightsWanted = () => showing() || !!trip || performance.now() - flightsAsked < FLIGHTS_FRESH;
+  game.budget.add({ name: 'airports', work: (ms) => airports.pump(ms), pressing: hereUnknown, idle: () => !flightsWanted() });
   game.addSystem({
     name: 'airports',
     phase: 'world',

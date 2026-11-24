@@ -142,6 +142,42 @@ test('asking again for something in line does not put it in twice, nor ahead of 
   assert.deepEqual(steps, ['a', 'b', 'c']);
 });
 
+test('a search can find what it needs of another itself, a step at a time', () => {
+  const { clock, slow, steps } = bench();
+  const towns = new Searches<string, number>({ grow: (key, n) => slow(key, n), clock });
+  // a pier, which has to know the town beside it before it can say where it is
+  const piers = new Searches<string, number>({
+    *grow(key) {
+      const town = yield* towns.steps('town', 5);
+      return `${key} by ${town}`;
+    },
+    clock,
+  });
+  piers.ask('pier', 0);
+  assert.equal(piers.pump(2), 1, 'its time ran out part way through the town');
+  assert.deepEqual(steps, ['town', 'town', 'town'], 'the town was looked for out of the pier\'s time, not in one go');
+  assert.equal(towns.has('town'), false);
+  assert.equal(piers.pump(100), 0);
+  assert.equal(piers.peek('pier', 0), 'pier by TOWN');
+  assert.equal(towns.peek('town', 5), 'TOWN', 'and the town is known to everyone, found once');
+  assert.equal(steps.length, 5);
+});
+
+test('steps goes on from where the search had got to, and stops when someone else finishes it', () => {
+  const { clock, slow, steps } = bench();
+  const s = new Searches<string, number>({ grow: (key, n) => slow(key, n), clock });
+  s.ask('a', 6);
+  s.pump(1); // two of its six steps
+  const mine = s.steps('a', 6);
+  assert.equal(mine.next().done, false);
+  assert.equal(steps.length, 3, 'not begun again');
+  assert.equal(s.get('a', 6), 'A'); // wanted outright meanwhile
+  assert.deepEqual(mine.next(), { done: true, value: 'A' });
+  assert.equal(steps.length, 6);
+  // known already: no steps at all
+  assert.deepEqual(s.steps('a', 6).next(), { done: true, value: 'A' });
+});
+
 test('pump stops when its time is up, mid-search', () => {
   const { clock, slow, steps } = bench();
   const s = new Searches<string, number>({ grow: (key, n) => slow(key, n), clock });

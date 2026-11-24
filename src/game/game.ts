@@ -103,7 +103,7 @@ export class Game extends Emitter {
   // see beforeArrival().
   arrivals: Promise<unknown>[];
   running: boolean;
-  private _covers: Array<() => boolean>;
+  private _covers: Array<{ on: () => boolean; idle: () => boolean }>;
   private _before: Promise<unknown> | null = null;
   private _last: number;
   private _raf: number;
@@ -175,13 +175,30 @@ export class Game extends Emitter {
   }
 
   // While fn() is true something covers the whole view (the map, say) and the
-  // world doesn't need drawing under it.
-  coverWhen(fn: () => boolean): void {
-    this._covers.push(fn);
+  // world doesn't need drawing under it. idle(), if it's given, says when
+  // what covers it is costing the frame next to nothing itself (the map,
+  // while nobody is scrolling it): the frame then has time to spare (`spare`),
+  // and the work that can wait is given more of it. Left out, it never is:
+  // somewhere else that is drawn in the forest's place is as busy as the
+  // forest was.
+  coverWhen(fn: () => boolean, idle: () => boolean = () => false): void {
+    this._covers.push({ on: fn, idle });
   }
 
   get covered(): boolean {
-    return this._covers.some((fn) => fn());
+    return this._covers.some((c) => c.on());
+  }
+
+  // Whether the frame has time to spare: the view is covered, and by nothing
+  // that is busy itself.
+  get spare(): boolean {
+    let any = false;
+    for (const c of this._covers) {
+      if (!c.on()) continue;
+      if (!c.idle()) return false;
+      any = true;
+    }
+    return any;
   }
 
   // ── Running ───────────────────────────────────────────────────────────────
@@ -225,7 +242,7 @@ export class Game extends Emitter {
       }
       // What can wait is done once the world has caught up with where you
       // are, out of whatever the frame can spare (budget.ts).
-      if (phase === 'world') this.budget.run(this.covered);
+      if (phase === 'world') this.budget.run(this.spare);
     }
     // What was pressed this frame has now been seen by everyone.
     if (this.input) this.input.endFrame();

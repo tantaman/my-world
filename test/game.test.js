@@ -243,6 +243,36 @@ test('something can cover the view', () => {
   assert.equal(game.covered, true);
 });
 
+test('a covered frame has time to spare only while what covers it is at rest', () => {
+  const game = new Game();
+  let mapOpen = false;
+  let scrolling = false;
+  let inHell = false;
+  game.coverWhen(
+    () => mapOpen,
+    () => !scrolling,
+  );
+  game.coverWhen(() => inHell); // somewhere else drawn in the forest's place: never idle
+  const given = [];
+  game.budget.add({ name: 'search', work: (ms) => void given.push(ms) });
+  // (what the search is given this frame, to the nearest ms: the clock is the real one)
+  const frame = () => (game.tick(given.length * 16), Math.round(given.at(-1)));
+  assert.equal(game.spare, false, 'the forest is being drawn');
+  assert.equal(frame(), game.budget.usual);
+  mapOpen = true;
+  assert.equal(game.spare, true);
+  assert.equal(frame(), game.budget.roomy, 'the map is up and still: the searches have more of the frame');
+  scrolling = true;
+  assert.equal(game.covered, true);
+  assert.equal(game.spare, false);
+  assert.equal(frame(), game.budget.usual, 'while it is being scrolled, the frame is the map\'s');
+  scrolling = false;
+  mapOpen = false;
+  inHell = true;
+  assert.equal(game.covered, true, 'the forest is not drawn');
+  assert.equal(frame(), game.budget.usual, 'but Hell is, and is as busy');
+});
+
 test('an emitter tells everyone, in order, and lets them leave', () => {
   const e = new Emitter();
   const heard = [];

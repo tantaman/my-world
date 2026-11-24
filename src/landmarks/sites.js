@@ -92,6 +92,12 @@ export class Sites {
     return this.search.peek(key(ci, cj));
   }
 
+  // ...or found by whoever asks, a step at a time: a generator for another
+  // search to `yield*` (core/searches.ts steps).
+  steps(ci, cj) {
+    return this.search.steps(key(ci, cj));
+  }
+
   // Sites whose plan comes within r of (x, z).
   near(x, z, r) {
     return this.within(x - r, z - r, x + r, z + r).filter((s) => boxDist(s.box, x, z) <= r);

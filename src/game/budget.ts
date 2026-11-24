@@ -18,6 +18,18 @@
 // One that throws is reported, and stopped if it keeps on, like a system
 // (game.ts).
 //
+// Some of it holds the rest up: every road for kilometres waits to know where
+// the ship's pier is, and nearly everything waits for the airfield where you
+// are. A job says so while it's so (`pressing`), and then goes before the
+// others and may have most of the allowance (PRESSING_SHARE of it), rather
+// than its even share of it, which with a dozen jobs busy is very little.
+// What it doesn't use the others have, as ever.
+//
+// And some of it nobody is waiting for at all: the airfields of the other
+// parts of the world, before anyone has asked where they could fly. A job
+// says that too while it's so (`idle`), and then has only what the others
+// leave: nothing while they are busy, all of it once they're done.
+//
 // A job can't be stopped part way through a step, so a step that runs long
 // takes the frame over its allowance. What it went over by is owed: it comes
 // out of the frames after, which do less, or nothing, until it's made up. So
@@ -33,8 +45,9 @@
 import { isNotYet } from '../core/notYet.ts';
 
 const USUAL_MS = 4; // ms a frame for all of it, while the world is being drawn
-const ROOMY_MS = 6; // ...and while it isn't (the map is over it): the frame has time to spare, but not much, the map being moved about in it
+const ROOMY_MS = 12; // ...and while it isn't, and nothing else is (the map is over it, and still): the frame has time to spare
 const LEAST_MS = 0.5; // a job's slice is never cut finer than this
+const PRESSING_SHARE = 0.75; // how much of the allowance the jobs others are waiting on may have between them, before the rest have theirs
 const OWED_MOST = 120; // ms owed at the most: one dreadful step doesn't stop the jobs for longer than half a second or so
 const FAULTS_BEFORE_STOPPING = 5;
 
@@ -43,6 +56,11 @@ export interface Job {
   // Do up to about `ms` milliseconds of work. -> whether there is more to do
   // (true, or how much, anything but 0 / false / nothing).
   work(ms: number): boolean | number | void;
+  // Whether others are held up until this has done what it's doing now
+  // (asked each frame): see the top.
+  pressing?(): boolean;
+  // Whether nobody is waiting for what it has to do now (asked each frame).
+  idle?(): boolean;
 }
 
 interface Held extends Job {
@@ -68,7 +86,7 @@ export class Budget {
   // -> a function that takes the job off again
   add(job: Job): () => void {
     if (this.jobs.some((j) => j.name === job.name)) throw new Error(`two jobs are called "${job.name}"`);
-    const held: Held = { faults: 0, ...job, work: job.work.bind(job) };
+    const held: Held = { faults: 0, ...job, work: job.work.bind(job), pressing: job.pressing?.bind(job), idle: job.idle?.bind(job) };
     this.jobs.push(held);
     return () => {
       const i = this.jobs.indexOf(held);
@@ -80,8 +98,9 @@ export class Budget {
     return this.jobs.map((j) => j.name);
   }
 
-  // One frame's worth: `roomy` when nothing is being drawn under whatever
-  // covers the view. (Game.tick calls this; call it yourself to step by hand.)
+  // One frame's worth: `roomy` when the frame has time to spare (nothing is
+  // being drawn under whatever covers the view, and that is still: Game's
+  // `spare`). (Game.tick calls this; call it yourself to step by hand.)
   run(roomy = false): void {
     const whole = roomy ? this.roomy : this.usual;
     this.spent = 0;
@@ -95,38 +114,62 @@ export class Budget {
       this.owed = Math.max(0, this.owed - whole);
       return;
     }
-    // Round and round, a slice each, until the allowance is gone or nobody
-    // has anything left. Whoever went first last frame goes last this one.
-    this.first = (this.first + 1) % n;
-    let waiting = this.jobs.slice(this.first).concat(this.jobs.slice(0, this.first));
     const t0 = this.clock();
+    // Whoever went first last frame goes last this one.
+    this.first = (this.first + 1) % n;
+    const pressing: Held[] = [];
+    const usual: Held[] = [];
+    const idle: Held[] = [];
+    for (let i = 0; i < n; i++) {
+      const job = this.jobs[(this.first + i) % n];
+      (job.pressing && job.pressing() ? pressing : job.idle && job.idle() ? idle : usual).push(job);
+    }
+    // Those the others are waiting on, first.
+    for (let i = 0; i < pressing.length; i++) {
+      const left = allowance * PRESSING_SHARE - (this.clock() - t0);
+      if (left < LEAST_MS) break;
+      this._turn(pressing[i], left / (pressing.length - i));
+    }
+    // Then the rest, and with what they leave, those nobody is waiting for.
+    if (this._rounds(usual, t0, allowance)) this._rounds(idle, t0, allowance);
+    this._close(t0, allowance);
+  }
+
+  // Round and round these, a slice each, until the allowance is gone or none
+  // of them has anything left. -> whether there's allowance left.
+  private _rounds(waiting: Held[], t0: number, allowance: number): boolean {
     while (waiting.length) {
       const still: Held[] = [];
       for (let i = 0; i < waiting.length; i++) {
         const left = allowance - (this.clock() - t0);
-        if (left <= 0) return this._close(t0, allowance);
-        const job = waiting[i];
-        const slice = Math.max(LEAST_MS, left / (waiting.length - i)); // an even share of what's left, among those still to go this round
-        const before = this.clock();
-        let more: boolean | number | void = false;
-        try {
-          more = job.work(Math.min(slice, left));
-          job.faults = 0;
-        } catch (err) {
-          more = false;
-          // (what it asked about isn't here yet: no fault, it's asked again)
-          if (!isNotYet(err)) this._fault(job, err);
-        }
-        const took = this.clock() - before;
-        if (took > 0) this.by[job.name] = (this.by[job.name] || 0) + took;
+        if (left <= 0) return false;
+        const slice = Math.min(left, Math.max(LEAST_MS, left / (waiting.length - i))); // an even share of what's left, among those still to go this round
         // It comes round again this frame only if it used what it was given:
         // one that stopped short is waiting on something, and asking it over
         // and over would only burn the allowance.
-        if (more && took >= Math.min(slice, left) * 0.5) still.push(job);
+        if (this._turn(waiting[i], slice)) still.push(waiting[i]);
       }
       waiting = still;
     }
-    this._close(t0, allowance);
+    return allowance - (this.clock() - t0) > 0;
+  }
+
+  // A job's turn: up to about `ms` of its work. -> whether it has more to do
+  // and used what it was given (so is worth coming back to this frame).
+  private _turn(job: Held, ms: number): boolean {
+    const before = this.clock();
+    let more: boolean | number | void = false;
+    try {
+      more = job.work(ms);
+      job.faults = 0;
+    } catch (err) {
+      more = false;
+      // (what it asked about isn't here yet: no fault, it's asked again)
+      if (!isNotYet(err)) this._fault(job, err);
+    }
+    const took = this.clock() - before;
+    if (took > 0) this.by[job.name] = (this.by[job.name] || 0) + took;
+    return !!more && took >= ms * 0.5;
   }
 
   private _close(t0: number, allowance: number): void {
