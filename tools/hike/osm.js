@@ -106,8 +106,10 @@ export function roads(osm) {
 
 const isWater = (t) => t.natural === 'water' && !['river', 'stream', 'canal', 'riverbank'].includes(t.water);
 
-// [{ name, rings: [[[lat, lon], ...], ...] }] — outer rings only; islands are
-// left to the elevation data, which already stands them out of the lake.
+// [{ name, rings: [[[lat, lon], ...], ...], holes? }] — its outer rings, and
+// its islands as holes in it, where the map draws them: an island stays land,
+// as high as the elevation has it, and a moat round one (a zoo's, round the
+// hill the lions are on) is a ring of water and not a pond over the hill.
 export function waters(osm) {
   const out = [];
   for (const w of osm.ways.values()) {
@@ -116,10 +118,15 @@ export function waters(osm) {
   }
   for (const r of osm.relations) {
     if (r.tags.type !== 'multipolygon' || !isWater(r.tags)) continue;
-    const parts = r.members.filter((m) => m.type === 'way' && m.role !== 'inner').map((m) => osm.ways.get(m.ref));
-    if (parts.some((p) => !p)) continue; // part of it is outside what we were sent
-    const rings = joinRings(parts.map((p) => p.refs)).map((refs) => coords(osm, refs));
-    if (rings.length) out.push({ name: r.tags.name || '', rings });
+    const ways = r.members.filter((m) => m.type === 'way').map((m) => ({ role: m.role, way: osm.ways.get(m.ref) }));
+    const outer = ways.filter((m) => m.role !== 'inner');
+    if (outer.some((m) => !m.way)) continue; // part of it is outside what we were sent
+    const rings = joinRings(outer.map((m) => m.way.refs)).map((refs) => coords(osm, refs));
+    if (!rings.length) continue;
+    // (an island only partly sent is left to the elevation data)
+    const inner = ways.filter((m) => m.role === 'inner');
+    const holes = inner.length && inner.every((m) => m.way) ? joinRings(inner.map((m) => m.way.refs)).map((refs) => coords(osm, refs)) : [];
+    out.push({ name: r.tags.name || '', rings, ...(holes.length ? { holes } : {}) });
   }
   return out;
 }

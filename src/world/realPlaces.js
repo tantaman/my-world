@@ -283,11 +283,15 @@ export function withRealPlaces(Land) {
     //
     // On the Earth, though, a real place stands at its real height: its sea
     // at the Earth's sea, and its land where the Earth's land is (the same
-    // land, finer).
+    // land, finer). The real height its heights start from (`base`, its
+    // lowest) stands where the Earth has that height, at the Earth's scale;
+    // so one brought in at a scale of its own (life size, a zoo) has its
+    // lowest ground where the Earth has it, and the rest at its own scale
+    // above that.
     _settle(L) {
       const def = L.def;
       if (this.earth) {
-        L.offset = this.sea.level + (def.base || 0) * def.scale;
+        L.offset = this.sea.level + (def.base || 0) * EARTH.scale;
         return;
       }
       const d = def.datum || this._ownDatum(L);

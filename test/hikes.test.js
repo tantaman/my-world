@@ -24,6 +24,7 @@ import { NO_WATER, LANDFORM_REACH, LANDFORM_DRY } from '../src/world/water.js';
 import { NET } from '../src/world/drainage.js';
 import { HIKES } from '../src/world/hikes.js';
 import { Landforms, loadAll, loadHike, reachOf } from '../src/world/landforms.js';
+import { EARTH } from '../src/world/earth.js';
 import { tiffExif, jpegWith, heifWith } from './helpers/photos.js';
 
 const SEED = 20261119;
@@ -1262,7 +1263,8 @@ test('the hikes in the game are where they really are, and those that meet share
   assert.equal(new Set(HIKES.map((h) => h.id)).size, HIKES.length, 'each has its own id');
   for (const h of HIKES) {
     assert.ok(Math.hypot(...h.at) - h.radius - h.fade > 1500, `${h.id} is out in the world, clear of where people start`);
-    const [x, z] = project(centreOf(h).lat, centreOf(h).lon, h.scale);
+    // (at the world's scale, whatever its own land's is: a life-size place too)
+    const [x, z] = project(centreOf(h).lat, centreOf(h).lon, EARTH.scale);
     assert.ok(Math.hypot(x - h.at[0], z - h.at[1]) < 400, `${h.id} is where it really is`);
     assert.ok(h.datum && h.base !== undefined, `${h.id} says what its heights stand on`);
     for (const o of HIKES) {

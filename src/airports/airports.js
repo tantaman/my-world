@@ -42,7 +42,9 @@
 //   x, z      where it's measured from: the start, or that hike's middle
 //   r0, r1    how near and far from there its airfield may be (m)
 //   hikes     the ids of the hikes it serves
-//   scale     game metres to a real metre there (a hike's: 1:5)
+//   scale     game metres to a real metre between there and anywhere else:
+//             the world's (the Earth's, 1 : 5), whatever scale the hikes
+//             it serves are at themselves
 //
 // An airfield (a site, laid out in its own frame as an old place is:
 // world/frame.js's toWorld, toLocal, onPlan):
@@ -64,6 +66,7 @@ import { Emitter } from '../core/events.js';
 import { Searches } from '../core/searches.ts';
 import { SURNAMES } from '../core/names.js';
 import { reachOf } from '../world/landforms.js';
+import { EARTH } from '../world/earth.js';
 
 export const STRIP = { length: 240, width: 16 }; // m
 export const HALF = STRIP.length / 2;
@@ -111,7 +114,7 @@ const FORMS = ['{s} Field', '{s} Airfield', '{s} Field', '{s} Strip', '{s} Airst
 // seed: the world's, for the airfields' names, which are each region's: no
 // two the same, in the order the regions came.
 export function regionsOf(cards, start, seed = 0) {
-  const regions = [{ id: 'home', x: start.x, z: start.z, r0: HOME_RING[0], r1: HOME_RING[1], hikes: [], scale: cards[0] ? cards[0].scale : 0.2 }];
+  const regions = [{ id: 'home', x: start.x, z: start.z, r0: HOME_RING[0], r1: HOME_RING[1], hikes: [], scale: EARTH.scale }];
   for (const c of cards) {
     const near = regions.find((g) => Math.hypot(c.at[0] - g.x, c.at[1] - g.z) < SHARE);
     if (near) {
@@ -119,7 +122,7 @@ export function regionsOf(cards, start, seed = 0) {
       continue;
     }
     const r0 = reachOf(c) + HIKE_RING[0];
-    regions.push({ id: c.id, x: c.at[0], z: c.at[1], r0, r1: r0 + HIKE_RING[1], hikes: [c.id], scale: c.scale });
+    regions.push({ id: c.id, x: c.at[0], z: c.at[1], r0, r1: r0 + HIKE_RING[1], hikes: [c.id], scale: EARTH.scale });
   }
   // a surname each, stepping through the list from somewhere of the seed's
   // own (by a step that has no factor in common with its length, so none

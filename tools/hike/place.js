@@ -28,6 +28,7 @@
 
 import { localFrame } from './geo.js';
 import { ORIGIN, stretch, project } from '../../src/core/geo.js';
+import { EARTH } from '../../src/world/earth.js';
 
 // (the projection is the game's own: src/core/geo.js. The real place at its
 // middle is the Hoh rain forest, a little down the valley from the visitor
@@ -45,15 +46,21 @@ const outerOf = (h) => h.radius + h.fade;
 // The real place a hike's land is centred on: its photo, unless it says.
 export const centreOf = (h) => h.middle || h.photo;
 
-// photo: { lat, lon }, where the land is centred; existing: the cards of the
-// hikes already in the game.
+// photo: { lat, lon }, where the land is centred; scale: the place's own, game
+// metres to a real metre of its land; existing: the cards of the hikes
+// already in the game.
+//
+// Where it goes is by the world's scale (the Earth's, 1 : 5), whatever its
+// own land is at: a place brought in life size (1 : 1, a zoo, where the
+// buildings and the walk between them are to be as big as they are) is still
+// where it really is, and only its own land is the larger for it.
 // → { at, datum, near, stretch, notes }: datum is the datum to share (null:
 // this hike sets its own), near the hike it was placed from (or null),
 // stretch how many times wider than life the map is there.
 export function placeHike({ photo, scale, radius, fade }, existing = []) {
   const outer = radius + fade;
   const notes = [];
-  let at = project(photo.lat, photo.lon, scale);
+  let at = project(photo.lat, photo.lon, EARTH.scale);
   let datum = null;
   let near = null;
 
