@@ -78,9 +78,12 @@ const RIVER_WIDTH = 10;
 const BANK_STEP = 5;
 const BANKED = 0.3;
 // game m: the spacing of a pool's own grid (a lake too small for the
-// ground's), and how far round it that reaches
+// ground's), and how far round it that reaches; and the most points that
+// grid has: a long narrow water (a tidal creek winding through a marsh) is
+// on one as fine as that many points over it can be
 const POOL_CELL = 0.5;
 const POOL_MARGIN = 6;
+const POOL_MOST = 40000;
 // A lake narrower than this many of the ground's cells across (its
 // thickness: twice its area over its shoreline, which for a ring of water is
 // how wide the ring is) is a pool on a grid of its own as well.
@@ -610,21 +613,23 @@ export function fineTiles(walk, { cell, margin }, scale, R, also = []) {
 }
 
 // A pool too small for the ground's grid: the signed distance to its shore
-// on a grid of its own, POOL_CELL apart, kept inside the disc of radius Rl;
-// and its level, the height most of it agrees on (elevation data lays water
-// out flat at its surface), from height(x, z) in real metres.
+// on a grid of its own, POOL_CELL apart (or as fine as POOL_MOST points over
+// it can be, half a metre at a time, for a long one), kept inside the disc of
+// radius Rl; and its level, the height most of it agrees on (elevation data
+// lays water out flat at its surface), from height(x, z) in real metres.
 // → { levelReal, own: { x, z, w, h, cell }, d }, or null if it's nothing
-function poolOf(rings, [x0, z0, x1, z1], Rl, height) {
+export function poolOf(rings, [x0, z0, x1, z1], Rl, height) {
   const m = POOL_MARGIN;
-  const w = Math.ceil((x1 - x0 + 2 * m) / POOL_CELL) + 1;
-  const h = Math.ceil((z1 - z0 + 2 * m) / POOL_CELL) + 1;
-  if (w * h > 40000) return null;
+  const span = (x1 - x0 + 2 * m) * (z1 - z0 + 2 * m);
+  const cell = Math.max(POOL_CELL, Math.ceil(Math.sqrt(span / POOL_MOST) / POOL_CELL) * POOL_CELL);
+  const w = Math.ceil((x1 - x0 + 2 * m) / cell) + 1;
+  const h = Math.ceil((z1 - z0 + 2 * m) / cell) + 1;
   const d = new Float32Array(w * h);
   const wet = [];
   for (let j = 0; j < h; j++) {
     for (let i = 0; i < w; i++) {
-      const x = x0 - m + i * POOL_CELL;
-      const z = z0 - m + j * POOL_CELL;
+      const x = x0 - m + i * cell;
+      const z = z0 - m + j * cell;
       const v = Math.max(signedDistance(rings, x, z), Math.hypot(x, z) - Rl);
       d[j * w + i] = v;
       if (v < 0) wet.push(height(x, z));
@@ -632,7 +637,7 @@ function poolOf(rings, [x0, z0, x1, z1], Rl, height) {
   }
   if (wet.length < 4) return null;
   wet.sort((a, b) => a - b);
-  return { levelReal: wet[Math.floor(wet.length * 0.3)], own: { x: round(x0 - m, 100), z: round(z0 - m, 100), w, h, cell: POOL_CELL }, d };
+  return { levelReal: wet[Math.floor(wet.length * 0.3)], own: { x: round(x0 - m, 100), z: round(z0 - m, 100), w, h, cell }, d };
 }
 
 // The box round some tiles of the finer grid, [x0, z0, x1, z1] game metres
