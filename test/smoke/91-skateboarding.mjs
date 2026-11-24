@@ -33,7 +33,7 @@ export default async function ({ page, step, key, frames, shot }) {
     await page.waitForFunction(() => world.chunks.isFullyLoaded(), null, { timeout: 120000 });
     await page.waitForFunction(() => world.roads.shown.size > 0, null, { timeout: 60000 });
     await frames(20);
-    const here = await page.evaluate(() => ({ foot: world.player.underfoot && world.player.underfoot.surface, at: world.act.here() && world.act.here().word, said: document.getElementById('toast').textContent }));
+    const here = await page.evaluate(() => ({ foot: world.player.underfoot && world.player.underfoot.surface, at: world.act.here() && world.act.here().word }));
     assert.equal(here.foot, 'tarmac', 'on its tarmac');
     assert.equal(here.at, 'skate', 'F would put you on your board');
     await key('KeyF');
