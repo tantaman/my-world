@@ -1341,6 +1341,26 @@ test('a stream is as wide as it really is: as the map says, between its banks, o
   near(piece.w0 * 2, 10 * 0.2, 1e-9, 'half its width either side of its line');
 });
 
+test('a long narrow water (a tidal creek through a marsh) is on a grid of its own as fine as fits, not left out', () => {
+  // a creek 16 m wide winding 800 m across the land, too narrow for its 8 m
+  // grid and too long for half-metre squares: at life size, as the Whorl's
+  // Owls Creek is
+  const P = { lat: 36.8, lon: -75.99, bearing: 0, hour: 12 };
+  const f = localFrame(P.lat, P.lon);
+  const bend = (e) => 60 * Math.sin(e / 140);
+  const side = (n) => Array.from({ length: 41 }, (_, k) => -400 + k * 20).map((e) => f.toLatLon(e, bend(e) + n));
+  const ring = [...side(-8), ...side(8).reverse()];
+  ring.push(ring[0]);
+  const def = buildHike({ id: 'creek', name: 'Creek', photo: P, elevation: (lat, lon) => 2 + Math.abs(f.toEN(lat, lon)[1] - bend(f.toEN(lat, lon)[0])) * 0.02, waters: [{ name: 'Creek', rings: [ring] }], at: [0, 0], scale: 1, radius: 500, fade: 200, cell: 8 }).def;
+  const creek = def.lakes.find((l) => l.name === 'Creek');
+  assert.ok(creek, 'the creek is kept');
+  assert.ok(creek.cell > 0.5 && creek.cell <= 3, `on a grid of its own, ${creek.cell} m (the ground's is ${def.ground.cell})`);
+  assert.ok(creek.w * creek.h <= 40000, 'no more of it than a pool would have');
+  const L = new Landform(def);
+  for (const e of [-300, -100, 0, 150, 320]) assert.ok(L.shore(e, -bend(e)) < -4, `in the water down its middle (${e} m)`);
+  assert.ok(L.shore(0, -40) > 10, 'and not off its banks');
+});
+
 test('heights pack smaller still, the plane through the ones before saying the rest', () => {
   const n = 61;
   const h = new Float32Array(n * n);
