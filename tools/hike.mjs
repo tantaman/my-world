@@ -24,6 +24,12 @@
 //   --fine-margin 400 how far round the walk the finer grid reaches
 //   --dem 3dep        heights from the USGS's 3DEP, lidar for most of the
 //                     United States, in place of Terrain Tiles (hike/usgs.js)
+//   --graded          a city's ground, graded for its streets: none of the
+//                     forest's small bumps laid over it (src/world/landform.js)
+//   --map dc          the water and the woods from the District of Columbia's
+//                     own survey (hike/dcgis.js) in place of OpenStreetMap: for
+//                     a place in Washington too big to ask OpenStreetMap for.
+//                     No trails: the city's streets are the city's (src/washington)
 //   --cover 0.85      how thickly wooded, 0..1
 //   --species 0.6     -1 broadleaf .. 1 conifers
 //   --country "…"     what kind of country it is (src/world/country.js): what
@@ -65,6 +71,7 @@ import { blockOf, blockTiles, missing } from './hike/usgs.js';
 import { parseOsm, mergeOsm, trails, waters, coastlines, roads, beaches, streams, riverbanks, canals, waterAreas, covers, peaks, falls, incompleteWaters } from './hike/osm.js';
 import { buildHike, splitHike, fineTiles, tileBox, DEFAULTS } from './hike/build.js';
 import { placeHike } from './hike/place.js';
+import * as dcgis from './hike/dcgis.js';
 import { winterSnow, snowlineFrom } from './hike/snow.js';
 import { COUNTRY } from '../src/world/country.js';
 
@@ -90,6 +97,7 @@ for (let k = 0; k < argv.length; k++) {
   const a = argv[k];
   if (!a.startsWith('--')) files.push(a);
   else if (a === '--force') flags.force = true;
+  else if (a === '--graded') flags.graded = true;
   else if (MANY.has(a.slice(2))) (flags[a.slice(2)] ||= []).push(argv[++k]);
   else flags[a.slice(2)] = argv[++k];
 }
@@ -149,6 +157,14 @@ function named(flag, s, count) {
 const extraFalls = (flags.fall || []).map((s) => named('fall', s, 2)).map(({ name, nums: [lat, lon] }) => ({ name, lat, lon }));
 const photos = (flags.photo || []).map((s) => named('photo', s, 4)).map(({ name, nums: [lat, lon, bearing, hour] }) => ({ name, lat, lon, bearing, hour }));
 
+// Where the trails, the water and the woods come from: OpenStreetMap, or a
+// city's own survey (hike/dcgis.js).
+const MAPS = ['osm', 'dc'];
+const MAP = flags.map || 'osm';
+if (!MAPS.includes(MAP)) {
+  console.error(`There is water and woods from ${MAPS.join(' or ')}, not "${MAP}".`);
+  process.exit(1);
+}
 const DEM = flags.dem || 'terrain';
 if (!DEMS.includes(DEM)) {
   console.error(`There are heights from ${DEMS.join(' or ')}, not "${DEM}".`);
@@ -291,12 +307,22 @@ const inner = opt.radius;
 const [oN, oW] = frame.toLatLon(-inner, inner);
 const [oS, oE] = frame.toLatLon(inner, -inner);
 process.stdout.write('trails and lakes: ');
-let osm = mergeOsm(await osmBox(oW, oS, oE, oN));
-for (const id of incompleteWaters(osm)) osm = mergeOsm([osm, parseOsm(await cached(`osm-relation-${id}.xml`, `https://api.openstreetmap.org/api/0.6/relation/${id}/full`, { text: true }))]);
-const ts = trails(osm);
-const ws = waters(osm);
-const coast = coastlines(osm);
-const cover = covers(osm);
+let osm = { nodes: new Map(), tagged: new Map(), ways: new Map(), relations: [] };
+let ts, ws, coast, cover, more;
+if (MAP === 'dc') {
+  // the city's own survey, and nothing of OpenStreetMap's
+  const box = [oW, oS, oE, oN].map((v) => Math.round(v * 1e5) / 1e5);
+  const getJson = async (name, url) => JSON.parse(await cached(name, url, { text: true }));
+  const { waters: w, riverbanks: banks } = dcgis.watersOf(await dcgis.features('water', box, getJson), elevation);
+  const runs = dcgis.streamsOf(await dcgis.features('hydro', box, getJson), elevation);
+  [ts, ws, coast, cover] = [[], w, [], dcgis.coversOf(await dcgis.features('canopy', box, getJson, 'TCAN_PCT'))];
+  more = { roads: [], beaches: [], streams: runs, riverbanks: banks, canals: [], waterAreas: [], falls: [] };
+} else {
+  osm = mergeOsm(await osmBox(oW, oS, oE, oN));
+  for (const id of incompleteWaters(osm)) osm = mergeOsm([osm, parseOsm(await cached(`osm-relation-${id}.xml`, `https://api.openstreetmap.org/api/0.6/relation/${id}/full`, { text: true }))]);
+  [ts, ws, coast, cover] = [trails(osm), waters(osm), coastlines(osm), covers(osm)];
+  more = { roads: roads(osm), beaches: beaches(osm), streams: streams(osm), riverbanks: riverbanks(osm), canals: canals(osm), waterAreas: waterAreas(osm), falls: falls(osm) };
+}
 console.log(`${ts.length} paths, ${ws.length} lakes and ponds${coast.length ? ', and the coast' : ''}${cover.length ? `; ${cover.length} areas of woods, scrub, scree, rock and the like` : ''}`);
 
 // ── Its name ─────────────────────────────────────────────────────────────────
@@ -352,7 +378,7 @@ else {
 }
 
 // ── Build it ─────────────────────────────────────────────────────────────────
-const parts = { id, name, photo, middle, from, to, elevation, trails: ts, waters: ws, coast, roads: roads(osm), beaches: beaches(osm), streams: streams(osm), riverbanks: riverbanks(osm), canals: canals(osm), waterAreas: waterAreas(osm), covers: cover, falls: [...falls(osm), ...extraFalls], photos, at, datum, ...opt };
+const parts = { id, name, photo, middle, from, to, elevation, trails: ts, waters: ws, coast, ...more, covers: cover, falls: [...more.falls, ...extraFalls], photos, at, datum, ...opt };
 let built;
 try {
   built = buildHike({ ...parts, fine: null });
@@ -369,6 +395,7 @@ if (opt.fine) {
   built = buildHike({ ...parts, fineElevation });
 }
 const { def, preview } = built;
+if (flags.graded) def.graded = true;
 const { card, land } = splitHike(def);
 const module = `// The land of ${def.name}, as \`npm run hike\` imported it from a photo taken
 // there: fetched the first time it's needed (src/world/landforms.js). Its card is
@@ -376,7 +403,7 @@ const module = `// The land of ${def.name}, as \`npm run hike\` imported it from
 // src/world/landform.js for what the parts are).
 //
 // The shape of the land: AWS Terrain Tiles (USGS 3DEP and others).
-// Trails and lakes: © OpenStreetMap contributors, under the ODbL.
+${MAP === 'dc' ? '// Water and woods: Open Data DC (DC GIS), CC BY 4.0.' : '// Trails and lakes: © OpenStreetMap contributors, under the ODbL.'}
 
 export default ${JSON.stringify(land)};
 `;

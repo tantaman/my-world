@@ -181,9 +181,13 @@ land of its own (a land 2's files end in `-land2`).
 Real land can be set into the world: a mountain you've climbed, brought in
 from a photo you took on it (see [Hikes](../hikes/README.md)). Inside one the
 ground, its trails, its lakes, its streams and its woods are the real ones,
-at 1 : 5 (or at a scale of its own: [the zoo](../zoo/README.md) is life
-size), and over a fade the forest takes over again round its edge
-(`landform.js`).
+at 1 : 5 (or at a scale of its own: [the zoo](../zoo/README.md) and
+[Washington](../washington/README.md) round it are life size), and over a
+fade the forest takes over again round its edge (`landform.js`). A place
+inside another (the zoo, in Washington) is laid over it: where the inner one
+is whole, its ground, its water and its country are what's there, whichever
+of the two came first. A city's ground is `graded`: the forest's small bumps
+aren't laid over it.
 
 A real place is set into whichever land the world is grown on, and no land
 knows about it. `realPlaces.js` is grown *from* the land (it is a class that
@@ -275,7 +279,7 @@ Earth's land as over the forest's.
 
 **What kind of country.** Each climate is a country (`country.js`,
 `EARTH_COUNTRY`): jungle, savanna, desert, sagebrush, prairie, chaparral,
-deciduous forest, the forest's own (a mild, wet coast), boreal forest,
+deciduous forest (and a city's, an eastern city's, for Washington), the forest's own (a mild, wet coast), boreal forest,
 tundra, ice; low flat ground in a warm wet climate is a swamp (the bayou);
 the borders between them wander a couple of kilometres. Round a hike, for a
 couple of kilometres past its edge, the country is the hike's own, and its

@@ -1,0 +1,3 @@
+// A tile of Washington, 500 m square from (3000, 6000): written by `npm run dc` (tools/dc.mjs), read by src/washington/codec.js.
+// Open Data DC (DC GIS), CC BY 4.0.
+export default 'BcFPKENxHADw7/f3+/5+2+M9ttnQGFvIn7deOa025WRryLP5Uw47cXZQajsviW0HkoR6iHJQylsuLiT5kzPlQnJSDigUB58PgkKoLdY/iIBTVLsCB7RHH+ya/7E5Xqt5JPO+sy/2yx74GZ0SIb2xJ+oaCVYk+wnlhfIqM2lNYM1oyu8HdK+qZ5VNjplpR2OJF3mz0jk6Np7LeduUFt3dXjWROSKblrGIECSU23RMA8lwTdhT0errECjPXetqZVVzKJ0KBvviEkU4HomoWjSqqQLlje/Q5eXZAhZx1mI7zNkgkErKirKEmxiCMm4g1K1rd9oQvNI9GbAgX4QJtrySOpTRRh0e+S0fhDw7ZQl4cs4rabjEMqbhWXxyHYpoYTcMm91g4RZGYZdPJsDGAvbAFpo6TMUMsDBrwCXGemFfnAgD1lieGfAtfoQO5rAO8A8=';

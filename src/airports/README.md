@@ -56,7 +56,8 @@ round the start; then each hike, in the order they were brought in, has one of
 its own unless it's within 60 km of a part of the world that has one already,
 in which case that's its airfield too. So the four hikes on Maui share one,
 and Tignes and the Vallée Blanche another, and bringing in a hike never moves
-an airfield that was there. Each is looked for in a ring round its part of the
+an airfield that was there, unless it's a place all round that part's middle
+(Washington, life size, round the zoo): then the airfield is out past it. Each is looked for in a ring round its part of the
 world (out past a hike's reach, so the land there is the forest's own), and
 goes where the ground will take the strip with the least bank under it: dry,
 with clear air off at least one end to climb out and come in over, a little

@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { deflateSync, inflateSync } from 'node:zlib';
 import { parseOsm } from '../tools/hike/osm.js';
 import { decodePatches, roofFaces, roofWalls, buildPlan, PART } from '../tools/zoo/plan.js';
-import { area, inside, edgeDistance } from '../src/zoo/shapes.js';
+import { area, inside, edgeDistance } from '../src/core/rings.js';
 import PLAN from '../src/zoo/plan.js';
 import { ZOO } from '../src/zoo/exhibits.js';
 import { Site, USE } from '../src/zoo/site.js';

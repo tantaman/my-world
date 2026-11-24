@@ -78,6 +78,9 @@
 //   snowline        [from, to]: the real heights over which snow comes to lie
 //                   on it, where that isn't where its country has it (a photo
 //                   taken in winter); null for none whatever its country says
+//   graded          true for a city's ground (Washington's), graded for its
+//                   streets and buildings: the forest's small bumps aren't laid
+//                   over it as they are over the rest of the real land
 //   base            the real height (m) the heights are measured up from
 //   datum           { at, outer, anchor, base }: what sets its heights in the
 //                   world. The first hike in a part of the world is its own
@@ -568,6 +571,9 @@ export class Landform {
     // its lakes and streams frozen over, if its country's are (and it has no sea)
     this.frozen = !!this.country.frozen && !this.lakes.some((l) => l.sea);
     this.scale = def.scale || 0.2;
+    // a city's ground, graded for its streets: none of the forest's small
+    // bumps on it (realPlaces.js)
+    this.graded = !!def.graded;
     this.base = def.base || 0;
     // what covers it, as COVER's kinds (1 + index; 0 nothing said), and the
     // last answer coverAt() gave

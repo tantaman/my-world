@@ -27,7 +27,7 @@
 //     wet      (x, z) → whether there's water there (a moat, a pool)
 //     kindOf   (exhibit) → what lives in it (species.js's kindOf), or null
 
-import { inside, area, centroid, edgeDistance } from './shapes.js';
+import { inside, area, centroid, edgeDistance } from '../core/rings.js';
 
 export const USE = { path: 1, plaza: 2, building: 4, pen: 8, fence: 16 };
 const CELL = 1; // m, the grid's squares

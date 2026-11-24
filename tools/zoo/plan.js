@@ -41,7 +41,7 @@
 //   points     [{ kind, name, x, z }]
 
 import { joinRings } from '../hike/osm.js';
-import { area, inside, centroid, edgeDistance } from '../../src/zoo/shapes.js';
+import { area, inside, centroid, edgeDistance } from '../../src/core/rings.js';
 
 export { area, inside, centroid, edgeDistance };
 

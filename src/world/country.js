@@ -544,6 +544,22 @@ export const COUNTRY = {
     frozen: true,
     woods: 0,
   }),
+
+  // A city of the temperate east (Washington): its parks and its yards, oaks,
+  // maples and lindens over mown grass with hardly anything under them, and
+  // in them the squirrels, the songbirds and the crows, and the deer and the
+  // foxes of its wooded parks; but no bear on its avenues.
+  'eastern city': kind({
+    lines: { tree: 0, snow: -150 },
+    ground: { tint: [1.05, 1.1, 0.8] },
+    trees: [['broad', 0.85], ['birch', 0.05], ['pine', 0.1]],
+    under: { fern: [['fern', 0.25], ['bush', 0.15]], bush: [['bush', 0.5]] },
+    rocks: 0.06,
+    clouds: { deck: 1500, cover: 0.4, shade: 0.15 },
+    animals: ['deer', 'fox', 'rabbit', 'squirrel', 'chipmunk', 'mouse', 'flock', 'flit', 'crows', 'hawk', 'owl', 'butterflies', 'bees'],
+    names: { broad: ['oak', 'an oak'] },
+    tints: { broad: [1.05, 1.08, 0.85] },
+  }),
 };
 
 // What kind of country each part of the real Earth is (world/earth.js), by

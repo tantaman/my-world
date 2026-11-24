@@ -12,7 +12,9 @@ here* sets you down at the Connecticut Avenue entrance (or on the path in
 front of the exhibit you picked, facing it). It's also in the *hikes* list
 beside the map, as **National Zoo**, whose walk is Olmsted Walk: from the
 entrance down the hill past the Great Cats to the lower end of the zoo,
-1.3 km and 51 m down. **Talbot Airfield** is 2 km off, for flying in (see
+1.3 km and 51 m down. All round it is [Washington](../washington/README.md),
+life size too: out of the gate is Connecticut Avenue. **Talbot Airfield**,
+for flying in, is out past the edge of the city, 18 km east (see
 [Airports](../airports/README.md)). In your pack, *National Zoo: where it
 is* says how far it is from wherever you are.
 
@@ -20,8 +22,9 @@ is* says how far it is from wherever you are.
 at 1 : 1. Its ground is the real ground, a height every two metres from the
 USGS's lidar, so Olmsted Walk runs downhill as it does, the paths are cut
 into the hillside, and Rock Creek runs along the bottom, 20 m wide. Out past
-the zoo's own fence the land gives way to the 1 : 5 world over half a
-kilometre round its edge.
+the zoo's own fence it gives way, over half a kilometre round its edge, to
+Washington's ground, life size as well and at the same heights (the zoo is
+laid over the city's, which is coarser).
 
 **The buildings** are as big as they are, and stand where they stand, with
 the roofs they have: Washington flew the whole city with lidar and traced
@@ -107,7 +110,6 @@ sound.js        its animals' voices: a lion's roar, an elephant's trumpet, a sea
 look.js         (fetched) a Zoo: built a step at a time, and what the forest keeps off it
 plan.js         (written by tools/zoo.mjs; fetched) what it's built from
 site.js         the plan laid out in the world: what's on each square metre of it, the pens
-shapes.js       rings in plan: their area, what's inside, how far from the edge
 buildings.js    the buildings: their surveyed roofs, their walls, their windows
 grounds.js      the paths, plazas and footbridges; benches, kiosks, fountains, statues
 fences.js       walls and fences, the map's and round the pens; the signs

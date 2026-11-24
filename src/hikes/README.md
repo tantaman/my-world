@@ -162,6 +162,7 @@ sky over it is doing, each as one entry in one table
 | `snowy mountains` | snow on all of it but the crags, its lakes frozen over and snowed on: a ski resort in winter | firs in the valleys, thinning out to none at 2,050 m; the odd bush | clear and crisp |
 | `travertine canyon` | red sandstone walls in ledges, pale towards the rim; travertine where the water runs, which is a milky blue-green | cottonwoods along the water; away from it, the odd squat juniper over mesquite and catclaw; no reeds or lilies in its pools | thunderheads over the rims |
 | `bayou` | black mud a metre over still brown water that mirrors everything; reeds and floating weed in it | live oaks and bald cypress hung with Spanish moss, palmettos under them | low and grey, mist on the water |
+| `eastern city` | mown grass, hardly anything under the trees | oaks and maples, the odd pine; squirrels and songbirds, and no bears | fair-weather cloud |
 
 **Where the tide sets the level.** In a delta (`--country bayou`) the water
 doesn't run downhill: the bayous and the canals between them all lie at the
@@ -243,8 +244,13 @@ says by how much. `--at x,z` puts one somewhere else.
 A real place can be brought in at a scale of its own: `--scale 1` is life
 size, as [the National Zoo](../zoo/README.md) is, so that what stands on it
 is as big as it is and as far apart. It still goes where it really is, at
-the world's 1 : 5; only its own land is the bigger for it, and stands with
-its lowest ground where the Earth has that height. Like everything
+the world's 1 : 5; only its own land is the bigger for it, and a real height
+stands that far over the sea at its own scale. One that meets another is
+placed from it, exactly, at that one's scale, as any two that meet are:
+[Washington](../washington/README.md), 23 km across, is placed from the zoo
+in the middle of it, so the zoo's buildings and the city's line up, and
+where one place is inside another (the zoo, in Washington) the inner one is
+laid over the outer. Like everything
 else a seed grows, a hike is part of the world description: a world built in
 near one keeps it there, so once placed it stays put. Importing it again
 (`--force`) leaves it where it is, and `npm test` checks that hikes leave the
@@ -291,6 +297,8 @@ each wait for it.
 | `--photo "Name@lat,lon,bearing,hour"` | none | another photo taken on the walk, a spot of its own (as many as you like) |
 | `--country "…"` | forest | what kind of country it is (above) |
 | `--snow` | in winter, where it lay then; else the country's | the real height snow lies from, or `none` |
+| `--map dc` | `osm` | the water and the woods from the District of Columbia's own survey, for a place in Washington too big to ask OpenStreetMap for; no trails (`tools/hike/dcgis.js`) |
+| `--graded` | not | a city's ground, graded: none of the forest's small bumps laid over it |
 | `--lat --lon --bearing --hour` | from the photo | for a photo that doesn't say |
 
 Downloads are kept in `node_modules/.cache/hike`. To take a hike out, delete

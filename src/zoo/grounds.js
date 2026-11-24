@@ -22,7 +22,7 @@ import * as THREE from 'three';
 import { Mesher } from '../build/geometry.js';
 import { SURF, UPRIGHT } from '../build/surfaces.js';
 import { USE } from './site.js';
-import { area } from './shapes.js';
+import { area } from '../core/rings.js';
 
 // What a path is paved with, by what the map says: [colour, surface].
 const PAVING = {

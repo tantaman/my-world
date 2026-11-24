@@ -55,6 +55,7 @@ npm test           # the rules, in Node (see "Checking it still works")
 npm run hike -- photo.heic   # put a hike you've done into the world (see src/hikes/README.md)
 npm run earth        # the real Earth under the world (see src/world/README.md)
 npm run zoo          # a real zoo's buildings and exhibits on its real ground (see src/zoo/README.md)
+npm run dc           # the city round it, Washington, DC, life size (see src/washington/README.md)
 ```
 
 The game is a static site and runs on its own; `npm run api` adds the save
@@ -204,7 +205,7 @@ place in that order, not at the end:
 | `build/kit.js` | flat-sided things from quads, boxes and panels, for a plain vertex-coloured material | `new Kit()`, `k.box(…, skip)`, `k.panel(…)`, `k.build()` |
 | `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)`, with `{ grown: true }` if all of it is grown from the seed |
 | `build/obstacles.js` | whether something has been built on what you grew | `game.builder.obstacles.built(x, z, R)` |
-| `build/surfaces.js` | what something built is made of: bark, grain, paint, stone, shingles, tin, glass, steel | `mesher.surf = SURF.paint` (and `mesher.wear`), drawn with `createBuildingMaterial()` |
+| `build/surfaces.js` | what something built is made of: bark, grain, paint, stone, shingles, tin, glass, steel; a city's walls, windows and all | `mesher.surf = SURF.paint` (and `mesher.wear`; for `SURF.facade`, which kind of front: `FACADE`), drawn with `createBuildingMaterial()` |
 | `caves/sites.js` | the mouths of caves, as something grown later keeps clear of | `caveMouths(caves, clear)`, with `keepClear` |
 | `core/card.js` | a place out of a book: its name and lines over the picture as you come into it, and the dark on the way | `new Card({ id, book })`, `card.show({ title, who, lines, canto })`, `await card.darken(on)` |
 | `core/lazy.ts` | code that isn't needed until you get there (what a place looks like), fetched then and once | `const look = lazy(() => import('./look.js'))`, `look.want()` → the module or null, `await look.ready()` |
@@ -476,6 +477,7 @@ src/
     events.js             Emitter: on / emit, in place of single callback slots
     storage.js            this browser's memory, and every key kept in it
     geom.js               plan-view geometry, a ray against a box or a capsule, and chance that several systems share
+    rings.js              a real place's shapes in plan: their area, what's inside one, how far from the edge
     format.js             how numbers are written for people
     lazy.ts               code fetched when it's first wanted, once
     names.js              names several kinds of thing draw on
@@ -503,6 +505,8 @@ tools/
   earth/                  the Earth's grids: land, sea, coast, relief; the climate
   zoo.mjs                 npm run zoo: a real zoo's buildings, exhibits and paths, from a city's roofs and OpenStreetMap
   zoo/                    reading the city's surveyed roofs; the zoo's plan
+  dc.mjs                  npm run dc: Washington, DC, from the city's roofs, streets and street trees
+  dc/                     a tile of the city's bytes; its landmarks
 worker/
   index.js                the front door: mint an id, route to the world
   world.js                a world's Durable Object — the only writer, and who is who

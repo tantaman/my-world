@@ -1,5 +1,6 @@
-// Shapes in plan: rings of [x, z, …] points (unclosed), as the zoo's plan has
-// them. Shared by the importer (tools/zoo/plan.js) and the game.
+// Shapes in plan: rings of [x, z, …] points (unclosed), as a real place's
+// plan has them (the zoo's, Washington's): their area, what's inside one,
+// how far a point is from the edge. Shared by the importers and the game.
 
 // Signed area of a ring of [x, z, …] (unclosed).
 export function area(r) {
