@@ -17,7 +17,9 @@
 //     *grow(id, town) { …; yield; …; return site; },   // or null: nothing there
 //   });
 //
-// A plain `yield` is a place to stop if time is up. `yield 'wait'` says the
+// A plain `yield` is a place to stop if time is up: there should be one
+// every millisecond or two of work, since a step can't be stopped part way
+// and the frame waits for it (game/budget.ts). `yield 'wait'` says the
 // search can't get further until something else has been found (the railway
 // there is still being surveyed): the others in line are gone on with, and
 // this one is come back to next time. A search only waits while it is
@@ -28,6 +30,16 @@
 // Earth under a part of the world, before its tile has come: core/notYet.ts)
 // is dropped and started over from the beginning once it's in line again:
 // searches answer from the seed alone, so starting over finds the same.
+//
+// The line is gone through most lately asked for first. Whoever still wants
+// an answer asks again: what looks round where you are asks every second or
+// two, the map every time it's drawn, a search waiting on another every
+// time it's come back to. So what is wanted now, and whatever that is
+// waiting on, is found before what was asked for once, a while ago (the
+// roads across a map that has since been scrolled away, or shut). Those
+// asked for together are looked for in the order they were asked in:
+// nearest first, if that's how they were asked. Nothing is dropped; what
+// nobody asks for again is found last.
 //
 // Every such registry used to carry its own copy of this, and its own
 // allowance of the frame. Now they are jobs sharing one (game/budget.ts):
@@ -55,7 +67,11 @@ export class Searches<T, A = undefined> {
   // False while an answer is wanted outright (inside get): see above.
   patient = true;
   private growing = new Map<string, Search<T>>();
-  private line = new Map<string, A>(); // asked about and not yet answered, in the order asked
+  // Asked about and not yet answered: what was handed in with each, and
+  // which turn of pump it was last asked for in. Kept in the order they were
+  // last asked for, so the latest are at the end.
+  private line = new Map<string, { arg: A; turn: number }>();
+  private turn = 0;
   private grow: (key: string, arg: A) => Search<T> | T;
   private found?: (key: string, answer: T) => void;
   private clock: () => number;
@@ -114,13 +130,26 @@ export class Searches<T, A = undefined> {
   // put in line for pump().
   peek(key: string, arg: A, ask = true): T | undefined {
     if (this.known.has(key)) return this.known.get(key) as T;
-    if (ask && !this.line.has(key)) this.line.set(key, arg);
+    if (ask) this.want(key, arg);
     return undefined;
   }
 
   // Put in line, without asking what the answer is.
   ask(key: string, arg: A): void {
-    if (!this.known.has(key) && !this.line.has(key)) this.line.set(key, arg);
+    if (!this.known.has(key)) this.want(key, arg);
+  }
+
+  // In line, as asked for just now: at the end of it, where pump looks first.
+  private want(key: string, arg: A): void {
+    const held = this.line.get(key);
+    if (!held) {
+      this.line.set(key, { arg, turn: this.turn });
+      return;
+    }
+    if (held.turn === this.turn) return; // (asked for already since pump last looked)
+    held.turn = this.turn;
+    this.line.delete(key);
+    this.line.set(key, held);
   }
 
   // The answer is this (it needed no search, or was found some other way).
@@ -135,7 +164,10 @@ export class Searches<T, A = undefined> {
   // Work through the line for up to `ms` milliseconds. -> how many are left.
   pump(ms: number): number {
     const t0 = this.clock();
-    for (const [key, arg] of this.line) {
+    for (const key of this.inTurn()) {
+      const held = this.line.get(key);
+      if (!held) continue; // (answered meanwhile: something wanted it outright)
+      const arg = held.arg;
       try {
         let run = this.growing.get(key);
         if (!run) {
@@ -164,6 +196,34 @@ export class Searches<T, A = undefined> {
     }
     return this.line.size;
   }
+
+  // The line as pump goes through it: those asked for most lately first, and
+  // those asked for in the same turn in the order they were. (The line is
+  // kept in the order last asked for, so that is its runs of one turn, the
+  // last run first.) What's asked for from here on is for the next turn.
+  private inTurn(): string[] {
+    const { keys, turns, order } = this;
+    keys.length = turns.length = order.length = 0;
+    this.turn++;
+    if (!this.line.size) return order;
+    this.line.forEach((held, key) => {
+      keys.push(key);
+      turns.push(held.turn);
+    });
+    let end = keys.length;
+    while (end > 0) {
+      const turn = turns[end - 1];
+      let start = end - 1;
+      while (start > 0 && turns[start - 1] === turn) start--;
+      for (let i = start; i < end; i++) order.push(keys[i]);
+      end = start;
+    }
+    return order;
+  }
+  // (kept from one pump to the next, to make nothing new each frame)
+  private keys: string[] = [];
+  private turns: number[] = [];
+  private order: string[] = [];
 
   // Forget everything (a registry that has grown too big to keep).
   clear(): void {

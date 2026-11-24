@@ -55,7 +55,7 @@
 //   world.cruise.hurry()         skip to the end of a lift ride or a slide
 
 import * as THREE from 'three';
-import { berthSearch, clearOf, regionsInTheWay } from './site.js';
+import { berthSearch, clearOf, regionsInTheWay, WAIT } from './site.js';
 import { layout, cabinsOn, cabinByNo, roomAt, roomName, deckAt, deckY, halfBeam, inner, whereAlong, DECK_BY_N, CORES, CORE, FIRST, LAST, STERN, BOW, DECK_H, SLAB, SHIP, isCabinDeck } from './plan.js';
 import { Voyage, PORTS, CALL, SEA as SEA_LEG } from './voyage.js';
 import { stateroom, describe, pickYours } from './cabins.js';
@@ -137,14 +137,38 @@ export function installCruise(game) {
   const plain = clearOf(common);
   const placed = (...box) => spaceport.sites.within(...box).length > 0 || videostore.stores(...box).length > 0 || huntclub.within(...box).length > 0 || abandoned.within(...box).length > 0;
   const keepOff = (...box) => plain(...box) || placed(...box);
+  // Whether all of that has been found in a box yet, asking for what hasn't
+  // (the railway; the towns round it and their video stores; the hunt
+  // clubs): a berth looked for in the background waits for it, rather than
+  // have a town and its railway found in the middle of a frame.
+  const T = towns.towns;
+  const placedKnown = (x0, z0, x1, z1) => {
+    let known = true;
+    for (let j = Math.floor(z0 / T.size) - 1; j <= Math.floor(z1 / T.size) + 1; j++) {
+      for (let i = Math.floor(x0 / T.size) - 1; i <= Math.floor(x1 / T.size) + 1; i++) {
+        const t = T.peek(i, j);
+        if (t === undefined || (t && videostore.branches.peek(t) === undefined)) known = false;
+      }
+    }
+    if (!huntclub.known(x0, z0, x1, z1)) known = false;
+    return known;
+  };
+  keepOff.ready = (...box) => {
+    // (both asked, so that all of it is sent for at once)
+    const rails = !plain.ready || plain.ready(...box);
+    return placedKnown(...box) && rails;
+  };
   const from = [player.start, mauiRegion];
   const berths = [null, null]; // each port's, once found (null if there's none)
   const searches = [null, null]; // { steps } while one's being looked for; 'done' after
   let site = null; // home's berth
   let voyage = null;
+  // (a search in the background waits for the railway where it's about to
+  // ask to have been surveyed; one wanted now has it surveyed there and then)
+  let hurried = false;
   function search(i) {
     if (searches[i] || !from[i]) return;
-    searches[i] = { steps: berthSearch(gen, from[i], keepOff) };
+    searches[i] = { steps: berthSearch(gen, from[i], keepOff, () => !hurried) };
   }
   // Port i's berth, found now if it hasn't been (the airfields in its way
   // asked about then and there): for when she's about to be there.
@@ -154,8 +178,14 @@ export function installCruise(game) {
       for (const g of i === 0 ? homeWays : mauiWays) fields.site(g.id);
       search(i);
     }
-    let r = searches[i].steps.next();
-    while (!r.done) r = searches[i].steps.next();
+    hurried = true;
+    let r;
+    try {
+      r = searches[i].steps.next();
+      while (!r.done) r = searches[i].steps.next();
+    } finally {
+      hurried = false;
+    }
     searches[i] = 'done';
     found(i, r.value);
     return berths[i];
@@ -179,6 +209,7 @@ export function installCruise(game) {
           search(i);
           break;
         }
+        if (r.value === WAIT && !r.done) break; // (on with the other; this one's come back to)
         if (!r.done) continue;
         searches[i] = 'done';
         found(i, r.value);

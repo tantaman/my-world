@@ -93,9 +93,14 @@ export function findBerth(gen, start, keepOff = () => false) {
 
 // findBerth a step at a time: a generator that yields every few dozen
 // heights it asks of the land (a millisecond or two: game/budget.ts), and
-// returns the berth (or null), so it can be spread over frames.
+// returns the berth (or null), so it can be spread over frames. While
+// patient() says it may, it waits (yielding WAIT) for what it keeps clear of
+// to have been found where it's about to ask (keepOff.ready: the railway
+// there, surveyed), rather than have it found there and then.
 const HEIGHTS_A_STEP = 32;
-export function* berthSearch(gen, start, keepOff = () => false) {
+const CLEAR_STEP = 160; // m: what it keeps clear of is asked about a square this big at a time (about a square of the caves')
+export const WAIT = 'wait';
+export function* berthSearch(gen, start, keepOff = () => false, patient = () => false) {
   const sea = SEA.level;
   const deep = sea - DEEP;
   const h = (x, z) => gen.height(x, z);
@@ -160,6 +165,19 @@ export function* berthSearch(gen, start, keepOff = () => false) {
   found.sort((a, b) => a.score - b.score);
   for (const f of found) {
     const box = boxOf(f);
+    if (patient()) {
+      while (keepOff.ready && !keepOff.ready(box[0] - CLEAR, box[1] - CLEAR, box[2] + CLEAR, box[3] + CLEAR)) yield WAIT;
+      // (and asked a square at a time first: what has to be found to answer,
+      // an old place or a cave's way in, is found a little at a time, and
+      // all of it is then asked of what is known)
+      let held = false;
+      for (let z = box[1] - CLEAR; z < box[3] + CLEAR && !held; z += CLEAR_STEP) {
+        for (let x = box[0] - CLEAR; x < box[2] + CLEAR && !held; x += CLEAR_STEP) {
+          held = keepOff(x, z, Math.min(x + CLEAR_STEP, box[2] + CLEAR), Math.min(z + CLEAR_STEP, box[3] + CLEAR));
+          yield;
+        }
+      }
+    }
     if (keepOff(box[0] - CLEAR, box[1] - CLEAR, box[2] + CLEAR, box[3] + CLEAR)) continue;
     f.lane = yield* laneOf(h, f, deep, sea);
     yield;
@@ -301,12 +319,12 @@ function boxOf(f) {
 // the airfields (airfields: the Airports, airports/airports.js, whose
 // airfields in the way are asked about: so ask once they've been found, as
 // fieldsKnown() says, or they're found then and there).
-// -> keepOff for findBerth.
+// -> keepOff for findBerth, with keepOff.ready (world/claims.ts) for a
+// search that may wait.
 export function clearOf({ landforms, sites, towns, caves, lines, boxes = () => [], airfields = null }) {
   const claims = [landOf(landforms), boxesOf(() => boxes()), placesOf(sites), placesOf(towns), caveMouths(caves, MOUTH_CLEAR), railsNear(lines, NEAR.longer)];
   if (airfields) claims.push(airfieldsOver(airfields));
-  // (a berth's search doesn't wait for what it keeps clear of: see the top)
-  return keepClear(claims, { waits: false });
+  return keepClear(claims);
 }
 
 // How far (m) a berth looked for round a point may reach, the most, and so

@@ -258,7 +258,15 @@ export function* trackSite(gen, town, layout, cell, keepOff = () => false, patie
   // as few as can be: it can be dear)
   found.sort((a, b) => a.score - b.score);
   for (const s of found) {
-    if (tiles(s, plan).some((b) => keepOff(b[0] - CLEAR, b[1] - CLEAR, b[2] + CLEAR, b[3] + CLEAR))) continue;
+    // (a square of its grounds at a time: what has to be found to answer, a
+    // cave's way in, say, is found a little at a time)
+    let held = false;
+    for (const b of tiles(s, plan)) {
+      held = keepOff(b[0] - CLEAR, b[1] - CLEAR, b[2] + CLEAR, b[3] + CLEAR);
+      if (held) break;
+      yield;
+    }
+    if (held) continue;
     const near = keepOff.points ? keepOff.points(s.box[0] - CLEAR, s.box[1] - CLEAR, s.box[2] + CLEAR, s.box[3] + CLEAR) : [];
     if (near.some((p) => onGrounds(c, pad.rect, ...xz(toLocal(s, p.x, p.z, _l)), p.r, p.infield))) continue;
     const gate = toWorld(s, c.layout.start + PADDOCK.gate.x, pad.zb + PADDOCK.gate.z);
