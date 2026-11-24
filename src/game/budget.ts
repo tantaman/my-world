@@ -45,7 +45,7 @@
 import { isNotYet } from '../core/notYet.ts';
 
 const USUAL_MS = 4; // ms a frame for all of it, while the world is being drawn
-const ROOMY_MS = 12; // ...and while it isn't, and nothing else is (the map is over it, and still): the frame has time to spare
+const ROOMY_MS = 10; // ...and while it isn't, and nothing else is (the map is over it, and still): the frame has time to spare (but is still a frame: with the rest of what it does, this keeps it under 16 ms)
 const LEAST_MS = 0.5; // a job's slice is never cut finer than this
 const PRESSING_SHARE = 0.75; // how much of the allowance the jobs others are waiting on may have between them, before the rest have theirs
 const OWED_MOST = 120; // ms owed at the most: one dreadful step doesn't stop the jobs for longer than half a second or so
