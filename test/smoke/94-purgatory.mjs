@@ -14,6 +14,11 @@ import assert from 'node:assert/strict';
 // ms to let the hiker walk each stretch of a stair: drawn in software, the
 // fire and the forest on the top go at a frame a second or so
 const STRETCH = 30000;
+// m from each point of a way up at which the hiker is at it, and turns for
+// the next. Not much: a stair is cut into the bank, and a metre to one side
+// of its foot the bank is a wall. (Turning a metre early cut that corner, and
+// whether it caught on the bank depended on how long the frames were.)
+const NEAR = 0.35;
 
 // In the page: the points to walk up way w (plan.WAYS) by, as world { x, z }:
 // in at its foot, along its way in, round its turn, and up its climb.
@@ -151,7 +156,7 @@ export default async function ({ page, step, open, shot }) {
   });
 
   await step('up the first stair, and a P gone', async () => {
-    const stair = await page.evaluate(async (STRETCH) => {
+    const stair = await page.evaluate(async ([STRETCH, NEAR]) => {
       const { purgatory, player } = world;
       purgatory.hours = 10;
       purgatory.stair(1);
@@ -164,12 +169,12 @@ export default async function ({ page, step, open, shot }) {
         if (purgatory.region === 'envy') break;
         purgatory.hours = 10; // (kept at midday, whatever the clock does: nobody climbs at night)
         player.steer = { x: p.x, z: p.z, run: true };
-        await T.until(() => Math.hypot(player.pos.x - p.x, player.pos.z - p.z) < 1, STRETCH);
+        await T.until(() => Math.hypot(player.pos.x - p.x, player.pos.z - p.z) < NEAR, STRETCH);
       }
       player.steer = null;
       await T.frames(10);
       return { region0: region, wiped: purgatory.wiped, up: player.pos.y - from, region: purgatory.region, brow: document.querySelectorAll('#purgatory-brow span:not(.gone)').length };
-    }, STRETCH);
+    }, [STRETCH, NEAR]);
     assert.equal(stair.region0, 'pride', 'on the first terrace');
     assert.ok(stair.wiped === 1 && stair.brow === 6, 'the angel wiped a P away');
     assert.ok(stair.up > 40 && stair.region === 'envy', `up to the second terrace (${stair.up.toFixed(0)} m)`);
@@ -193,7 +198,7 @@ export default async function ({ page, step, open, shot }) {
   });
 
   await step('through the fire to the top', async () => {
-    const fire = await page.evaluate(async (STRETCH) => {
+    const fire = await page.evaluate(async ([STRETCH, NEAR]) => {
       const { purgatory, player } = world;
       purgatory.hours = 11;
       // (as if the angels below had wiped theirs: the last P is the fire's to take)
@@ -209,13 +214,13 @@ export default async function ({ page, step, open, shot }) {
         player.steer = { x: p.x, z: p.z, run: true };
         await T.until(() => {
           burned = Math.max(burned, parseFloat(document.getElementById('purgatory-fire').style.opacity || 0));
-          return Math.hypot(player.pos.x - p.x, player.pos.z - p.z) < 1;
+          return Math.hypot(player.pos.x - p.x, player.pos.z - p.z) < NEAR;
         }, STRETCH);
       }
       player.steer = null;
       await T.frames(10);
       return { burned, wiped: purgatory.wiped, region: purgatory.region };
-    }, STRETCH);
+    }, [STRETCH, NEAR]);
     assert.ok(fire.burned > 0.3, 'through the fire');
     assert.equal(fire.wiped, 7, 'the last P gone');
     assert.equal(fire.region, 'eden', 'and up into the forest on the top');
