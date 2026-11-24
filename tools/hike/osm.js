@@ -261,7 +261,7 @@ export function coastlines(osm) {
 }
 
 // Ways that share end nodes, joined into closed rings.
-function joinRings(lines) {
+export function joinRings(lines) {
   const left = lines.map((l) => l.slice());
   const rings = [];
   while (left.length) {
