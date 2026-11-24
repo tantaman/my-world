@@ -6,6 +6,7 @@
 // its place in the world, and the animals in their pens.
 
 import * as THREE from 'three';
+import { Emitter } from '../core/events.js';
 import PLAN from './plan.js';
 import { Site, USE } from './site.js';
 import { kindOf } from './species.js';
@@ -23,7 +24,8 @@ export { PLAN };
 // a pen, only the small ones go: the animals have the trees they have.
 export const KEEP = { building: 2.5, path: 1.2, plaza: 1, fence: 1 };
 
-export class Zoo {
+// Emits 'call' ({ kind, x, y, z }) when one of its animals calls.
+export class Zoo extends Emitter {
   // card: the real place's (world/hikes.js); offset: its land's (the height
   // its plan's heights are measured from); ground(x, z); wet(x, z): whether
   // there's water there; water(x, z): the level of it, or NaN.
@@ -31,6 +33,7 @@ export class Zoo {
   // It's built a little at a time (pump), a step being a few milliseconds:
   // until `ready`, nothing of it is in its group.
   constructor({ card, offset, ground, wet, water }) {
+    super();
     // (laid out in the first step of building it: there from when it's ready)
     /** @type {Site} */
     this.site = /** @type {any} */ (null);
@@ -67,6 +70,7 @@ export class Zoo {
   *_build({ card, offset, ground, wet, water }) {
     this.site = new Site(PLAN, { at: card.at, offset, ground, wet, kindOf });
     this.residents = new Residents(this.site, { ground, water });
+    this.residents.on('call', (c) => this.emit('call', c));
     yield;
     const site = this.site;
     const materials = this.materials;

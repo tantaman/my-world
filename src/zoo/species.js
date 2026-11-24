@@ -16,14 +16,14 @@
 //   fence     fences.js's kind, or null for none (a moat, a building's wall)
 //   swims     lives in the water of its pen (the seals, the otters)
 //   pace      m/s it ambles at
-//   voice     audio/calls.js's call, now and then
+//   voice     its call (sound.js), now and then
 //
 // An exhibit no kind matches (Tiger Tracks, the Butterfly Garden, a sign
 // about growing up a tiger) has its sign and nothing in it.
 
 export const KINDS = [
   // ── the big cats, on Lion/Tiger Hill and at the Cheetah Conservation Station
-  { match: /(?<!sea )\blion\b/, name: 'lion', body: 'cat', look: { size: 1.12, coat: 0xc29a5c, belly: 0xe6d2a6, mane: 0x5e3a20, tuft: 0x2a1c12 }, count: [2, 3], fence: 'tall', pace: 0.8, voice: 'roar' },
+  { match: /(?<!sea )\blion\b/, name: 'lion', body: 'cat', look: { size: 1.12, coat: 0xc29a5c, belly: 0xe6d2a6, mane: 0x5e3a20, tuft: 0x2a1c12 }, count: [2, 3], fence: 'tall', pace: 0.8, voice: 'zoo-roar' },
   { match: /sumatran tiger/, name: 'Sumatran tiger', body: 'cat', look: { size: 0.9, coat: 0xb8621c, belly: 0xf2e8d6, stripes: 0x16100c, dense: 1.3 }, count: [1, 2], fence: 'tall', pace: 0.85 },
   { match: /\btiger\b/, name: 'tiger', body: 'cat', look: { size: 1.02, coat: 0xd2782a, belly: 0xf4ece0, stripes: 0x16100c }, count: [1, 2], fence: 'tall', pace: 0.85 },
   { match: /cheetah/, name: 'cheetah', body: 'cat', look: { size: 0.86, lean: 0.72, coat: 0xd9b46e, belly: 0xf0e2c0, spots: 0x17120d, tears: true }, count: [2, 3], fence: 'mesh', pace: 1 },
@@ -38,7 +38,7 @@ export const KINDS = [
   { match: /sloth bear/, name: 'sloth bear', body: 'bear', look: { size: 0.85, coat: 0x141210, shag: true, chest: 0xe6dcc4, snout: 0xb0a490 }, count: [1, 2], fence: 'wall', pace: 0.55 },
   { match: /andean bear|spectacled/, name: 'Andean bear', body: 'bear', look: { size: 0.78, coat: 0x1c1814, specs: 0xdcc896, snout: 0xc8b48a }, count: [1, 1], total: 2, fence: 'wall', pace: 0.5 },
   // ── the elephants of Elephant Trails
-  { match: /asian elephant|elephant(?! community| learning| overlook)/, name: 'Asian elephant', body: 'elephant', look: { size: 2.6, coat: 0x6c6460 }, count: [3, 4], total: 5, fence: 'wall', pace: 0.7, voice: 'trumpet' },
+  { match: /asian elephant|elephant(?! community| learning| overlook)/, name: 'Asian elephant', body: 'elephant', look: { size: 2.6, coat: 0x6c6460 }, count: [3, 4], total: 5, fence: 'wall', pace: 0.7, voice: 'zoo-trumpet' },
   // ── hoofed, and the Kids' Farm
   { match: /grevy/, name: "Grévy's zebra", body: 'hoof', look: { form: 'horse', size: 1.4, coat: 0xf2f0ea, stripes: 0x111111, narrow: true, mane: 0x1a1a1a }, count: [2, 2], fence: 'mesh', room: 16, pace: 0.9 },
   { match: /zebra/, name: 'zebra', body: 'hoof', look: { form: 'horse', size: 1.3, coat: 0xf0eee8, stripes: 0x111111, mane: 0x1a1a1a }, count: [2, 3], fence: 'mesh', room: 16, pace: 0.9 },
@@ -68,7 +68,7 @@ export const KINDS = [
   { match: /howler/, name: 'black howler monkey', body: 'monkey', look: { size: 0.38, coat: 0x141210, tail: 0.65 }, count: [2, 2], fence: 'mesh', room: 7, pace: 0.35 },
   { match: /swamp monkey/, name: "Allen's swamp monkey", body: 'monkey', look: { size: 0.32, coat: 0x5a5a4e, belly: 0xb8b0a0, tail: 0.5 }, count: [2, 3], fence: 'mesh', pace: 0.4 },
   // ── the seals and sea lions of the American Trail
-  { match: /sea lion/, name: 'California sea lion', body: 'seal', look: { size: 2.0, coat: 0x4a3626 }, count: [3, 4], fence: null, swims: true, pace: 2.2, voice: 'bark' },
+  { match: /sea lion/, name: 'California sea lion', body: 'seal', look: { size: 2.0, coat: 0x4a3626 }, count: [3, 4], fence: null, swims: true, pace: 2.2, voice: 'zoo-honk' },
   { match: /gray seal|grey seal/, name: 'gray seal', body: 'seal', look: { size: 2.1, coat: 0x6e6c68, mottle: 0x3a3836, seal: true }, count: [2, 3], fence: null, swims: true, pace: 1.6 },
   // ── birds that walk
   { match: /flamingo/, name: 'American flamingo', body: 'bird', look: { form: 'flamingo', size: 1.3, coat: 0xf08a7a, wing: 0xe8604c, legs: 0xe87a6a, beak: 0x1a1a1a }, count: [8, 10], fence: 'mesh', pace: 0.35 },

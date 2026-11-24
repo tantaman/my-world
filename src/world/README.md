@@ -181,7 +181,8 @@ land of its own (a land 2's files end in `-land2`).
 Real land can be set into the world: a mountain you've climbed, brought in
 from a photo you took on it (see [Hikes](../hikes/README.md)). Inside one the
 ground, its trails, its lakes, its streams and its woods are the real ones,
-at 1 : 5, and over a fade the forest takes over again round its edge
+at 1 : 5 (or at a scale of its own: [the zoo](../zoo/README.md) is life
+size), and over a fade the forest takes over again round its edge
 (`landform.js`).
 
 A real place is set into whichever land the world is grown on, and no land

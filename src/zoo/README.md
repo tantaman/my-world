@@ -53,7 +53,8 @@ river otters, bald eagles on their perches, ravens and wolves; flamingos,
 ostriches, rheas, cassowaries, cranes and bustards; and at the Kids' Farm,
 alpacas, goats, cows, pigs, a donkey and chickens. They amble about their
 yards, graze, sit and lie down, and turn to look at you when you come near
-the fence. Each kind you see is counted (it's yours, saved), and the zoo's
+the fence; now and then the lions roar, an elephant trumpets and the sea
+lions honk. Each kind you see is counted (it's yours, saved), and the zoo's
 place on the map says how many.
 
 | | |
@@ -95,6 +96,8 @@ contributors, under the [ODbL](https://www.openstreetmap.org/copyright).
 index.ts        plugs it into the game: where it is, standing it up, the forest kept off it, the map, what you've seen
 exhibits.js     (written by tools/zoo.mjs) each exhibit, and where on the path it's seen from
 pictures.js     the zoo in your pack
+onMap.js        the zoo on the map, close up: its pens, paths and buildings
+sound.js        its animals' voices: a lion's roar, an elephant's trumpet, a sea lion's honk
 look.js         (fetched) a Zoo: built a step at a time, and what the forest keeps off it
 plan.js         (written by tools/zoo.mjs; fetched) what it's built from
 site.js         the plan laid out in the world: what's on each square metre of it, the pens
