@@ -1,9 +1,10 @@
 // The National Zoo: picked on the map, `go here` sets you down at its gate on
 // Connecticut Avenue in Washington, a long way from the forest, and the zoo
 // stands up round you: its buildings, its fences and signs, and its animals
-// in their pens. Down Olmsted Walk on foot; the flamingos by the path, seen
-// and counted; and the cheetahs' fence keeps you out of their yard however
-// hard you walk at it.
+// in their pens. Down Olmsted Walk on foot, on its paving and not down in
+// it; the flamingos by the path, seen and counted; the goats in the yard the
+// map fences, with no second fence inside it; and the cheetahs' fence keeps
+// you out of their yard however hard you walk at it.
 //
 // Needs: nothing in particular (the zoo is on the map from anywhere).
 // Leaves: you on the path by the cheetahs, at the Cheetah Conservation Station.
@@ -53,7 +54,54 @@ export default async function ({ page, step, key, frames, shot }) {
     const walked = Math.hypot(to.x - from.x, to.z - from.z);
     assert.ok(walked > 4, `on along it (${walked.toFixed(1)} m)`);
     assert.ok(Math.abs(to.y - to.ground) < 1.2, 'on the ground, not through it');
-    return { walked: Math.round(walked * 10) / 10 };
+    // and the walk's paving round you lies just over the ground you stand
+    // on: a boot's sole, not up round your ankles
+    const paving = await page.evaluate(() => {
+      const zoo = world.zoo.built;
+      const meshes = [];
+      zoo.group.traverse((o) => o.isMesh && o.material === zoo.materials.paving && meshes.push(o));
+      // the top of the paving at (x, z), or null where there's none
+      const top = (x, z) => {
+        let best = null;
+        for (const m of meshes) {
+          const P = m.geometry.attributes.position.array;
+          const I = m.geometry.index.array;
+          const [ox, oy, oz] = [m.position.x, m.position.y, m.position.z];
+          const [qx, qz] = [x - ox, z - oz];
+          for (let k = 0; k < I.length; k += 3) {
+            const [a, b, c] = [I[k] * 3, I[k + 1] * 3, I[k + 2] * 3];
+            const d = (P[b + 2] - P[c + 2]) * (P[a] - P[c]) + (P[c] - P[b]) * (P[a + 2] - P[c + 2]);
+            if (Math.abs(d) < 1e-9) continue;
+            const wa = ((P[b + 2] - P[c + 2]) * (qx - P[c]) + (P[c] - P[b]) * (qz - P[c + 2])) / d;
+            const wb = ((P[c + 2] - P[a + 2]) * (qx - P[c]) + (P[a] - P[c]) * (qz - P[c + 2])) / d;
+            const wc = 1 - wa - wb;
+            if (wa < 0 || wb < 0 || wc < 0) continue;
+            const y = oy + wa * P[a + 1] + wb * P[b + 1] + wc * P[c + 1];
+            if (best === null || y > best) best = y;
+          }
+        }
+        return best;
+      };
+      const walk = zoo.site.paths.find((p) => p.name === 'Olmsted Walk');
+      const { x: px, z: pz } = world.player.pos;
+      const over = [];
+      for (let k = 0; k + 3 < walk.pts.length; k += 2) {
+        const [ax, az, bx, bz] = walk.pts.slice(k, k + 4);
+        const n = Math.ceil(Math.hypot(bx - ax, bz - az) / 2);
+        for (let i = 0; i < n; i++) {
+          const [x, z] = [ax + ((bx - ax) * i) / n, az + ((bz - az) * i) / n];
+          if (Math.hypot(x - px, z - pz) > 40) continue;
+          const y = top(x, z);
+          if (y !== null) over.push(y - world.chunks.heightAt(x, z));
+        }
+      }
+      return over.sort((a, b) => a - b);
+    });
+    assert.ok(paving.length > 10, `paving along the walk near you (${paving.length} spots)`);
+    const middle = paving[paving.length >> 1];
+    assert.ok(middle < 0.12, `the paving is ${middle.toFixed(2)} m over the ground you stand on`);
+    assert.ok(paving[0] > -0.02, `and nowhere under it (${paving[0].toFixed(2)} m)`);
+    return { walked: Math.round(walked * 10) / 10, paving: Math.round(middle * 100) / 100 };
   });
 
   await step('the flamingos, seen', async () => {
@@ -62,6 +110,19 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.ok(seen, 'standing by them, the flamingos are counted as seen');
     await shot('the flamingos');
     return { seen: await page.evaluate(() => world.zoo.seen) };
+  });
+
+  await step("the goats, in the yard the map fences, and no other", async () => {
+    await page.evaluate(() => world.zoo.go('goat'));
+    const goats = await page.evaluate(() => {
+      const zoo = world.zoo.built;
+      const e = zoo.site.exhibits.find((x) => x.id === 'goat');
+      return { walled: !!e.walled, goats: zoo.residents.list.filter((a) => a.exhibit === e).length };
+    });
+    assert.ok(goats.walled, "their yard is the one the map fences in: it has no fence of its own inside that");
+    assert.ok(goats.goats >= 2, `goats in it (${goats.goats})`);
+    await shot('the goats at the Kids\' Farm');
+    return goats;
   });
 
   await step("the cheetahs' fence keeps you out", async () => {

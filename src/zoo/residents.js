@@ -6,6 +6,11 @@
 // swim laps of their pools, otters and ducks take to the water, the birds of
 // prey sit on their perches, and the reptiles bask.
 //
+// Each keeps the whole of itself in its pen: as far from the fence, and from
+// any building, wall or fence the map has in the pen, as its body reaches
+// from its middle (its nose or its tail, whichever way it's facing), where
+// it stands and wherever it walks.
+//
 // Only those near you are moved (UPDATE), and only those you could see are
 // drawn (SHOW): the zoo has a couple of hundred animals in it.
 //
@@ -20,8 +25,6 @@ import { disposeAnimal } from '../render/rig.js';
 import { mulberry32, clamp, lerp } from '../noise.js';
 import { wrapAngle } from '../core/geom.js';
 import { makeBody } from './bodies.js';
-import { inside, edgeDistance } from './shapes.js';
-import { USE } from './site.js';
 
 const UPDATE = 140; // m from the eye: nearer than this, they move
 const SHOW = 240; // m: nearer than this, they're drawn
@@ -31,6 +34,13 @@ const ARRIVE = 0.6; // m from where it's going that counts as there
 const NOTICE = 14; // m: a visitor nearer than this is looked at
 const PERCH = { h: [1.3, 2.2], post: 0x5a4430 };
 const CALLS = 1 / 70; // calls a second, for an animal with a voice, near you
+// m an animal keeps from a fence or a wall beyond its body's reach (half a
+// wall's thickness, and a hair)
+const SPARE = 0.2;
+// Where there's no spot in a pen that far from its fence, a spot this much
+// nearer, and then this, rather than no animal (a small pen for a big one).
+const SQUEEZE = [1, 0.7, 0.45];
+const STRIDE = 0.8; // m between the points a walk is looked along before it's set out on
 
 const hashOf = (s) => {
   let h = 2166136261;
@@ -38,6 +48,7 @@ const hashOf = (s) => {
   return h >>> 0;
 };
 const _seen = new Set();
+const _box = new THREE.Box3();
 
 export class Residents extends Emitter {
   // site: site.js's; ground(x, z); water(x, z) → the level of the water
@@ -78,12 +89,19 @@ export class Residents extends Emitter {
   _make(e, kind, i, rnd) {
     const body = makeBody(kind, hashOf(`${e.id}:${i}`), { male: i === 0 && rnd() < 0.7 });
     const swims = kind.swims || body.form === 'seal';
-    const spot = (swims && this._wetSpot(e.pen, rnd)) || this.site.spotIn(e.pen, rnd, this._clear(kind));
+    const most = reach(body) + SPARE;
+    let spot = null;
+    let clear = 0;
+    for (const k of SQUEEZE) {
+      clear = most * k;
+      spot = (swims && this._wetSpot(e.pen, rnd, clear)) || this.site.spotIn(e.pen, rnd, clear);
+      if (spot) break;
+    }
     if (!spot) {
       body.mesh.traverse((o) => o.isSkinnedMesh && disposeAnimal(o));
       return null;
     }
-    const a = { kind, exhibit: e, body, x: spot[0], z: spot[1], yaw: rnd() * Math.PI * 2, speed: 0, state: 'idle', timer: rnd() * IDLE[1], target: null, rnd, look: 0, phase: rnd() * 10, swimming: false, pose: 'stand' };
+    const a = { kind, exhibit: e, body, clear, x: spot[0], z: spot[1], yaw: rnd() * Math.PI * 2, speed: 0, state: 'idle', timer: rnd() * IDLE[1], target: null, rnd, look: 0, phase: rnd() * 10, swimming: false, pose: 'stand' };
     body.mesh.position.set(a.x, this.ground(a.x, a.z), a.z);
     body.mesh.rotation.y = a.yaw;
     if (body.form === 'quad') a.quad = new Quad(body.mesh, body.quad.sk, body.quad.dims);
@@ -106,12 +124,9 @@ export class Residents extends Emitter {
     this._pose(a, rnd);
     return a;
   }
-  // m it keeps from its pen's fence
-  _clear(kind) {
-    return clamp((kind.look.size || 0.5) * 0.6, 0.4, 2.5);
-  }
-  // a spot in the water of a pen, or null
-  _wetSpot(pen, rnd) {
+  // a spot in the water of a pen, `clear` m from its fence, or null
+  _wetSpot(pen, rnd, clear) {
+    const wet = (x, z) => this.site.roomIn(pen, x, z, clear) && Number.isFinite(this.water(x, z)) && this.water(x, z) - this.ground(x, z) > 0.3;
     for (let k = 0; k < 40; k++) {
       const s = this.site.spotIn(pen, rnd, 0.3);
       if (!s) continue;
@@ -119,7 +134,7 @@ export class Residents extends Emitter {
       for (let j = 0; j < 12; j++) {
         const x = s[0] + (rnd() - 0.5) * 12;
         const z = s[1] + (rnd() - 0.5) * 12;
-        if (inside(pen, x, z) && Number.isFinite(this.water(x, z)) && this.water(x, z) - this.ground(x, z) > 0.3) return [x, z];
+        if (wet(x, z)) return [x, z];
       }
     }
     // a pen that's all water (a pool the map draws as the exhibit)
@@ -128,7 +143,7 @@ export class Residents extends Emitter {
     for (let k = 0; k < 60; k++) {
       const x = x0 + rnd() * (x1 - x0);
       const z = z0 + rnd() * (z1 - z0);
-      if (inside(pen, x, z) && Number.isFinite(this.water(x, z)) && this.water(x, z) - this.ground(x, z) > 0.3) return [x, z];
+      if (wet(x, z)) return [x, z];
     }
     return null;
   }
@@ -147,13 +162,16 @@ export class Residents extends Emitter {
     const pen = a.exhibit.pen;
     const swims = a.kind.swims || a.body.form === 'seal';
     for (let k = 0; k < 6; k++) {
-      const s = swims && (a.body.form === 'seal' || a.rnd() < 0.5) ? this._wetSpot(pen, a.rnd) : this.site.spotIn(pen, a.rnd, this._clear(a.kind));
+      const s = swims && (a.body.form === 'seal' || a.rnd() < 0.5) ? this._wetSpot(pen, a.rnd, a.clear) : this.site.spotIn(pen, a.rnd, a.clear);
       if (!s) continue;
+      // (all the way there with room for it: not through a wall the map has
+      // across the pen, nor round the inside of a corner of its fence)
       let ok = true;
-      for (let t = 0.2; t < 1 && ok; t += 0.2) {
-        const x = a.x + (s[0] - a.x) * t;
-        const z = a.z + (s[1] - a.z) * t;
-        if (!inside(pen, x, z) || this.site.use(x, z) & USE.building) ok = false;
+      const n = Math.max(1, Math.ceil(Math.hypot(s[0] - a.x, s[1] - a.z) / STRIDE));
+      for (let i = 1; i < n && ok; i++) {
+        const x = a.x + ((s[0] - a.x) * i) / n;
+        const z = a.z + ((s[1] - a.z) * i) / n;
+        if (!this.site.roomIn(pen, x, z, a.clear)) ok = false;
         if (a.body.form === 'seal' && !Number.isFinite(this.water(x, z))) ok = false;
       }
       if (!ok) continue;
@@ -204,8 +222,8 @@ export class Residents extends Emitter {
     a.speed = lerp(a.speed, want, 1 - Math.exp(-dt * 3));
     const nx = a.x + Math.sin(a.yaw) * a.speed * dt;
     const nz = a.z + Math.cos(a.yaw) * a.speed * dt;
-    // (never out of its pen)
-    if (inside(a.exhibit.pen, nx, nz) && edgeDistance(a.exhibit.pen, nx, nz) > 0.25) {
+    // (never out of its pen, nor into its fence or a wall, nose or tail)
+    if (this.site.roomIn(a.exhibit.pen, nx, nz, a.clear)) {
       a.x = nx;
       a.z = nz;
     } else if (a.state === 'walk') this._pose(a, a.rnd);
@@ -319,6 +337,20 @@ export class Residents extends Emitter {
     for (const p of this.perches) p.geometry.dispose();
     this.list = [];
   }
+}
+
+// How far (m) a body reaches from its middle, in plan: its nose or its tail,
+// or a wing held out, whichever is furthest.
+function reach(body) {
+  const m = body.mesh;
+  const [p, r] = [m.position.clone(), m.rotation.y];
+  m.position.set(0, 0, 0);
+  m.rotation.y = 0;
+  m.updateMatrixWorld(true);
+  _box.setFromObject(m);
+  m.position.copy(p);
+  m.rotation.y = r;
+  return Math.max(-_box.min.x, _box.max.x, -_box.min.z, _box.max.z);
 }
 
 let _perchMat = null;
