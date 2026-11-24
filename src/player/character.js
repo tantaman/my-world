@@ -535,7 +535,9 @@ export class Character {
   // to the snow (and leans it into a turn), and the body stays over the feet.
   // Read every frame, so its owner can change it as it goes:
   //   feet    [[x, z], [x, z]]  where the left and right feet stand (m, body
-  //           frame: +x is the hiker's left, +z ahead)
+  //           frame: +x is the hiker's left, +z ahead), or [x, z, lift] for
+  //           a foot lifted off what you stand on (m; down to the ground
+  //           beside it, negative: a foot put down to push a skateboard)
   //   out     [l, r]  how far each toe turns out (radians; negative turns it in)
   //   crouch  0..1    how far down into the knees
   //   lean    how far the body leans forward over the feet (radians)
@@ -945,7 +947,7 @@ export class Character {
       for (const F of [this.footL, this.footR]) {
         const i = F.side > 0 ? 0 : 1;
         F.x = lerp(F.x, feet[i][0], std);
-        F.y = lerp(F.y, ANKLE_H + tuck * STANCE_TUCK, std);
+        F.y = lerp(F.y, ANKLE_H + tuck * STANCE_TUCK + (feet[i][2] ?? 0), std);
         F.z = lerp(F.z, feet[i][1], std);
         F.p = lerp(F.p, 0, std);
         F.out = lerp(F.out, out[i], std);
