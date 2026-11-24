@@ -181,7 +181,7 @@ export function installHell(game: Game) {
       const pz = gate.z + gate.uz * t;
       if (Math.hypot(px - x, pz - z) < reach + gate.w + 3) out.push({ x: px, z: pz, what: 'the gate', dig: gate.w + 2, wall: gate.w + 1.5, footing: gate.w + 2, roof: gate.w + 1.5, grown: true });
     }
-  });
+  }, { grown: true });
   // Hell's side of the door: at the back of the cleft in the rock, facing out.
   {
     const frame = doorFrame(way.stone);

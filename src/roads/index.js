@@ -104,23 +104,17 @@ export function installRoads(game) {
   // Not where something has been built, or a fire laid, on it: anything not
   // grown from the seed. Asked once per road, after the save is in.
   const standing = new Map();
-  let asking = false; // (its own obstacles keep out of it)
   function stands(road) {
     let yes = standing.get(road.id);
     if (yes !== undefined) return yes;
     yes = true;
-    asking = true;
-    try {
-      for (let i = 0; i < road.n && yes; i += 2) {
-        for (const o of builder.obstacles.near(road.x[i], road.z[i], footprint(road, i) + 1)) {
-          if (!o.grown && !o.clear) {
-            yes = false;
-            break;
-          }
+    for (let i = 0; i < road.n && yes; i += 2) {
+      for (const o of builder.obstacles.built(road.x[i], road.z[i], footprint(road, i) + 1)) {
+        if (!o.clear) {
+          yes = false;
+          break;
         }
       }
-    } finally {
-      asking = false;
     }
     standing.set(road.id, yes);
     return yes;
@@ -199,7 +193,6 @@ export function installRoads(game) {
   });
   // building goes round them
   builder.obstacles.addSource((x, z, R, out) => {
-    if (asking) return;
     for (const road of near(x - R - 12, z - R - 12, x + R + 12, z + R + 12)) {
       samplesNear(road, x, z, R + 10, (i) => {
         const r = footprint(road, i);
@@ -211,7 +204,7 @@ export function installRoads(game) {
       out.push({ x: gate.x, z: gate.z, what: 'the road', dig: JUNCTION + 0.6, wall: JUNCTION + 0.4, footing: JUNCTION + 0.8, roof: JUNCTION, grown: true });
       for (let k = 0; k <= 4; k++) out.push({ x: gate.ex + (gate.x - gate.ex) * (k / 4), z: gate.ez + (gate.z - gate.ez) * (k / 4), what: 'the road', dig: WIDE + 0.6, wall: WIDE + 0.4, footing: WIDE + 0.8, roof: WIDE, grown: true });
     }
-  });
+  }, { grown: true });
 
   // ── Standing the road up and taking it down ───────────────────────────────
   const shown = new Map(); // key -> { key, x, z, r, object }

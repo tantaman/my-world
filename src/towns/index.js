@@ -78,7 +78,6 @@ export function installTowns(game) {
   // Not where something has been built, a fire laid or a stump left: anything
   // that isn't grown from the seed. Asked once per lot, after the save is in.
   const standing = new Map();
-  let asking = false; // (the towns' own obstacles keep out of it)
   function stands(town, lot) {
     const key = `${town.id}/${lot.u.toFixed(1)}/${lot.v.toFixed(1)}`;
     let yes = standing.get(key);
@@ -86,16 +85,11 @@ export function installTowns(game) {
     yes = true;
     const r = Math.hypot(lot.w, lot.d) / 2;
     const s = { x: lot.x, z: lot.z, yaw: lot.yaw, box: [lot.x - r, lot.z - r, lot.x + r, lot.z + r], plan: [[-lot.w / 2, -lot.d / 2, lot.w / 2, lot.d / 2]] };
-    asking = true;
-    try {
-      for (const o of builder.obstacles.near(lot.x, lot.z, r + 1)) {
-        if (!o.grown && onPlan(s, o.x, o.z, 0.5)) {
-          yes = false;
-          break;
-        }
+    for (const o of builder.obstacles.built(lot.x, lot.z, r + 1)) {
+      if (onPlan(s, o.x, o.z, 0.5)) {
+        yes = false;
+        break;
       }
-    } finally {
-      asking = false;
     }
     standing.set(key, yes);
     return yes;
@@ -138,7 +132,6 @@ export function installTowns(game) {
     return list;
   }
   builder.obstacles.addSource((x, z, R, out) => {
-    if (asking) return;
     for (const t of towns.near(x, z, R + 1)) {
       for (const d of discsOf(t)) {
         if (Math.hypot(d.x - x, d.z - z) > R + d.r + 1) continue;
@@ -146,7 +139,7 @@ export function installTowns(game) {
         out.push({ x: d.x, z: d.z, what: d.what, dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
       }
     }
-  });
+  }, { grown: true });
 
   // ── Standing them up and taking them down ─────────────────────────────────
   // What a town is built from, and its people, come when the first one is

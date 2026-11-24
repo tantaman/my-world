@@ -225,7 +225,7 @@ export function installRacetrack(game) {
         out.push({ x: d.x, z: d.z, what: 'the race track', dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
       }
     }
-  });
+  }, { grown: true });
 
   // ── On the map ────────────────────────────────────────────────────────────
   // where one is is its paddock gate: that's where `go here` and tracking it lead

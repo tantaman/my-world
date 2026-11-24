@@ -201,7 +201,8 @@ place in that order, not at the end:
 | `build/geometry.js` | whole geometries welded into one mesh, each saying what it's made of | `new Mesher()`, `m.add(geometry, matrix, color)`, `m.build()` |
 | `build/inventory.js` | a material to carry (`optional`: on the HUD only while you have some) | `game.builder.stock.define({ id, label, optional, icon })` |
 | `build/kit.js` | flat-sided things from quads, boxes and panels, for a plain vertex-coloured material | `new Kit()`, `k.box(…, skip)`, `k.panel(…)`, `k.build()` |
-| `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)` |
+| `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)`, with `{ grown: true }` if all of it is grown from the seed |
+| `build/obstacles.js` | whether something has been built on what you grew | `game.builder.obstacles.built(x, z, R)` |
 | `build/surfaces.js` | what something built is made of: bark, grain, paint, stone, shingles, tin, glass | `mesher.surf = SURF.paint` (and `mesher.wear`), drawn with `createBuildingMaterial()` |
 | `caves/sites.js` | the mouths of caves, as something grown later keeps clear of | `caveMouths(caves, clear)`, with `keepClear` |
 | `core/card.js` | a place out of a book: its name and lines over the picture as you come into it, and the dark on the way | `new Card({ id, book })`, `card.show({ title, who, lines, canto })`, `await card.darken(on)` |

@@ -46,22 +46,15 @@ export function installAbandoned(game) {
   const standing = new Map(),
     shown = new Map(),
     visited = new Set();
-  let checking = false;
   function stands(s) {
     if (!standing.has(s.id)) {
-      checking = true;
-      try {
-        const near = builder.obstacles.near(s.x, s.z, Math.hypot(s.w, s.d + 11) + 3);
-        standing.set(s.id, !near.some((o) => !o.grown && onPlan(s, o.x, o.z, 1)));
-      } finally {
-        checking = false;
-      }
+      const near = builder.obstacles.built(s.x, s.z, Math.hypot(s.w, s.d + 11) + 3);
+      standing.set(s.id, !near.some((o) => onPlan(s, o.x, o.z, 1)));
     }
     return standing.get(s.id);
   }
   const discs = new WeakMap();
   builder.obstacles.addSource((x, z, r, out) => {
-    if (checking) return;
     localSites(x, z, false).forEach((s) => {
       if (!overlaps(s.box, [x - r - 3, z - r - 3, x + r + 3, z + r + 3]) || !stands(s)) return;
       if (!discs.has(s)) discs.set(s, planDiscs(s, 3));
@@ -70,7 +63,7 @@ export function installAbandoned(game) {
           out.push({ ...p, what: s.name, wall: p.r, footing: p.r, roof: p.r, dig: p.r, grown: true });
         }
     });
-  });
+  }, { grown: true });
   // Leave room behind a walker for the chase camera at the map arrival.
   const clearings = new WeakMap();
   chunks.on('vegetation', (ch) => {

@@ -278,7 +278,7 @@ export function installVideostore(game) {
         out.push({ x: d.x, z: d.z, what: 'the video store', dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
       }
     }
-  });
+  }, { grown: true });
   // ── On the map ────────────────────────────────────────────────────────────
   // where one is is its doors: that's where `go here` and tracking it lead
   // (made once each, and again when you've been there)
