@@ -3,8 +3,9 @@
 // each pen, of the kind its animals want (species.js: a tall wire mesh for
 // the big cats, a timber rail at the Kids' Farm), wherever its edge isn't on
 // a path, under a roof, in the water (Lion/Tiger Hill has its moat) or
-// along a wall the map already has; and at each exhibit, a sign by the path
-// with its name on it.
+// along a wall or fence the map already has (one fence, not two side by
+// side), and none at all round a yard the map has fenced in already (the
+// goats'); and at each exhibit, a sign by the path with its name on it.
 //
 // buildFences(site, ground, out) fills out with { walls, posts, net: Mesher
 // each, solids } (net is the wire mesh, drawn see-through), a little at a
@@ -29,6 +30,12 @@ export const FENCES = {
 // The map's own, by its barrier tag.
 const MAPPED = { wall: 'wall', retaining_wall: 'wall', city_wall: 'wall', fence: 'mesh', hedge: 'wall', guard_rail: 'rail', handrail: 'rail' };
 const PIECE = 2; // m: a pen's edge is looked at this much at a time
+// A piece of a pen's edge with a wall or fence of the map's running along it
+// nearer than this (m), and as near parallel as this (the cosine of the
+// angle between them), has that for its fence. (Not one that only crosses
+// it: that's a wall across the pen.)
+const ALONGSIDE = 3;
+const PARALLEL = 0.8;
 const WALL_T = 0.3; // m thick
 const _c = new THREE.Color();
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -47,7 +54,7 @@ export function* buildFences(site, ground, out = {}) {
   yield;
   // round each pen
   for (const e of site.exhibits) {
-    if (!e.pen || !e.kind || e.kind.fence === null || e.shared) continue;
+    if (!e.pen || !e.kind || e.kind.fence === null || e.shared || e.walled) continue;
     yield;
     const kind = FENCES[e.kind.fence || 'mesh'];
     const P = e.pen;
@@ -63,7 +70,7 @@ export function* buildFences(site, ground, out = {}) {
         const t1 = (j + 1) / n;
         const mx = ax + (bx - ax) * ((t0 + t1) / 2);
         const mz = az + (bz - az) * ((t0 + t1) / 2);
-        const wanted = j < n && !(site.use(mx, mz) & (USE.path | USE.building | USE.fence | USE.plaza)) && !site.wet(mx, mz);
+        const wanted = j < n && !(site.use(mx, mz) & (USE.path | USE.building | USE.fence | USE.plaza)) && !site.wet(mx, mz) && !alongside(site, mx, mz, bx - ax, bz - az);
         if (wanted && from === null) from = t0;
         if (!wanted && from !== null) {
           run(out, kind, ax + (bx - ax) * from, az + (bz - az) * from, ax + (bx - ax) * t0, az + (bz - az) * t0, ground);
@@ -73,6 +80,27 @@ export function* buildFences(site, ground, out = {}) {
     }
   }
   return out;
+}
+
+// Whether one of the map's walls or fences runs along beside (x, z), going
+// the way (dx, dz) goes.
+function alongside(site, x, z, dx, dz) {
+  if (!site.near(x, z, ALONGSIDE, USE.fence)) return false;
+  const l = Math.hypot(dx, dz) || 1;
+  for (const b of site.barriers) {
+    const P = b.pts;
+    for (let k = 0; k + 3 < P.length; k += 2) {
+      const [ax, az, bx, bz] = [P[k], P[k + 1], P[k + 2], P[k + 3]];
+      const ux = bx - ax;
+      const uz = bz - az;
+      const ul = Math.hypot(ux, uz);
+      if (ul < 1e-3) continue;
+      const t = Math.max(0, Math.min(1, ((x - ax) * ux + (z - az) * uz) / (ul * ul)));
+      if (Math.hypot(ax + ux * t - x, az + uz * t - z) > ALONGSIDE) continue;
+      if (Math.abs(ux * dx + uz * dz) / (ul * l) >= PARALLEL) return true;
+    }
+  }
+  return false;
 }
 
 // A stretch of fence or wall from a to b, standing on the ground.

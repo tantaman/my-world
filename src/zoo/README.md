@@ -39,7 +39,9 @@ Kids' Farm, a wall for the bears and the elephants), with nothing between
 you and Lion/Tiger Hill but its moat. Each has a sign by the path with its
 name on it. Where the map has only a point (the Kids' Farm's goats and
 cows, the zebras at the Cheetah Conservation Station), the yard is the open
-ground round it, out to the paths. Those it draws over a building (the
+ground round it, out to the paths and the map's own fences; where the map
+fences a yard in round it (the goats'), that yard is theirs, behind that
+fence and no other. Those it draws over a building (the
 Reptile Discovery Center, the Great Ape House, Amazonia) are indoors, and
 have a sign at the door.
 
@@ -54,8 +56,12 @@ ostriches, rheas, cassowaries, cranes and bustards; and at the Kids' Farm,
 alpacas, goats, cows, pigs, a donkey and chickens. They amble about their
 yards, graze, sit and lie down, and turn to look at you when you come near
 the fence; now and then the lions roar, an elephant trumpets and the sea
-lions honk. Each kind you see is counted (it's yours, saved), and the zoo's
-place on the map says how many.
+lions honk. Each keeps the whole of itself in its yard, nose and tail, clear
+of the fences and of any wall across it. Each kind you see is counted (it's
+yours, saved), and the zoo's place on the map says how many.
+
+**The paths** lie on the ground as it's drawn, a few centimetres over it,
+so you walk on them rather than in them.
 
 | | |
 |---|---|

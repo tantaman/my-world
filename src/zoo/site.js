@@ -11,10 +11,13 @@
 // A pen is where an exhibit's animals live: the area the map draws for it,
 // or, where the map has only a point (the Kids' Farm's goats, the zebras at
 // the Cheetah Conservation Station), the ground round the point out as far
-// as it goes before a path, a building or another pen, up to how far its
-// animals want (species.js). An exhibit the map draws over a building (the
-// Reptile Discovery Center, the Great Ape House) is indoors: it has a sign
-// at the door and no pen.
+// as it goes before a path, a building, a wall or fence the map has, or
+// another pen, up to how far its animals want (species.js). Where the map's
+// fences and buildings close the ground round the point in (the goats' yard
+// at the Kids' Farm), that yard is the pen, and is `walled`: it needs no
+// fence of its own. An exhibit the map draws over a building (the Reptile
+// Discovery Center, the Great Ape House) is indoors: it has a sign at the
+// door and no pen.
 //
 //   new Site(plan, { at, offset, ground, wet, kindOf })
 //     plan     plan.js's
@@ -35,9 +38,11 @@ const RAYS = 28;
 const RAY_STEP = 0.5;
 const PEN_CLEAR = 1.2;
 const SEEK = 25; // m from the map's point to look for open ground for a pen
+const YARD = 45; // m: how far out a yard the map fences in round its point is looked for
 // An exhibit drawn over a building is indoors when this much of it is under
 // its roof.
 const INDOORS = 0.5;
+const SPOT_TRIES = 60; // spots tried in a pen before giving up on one
 
 export class Site {
   constructor(plan, { at, offset = 0, ground = () => 0, wet = () => false, kindOf = () => null }) {
@@ -76,7 +81,7 @@ export class Site {
     for (const b of this.buildings) for (const f of b.faces) this._fill(f[0], USE.building, f.slice(1));
     for (const a of this.areas) for (const r of a.rings) this._fill(r, USE.plaza);
     for (const p of this.paths) this._stroke(p.pts, p.width / 2, USE.path);
-    for (const b of this.barriers) this._stroke(b.pts, 0.3, USE.fence);
+    for (const b of this.barriers) this._trace(b.pts, USE.fence);
     // (water is asked about where it matters, not worked out for every square)
     this.wet = wet;
 
@@ -97,7 +102,12 @@ export class Site {
         ex.shared = true;
         continue;
       }
-      ex.pen = ex.area || this._grow(ex.x, ex.z, ex.kind.room || 8);
+      if (ex.area) ex.pen = ex.area;
+      else {
+        const grown = this._grow(ex.x, ex.z, ex.kind.room || 8);
+        ex.pen = grown && grown.ring;
+        ex.walled = !!grown?.walled;
+      }
       if (ex.pen && Math.abs(area(ex.pen)) < 2) ex.pen = null;
       if (ex.pen) this._fill(ex.pen, USE.pen);
     }
@@ -124,6 +134,26 @@ export class Site {
       }
     }
     return false;
+  }
+  // Whether no square with anything in `flags` on it comes within r m of
+  // (x, z): an animal r m long from its middle can stand there.
+  clearOf(x, z, r, flags) {
+    const i0 = Math.max(0, Math.floor((x - r - this.x0) / CELL));
+    const i1 = Math.min(this.w - 1, Math.floor((x + r - this.x0) / CELL));
+    const j0 = Math.max(0, Math.floor((z - r - this.z0) / CELL));
+    const j1 = Math.min(this.h - 1, Math.floor((z + r - this.z0) / CELL));
+    for (let j = j0; j <= j1; j++) {
+      // (how far the row of squares is, up or down)
+      const sz = this.z0 + j * CELL;
+      const dz = Math.max(sz - z, 0, z - sz - CELL);
+      for (let i = i0; i <= i1; i++) {
+        if (!(this.grid[j * this.w + i] & flags)) continue;
+        const sx = this.x0 + i * CELL;
+        const dx = Math.max(sx - x, 0, x - sx - CELL);
+        if (dx * dx + dz * dz < r * r) return false;
+      }
+    }
+    return true;
   }
   // Whether (x, z) is inside the zoo's outline.
   inZoo(x, z) {
@@ -183,6 +213,38 @@ export class Site {
       }
     }
   }
+  // every square a line [x, z, x, z, …] runs through, if only across a
+  // corner: a wall or fence, which is thinner than a square but mustn't have
+  // gaps in it. (From square to square along it, into whichever it crosses
+  // the side of next.)
+  _trace(pts, flag) {
+    const mark = (i, j) => {
+      if (i >= 0 && j >= 0 && i < this.w && j < this.h) this.grid[j * this.w + i] |= flag;
+    };
+    for (let k = 0; k + 3 < pts.length; k += 2) {
+      const [ax, az, bx, bz] = [pts[k], pts[k + 1], pts[k + 2], pts[k + 3]];
+      let i = Math.floor((ax - this.x0) / CELL);
+      let j = Math.floor((az - this.z0) / CELL);
+      const [i1, j1] = [Math.floor((bx - this.x0) / CELL), Math.floor((bz - this.z0) / CELL)];
+      const [dx, dz] = [bx - ax, bz - az];
+      const [si, sj] = [Math.sign(dx), Math.sign(dz)];
+      // how far along it (0..1) the next side across x, and across z, is
+      let tx = dx ? (this.x0 + (i + (si > 0 ? 1 : 0)) * CELL - ax) / dx : Infinity;
+      let tz = dz ? (this.z0 + (j + (sj > 0 ? 1 : 0)) * CELL - az) / dz : Infinity;
+      const [stepX, stepZ] = [dx ? CELL / Math.abs(dx) : Infinity, dz ? CELL / Math.abs(dz) : Infinity];
+      mark(i, j);
+      for (let n = Math.abs(i1 - i) + Math.abs(j1 - j); n > 0; n--) {
+        if (tx < tz) {
+          i += si;
+          tx += stepX;
+        } else {
+          j += sj;
+          tz += stepZ;
+        }
+        mark(i, j);
+      }
+    }
+  }
   // How much of a ring is under a roof (0..1), by its grid squares.
   _covered(ring) {
     let all = 0;
@@ -195,26 +257,38 @@ export class Site {
     const [x, z] = centroid(ring);
     return this.use(x, z) & USE.building ? 1 : 0;
   }
-  // A pen round (x, z): out each way until a path, a building, a fence,
-  // water or another pen is near, or `room` m. Where the map's point is on
-  // something (the Kids' Farm's goats on its barn, the gorillas on the Great
-  // Ape House), their yard is the open ground nearest it, beside it.
+  // A pen round (x, z): { ring, walled }. Out each way until a path, a
+  // building, a wall or fence, water or another pen is near, or `room` m.
+  // Where the map's point is on something (the Kids' Farm's goats on its
+  // barn, the gorillas on the Great Ape House), their yard is the open ground
+  // nearest it, beside it. Where every way out comes to a wall, a fence or a
+  // building within YARD m, the map has fenced a yard in there, and all of
+  // it is the pen: walled, needing no fence of its own.
   _grow(x, z, room) {
-    const blocked = (px, pz) => this.near(px, pz, PEN_CLEAR, USE.path | USE.plaza | USE.building | USE.pen) || this.wet(px, pz);
+    const blocked = (px, pz) => this.near(px, pz, PEN_CLEAR, USE.path | USE.plaza | USE.building | USE.pen | USE.fence) || this.wet(px, pz);
     if (blocked(x, z)) {
       const at = this._open(x, z, blocked);
       if (!at) return null;
       [x, z] = at;
     }
-    const ring = [];
+    const yard = this._rays(x, z, YARD, blocked);
+    if (yard.every((r) => r.walled)) return { ring: yard.map((r) => r.at), walled: true };
+    return { ring: this._rays(x, z, room, blocked).map((r) => r.at), walled: false };
+  }
+  // Out from (x, z) each way until blocked, or `most` m: [{ at: [x, z],
+  // walled: stopped by a wall, a fence or a building }].
+  _rays(x, z, most, blocked) {
+    const out = [];
     for (let k = 0; k < RAYS; k++) {
       const a = (k / RAYS) * Math.PI * 2;
       const [dx, dz] = [Math.cos(a), Math.sin(a)];
       let r = RAY_STEP;
-      while (r + RAY_STEP <= room && !blocked(x + dx * (r + RAY_STEP), z + dz * (r + RAY_STEP))) r += RAY_STEP;
-      ring.push([Math.round((x + dx * r) * 100) / 100, Math.round((z + dz * r) * 100) / 100]);
+      while (r + RAY_STEP <= most && !blocked(x + dx * (r + RAY_STEP), z + dz * (r + RAY_STEP))) r += RAY_STEP;
+      const [nx, nz] = [x + dx * (r + RAY_STEP), z + dz * (r + RAY_STEP)];
+      const walled = r + RAY_STEP <= most && this.near(nx, nz, PEN_CLEAR, USE.building | USE.fence);
+      out.push({ at: [Math.round((x + dx * r) * 100) / 100, Math.round((z + dz * r) * 100) / 100], walled });
     }
-    return ring;
+    return out;
   }
 
   // The nearest spot to (x, z) that isn't blocked, out to SEEK m; or null.
@@ -242,7 +316,8 @@ export class Site {
       .map((q) => q.e);
   }
   // A spot in a pen that its animals can stand on: inside it, `clear` m in
-  // from its edge, on dry ground. rnd: () → 0..1. Null if none is found.
+  // from its edge and from any building, wall or fence in it, on dry ground.
+  // rnd: () → 0..1. Null if none is found.
   spotIn(pen, rnd, clear = 1) {
     let [x0, z0, x1, z1] = [Infinity, Infinity, -Infinity, -Infinity];
     for (const [x, z] of pen) {
@@ -251,13 +326,17 @@ export class Site {
       x1 = Math.max(x1, x);
       z1 = Math.max(z1, z);
     }
-    for (let k = 0; k < 40; k++) {
+    for (let k = 0; k < SPOT_TRIES; k++) {
       const x = x0 + rnd() * (x1 - x0);
       const z = z0 + rnd() * (z1 - z0);
-      if (!inside(pen, x, z) || edgeDistance(pen, x, z) < clear) continue;
-      if (this.use(x, z) & USE.building || this.wet(x, z)) continue;
+      if (!this.roomIn(pen, x, z, clear) || this.wet(x, z)) continue;
       return [x, z];
     }
     return null;
+  }
+  // Whether something `clear` m from its middle fits at (x, z) in a pen: in
+  // it, and that far from its edge and from any building, wall or fence.
+  roomIn(pen, x, z, clear) {
+    return inside(pen, x, z) && edgeDistance(pen, x, z) >= clear && this.clearOf(x, z, clear, USE.building | USE.fence);
   }
 }

@@ -5,8 +5,10 @@
 // zoo's buildings and exhibits, each seen from a path; that each exhibit's
 // animals are the right ones (a sea lion is no lion, a red panda no giant
 // panda, a sign about tigers no tiger); that pens keep off paths and
-// buildings; that every body is whole; and that the animals stay in their
-// pens, whatever they get up to.
+// buildings, and a yard the map fences in has that one fence and no other;
+// that every body is whole; that the animals stay in their pens, whatever
+// they get up to, none of them with its nose or tail in a wall; and that
+// the paths lie just over the ground you stand on, never under it.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -21,6 +23,9 @@ import { KINDS, kindOf } from '../src/zoo/species.js';
 import { makeBody } from '../src/zoo/bodies.js';
 import { Residents } from '../src/zoo/residents.js';
 import { Zoo } from '../src/zoo/look.js';
+import { buildFences } from '../src/zoo/fences.js';
+import { buildGrounds } from '../src/zoo/grounds.js';
+import * as THREE from 'three';
 import { HIKES } from '../src/world/hikes.js';
 import { project } from '../src/core/geo.js';
 import { EARTH } from '../src/world/earth.js';
@@ -195,6 +200,68 @@ test('pens keep off the paths and the buildings, and an exhibit under a roof has
   assert.ok(goat.pen && Math.abs(area(goat.pen)) > 10);
 });
 
+test("a yard the map fences in is the pen, behind the map's fence and no other", () => {
+  const s = site();
+  // the Kids' Farm's goats: a point on their barn, in a yard the map fences
+  const goat = s.exhibits.find((e) => e.id === 'goat');
+  assert.ok(goat.walled, 'their yard is walled in already');
+  const yard = s.barriers.find((b) => {
+    for (let k = 0; k + 1 < b.pts.length; k += 2) if (Math.hypot(b.pts[k] - goat.x, b.pts[k + 1] - goat.z) < 30) return true;
+    return false;
+  });
+  assert.ok(yard, "the map's fence round it");
+  // the pen is the yard: all of it inside the fence, and most of what's inside
+  for (const [x, z] of goat.pen) assert.ok(!(s.use(x, z) & (USE.fence | USE.path)), 'its edge is in from the fence');
+  assert.ok(Math.abs(area(goat.pen)) > 100, `the yard, not a corner of it (${Math.abs(area(goat.pen)).toFixed(0)} m²)`);
+  // a fence the map draws is in every square it runs through (on the
+  // zoo's grid): no gaps to grow a pen out of
+  const [x0, z0, x1, z1] = s.box;
+  for (const b of s.barriers) {
+    for (let k = 0; k + 3 < b.pts.length; k += 2) {
+      for (let t = 0; t <= 1; t += 0.05) {
+        const [x, z] = [b.pts[k] + (b.pts[k + 2] - b.pts[k]) * t, b.pts[k + 1] + (b.pts[k + 3] - b.pts[k + 1]) * t];
+        if (x > x0 && z > z0 && x < x1 && z < z1) assert.ok(s.use(x, z) & USE.fence, 'a gap in a fence');
+      }
+    }
+  }
+  // and a grown pen keeps off the map's fences, as it does the paths
+  for (const e of s.exhibits) {
+    if (!e.pen || e.area || e.shared) continue;
+    for (const [x, z] of e.pen) assert.ok(!(s.use(x, z) & USE.fence), `${e.name}'s yard stops at the fence`);
+  }
+});
+
+test('a fence goes up round a pen only where the map has none of its own', () => {
+  const s = site();
+  const out = {};
+  for (const _ of buildFences(s, flat, out));
+  // each stretch of fence: the map's come first, one a segment, then the pens'
+  const mapped = s.barriers.reduce((n, b) => n + b.pts.length / 2 - 1, 0);
+  const pens = out.solids.slice(mapped);
+  assert.ok(pens.length > 100, `fences round the pens (${pens.length} stretches)`);
+  const goat = s.exhibits.find((e) => e.id === 'goat');
+  // none inside the goats' yard: the map's fence is theirs
+  assert.ok(!pens.some((f) => inside(goat.pen, (f.ax + f.bx) / 2, (f.az + f.bz) / 2)), 'no second fence round the goats');
+  // and none running along beside a fence or wall the map has, a stride off it
+  for (const f of pens) {
+    const [mx, mz] = [(f.ax + f.bx) / 2, (f.az + f.bz) / 2];
+    const [dx, dz] = [f.bx - f.ax, f.bz - f.az];
+    const l = Math.hypot(dx, dz) || 1;
+    for (const b of s.barriers) {
+      for (let k = 0; k + 3 < b.pts.length; k += 2) {
+        const [ax, az, bx, bz] = b.pts.slice(k, k + 4);
+        const [ux, uz] = [bx - ax, bz - az];
+        const ul = Math.hypot(ux, uz);
+        if (ul < 0.5) continue;
+        const t = Math.max(0, Math.min(1, ((mx - ax) * ux + (mz - az) * uz) / (ul * ul)));
+        const d = Math.hypot(ax + ux * t - mx, az + uz * t - mz);
+        const parallel = Math.abs(ux * dx + uz * dz) / (ul * l) > 0.9;
+        assert.ok(!(parallel && d < 2 && t > 0 && t < 1), 'two fences side by side');
+      }
+    }
+  }
+});
+
 test('every kind of animal has a whole body', () => {
   for (const k of KINDS) {
     for (const male of [true, false]) {
@@ -221,9 +288,25 @@ test('the animals stay in their pens, whatever they get up to', () => {
   assert.ok(new Set(r.list.map((a) => a.kind.name)).size > 45, 'of many kinds');
   // two pandas, whatever the pens
   assert.equal(r.list.filter((a) => a.kind.name === 'giant panda').length, 2);
-  // a few minutes of their day, watched from close by
+  // each keeps as far off the fence as it is long, nose or tail, the
+  // elephants a good way off (a pen too small for one may squeeze it some)
+  const box = new THREE.Box3();
+  let short = 0;
+  for (const a of r.list) {
+    a.body.mesh.updateMatrixWorld(true);
+    box.setFromObject(a.body.mesh);
+    const long = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2;
+    if (a.clear < long * 0.9) short++;
+  }
+  assert.ok(short <= r.list.length / 20, `${short} of ${r.list.length} with less room than they're long`);
+  assert.ok(r.list.filter((a) => a.kind.name === 'Asian elephant').every((a) => a.clear > 2), 'an elephant keeps its trunk out of the wall');
+  // a few minutes of their day, watched from close by: never into a fence, a
+  // wall or a building, all of them, all the time
   for (let t = 0; t < 600; t++) {
-    for (const a of r.list) r._step(a, 0.25, { x: a.x + 5, z: a.z });
+    for (const a of r.list) {
+      r._step(a, 0.25, { x: a.x + 5, z: a.z });
+      if (t % 10 === 0) assert.ok(s.roomIn(a.exhibit.pen, a.x, a.z, a.clear * 0.999), `${a.kind.name} in ${a.exhibit.name} keeps out of the walls`);
+    }
   }
   let moved = 0;
   for (const a of r.list) {
@@ -233,6 +316,34 @@ test('the animals stay in their pens, whatever they get up to', () => {
   }
   assert.ok(moved > r.list.length / 3, 'and they get about');
   r.dispose();
+});
+
+test('the paths lie just over the ground you stand on, and never under it, however it rises and falls', () => {
+  // ground that's up and down a hand's breadth every metre or two, on a hillside
+  const ground = (x, z) => 0.08 * x + 0.06 * Math.sin(x * 2.3) * Math.cos(z * 1.7) + 0.05 * Math.sin(z * 3.1 + x);
+  // ...as it's drawn and stood on (Chunk.sampleHeight): flat between whole metres
+  const drawn = (x, z) => {
+    const [i, j] = [Math.floor(x), Math.floor(z)];
+    const [u, v] = [x - i, z - j];
+    const [a, b, c, d] = [ground(i, j), ground(i + 1, j), ground(i, j + 1), ground(i + 1, j + 1)];
+    return u + v <= 1 ? a + (b - a) * u + (c - a) * v : d + (c - d) * (1 - u) + (b - d) * (1 - v);
+  };
+  const out = {};
+  for (const _ of buildGrounds(site(), ground, out));
+  const over = [];
+  for (const m of out.paving) {
+    const P = m.pos;
+    for (let k = 0; k < P.length; k += 9) {
+      // the middle of each triangle of it
+      const [x, y, z] = [0, 1, 2].map((o) => (P[k + o] + P[k + 3 + o] + P[k + 6 + o]) / 3);
+      over.push(y - drawn(x, z));
+    }
+  }
+  over.sort((a, b) => a - b);
+  assert.ok(over.length > 50000);
+  assert.ok(over[0] > 0, `never under the ground (${over[0].toFixed(3)} m)`);
+  const half = over[over.length >> 1];
+  assert.ok(half < 0.09, `about a boot's sole over it (${half.toFixed(3)} m), not up round your ankles`);
 });
 
 test('the zoo is built a little at a time, and the forest keeps off what is built', () => {

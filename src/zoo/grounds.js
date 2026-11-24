@@ -5,6 +5,16 @@
 // and the ice cream stands' kiosks, maps on their boards, and the statues
 // (Uncle Beazley the triceratops among them).
 //
+// The paving lies a few centimetres over the ground as it's drawn and stood
+// on, so your feet are on it, or as near as can be, and not down in it: the
+// terrain near you is the land's height at every whole metre, cut into
+// triangles (world/chunks.js), and that's what the paving is laid over. Its
+// points are further apart than the terrain's, so where the land would come
+// up through it between them (a bank at a path's edge, a hump) that bit of
+// it is raised to stay over. (The lidar's ground under a path rises and
+// falls a hand's breadth in a metre or two, so that's a few centimetres
+// more here and there.)
+//
 // buildGrounds(site, ground, out) fills out with { paving: [Mesher], things:
 // Mesher, solids }, a little at a time (a generator, as buildings.js's is).
 
@@ -31,7 +41,9 @@ const PAVING = {
   ground: [0x7a6448, SURF.clay],
 };
 const STEPS = [0xb0aca2, SURF.stone];
-const LIFT = { path: 0.24, plaza: 0.17 }; // m over the ground (paths over plazas)
+const LIFT = { path: 0.05, plaza: 0.04 }; // m over the ground as it's drawn (paths over plazas)
+const KEEP_OVER = 0.02; // m the paving stays over the drawn ground, at the least, between its points
+const LOOK_IN = 3; // a paving triangle's sides are cut in this many to look for the ground coming up through it
 const STEP = 1.6; // m between the points a path is laid over
 const PLAZA_EDGE = 2.4; // m: the longest side of a plaza's triangles
 const DECK = { thick: 0.35, rail: 1.05, clear: 0.25 }; // a footbridge's deck, its rail (m), and how far it stays over the ground
@@ -45,6 +57,7 @@ export function* buildGrounds(site, ground, out = {}) {
   const things = new Mesher();
   const solids = [];
   Object.assign(out, { paving: [paving], things, solids });
+  const drawn = asDrawn(ground);
   // (a few meshes of it, not one big one: each is handed to the graphics card
   // in a step of its own)
   const room = () => {
@@ -55,7 +68,7 @@ export function* buildGrounds(site, ground, out = {}) {
   // ── plazas
   for (const a of site.areas) {
     const [col, surf] = PAVING[a.surface] || PAVING.paved;
-    for (const ring of a.rings) plaza(paving, ring, ground, new THREE.Color(col), surf);
+    for (const ring of a.rings) plaza(paving, ring, drawn, new THREE.Color(col), surf);
     room();
     yield;
   }
@@ -70,10 +83,10 @@ export function* buildGrounds(site, ground, out = {}) {
     if (site.use(P[mid], P[mid + 1]) & USE.building && site.use(P[0], P[1]) & USE.building) continue;
     if (p.surface === 'linoleum' || p.surface === 'carpet') continue;
     const [col, surf] = p.kind === 'steps' ? STEPS : PAVING[p.surface] || PAVING.asphalt;
-    if (p.bridge) bridge(paving, things, solids, P, p.width / 2, ground, new THREE.Color(col), surf);
+    if (p.bridge) bridge(paving, things, solids, P, p.width / 2, drawn, new THREE.Color(col), surf);
     // (where a path crosses a plaza the map draws as well, the plaza is its
     // paving: Olmsted Walk is drawn both ways)
-    else strip(paving, P, p.width / 2, (x, z) => ground(x, z) + LIFT.path, new THREE.Color(col), surf, p.kind === 'steps', (x, z) => (site.use(x, z) & USE.plaza) !== 0);
+    else strip(paving, P, p.width / 2, (x, z) => drawn(x, z) + LIFT.path, new THREE.Color(col), surf, p.kind === 'steps', (x, z) => (site.use(x, z) & USE.plaza) !== 0, drawn);
   }
   yield;
   // ── what stands along them
@@ -135,10 +148,60 @@ function along(P) {
   return out;
 }
 
+// The ground as it's drawn near you, and stood on (Chunk.sampleHeight): the
+// land's height at each whole metre, and flat between, the square cut from
+// its +x corner to its +z one. (x, z) → m.
+function asDrawn(ground) {
+  const at = new Map();
+  const corner = (i, j) => {
+    const k = i * 4194304 + j;
+    let h = at.get(k);
+    if (h === undefined) at.set(k, (h = ground(i, j)));
+    return h;
+  };
+  return (x, z) => {
+    const i = Math.floor(x);
+    const j = Math.floor(z);
+    const u = x - i;
+    const v = z - j;
+    if (u + v <= 1) {
+      const a = corner(i, j);
+      return a + (corner(i + 1, j) - a) * u + (corner(i, j + 1) - a) * v;
+    }
+    const d = corner(i + 1, j + 1);
+    return d + (corner(i, j + 1) - d) * (1 - u) + (corner(i + 1, j) - d) * (1 - v);
+  };
+}
+
+// Raise triangles of paving (each three points, which may be shared with
+// their neighbours) wherever the drawn ground would come up through them, so
+// they're KEEP_OVER over it everywhere: each by as much as it needs, and the
+// points it shares with the next raised with it.
+function keepOver(tris, drawn) {
+  const up = new Map();
+  for (let k = 0; k < tris.length; k += 3) {
+    const [a, b, c] = [tris[k], tris[k + 1], tris[k + 2]];
+    let need = 0;
+    for (let p = 0; p <= LOOK_IN; p++) {
+      for (let q = 0; p + q <= LOOK_IN; q++) {
+        const [wb, wc] = [p / LOOK_IN, q / LOOK_IN];
+        const wa = 1 - wb - wc;
+        const x = a.x * wa + b.x * wb + c.x * wc;
+        const z = a.z * wa + b.z * wb + c.z * wc;
+        need = Math.max(need, drawn(x, z) + KEEP_OVER - (a.y * wa + b.y * wb + c.y * wc));
+      }
+    }
+    if (need <= 0) continue;
+    for (const v of [a, b, c]) up.set(v, Math.max(up.get(v) || 0, need));
+  }
+  for (const [v, h] of up) v.y += h;
+}
+
 // A ribbon along a path, `half` m either side, at height(x, z) every metre or
-// so along it and across it, so it lies on the land as the land lies.
+// so along it and across it, so it lies on the land as the land lies (kept
+// over `over`, the ground as it's drawn, where it's given).
 const ACROSS = 2; // m between the points across a path
-function strip(m, P, half, height, col, surf, steps = false, skip = null) {
+function strip(m, P, half, height, col, surf, steps = false, skip = null, over = null) {
   const pts = along(P);
   if (pts.length < 2) return;
   const tri = [];
@@ -160,6 +223,7 @@ function strip(m, P, half, height, col, surf, steps = false, skip = null) {
       tri.push(a, c, b, b, c, d);
     }
   }
+  if (over) keepOver(tri, over);
   // steps: a darker nosing every so often, so they read as steps
   m.tris(tri, (p) => (steps && Math.floor(p.y / 0.18) % 2 ? _c.copy(col).multiplyScalar(0.8) : _c.copy(col)), surf);
 }
@@ -201,8 +265,9 @@ function bridge(m, things, solids, P, half, ground, col, surf) {
   }
 }
 
-// A plaza: its outline cut into triangles small enough to lie on the land.
-function plaza(m, ring, ground, col, surf) {
+// A plaza: its outline cut into triangles small enough to lie on the land
+// (drawn: the ground as it's drawn).
+function plaza(m, ring, drawn, col, surf) {
   if (ring.length < 3) return;
   const ccw = area(ring) > 0;
   let tris;
@@ -240,11 +305,17 @@ function plaza(m, ring, ground, col, surf) {
     }
   };
   for (const [a, b, c] of tris) (ccw ? split(ring[a], ring[c], ring[b], 0) : split(ring[a], ring[b], ring[c], 0));
-  m.tris(
-    out.map(([x, z]) => V(x, ground(x, z) + LIFT.plaza, z)),
-    () => col,
-    surf,
-  );
+  // (a point shared by triangles is one point, raised with all of them)
+  const points = new Map();
+  const pt = ([x, z]) => {
+    const k = `${x},${z}`;
+    let p = points.get(k);
+    if (!p) points.set(k, (p = V(x, drawn(x, z) + LIFT.plaza, z)));
+    return p;
+  };
+  const laid = out.map(pt);
+  keepOver(laid, drawn);
+  m.tris(laid, () => col, surf);
 }
 
 // ── Things along the paths ──────────────────────────────────────────────────
