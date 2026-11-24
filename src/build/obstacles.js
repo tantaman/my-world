@@ -25,6 +25,22 @@
 //             of these; leave it out for anything that stays put (a fire ring).
 //   grown     true for what the seed grows (a tree, a boulder, an old cabin),
 //             as against what someone has put there since
+//
+// What is grown from the seed asks a narrower question, to know whether it
+// is still there: has anyone put something on it?
+//
+//   obstacles.built(x, z, R)       // a footing, a fire ring, a stump: nothing grown
+//
+// and a source whose things are all grown says so, so that built() needn't
+// ask it:
+//
+//   obstacles.addSource(fn, { grown: true });    // from src/roads/index.js
+//
+// That is more than a saving. A grown thing's source goes looking for what
+// is near (a road's for the roads there, a dealership's for the towns), and
+// what it hasn't found yet it sends for. Were built() to ask those, every
+// road found would send for the dealerships beside it, each of those for its
+// town's roads, and so on outward across the world without end.
 
 // The same, for the type check: what a .ts feature's source is held to.
 /**
@@ -47,11 +63,19 @@ export class Obstacles {
   constructor() {
     /** @type {ObstacleSource[]} */
     this.sources = [];
+    // ...and those of them that may hold something not grown from the seed
+    /** @type {ObstacleSource[]} */
+    this.put = [];
   }
 
-  /** @param {ObstacleSource} fn */
-  addSource(fn) {
+  // grown: everything this source gives is grown from the seed.
+  /**
+   * @param {ObstacleSource} fn
+   * @param {{ grown?: boolean }} [what]
+   */
+  addSource(fn, { grown = false } = {}) {
     this.sources.push(fn);
+    if (!grown) this.put.push(fn);
   }
 
   // Everything within R of (x, z).
@@ -61,5 +85,14 @@ export class Obstacles {
     const out = [];
     for (const source of this.sources) source(x, z, R, out);
     return out;
+  }
+
+  // What someone has put within R of (x, z): nothing the seed grows.
+  /** @returns {Obstacle[]} */
+  built(x, z, R) {
+    /** @type {Obstacle[]} */
+    const out = [];
+    for (const source of this.put) source(x, z, R, out);
+    return out.filter((o) => !o.grown);
   }
 }

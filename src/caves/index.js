@@ -93,7 +93,7 @@ export function installCaves(game) {
         if (Math.hypot(px - x, pz - z) < R + m.w + 3) out.push({ x: px, z: pz, what: 'the mouth of a cave', dig: m.w + 1.5, wall: m.w + 1, footing: m.w + 1.5, roof: m.w + 1, grown: true });
       }
     }
-  });
+  }, { grown: true });
 
   // ── The lamp ──────────────────────────────────────────────────────────────
   const lamp = new Headlamp(scene, player.character);

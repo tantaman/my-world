@@ -67,7 +67,7 @@ export function installBuild(game) {
     chunks.forEachPlant(x, z, R + 1, ['rock'], (ch, kind, k, px, py, pz, s) => {
       if (s > LIFTABLE) out.push({ x: px, z: pz, what: 'a boulder', dig: s * 1.05, grown: true });
     });
-  });
+  }, { grown: true });
   obstacles.addSource((x, z, R, out) => {
     for (const s of forest.stumps.values()) {
       if (Math.hypot(s.x - x, s.z - z) < R + 1) out.push({ x: s.x, z: s.z, what: 'a stump', dig: s.r + 0.7, wall: s.r, low: true, footing: s.r + 0.5, clear: 'grub' });

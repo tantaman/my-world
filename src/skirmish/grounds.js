@@ -51,7 +51,7 @@ export class Grounds {
         if (Math.hypot(d.x - x, d.z - z) > R + d.r + 1) continue;
         out.push({ x: d.x, z: d.z, what: 'the gate', dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
       }
-    });
+    }, { grown: true });
     map.places.addSource({
       within: (x0, z0, x1, z1) => {
         const p = this.asPlace();

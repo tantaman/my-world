@@ -112,18 +112,12 @@ export function installCars(game) {
   // Not where something has been built, a fire laid or a stump left (anything
   // not grown from the seed). Asked once each, after the save is in.
   const standing = new Map();
-  let asking = false;
   function stands(d) {
     let yes = standing.get(d.id);
     if (yes !== undefined) return yes;
     yes = true;
-    asking = true;
-    try {
-      const r = Math.hypot(LOT[2] - LOT[0], LOT[3] - LOT[1]) / 2 + SKIRT;
-      for (const o of builder.obstacles.near(d.x, d.z, r)) if (!o.grown && onPlan(d, o.x, o.z, SKIRT)) yes = false;
-    } finally {
-      asking = false;
-    }
+    const r = Math.hypot(LOT[2] - LOT[0], LOT[3] - LOT[1]) / 2 + SKIRT;
+    for (const o of builder.obstacles.built(d.x, d.z, r)) if (onPlan(d, o.x, o.z, SKIRT)) yes = false;
     standing.set(d.id, yes);
     return yes;
   }
@@ -160,7 +154,6 @@ export function installCars(game) {
   });
   const discs = new Map();
   builder.obstacles.addSource((x, z, R, out) => {
-    if (asking) return;
     for (const d of found(x - R - 30, z - R - 30, x + R + 30, z + R + 30)) {
       if (!discs.has(d.id)) discs.set(d.id, planDiscs({ ...d, plan: cleared }, 2.5));
       for (const c of discs.get(d.id)) {
@@ -168,7 +161,7 @@ export function installCars(game) {
         out.push({ x: c.x, z: c.z, what: d.name, dig: c.r + 0.3, wall: c.r + 0.2, footing: c.r + 0.5, roof: c.r, grown: true });
       }
     }
-  });
+  }, { grown: true });
 
   // ── Materials ─────────────────────────────────────────────────────────────
   const materials = {

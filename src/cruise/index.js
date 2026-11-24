@@ -681,7 +681,7 @@ export function installCruise(game) {
         out.push({ x: d.x, z: d.z, what: 'the pier', dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
       }
     }
-  });
+  }, { grown: true });
   function pierAt(i) {
     const b = berths[i];
     if (piers[i]) return piers[i];

@@ -58,7 +58,6 @@ export function installLandmarks(game) {
   // Not where something has been built, a fire laid or a stump left: anything
   // that isn't grown from the seed. Asked once per site, after the save is in.
   const standing = new Map();
-  let asking = false; // (the sites' own obstacles keep out of it)
   function stands(s) {
     let yes = standing.get(s.id);
     if (yes !== undefined) return yes;
@@ -72,16 +71,11 @@ export function installLandmarks(game) {
     const cx = (s.box[0] + s.box[2]) / 2;
     const cz = (s.box[1] + s.box[3]) / 2;
     const r = Math.hypot(s.box[2] - s.box[0], s.box[3] - s.box[1]) / 2;
-    asking = true;
-    try {
-      for (const o of builder.obstacles.near(cx, cz, r + 1)) {
-        if (!o.grown && onPlan(s, o.x, o.z, 0.5)) {
-          yes = false;
-          break;
-        }
+    for (const o of builder.obstacles.built(cx, cz, r + 1)) {
+      if (onPlan(s, o.x, o.z, 0.5)) {
+        yes = false;
+        break;
       }
-    } finally {
-      asking = false;
     }
     standing.set(s.id, yes);
     return yes;
@@ -115,7 +109,6 @@ export function installLandmarks(game) {
   // ── Building goes round it ────────────────────────────────────────────────
   const discs = new Map();
   builder.obstacles.addSource((x, z, R, out) => {
-    if (asking) return;
     for (const s of near(x, z, R + 1)) {
       let list = discs.get(s.id);
       if (!list) discs.set(s.id, (list = planDiscs(s)));
@@ -125,7 +118,7 @@ export function installLandmarks(game) {
         out.push({ x: d.x, z: d.z, what, dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
       }
     }
-  });
+  }, { grown: true });
 
   // ── Standing them up and taking them down ─────────────────────────────────
   // What an old place is built from comes when the first one is about to be

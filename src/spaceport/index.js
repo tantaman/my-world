@@ -156,7 +156,7 @@ export function installSpaceport(game) {
         out.push({ x: d.x, z: d.z, what: 'the launch pad', dig: d.r + 0.3, wall: d.r + 0.2, footing: d.r + 0.5, roof: d.r, grown: true });
       }
     }
-  });
+  }, { grown: true });
   // ── On the map ────────────────────────────────────────────────────────────
   // (made once each, and again when you've been there)
   const places = new Map();

@@ -110,27 +110,21 @@ export function installRailway(game) {
   // station: anything not grown from the seed. Asked once per line, after
   // the save is in.
   const standing = new Map();
-  let asking = false; // (its own obstacles keep out of it)
   function stands(line) {
     let yes = standing.get(line.id);
     if (yes !== undefined) return yes;
     yes = true;
-    asking = true;
-    try {
-      for (let i = 0; i < line.n && yes; i += 2) {
-        for (const o of builder.obstacles.near(line.x[i], line.z[i], footprint(line, i) + 1)) {
-          if (!o.grown && !o.clear) {
-            yes = false;
-            break;
-          }
+    for (let i = 0; i < line.n && yes; i += 2) {
+      for (const o of builder.obstacles.built(line.x[i], line.z[i], footprint(line, i) + 1)) {
+        if (!o.clear) {
+          yes = false;
+          break;
         }
       }
-      for (const st of line.stations) {
-        const r = Math.hypot(st.box[2] - st.box[0], st.box[3] - st.box[1]) / 2;
-        for (const o of builder.obstacles.near(st.x, st.z, r + 1)) if (!o.grown && !o.clear && onPlan(st, o.x, o.z, 0.5)) yes = false;
-      }
-    } finally {
-      asking = false;
+    }
+    for (const st of line.stations) {
+      const r = Math.hypot(st.box[2] - st.box[0], st.box[3] - st.box[1]) / 2;
+      for (const o of builder.obstacles.built(st.x, st.z, r + 1)) if (!o.clear && onPlan(st, o.x, o.z, 0.5)) yes = false;
     }
     standing.set(line.id, yes);
     return yes;
@@ -171,7 +165,6 @@ export function installRailway(game) {
   // building goes round it
   const discs = new Map();
   builder.obstacles.addSource((x, z, R, out) => {
-    if (asking) return;
     for (const line of lines.within(x - R - 12, z - R - 12, x + R + 12, z + R + 12, false)) {
       if (!stands(line)) continue;
       samplesNear(line, x, z, R + 9, (i) => {
@@ -188,7 +181,7 @@ export function installRailway(game) {
         }
       }
     }
-  });
+  }, { grown: true });
 
   // ── Standing the track up and taking it down ──────────────────────────────
   const shown = new Map(); // key -> { key, x, z, r, object }

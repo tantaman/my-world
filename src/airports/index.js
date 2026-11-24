@@ -110,30 +110,24 @@ export function installAirports(game) {
   // Not where something has been built, or a fire laid, on its strip, its
   // apron or its banks: anything not grown from the seed. Asked once each.
   const standing = new Map();
-  let asking = false; // (its own obstacles keep out of it)
   function stands(site) {
     let yes = standing.get(site.id);
     if (yes !== undefined) return yes;
     yes = true;
-    asking = true;
-    try {
-      for (let lz = -HALF; lz <= HALF && yes; lz += 12) {
-        for (let lx = -8; lx <= APRON[2]; lx += 12) {
-          if (lx > 8 && (lz < APRON[1] || lz > APRON[3])) continue;
-          toWorld(site, lx, lz, _w);
-          for (const o of builder.obstacles.near(_w.x, _w.z, 9 + site.toe)) {
-            if (o.grown || o.clear) continue;
-            toLocal(site, o.x, o.z, _l);
-            if (outside(_l.x, _l.z, _o) < site.toe + 1) {
-              yes = false;
-              break;
-            }
+    for (let lz = -HALF; lz <= HALF && yes; lz += 12) {
+      for (let lx = -8; lx <= APRON[2]; lx += 12) {
+        if (lx > 8 && (lz < APRON[1] || lz > APRON[3])) continue;
+        toWorld(site, lx, lz, _w);
+        for (const o of builder.obstacles.built(_w.x, _w.z, 9 + site.toe)) {
+          if (o.clear) continue;
+          toLocal(site, o.x, o.z, _l);
+          if (outside(_l.x, _l.z, _o) < site.toe + 1) {
+            yes = false;
+            break;
           }
-          if (!yes) break;
         }
+        if (!yes) break;
       }
-    } finally {
-      asking = false;
     }
     standing.set(site.id, yes);
     return yes;
@@ -188,7 +182,6 @@ export function installAirports(game) {
   });
   // building goes round it
   builder.obstacles.addSource((x, z, R, out) => {
-    if (asking) return;
     for (const s of within(x - R - 60, z - R - 60, x + R + 60, z + R + 60)) {
       toLocal(s, x, z, _l);
       const d = outside(_l.x, _l.z, _o);
@@ -198,7 +191,7 @@ export function installAirports(game) {
       const r = 2 + Math.max(0, Math.min(s.toe, d - 0.5));
       out.push({ x: _w.x, z: _w.z, what: 'the airfield', dig: r + 0.5, wall: r + 0.3, footing: r + 0.7, roof: r, grown: true });
     }
-  });
+  }, { grown: true });
 
   // ── Standing them up and taking them down ─────────────────────────────────
   const body = createBuildingMaterial(); // (build/surfaces.js)
