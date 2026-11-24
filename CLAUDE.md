@@ -92,6 +92,17 @@ starts with the contract.
   (`towns/perTown.ts`), and registers one job:
   `game.budget.add({ name, work: (ms) => it.pump(ms) })`. Don't slice time
   by hand or keep an allowance of the frame of your own.
+- A search can't be stopped part way through a step, so it yields every
+  millisecond or two of work: every few dozen heights asked of the land
+  (`HEIGHTS_A_STEP` in `airports/airports.js`), not every row of a grid or
+  every spot looked at. What it needs of another registry it waits for
+  (`yield 'wait'` until `keepOff.ready(box)`), or asks a square at a time
+  with a yield between, rather than have it all found in one step.
+- What is grown from the seed asks `builder.obstacles.built(x, z, R)` to
+  know whether someone has built on it, never `near()`, and adds its own
+  source with `{ grown: true }`. A grown thing's source goes looking for
+  what's near and sends for what hasn't been found: asked by other grown
+  things, each road found sent for the next, across the world, for ever.
 - What is only needed once you're at a place (what builds it, who is in
   it) goes in a module of its own that the feature fetches when the first
   one is about to be stood up: `const look = lazy(() => import('./look.js'))`

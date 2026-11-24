@@ -319,7 +319,8 @@ export class Lines {
         nb[k * RINGS + j] = gen.broadHeight(A.x, A.z, 0);
         nc[k * RINGS + j] = this._spotCost(A.x, A.z, avoid);
       }
-      if (k % 8 === 7) yield;
+      // (every millisecond or two of asking about the land: game/budget.ts)
+      if (k % 2 === 1) yield;
     }
     const W = 2 * SWERVE + 1;
     const ec = new Float64Array(NODES * RINGS * W).fill(Infinity);
@@ -341,7 +342,7 @@ export class Lines {
           ec[(k * RINGS + i) * W + (j - i + SWERVE)] = c;
         }
       }
-      if (k % 8 === 7) yield;
+      yield;
     }
     const path = bestRing(nc, ec);
     if (!path) return null;
@@ -390,7 +391,7 @@ export class Lines {
       w[i] = level > hc + 0.02 ? level : -Infinity;
       wet[i] = w[i] > -Infinity ? 1 : 0;
       floor[i] = Math.max(g[i] + BED, w[i] + CLEAR);
-      if (i % 40 === 39) yield;
+      if (i % 12 === 11) yield;
     }
     let h = envelope(floor, ds);
 
@@ -488,7 +489,20 @@ export class Lines {
     for (const source of this.keepClear) {
       for (let z = z0; z < z1; z += CLEAR_STEP) {
         for (let x = x0; x < x1; x += CLEAR_STEP) {
-          for (const d of source(x, z, Math.min(x + CLEAR_STEP, x1), Math.min(z + CLEAR_STEP, z1))) {
+          const xe = Math.min(x + CLEAR_STEP, x1);
+          const ze = Math.min(z + CLEAR_STEP, z1);
+          // (a quarter of the square at a time first, when there's no hurry:
+          // a cave's way in takes a while to lay out, and a square can hold
+          // four; then all of it, of what is by then known)
+          if (this.search.patient) {
+            const xm = (x + xe) / 2;
+            const zm = (z + ze) / 2;
+            for (const [a, b, c, d] of [[x, z, xm, zm], [xm, z, xe, zm], [x, zm, xm, ze], [xm, zm, xe, ze]]) {
+              source(a, b, c, d);
+              yield;
+            }
+          }
+          for (const d of source(x, z, xe, ze)) {
             if (seen.has(d.key)) continue;
             seen.add(d.key);
             out.push(d);

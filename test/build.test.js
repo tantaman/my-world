@@ -74,6 +74,32 @@ test('whoever owns a thing says how much room it needs', () => {
   assert.equal(blocksFooting(-3, -3), undefined);
 });
 
+test('what is grown asks only what has been built, and that never asks what else is grown', () => {
+  const obstacles = new Obstacles();
+  // a road's source: asked what's near, it goes looking (and sends for what it hasn't found)
+  let lookedFor = 0;
+  obstacles.addSource(
+    (x, z, R, out) => {
+      lookedFor++;
+      out.push({ x: 0, z: 0, what: 'the road', dig: 4, grown: true });
+    },
+    { grown: true },
+  );
+  // the forest's, which is grown and says so...
+  obstacles.addSource((x, z, R, out) => out.push({ x: 1, z: 0, what: 'a pine', dig: 1.3, clear: 'fell', grown: true }), { grown: true });
+  // ...and what people have put there: a stump, a fire ring
+  obstacles.addSource((x, z, R, out) => out.push({ x: 2, z: 0, what: 'a stump', dig: 1, clear: 'grub' }));
+  obstacles.addSource((x, z, R, out) => out.push({ x: 3, z: 0, what: 'a fire ring', dig: 1.05 }));
+  // a source that didn't say, with something grown in it: asked, and that left out
+  obstacles.addSource((x, z, R, out) => out.push({ x: 4, z: 0, what: 'a boulder', dig: 2, grown: true }, { x: 5, z: 0, what: 'a footing', dig: 0.6 }));
+
+  assert.deepEqual(obstacles.built(0, 0, 10).map((o) => o.what), ['a stump', 'a fire ring', 'a footing']);
+  assert.equal(lookedFor, 0, 'the road was not asked: so finding a road cannot set off a search for whatever is beside it');
+  // a tool is told about all of it
+  assert.deepEqual(obstacles.near(0, 0, 10).map((o) => o.what), ['the road', 'a pine', 'a stump', 'a fire ring', 'a boulder', 'a footing']);
+  assert.equal(lookedFor, 1);
+});
+
 // A bench with nothing round it: enough to register tools and pick them.
 function bench() {
   const said = [];

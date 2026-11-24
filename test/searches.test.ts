@@ -113,6 +113,35 @@ test('wanted outright, a search does not wait', () => {
   assert.ok(s.patient, 'and is patient again afterwards');
 });
 
+test('what was asked for most lately is looked for first; what is asked for together, in the order asked', () => {
+  const { clock, slow, steps } = bench();
+  const s = new Searches<string, number>({ grow: (key, n) => slow(key, n), clock });
+  // a map scrolled across a while ago left these...
+  for (const k of ['far1', 'far2', 'far3']) s.ask(k, 4);
+  s.pump(1); // (the first of them begun: two of its four steps)
+  assert.deepEqual(steps, ['far1', 'far1']);
+  // ...and now what's round you is asked for, nearest first
+  for (const k of ['near1', 'near2']) s.ask(k, 2);
+  steps.length = 0;
+  s.pump(3);
+  assert.deepEqual(steps, ['near1', 'near1', 'near2', 'near2'], 'those first, in the order they were asked for');
+  // asked for again, something from before goes ahead of the rest of it
+  s.peek('far3', 4);
+  steps.length = 0;
+  assert.equal(s.pump(100), 0, 'and nothing is dropped: all of it is found in the end');
+  assert.deepEqual(steps, ['far3', 'far3', 'far3', 'far3', 'far1', 'far1', 'far2', 'far2', 'far2', 'far2'], 'far1 from where it had got to');
+  assert.equal(s.peek('far1', 4), 'FAR1');
+});
+
+test('asking again for something in line does not put it in twice, nor ahead of what it was asked with', () => {
+  const { clock, slow, steps } = bench();
+  const s = new Searches<string, number>({ grow: (key, n) => slow(key, n), clock });
+  for (let round = 0; round < 3; round++) for (const k of ['a', 'b', 'c']) s.peek(k, 1);
+  assert.equal(s.size, 3);
+  s.pump(100);
+  assert.deepEqual(steps, ['a', 'b', 'c']);
+});
+
 test('pump stops when its time is up, mid-search', () => {
   const { clock, slow, steps } = bench();
   const s = new Searches<string, number>({ grow: (key, n) => slow(key, n), clock });
