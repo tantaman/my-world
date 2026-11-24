@@ -124,6 +124,55 @@ test('a frame that owes a little does a little less', () => {
   assert.equal(budget.owed, 0);
 });
 
+test('a job the others are waiting on goes first, and has most of the frame', () => {
+  const { budget, job } = bench();
+  const log: string[] = [];
+  const roads = job('roads', 100, log);
+  const tracks = job('tracks', 100, log);
+  // the pier: 5 ms of looking, and every road waits on it until it's found
+  const pier = job('pier', 5, log);
+  budget.add(roads);
+  budget.add(tracks);
+  budget.add({ name: 'pier', work: (ms) => pier.work(ms), pressing: () => pier.left > 0 });
+  budget.run();
+  assert.equal(log[0], 'pier', 'before the others, whoever\'s turn it was');
+  assert.equal(budget.by.pier, budget.usual * 0.75, 'three quarters of the allowance, not a third of it');
+  assert.equal(budget.by.roads + budget.by.tracks, budget.usual * 0.25, 'and the others have the rest');
+  assert.equal(budget.spent, budget.usual);
+  // once it's found (nobody is waiting on it any more) it's a job like any other
+  budget.run();
+  assert.equal(pier.left, 0);
+  budget.run();
+  assert.equal(budget.by.roads, budget.usual / 2);
+});
+
+test('a job the others are waiting on that is itself waiting leaves the frame to them', () => {
+  const { budget, job } = bench();
+  const roads = job('roads', 100);
+  let asked = 0;
+  budget.add({ name: 'pier', work: () => (asked++, true), pressing: () => true }); // more to do, but it did nothing with its time
+  budget.add(roads);
+  budget.run();
+  assert.equal(asked, 1);
+  assert.equal(100 - roads.left, budget.usual);
+});
+
+test('a job nobody is waiting for has only what the others leave', () => {
+  const { budget, job } = bench();
+  const roads = job('roads', budget.usual * 2.5);
+  const far = job('far airfields', 100);
+  budget.add({ name: 'far airfields', work: (ms) => far.work(ms), idle: () => true });
+  budget.add(roads);
+  budget.run();
+  budget.run();
+  assert.equal(far.left, 100, 'nothing, while the roads are busy');
+  budget.run();
+  assert.equal(roads.left, 0);
+  assert.equal(100 - far.left, budget.usual / 2, 'what they left of the frame they finished in');
+  budget.run();
+  assert.equal(100 - far.left, budget.usual * 1.5, 'and all of it once they are done');
+});
+
 test('a job that keeps throwing is stopped, and the rest carry on', (t) => {
   t.mock.method(console, 'error', () => {});
   const { budget, job } = bench();

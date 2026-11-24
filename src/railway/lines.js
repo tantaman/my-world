@@ -229,6 +229,12 @@ export class Lines {
     return this.search.peek(key(ci, cj));
   }
 
+  // ...or surveyed by whoever asks, a step at a time: a generator for
+  // another search to `yield*` (core/searches.ts steps).
+  steps(ci, cj) {
+    return this.search.steps(key(ci, cj));
+  }
+
   // Lines known so far within r of (x, z); the rest are queued.
   known(x, z, r) {
     return this.within(x - r, z - r, x + r, z + r, false);
@@ -973,6 +979,16 @@ export const surveyed = (lines) => (x0, z0, x1, z1) => {
   }
   return known;
 };
+
+// ...or surveyed there by whoever asks, a step at a time: a generator for a
+// search to `yield*` when what it's looking for holds others up, and it
+// shouldn't wait for the railway's turn (the ship's pier).
+export const surveying = (lines) =>
+  function* (x0, z0, x1, z1) {
+    for (let j = Math.floor(z0 / CELL); j <= Math.floor(z1 / CELL); j++) {
+      for (let i = Math.floor(x0 / CELL); i <= Math.floor(x1 / CELL); i++) yield* lines.steps(i, j);
+    }
+  };
 
 export const railsNear = (lines, near) => ({
   holds(x0, z0, x1, z1) {

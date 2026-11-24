@@ -78,8 +78,14 @@ export function installMap(game) {
   commands.add({ id: 'map', keys: ['KeyM', 'PadSelect'], group: 'WANDER', label: 'map · mark places · where to go', icon: pictures.MAP, run: () => map.open() });
   hud.button('map-btn', () => map.toggle());
 
-  // The map covers the view, so the world isn't drawn under it.
-  game.coverWhen(() => map.isOpen);
+  // The map covers the view, so the world isn't drawn under it; and while
+  // it's at rest the frame has time to spare for whatever is being looked
+  // for (the places in Routes, the roads across it). While it's being
+  // scrolled or zoomed, the frame is the map's.
+  game.coverWhen(
+    () => map.isOpen,
+    () => map.still,
+  );
 
   game.addSystem({
     name: 'markers',

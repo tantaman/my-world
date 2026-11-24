@@ -94,9 +94,10 @@ export function findBerth(gen, start, keepOff = () => false) {
 // findBerth a step at a time: a generator that yields every few dozen
 // heights it asks of the land (a millisecond or two: game/budget.ts), and
 // returns the berth (or null), so it can be spread over frames. While
-// patient() says it may, it waits (yielding WAIT) for what it keeps clear of
-// to have been found where it's about to ask (keepOff.ready: the railway
-// there, surveyed), rather than have it found there and then.
+// patient() says it may, what it keeps clear of is found a step at a time
+// where it's about to ask (keepOff.settle, a generator: the railway there,
+// the towns), and waited for (yielding WAIT) where that's someone else's to
+// find (keepOff.ready), rather than all found there and then.
 const HEIGHTS_A_STEP = 32;
 const CLEAR_STEP = 160; // m: what it keeps clear of is asked about a square this big at a time (about a square of the caves')
 export const WAIT = 'wait';
@@ -166,6 +167,7 @@ export function* berthSearch(gen, start, keepOff = () => false, patient = () => 
   for (const f of found) {
     const box = boxOf(f);
     if (patient()) {
+      if (keepOff.settle) yield* keepOff.settle(box[0] - CLEAR, box[1] - CLEAR, box[2] + CLEAR, box[3] + CLEAR);
       while (keepOff.ready && !keepOff.ready(box[0] - CLEAR, box[1] - CLEAR, box[2] + CLEAR, box[3] + CLEAR)) yield WAIT;
       // (and asked a square at a time first: what has to be found to answer,
       // an old place or a cave's way in, is found a little at a time, and

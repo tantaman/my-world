@@ -10,6 +10,14 @@
 //               put in line to be done a little at a time by pump() (a list,
 //               the map: they'd rather fill in over a few frames than stall)
 //
+//   steps(key)  the answer, found by whoever asks, a step at a time: for a
+//               search that needs another's answer before it can go on
+//               (`const town = yield* towns.steps(key)`). It neither has it
+//               all found in one step, as get() would, nor waits for its turn
+//               in a line it has no say in, as peek() would: the looking is
+//               done out of the asker's own time, so whatever is hurrying the
+//               asker hurries this
+//
 // The search itself is the owner's, a generator that yields now and then so
 // it can be left there until next frame:
 //
@@ -123,6 +131,32 @@ export class Searches<T, A = undefined> {
       return this.set(key, r.value);
     } finally {
       this.patient = was;
+    }
+  }
+
+  // The answer, found a step at a time by whoever asks: a generator to
+  // `yield*` from inside another search. It goes on from wherever the search
+  // for it had got to, and whatever it yields is passed on ('wait' too).
+  *steps(key: string, arg: A): Search<T> {
+    for (;;) {
+      // (found meanwhile, by pump or by someone who wanted it outright)
+      if (this.known.has(key)) return this.known.get(key) as T;
+      let run = this.growing.get(key);
+      if (!run) {
+        const begun = this.grow(key, arg);
+        if (!isSearch(begun)) return this.set(key, begun);
+        this.growing.set(key, (run = begun));
+      }
+      let r;
+      try {
+        r = run.next();
+      } catch (err) {
+        // (what it asked about isn't here yet: begun again when it's come back to)
+        if (isNotYet(err)) this.growing.delete(key);
+        throw err;
+      }
+      if (r.done) return this.set(key, r.value);
+      yield r.value;
     }
   }
 

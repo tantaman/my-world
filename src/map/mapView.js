@@ -59,6 +59,7 @@ const BADGE_FILL = { fresh: '#e9dfc0', visited: '#a99a76' };
 const SHAPE_FILL = 'rgba(74, 56, 36, 0.92)';
 const GROUND_FILL = 'rgba(176, 150, 108, 0.85)'; // a place's open ground: a town's street
 const SHAPES_FROM = 2.6; // device px per metre (per DPR) from which a place's shape is drawn
+const STILL_AFTER = 0.3; // s since it was last scrolled or zoomed, after which the map is at rest (`still`)
 const NEARBY = { r: 1500, n: 8, every: 0.5 }; // places listed beside the map: within r m, at most n, looked at again every s while it's open (they fill in)
 
 const TEMPLATE = /* html */ `
@@ -149,6 +150,10 @@ export class MapView {
     this.sprites = new Map();
     this.viewKey = '';
     this.t = 0;
+    // where it was looking a frame ago, and when (on its own clock, t) it
+    // last looked somewhere else: see `still`
+    this._view = { cx: 0, cz: 0, scale: 0 };
+    this._movedAt = 0;
     this.layers = [];
     this.actions = []; // the options under the lists: [{ id, run, enabled, button }]
     const view = this;
@@ -503,8 +508,23 @@ export class MapView {
         this.fly = null;
       }
     }
+    const v = this._view;
+    if (v.cx !== this.cx || v.cz !== this.cz || v.scale !== this.scale) {
+      v.cx = this.cx;
+      v.cz = this.cz;
+      v.scale = this.scale;
+      this._movedAt = this.t;
+    }
     this._requestTiles();
     this._draw();
+  }
+
+  // Whether the map is at rest: open, and not scrolled or zoomed (by hand,
+  // by a key, or flying to somewhere) for a moment. Then the frame has time
+  // to spare for what's being looked for (game.coverWhen); while it's being
+  // moved, the frame is the map's.
+  get still() {
+    return this.isOpen && this.t - this._movedAt > STILL_AFTER;
   }
 
   _requestTiles() {

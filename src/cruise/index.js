@@ -56,6 +56,7 @@
 
 import * as THREE from 'three';
 import { berthSearch, clearOf, regionsInTheWay, WAIT } from './site.js';
+import { surveying } from '../railway/lines.js';
 import { layout, cabinsOn, cabinByNo, roomAt, roomName, deckAt, deckY, halfBeam, inner, whereAlong, DECK_BY_N, CORES, CORE, FIRST, LAST, STERN, BOW, DECK_H, SLAB, SHIP, isCabinDeck } from './plan.js';
 import { Voyage, PORTS, CALL, SEA as SEA_LEG } from './voyage.js';
 import { stateroom, describe, pickYours } from './cabins.js';
@@ -85,6 +86,7 @@ const PIER_SOLID = 900; // m: within this of a pier, what's solid of it is there
 const ARRIVE = 40; // m from the gangway's foot that counts as there
 const SEA_FOG = SEA_LEG.fog; // s in the thick of the fog
 const MAUI_AFTER = 20; // s after the world opens that Maui's berth is looked for (or as soon as she's bound there)
+const MAUI_NEAR = 20000; // m from Maui's part of the world within which its berth is wanted now
 const FOG_HAZE = 24; // how thick the air is in the thick of the fog at sea (1: the forest's)
 const FOG_HORN = 30; // s between blasts of her horn in fog
 const FULL_SPEED = 6; // m/s: under way, as fast as she goes in and out
@@ -140,8 +142,18 @@ export function installCruise(game) {
   // Whether all of that has been found in a box yet, asking for what hasn't
   // (the railway; the towns round it and their video stores; the hunt
   // clubs): a berth looked for in the background waits for it, rather than
-  // have a town and its railway found in the middle of a frame.
+  // have a town and its railway found in the middle of a frame. The railway
+  // and the towns it finds itself first, a step at a time (settle): every
+  // road for kilometres waits to know where the pier is, so it doesn't wait
+  // for their turn.
   const T = towns.towns;
+  const rails = surveying(railway.lines);
+  keepOff.settle = function* (x0, z0, x1, z1) {
+    yield* rails(x0, z0, x1, z1);
+    for (let j = Math.floor(z0 / T.size) - 1; j <= Math.floor(z1 / T.size) + 1; j++) {
+      for (let i = Math.floor(x0 / T.size) - 1; i <= Math.floor(x1 / T.size) + 1; i++) yield* T.steps(i, j);
+    }
+  };
   const placedKnown = (x0, z0, x1, z1) => {
     let known = true;
     for (let j = Math.floor(z0 / T.size) - 1; j <= Math.floor(z1 / T.size) + 1; j++) {
@@ -218,7 +230,18 @@ export function installCruise(game) {
     }
     return searches.some((sr) => sr && sr !== 'done');
   }
-  game.budget.add({ name: 'cruise', work: stepSearches });
+  // (while home's berth is being looked for, it goes before the rest: every
+  // road within reach of it waits to know where it is)
+  // (...and Maui's nobody is waiting for, unless you're over there: it has
+  // what the other searches leave of a frame. Aboard and bound there, it's
+  // found there and then: ensure().)
+  const mauiNear = () => !!mauiRegion && Math.hypot(game.focus.x - mauiRegion.x, game.focus.z - mauiRegion.z) < MAUI_NEAR;
+  game.budget.add({
+    name: 'cruise',
+    work: stepSearches,
+    pressing: () => !!searches[0] && searches[0] !== 'done',
+    idle: () => searches[0] === 'done' && !mauiNear(),
+  });
   function found(i, b) {
     berths[i] = b;
     if (!b) return;
@@ -1357,7 +1380,7 @@ export function installCruise(game) {
       if (site && !searches[1] && mauiRegion) {
         const t = voyage.at(clock(), {}, () => false);
         const bound = (t.to === 1 && t.phase !== 'leaving') || (t.phase === 'docked' && t.port === 1) || t.port === 1;
-        if ((elapsed > MAUI_AFTER || bound || Math.hypot(game.focus.x - mauiRegion.x, game.focus.z - mauiRegion.z) < 20000) && known(mauiWays)) search(1);
+        if ((elapsed > MAUI_AFTER || bound || mauiNear()) && known(mauiWays)) search(1);
       }
       if (!voyage) return;
       if (!voy.phase) place();
