@@ -136,8 +136,9 @@ starts sound only after a key or a click, so with a pad alone the forest may
 stay quiet until one.
 
 Plug in two, three or four pads and the screen splits, with someone else on
-each pad after the first ([Split screen](../splitscreen/README.md)). The
-first pad is still yours alone (`game.pads.only`).
+each pad after the first ([Split screen](../splitscreen/README.md)), each
+with a HUD of their own and their own choice of who to be and of where their
+camera sits. The first pad is still yours alone (`game.pads.only`).
 
 A feature gives a command a pad button by listing it with its keys
 (`keys: ['KeyM', 'PadSelect']`); `gamepad.js` has the names.

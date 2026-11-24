@@ -5,12 +5,14 @@
 // pad until then), and the screen splits in two; a third, in three; a fourth,
 // in quarters (layout.js). The first pad, with the keyboard and the mouse, is
 // the hiker you already are, with everything you can do. Each other pad is
-// somebody else, another of the hikers (player/hikers.js), set down beside
-// you: they walk, run, jump, swim and dive, and look about, with a camera of
-// their own on their own part of the screen. Tools, rides, the map and the
-// pack are still only yours: everything else the game does is done by and
-// for the first hiker. Unplug a pad and whoever it was goes; with one left,
-// the screen is whole again.
+// somebody else, set down beside you: they walk, run, jump, swim and dive,
+// and look about, with a camera of their own on their own part of the
+// screen, and a HUD of their own there (partHud.ts). Who each of them is
+// (player/hikers.js) is theirs to choose, as it is yours: any of the hikers,
+// whoever else is them already. So is whether their camera is locked behind
+// them. Tools, rides, the map and the pack are still only yours: everything
+// else the game does is done by and for the first hiker. Unplug a pad and
+// whoever it was goes; with one left, the screen is whole again.
 //
 // How it fits in, without anything else knowing about it:
 //   - only the first pad is read as yours (game.pads.only)
@@ -24,7 +26,8 @@
 //     own eyes hides your body from your own part only.
 //   - the ground and the grass are grown round each of them as well as round
 //     you (game.followed)
-//   - your HUD keeps to your part of the screen (#hud's box, index.html)
+//   - your HUD keeps to your part of the screen (#hud's box, index.html),
+//     and each of the others' is made here, in theirs
 //
 // What goes by where you are and nothing else (the animals, the towns, what
 // is heard) still goes by you alone.
@@ -34,10 +37,12 @@ import type { Game } from '../game/game.ts';
 import type { Part } from '../render/views.ts';
 import { Player } from '../player/player.js';
 import { HIKERS, hiker } from '../player/hikers.js';
-import { padName } from '../player/gamepad.js';
+import { padName, padNames } from '../player/gamepad.js';
 import { SHARED, WADE, UNDER } from '../render/uniforms.js';
 import { waterSample } from '../core/geom.js';
 import { PadControls } from './pad.js';
+import { PartHud } from './partHud.ts';
+import type { Row, Panel } from './partHud.ts';
 import { layout, cast, next, MOST } from './layout.js';
 import './splitscreen.css';
 
@@ -46,6 +51,8 @@ export interface Other {
   pad: number; // which pad is theirs (Gamepad.index)
   who: string; // which hiker they are (an id in player/hikers.js)
   hiker: Player;
+  behind: boolean; // is their camera locked behind them?
+  panel: boolean; // is their panel open?
 }
 
 // What this provides: world.splitscreen, for the console and the play-through.
@@ -94,9 +101,7 @@ interface Someone {
   camera: THREE.PerspectiveCamera;
   ripple: number; // eased (RIPPLE_EASE)
   waiting: boolean; // joined while something else was drawn: set down once it isn't
-  part: HTMLElement;
-  who: HTMLElement;
-  said: string; // what `who` says, as last written
+  hud: PartHud; // what is written over their part, and the part itself
 }
 
 // The features this uses, so it is installed after them (game/features.js).
@@ -109,22 +114,39 @@ export function installSplitscreen(game: Game) {
   const FOV = camera.fov; // (as it is before anyone has zoomed into their eyes)
   const ids = () => HIKERS.map((h: { id: string }) => h.id);
   const whoOf = (h: Player): string => h.character.who.id;
+  const nameOf = (h: Player): string => h.character.who.name;
 
-  // Who was last on each part of the screen (1, 2, 3), remembered by this
-  // browser, so that the same pad is the same hiker next time.
-  const remembered = settings.get('splitHikers', 'object');
-  const kept: Array<string | null> = Array.isArray(remembered) ? remembered.map((id: unknown) => (typeof id === 'string' ? id : null)) : [];
-  const remember = (o: Someone) => {
-    kept[o.slot] = whoOf(o.hiker);
-    settings.set('splitHikers', kept.slice());
+  // What each of the others chose, remembered by this browser for their part
+  // of the screen (1, 2, 3), so that the same pad finds it as they left it:
+  // who they are, and whether their camera is locked behind them (player.js:
+  // one stick does it all, which is easier for small hands). Only what they
+  // chose: someone who has never said who they are is found a hiker nobody
+  // is, each time (cast, layout.js).
+  const each = <T>(name: string, is: (v: unknown) => v is T): Array<T | null> => {
+    const was = settings.get(name, 'object');
+    return Array.isArray(was) ? was.map((v: unknown) => (is(v) ? v : null)) : [];
   };
-  // Whether the others' cameras are locked behind them (player.js: one stick
-  // does it all, which is easier for small hands). Their own; on by default.
-  let behind: boolean = settings.get('splitBehind', 'boolean') ?? true;
+  const kept = each('splitHikers', (v): v is string => typeof v === 'string');
+  const locked = each('splitBehinds', (v): v is boolean => typeof v === 'boolean');
+  // Until one of them has chosen, their camera is locked behind them.
+  // (splitBehind: what the one switch for all of them, which this once was,
+  // was left at.)
+  const LOCKED: boolean = settings.get('splitBehind', 'boolean') ?? true;
+  function be(o: Someone, id: string) {
+    if (id === whoOf(o.hiker)) return;
+    o.hiker.be(hiker(id));
+    kept[o.slot] = id;
+    settings.set('splitHikers', kept.slice());
+  }
+  function lock(o: Someone, on: boolean) {
+    o.hiker.lockCamera = on;
+    locked[o.slot] = on;
+    settings.set('splitBehinds', locked.slice());
+  }
 
   // ── On the screen ─────────────────────────────────────────────────────────
-  // A thin dark line round each part, and on each of the others' parts who
-  // that is and what their pad does. Your HUD keeps to your own part.
+  // A thin dark line round each part, and over each of the others' parts, a
+  // HUD of their own (partHud.ts). Yours keeps to your own part.
   const box = document.createElement('div');
   box.id = 'split';
   box.hidden = true;
@@ -148,18 +170,51 @@ export function installSplitscreen(game: Game) {
     if (hudEl) hudEl.style.inset = on ? `${r.y * 100}% ${(1 - r.x - r.w) * 100}% ${(1 - r.y - r.h) * 100}% ${r.x * 100}%` : '';
   }
 
-  // Who someone is, and what their pad's spare buttons do, in their part.
+  // Someone's panel (their start button): what is theirs to set, as who is
+  // hiking and the camera behind you are yours on the settings panel, and
+  // the way back to you. Worked with their own pad (buttons(), below).
+  const rowsOf = (o: Someone): Row[] => [
+    { id: 'who', label: () => 'who is hiking', value: () => nameOf(o.hiker), step: (by) => be(o, next(ids(), whoOf(o.hiker), by)) },
+    { id: 'behind', label: () => 'camera locked behind you', value: () => (o.hiker.lockCamera ? 'on' : 'off'), step: () => lock(o, !o.hiker.lockCamera) },
+    { id: 'back', label: () => `back beside ${nameOf(player)}`, value: () => padName('PadA', o.controls.kind), press: () => bring(o), closes: true },
+  ];
+  const panelOf = (o: Someone): Panel => ({
+    title: () => nameOf(o.hiker).toUpperCase(),
+    rows: rowsOf(o),
+    keys: () => o.controls.keys(o.hiker.lockCamera),
+    foot: () => {
+      const kind = o.controls.kind;
+      return `${padNames(['PadUp', 'PadDown'], kind)} choose · ${padNames(['PadLeft', 'PadRight'], kind).replace('d-pad ', '')} change · ${padName('PadB', kind)} close`;
+    },
+  });
+  // Who someone is, and the buttons that are the split screen's, on their part.
   function label(o: Someone) {
     const kind = o.controls.kind;
-    const name = o.hiker.character.who.name;
-    const said = `${name}|${kind}|${player.character.who.name}`;
-    if (said === o.said) return;
-    o.said = said;
-    const b = document.createElement('b');
-    b.textContent = name;
-    const i = document.createElement('i');
-    i.textContent = `${padName('PadSelect', kind)} · someone else   ${padName('PadStart', kind)} · back beside ${player.character.who.name}`;
-    o.who.replaceChildren(b, i);
+    o.hud.label(nameOf(o.hiker), `${padName('PadSelect', kind)} · someone else   ${padName('PadStart', kind)} · settings`);
+  }
+  // The buttons of their pad that are the split screen's: start opens their
+  // panel and puts it away, and while it's open the pad is the panel's
+  // (controls.blocked): the d-pad goes from row to row and changes the one
+  // they're on, A does too, B puts it away. Otherwise select makes them the
+  // next of the hikers.
+  function buttons(o: Someone) {
+    const { controls: c, hud: h } = o;
+    const m = h.menu;
+    if (c.pressed('PadStart')) {
+      if (m.isOpen) m.close();
+      else m.open();
+    } else if (!m.isOpen) {
+      if (c.pressed('PadSelect')) {
+        be(o, next(ids(), whoOf(o.hiker)));
+        h.flash(nameOf(o.hiker));
+      }
+    } else if (c.pressed('PadB')) m.close();
+    else if (c.pressed('PadUp')) m.move(-1);
+    else if (c.pressed('PadDown')) m.move(1);
+    else if (c.pressed('PadLeft')) m.step(-1);
+    else if (c.pressed('PadRight')) m.step(1);
+    else if (c.pressed('PadA')) m.press();
+    c.blocked = m.isOpen;
   }
 
   // The screen shared out between everyone (or whole again).
@@ -177,8 +232,8 @@ export function installSplitscreen(game: Game) {
     views.show(parts);
     yourRect = rects[0];
     place(yours, rects[0]);
-    others.forEach((o, i) => place(o.part, rects[i + 1]));
-    box.replaceChildren(yours, ...others.map((o) => o.part));
+    others.forEach((o, i) => place(o.hud.el, rects[i + 1]));
+    box.replaceChildren(yours, ...others.map((o) => o.hud.el));
     frame(!game.covered, true);
   }
   addEventListener('resize', () => {
@@ -264,6 +319,8 @@ export function installSplitscreen(game: Game) {
     o.waiting = false;
   }
 
+  // Someone new: whoever was on that part of the screen last time, with
+  // their camera as they had it; or the first of the hikers nobody is yet.
   function join(pad: number, slot: number) {
     const id = cast(ids(), everyone.map(whoOf), kept[slot] ?? null);
     const eye = new THREE.PerspectiveCamera(FOV, camera.aspect, camera.near, camera.far);
@@ -271,73 +328,37 @@ export function installSplitscreen(game: Game) {
     const h = new Player({ scene, camera: eye, world: chunks, input: controls, solids, spaces, basins, who: hiker(id) });
     // what keeps your camera out of walls and roofs keeps theirs out too
     h.cameraBlockers = player.cameraBlockers;
-    h.lockCamera = behind;
-    const part = document.createElement('div');
-    part.className = 'part';
-    const who = document.createElement('div');
-    who.className = 'who';
-    part.appendChild(who);
-    const o: Someone = { pad, slot, controls, hiker: h, camera: eye, ripple: 0, waiting: true, part, who, said: '' };
+    h.lockCamera = locked[slot] ?? LOCKED;
+    const o: Someone = { pad, slot, controls, hiker: h, camera: eye, ripple: 0, waiting: true, hud: new PartHud() };
+    o.hud.offer(panelOf(o));
     others.push(o);
     everyone = [...everyone, h];
     followed.add(h.pos);
     if (!game.covered) bring(o);
-    remember(o);
     label(o);
-    hud.flash(`${h.character.who.name} joins in`);
+    hud.flash(`${nameOf(h)} joins in`);
+    o.hud.flash(`${nameOf(h)} · ${padName('PadStart', controls.kind)} for your settings`, 4000);
   }
 
   function leave(o: Someone) {
     followed.delete(o.hiker.pos);
     scene.remove(o.hiker.character.root);
     o.hiker.character.dispose();
-    o.part.remove();
+    o.hud.dispose();
     others.splice(others.indexOf(o), 1);
     everyone = everyone.filter((h) => h !== o.hiker);
-    hud.flash(`${o.hiker.character.who.name}'s pad is gone`);
+    hud.flash(`${nameOf(o.hiker)}'s pad is gone`);
   }
 
-  // Be the next hiker nobody else is.
-  function change(o: Someone) {
-    const id = next(ids(), whoOf(o.hiker), everyone.filter((h) => h !== o.hiker).map(whoOf));
-    if (id === whoOf(o.hiker)) return;
-    o.hiker.be(hiker(id));
-    remember(o);
-  }
-
-  // Everyone somebody different, while there's somebody left to be (you may
-  // have just become who one of the others is, on the settings panel).
-  function apart() {
-    for (let k = 1; k < everyone.length; k++) {
-      const id = whoOf(everyone[k]);
-      if (!everyone.slice(0, k).some((h) => whoOf(h) === id)) continue;
-      const free = ids().find((c) => !everyone.some((h) => whoOf(h) === c));
-      if (!free) return;
-      everyone[k].be(hiker(free));
-      remember(others[k - 1]);
-    }
-  }
-
-  // ── Settings, and the help panel ──────────────────────────────────────────
-  hud.setting({
-    id: 'split-camera-behind',
-    group: 'SPLIT SCREEN',
-    label: "the other pads' cameras locked behind them",
-    get: () => behind,
-    set(on: boolean) {
-      behind = on;
-      settings.set('splitBehind', on);
-    },
-  });
+  // ── The help panel ────────────────────────────────────────────────────────
   commands.describe({ group: 'SPLIT SCREEN', help: '2 to 4 pads', label: 'a part of the screen each' });
   commands.describe({ group: 'SPLIT SCREEN', help: 'select', pad: ['PadSelect'], label: 'on the other pads: be someone else' });
-  commands.describe({ group: 'SPLIT SCREEN', help: 'start', pad: ['PadStart'], label: 'on the other pads: back beside you' });
+  commands.describe({ group: 'SPLIT SCREEN', help: 'start', pad: ['PadStart'], label: 'on the other pads: their own settings' });
 
   // ── Each frame ────────────────────────────────────────────────────────────
   // After you've moved (the player feature's system), and before the world
   // grows round where everyone now is.
   const only = new Set<number>();
-  let yourId = whoOf(player);
   let last: { x: number; z: number } | null = null;
   game.addSystem({
     name: 'splitscreen',
@@ -376,10 +397,6 @@ export function installSplitscreen(game: Game) {
         last = null;
         return;
       }
-      if (whoOf(player) !== yourId) {
-        yourId = whoOf(player);
-        apart();
-      }
 
       // While something else is drawn over everything (the map, a place of
       // its own), the others wait where they are.
@@ -388,7 +405,11 @@ export function installSplitscreen(game: Game) {
       if (!covered) {
         const p = player.pos;
         const jumped = last !== null && Math.hypot(p.x - last.x, p.z - last.z) > TELEPORT;
-        for (const o of others) if (o.waiting || jumped || Math.hypot(o.hiker.pos.x - p.x, o.hiker.pos.z - p.z) > TOO_FAR) bring(o);
+        for (const o of others) {
+          const left = Math.hypot(o.hiker.pos.x - p.x, o.hiker.pos.z - p.z) > TOO_FAR;
+          if (o.waiting || jumped || left) bring(o);
+          if (left) o.hud.flash(`back beside ${nameOf(player)}`);
+        }
         last ??= { x: 0, z: 0 };
         last.x = p.x;
         last.z = p.z;
@@ -396,12 +417,11 @@ export function installSplitscreen(game: Game) {
       for (const o of others) {
         o.controls.read();
         if (covered) continue;
-        if (o.controls.pressed('PadSelect')) change(o);
-        if (o.controls.pressed('PadStart')) bring(o);
+        buttons(o);
         label(o);
-        o.hiker.lockCamera = behind;
         o.hiker.update(dt);
         o.ripple += (o.hiker.ripple - o.ripple) * (1 - Math.exp(-dt * RIPPLE_EASE));
+        o.hud.update(o.hiker.pos, o.hiker.camYaw, sky.hours, hud.guided);
       }
       gather();
     },
@@ -413,7 +433,7 @@ export function installSplitscreen(game: Game) {
       return others.length + 1;
     },
     get others() {
-      return others.map((o) => ({ pad: o.pad, who: whoOf(o.hiker), hiker: o.hiker }));
+      return others.map((o) => ({ pad: o.pad, who: whoOf(o.hiker), hiker: o.hiker, behind: o.hiker.lockCamera, panel: o.hud.menu.isOpen }));
     },
   });
 }

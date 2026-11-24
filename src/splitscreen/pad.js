@@ -6,8 +6,11 @@
 // stick looks, A jumps, B runs (and dives), the d-pad zooms, as BINDINGS has
 // them. It has no mouse and no keyboard, and none of the game's commands: the
 // buttons left over are the split screen's own (index.ts asks pressed()).
+//
+// While their panel is open (partHud.ts) the pad is the panel's: `blocked`,
+// and the hiker is told nothing, as yours is while a panel has the keyboard.
 
-import { Pads } from '../player/gamepad.js';
+import { Pads, padNames } from '../player/gamepad.js';
 import { BINDINGS } from '../player/input.js';
 
 const NO_LOOK = Object.freeze({ x: 0, y: 0 });
@@ -19,6 +22,9 @@ export class PadControls {
     this.index = index;
     this.pads = new Pads(list);
     this.pads.only = new Set([index]);
+    // The pad is working something else (their panel): nothing it does is
+    // walking, looking or jumping, though pressed() still answers.
+    this.blocked = false;
     this._jumped = false;
     this._axes = { x: 0, y: 0 };
   }
@@ -26,7 +32,7 @@ export class PadControls {
   // Read the pad: once a frame, before its hiker moves.
   read() {
     this.pads.read();
-    this._jumped = BINDINGS.jump.some((code) => this.pads.went.has(code));
+    this._jumped = !this.blocked && BINDINGS.jump.some((code) => this.pads.went.has(code));
     return this;
   }
 
@@ -40,6 +46,21 @@ export class PadControls {
     return this.pads.kind;
   }
 
+  // What the pad does, by what its buttons are called, for their panel to
+  // list: [{ keys, does }]. locked: is their camera locked behind them
+  // (player.js)? Then the sticks turn them.
+  keys(locked = false) {
+    const named = (...codes) => padNames(codes, this.kind);
+    return [
+      { keys: named('PadLS'), does: locked ? 'walk · left and right turn you' : 'walk' },
+      { keys: named('PadRS'), does: locked ? 'turn · look up and down' : 'look around' },
+      { keys: named('PadA'), does: 'jump · out of your depth, come up' },
+      { keys: named('PadB'), does: 'run · out of your depth, dive' },
+      { keys: named('PadUp', 'PadDown'), does: 'zoom · all the way in, your eyes' },
+      { keys: named('PadSelect'), does: 'be someone else' },
+    ];
+  }
+
   // ── What player.js asks ───────────────────────────────────────────────────
 
   consumeLook() {
@@ -47,7 +68,7 @@ export class PadControls {
   }
 
   lookRate() {
-    return this.pads.look;
+    return this.blocked ? NO_LOOK : this.pads.look;
   }
 
   consumeZoom() {
@@ -55,13 +76,13 @@ export class PadControls {
   }
 
   isDown(action) {
-    return BINDINGS[action].some((code) => this.pads.down.has(code));
+    return !this.blocked && BINDINGS[action].some((code) => this.pads.down.has(code));
   }
 
   // x right, y forward, in [-1, 1]. (Player may change what it's handed.)
   moveAxes() {
-    this._axes.x = this.pads.move.x;
-    this._axes.y = -this.pads.move.y;
+    this._axes.x = this.blocked ? 0 : this.pads.move.x;
+    this._axes.y = this.blocked ? 0 : -this.pads.move.y;
     return this._axes;
   }
 
