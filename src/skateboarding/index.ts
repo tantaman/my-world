@@ -173,7 +173,6 @@ export function installSkateboarding(game: Game) {
   let best: Best | null = null;
   let hold: ReturnType<typeof player.rides.take> = null;
   let heading = 0; // which way you were going, for the camera to keep to while you're down
-  let hinted = false;
   const c = { push: false, brake: 0, steer: 0, crouch: false, pop: false, flip: 0, shove: false };
   builder.idleWhile(() => active);
 
@@ -366,21 +365,12 @@ export function installSkateboarding(game: Game) {
     hud.cue({ html: cueFor(input, skater, act.key('step off')) }, 'skateboarding');
   }
 
-  // The first time you stand on tarmac, where your board is.
-  function hint() {
-    if (hinted || !canSkate() || !['tarmac', 'asphalt'].includes(underfoot())) return;
-    hinted = true;
-    const k = act.key('skate');
-    hud.flash(`tarmac underfoot: ${k === 'F' ? 'F to skate' : 'your skateboard is at hand'}`, SAY);
-  }
-
   // ── Every frame ───────────────────────────────────────────────────────────
   game.addSystem({
     name: 'skateboarding',
     phase: 'update',
     update({ dt }) {
       if (!active) {
-        hint();
         cue();
         show();
         return;

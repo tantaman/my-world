@@ -6,8 +6,7 @@ the round where they meet at a town's gate, a car dealer's lot, an airstrip,
 the cruise ship's pier, a boardwalk, a dock — press **F** (the key that gets
 you onto anything: see [Acting](../act/README.md); *skate* is at hand in the
 pack, and a button on a touch screen) and you're on it. **F** again (*step
-off*) and it's under your arm. The first time you stand on tarmac, you're
-told so.
+off*) and it's under your arm.
 
 | | rolling | in the air |
 |---|---|---|
