@@ -204,7 +204,7 @@ place in that order, not at the end:
 | `build/kit.js` | flat-sided things from quads, boxes and panels, for a plain vertex-coloured material | `new Kit()`, `k.box(…, skip)`, `k.panel(…)`, `k.build()` |
 | `build/obstacles.js` | a thing tools must work round | `game.builder.obstacles.addSource(fn)`, with `{ grown: true }` if all of it is grown from the seed |
 | `build/obstacles.js` | whether something has been built on what you grew | `game.builder.obstacles.built(x, z, R)` |
-| `build/surfaces.js` | what something built is made of: bark, grain, paint, stone, shingles, tin, glass | `mesher.surf = SURF.paint` (and `mesher.wear`), drawn with `createBuildingMaterial()` |
+| `build/surfaces.js` | what something built is made of: bark, grain, paint, stone, shingles, tin, glass, steel | `mesher.surf = SURF.paint` (and `mesher.wear`), drawn with `createBuildingMaterial()` |
 | `caves/sites.js` | the mouths of caves, as something grown later keeps clear of | `caveMouths(caves, clear)`, with `keepClear` |
 | `core/card.js` | a place out of a book: its name and lines over the picture as you come into it, and the dark on the way | `new Card({ id, book })`, `card.show({ title, who, lines, canto })`, `await card.darken(on)` |
 | `core/lazy.ts` | code that isn't needed until you get there (what a place looks like), fetched then and once | `const look = lazy(() => import('./look.js'))`, `look.want()` → the module or null, `await look.ready()` |

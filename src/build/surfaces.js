@@ -18,6 +18,9 @@
 //   tin       corrugated iron: ribs the light runs along, rust coming through and running down
 //   glass     smooth, mirroring the sky, dark beyond it
 //   iron      dark worked iron
+//   steel     galvanized or stainless: smooth and bright, the sky in it, brushed
+//             along the sheet; worn (as galvanized is), duller, mottled with
+//             its spangle of crystals
 //   clay      chinking, mortar and plaster: sandy, crazed with fine cracks
 //   cloth     canvas, a weave
 //
@@ -52,6 +55,7 @@ export const SURF = {
   iron: 10,
   clay: 11,
   cloth: 12,
+  steel: 13,
 };
 // For a flat face (Mesher.tris), its grain runs across it, level, unless it
 // is marked as standing upright (an upright board): surf | UPRIGHT.
@@ -250,6 +254,13 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
           relief = pit * 0.0008;
           metal = 0.55;
           rough = 0.6;
+        } else if (kind == S_STEEL) {
+          float spangle = vnoise(uv * 9.0) * shows(0.05, fw);
+          float brush = streak(vec2(uv.x * 0.6, uv.y * 140.0), 0.8) * shows(0.004, fw);
+          col *= mix(0.94 + 0.1 * brush, 0.86 + 0.24 * spangle, wear);
+          relief = brush * 0.0002 * (1.0 - wear);
+          metal = mix(0.7, 0.3, wear);
+          rough = mix(0.26, 0.55, wear);
         } else if (kind == S_CLAY) {
           float sand = hash12(floor(uv * 400.0)) * shows(0.0025, fw);
           float crack = (1.0 - smoothstep(0.0, 0.03, abs(vnoise(uv * 14.0) - 0.5))) * shows(0.02, fw);
@@ -267,7 +278,7 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
 
         // Weather: wherever it isn't glass or metal, streaks down the walls
         // where the rain runs, and moss and lichen on what faces the sky.
-        if (kind != S_GLASS && kind != S_TIN && kind != S_IRON) {
+        if (kind != S_GLASS && kind != S_TIN && kind != S_IRON && kind != S_STEEL) {
           vec2 wp = worldXZ(vWPos);
           float up = wn.y;
           if (abs(up) < 0.6) {
@@ -323,6 +334,15 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
           float F = 0.04 + 0.96 * pow(1.0 - clamp(dot(V, N), 0.0, 1.0), 5.0);
           vec3 env = R.y > 0.0 ? skyGradient(R) : mix(uHorizon * 0.35, vec3(0.03, 0.035, 0.025), smoothstep(0.0, -0.3, R.y));
           outgoingLight = outgoingLight * (1.0 - F) + env * F;
+        } else if (kind == S_STEEL) {
+          // Steel: the sky in it too, in its own colour, more the smoother
+          // it is and the more slanting the look.
+          vec3 N = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
+          vec3 V = normalize(cameraPosition - vWPos);
+          vec3 R = reflect(-V, N);
+          float F = 0.04 + 0.96 * pow(1.0 - clamp(dot(V, N), 0.0, 1.0), 5.0);
+          vec3 env = R.y > 0.0 ? skyGradient(R) : mix(uHorizon * 0.35, vec3(0.03, 0.035, 0.025), smoothstep(0.0, -0.3, R.y));
+          outgoingLight += env * diffuseColor.rgb * (0.15 + 0.55 * (1.0 - wear)) * (0.35 + 0.65 * F);
         }
         #include <opaque_fragment>`,
       );
