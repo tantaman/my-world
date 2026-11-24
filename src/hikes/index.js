@@ -32,6 +32,13 @@ const FAR_MARGIN = 700; // m of the forest round a hike that its far view takes 
 const FAR_STEP = 16; // m between the far view's heights
 const FAR_MAKE = 1500; // m past a hike's edge: nearer than this its far view is made…
 const FAR_DROP = 2500; // …and further than this, let go
+// A place too big to draw whole (Washington, life size: 24 km across) has a
+// square of it drawn round you instead, as the forest's own far view is:
+// over this much of it (m, its outer edge from its middle), the square this
+// big (half of it, m), its heights this far apart, re-made as you go once
+// you've walked this far (m) from where it was drawn round.
+const FAR_WHOLE = 3000;
+const FAR_ROUND = { half: 1100, step: 16, move: 400 };
 const VIEW_PITCH = 0.18; // rad: the camera looks out, a little down, as a photo does
 const CAIRN_ASIDE = 1.4; // m to the left of where the photo was taken
 const SIGN_ASIDE = 1.6; // m to the side of the trail where it starts
@@ -73,7 +80,8 @@ export function installHikes(game) {
   }
 
   // the hike whose land you're on
-  const onHike = (x, z) => cards.find((c) => Math.hypot(x - c.at[0], z - c.at[1]) < outer(c)) || null;
+  // (the innermost, where one is inside another: the zoo, in Washington)
+  const onHike = (x, z) => cards.filter((c) => Math.hypot(x - c.at[0], z - c.at[1]) < outer(c)).sort((a, b) => outer(a) - outer(b))[0] || null;
 
   // ── On the map ───────────────────────────────────────────────────────────
   // Where each hike starts and where its photo was taken are places on the
@@ -154,7 +162,7 @@ export function installHikes(game) {
     const s = spot(c, at);
     player.spawn(s.x, s.z, s.yaw, s.camYaw);
     arrivedOn = c;
-    far.want(c.id, ...farBox(c));
+    far.want(c.id, ...farBox(c, s.x, s.z));
     const shot = shotOf(c, at);
     if (shot) {
       player.camPitch = VIEW_PITCH;
@@ -215,7 +223,14 @@ export function installHikes(game) {
   // does not reach: so the land round the hike is drawn once more, coarsely
   // (src/far/). Asking for a square whose land has not been fetched waits for
   // it rather than drawing the forest in its place.
-  const farBox = (c) => {
+  // (for one too big for that, the square round (x, z): on a grid, so that
+  // it's asked for again only once you've gone FAR_ROUND.move)
+  const farBox = (c, x = game.focus.x, z = game.focus.z) => {
+    if (outer(c) > FAR_WHOLE) {
+      const { half, step, move } = FAR_ROUND;
+      const [mx, mz] = [Math.round(x / move) * move, Math.round(z / move) * move];
+      return [mx - half, mz - half, mx + half, mz + half, step];
+    }
     const half = outer(c) + FAR_MARGIN;
     return [c.at[0] - half, c.at[1] - half, c.at[0] + half, c.at[1] + half, FAR_STEP];
   };

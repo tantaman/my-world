@@ -23,6 +23,12 @@
 //             its spangle of crystals
 //   clay      chinking, mortar and plaster: sandy, crazed with fine cracks
 //   cloth     canvas, a weave
+//   facade    a building's wall in a city: brick, stone or render, with its
+//             windows in rows, storey over storey, lit here and there at
+//             night. Its grain runs along the wall, level, and up it from
+//             the foot of the building (a city's walls write their own:
+//             src/washington/), and its wear is which kind of front it is:
+//             FACADE
 //
 // Each sets how the surface stands up and down (bumped into its normal), how
 // rough and how metallic it is, and what it does to the vertex colour. As
@@ -56,7 +62,13 @@ export const SURF = {
   clay: 11,
   cloth: 12,
   steel: 13,
+  facade: 14,
 };
+// The kinds of front a facade is, as its wear (0..1): a row house's, brick,
+// its windows tall and narrow; an older office's or a government building's,
+// stone, its windows in a grid; and a newer office's, its floors banded in
+// glass.
+export const FACADE = { row: 0.1, stone: 0.45, glass: 0.8 };
 // For a flat face (Mesher.tris), its grain runs across it, level, unless it
 // is marked as standing upright (an upright board): surf | UPRIGHT.
 export const UPRIGHT = 64;
@@ -132,6 +144,7 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
         float fw = max(length(dFdx(uv)), length(dFdy(uv))); // m a pixel, across the surface
         vec3 wn = normalize(vWNormal) * (gl_FrontFacing ? 1.0 : -1.0);
         float relief = 0.0; // how far it stands proud here (m)
+        float glazing = 0.0; // how much of it is window glass (a facade's)
         float rough = 0.85;
         float metal = 0.0;
         vec3 col = diffuseColor.rgb;
@@ -267,6 +280,40 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
           col *= (0.88 + 0.2 * sand) * (1.0 - 0.35 * crack);
           relief = (sand * 0.4 - crack) * ${RELIEF.clay};
           rough = 0.97;
+        } else if (kind == S_FACADE) {
+          // which kind of front: a row house's, stone, or banded in glass
+          float style = wear;
+          float storey = style < 0.33 ? 3.3 : style < 0.66 ? 3.9 : 3.7;
+          float bay = style < 0.33 ? 2.4 : style < 0.66 ? 2.9 : 1.6;
+          vec2 sill = style < 0.33 ? vec2(0.85, 2.55) : style < 0.66 ? vec2(1.0, 2.9) : vec2(0.75, 3.35);
+          float wide = style < 0.33 ? 0.95 : style < 0.66 ? 1.35 : 1.5;
+          float floorN = floor(uv.y / storey);
+          float bayN = floor(uv.x / bay);
+          vec2 inCell = vec2(fract(uv.x / bay) * bay, fract(uv.y / storey) * storey);
+          float edge = 0.05;
+          float wx = smoothstep(0.0, edge, inCell.x - (bay - wide) * 0.5) * smoothstep(0.0, edge, (bay + wide) * 0.5 - inCell.x);
+          float wy = smoothstep(0.0, edge, inCell.y - sill.x) * smoothstep(0.0, edge, sill.y - inCell.y);
+          // (no windows under the first storey's sill: the foot of the wall)
+          float win = wx * wy * step(0.0, uv.y - sill.x) * shows(0.35, fw);
+          // the wall itself: brick in courses, or dressed stone, or render
+          if (style < 0.33) {
+            vec4 c = courses(uv, 0.215, 0.075);
+            float mortar = (1.0 - smoothstep(0.0, 0.06, c.z) * (1.0 - smoothstep(0.94, 1.0, c.z)) * smoothstep(0.0, 0.12, c.w)) * shows(0.03, fw);
+            col *= (0.86 + 0.24 * hash12(c.xy)) * mix(1.0, 1.25, mortar * 0.6);
+            relief = -mortar * 0.004;
+          } else {
+            float block = courses(uv, 1.2, 0.6).z;
+            col *= 0.9 + 0.16 * vnoise(uv * 2.0) + 0.06 * (1.0 - smoothstep(0.0, 0.02, block)) * shows(0.05, fw);
+          }
+          // the glass: dark, a little different pane to pane, a frame round it
+          float pane = hash12(vec2(bayN, floorN) + 7.1);
+          vec3 glass = vec3(0.05, 0.065, 0.08) * (0.8 + 0.5 * pane);
+          col = mix(col, glass, win);
+          glazing = win;
+          rough = mix(0.9, 0.08, win);
+          // at night, a light on in some of them
+          float lit = step(0.62, hash12(vec2(bayN * 1.7 + 3.0, floorN * 2.3 - 1.0))) * uNight * win;
+          totalEmissiveRadiance += vec3(1.0, 0.78, 0.45) * lit * (0.55 + 0.45 * pane);
         } else if (kind == S_CLOTH) {
           vec2 w = fract(uv * 220.0);
           float weave = (step(0.5, w.x) == step(0.5, w.y) ? 1.0 : 0.6) * shows(0.0045, fw);
@@ -325,13 +372,13 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
       )
       .replace(
         '#include <opaque_fragment>',
-        `if (kind == S_GLASS) {
+        `if (kind == S_GLASS || glazing > 0.0) {
           // Glass: the sky mirrored in it, more of it the more slanting the
           // look (Fresnel), over the dark of the room behind it.
           vec3 N = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
           vec3 V = normalize(cameraPosition - vWPos);
           vec3 R = reflect(-V, N);
-          float F = 0.04 + 0.96 * pow(1.0 - clamp(dot(V, N), 0.0, 1.0), 5.0);
+          float F = (0.04 + 0.96 * pow(1.0 - clamp(dot(V, N), 0.0, 1.0), 5.0)) * (kind == S_GLASS ? 1.0 : glazing);
           vec3 env = R.y > 0.0 ? skyGradient(R) : mix(uHorizon * 0.35, vec3(0.03, 0.035, 0.025), smoothstep(0.0, -0.3, R.y));
           outgoingLight = outgoingLight * (1.0 - F) + env * F;
         } else if (kind == S_STEEL) {
@@ -347,6 +394,6 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
         #include <opaque_fragment>`,
       );
   };
-  mat.customProgramCacheKey = () => 'building-v2';
+  mat.customProgramCacheKey = () => 'building-v4';
   return mat;
 }

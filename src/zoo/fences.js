@@ -16,7 +16,7 @@ import { Mesher } from '../build/geometry.js';
 import { SURF, UPRIGHT } from '../build/surfaces.js';
 import { layout } from '../build/font.js';
 import { USE } from './site.js';
-import { inside } from './shapes.js';
+import { inside } from '../core/rings.js';
 
 // Each kind of fence: how high (m), what it's made of, how far apart its
 // posts are, and whether it's a mesh you see through.

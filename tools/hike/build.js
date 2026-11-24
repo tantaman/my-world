@@ -53,6 +53,10 @@ const SEA_LEVEL = 0;
 const SEA_NAME = 'the sea';
 // real m: how far over the water a lake's, or the sea's, banks are kept
 const BANK = 0.5;
+// real m: water said to lie at a level (the tide's, a city's survey: see
+// hike/dcgis.js) is water only where the land under it is no more than this
+// above that
+const RAPIDS = 2;
 // In a country where the tide sets the level (country.js, `tidal`: a delta's
 // bayous and canals), the water is all one, still, at the level of the sea,
 // whatever the map says runs: the areas it draws water over, lakes, rivers and
@@ -104,7 +108,8 @@ const SEA_CELL = 3;
 //   photo      { lat, lon, bearing, hour } (readPhoto())
 //   elevation  (lat, lon) -> metres above sea level
 //   trails     [{ name, points: [[lat, lon], ...], rope?, closed? }]   (osm.js)
-//   waters     [{ name, rings: [[[lat, lon], ...]] }]
+//   waters     [{ name, rings: [[[lat, lon], ...]], holes?, level? }]: level,
+//              the real height it lies at, where that's known (the tide's)
 //   coast      [[[lat, lon], ...], ...]: the shoreline of the sea, the land
 //              on the left of each line as you go along it (osm.js)
 //   roads      [[[lat, lon], ...], ...]: roads and car parks, where a walk
@@ -239,9 +244,19 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
       continue;
     }
     // Elevation data lays a lake out flat at its surface: the level is the
-    // height most of it agrees on.
+    // height most of it agrees on, unless the water says (the tide's).
     const levels = wet.map((k) => E[k]).sort((a, b) => a - b);
-    const level = levels[Math.floor(levels.length * 0.3)];
+    const level = w.level ?? levels[Math.floor(levels.length * 0.3)];
+    // (water said to be at a level stops where the land under it rises
+    // above that, a river's rapids: it runs on from there as a stream)
+    if (w.level !== undefined) {
+      for (let j = 0; j < bh; j++) {
+        for (let i = 0; i < bw; i++) {
+          const over = E[(j0 + j) * n + i0 + i] - (level + RAPIDS);
+          if (over > 0) d[j * bw + i] = Math.max(d[j * bw + i], over);
+        }
+      }
+    }
     for (let j = 0; j < bh; j++) {
       for (let i = 0; i < bw; i++) {
         const k = (j0 + j) * n + i0 + i;

@@ -1263,9 +1263,19 @@ test('the hikes in the game are where they really are, and those that meet share
   assert.equal(new Set(HIKES.map((h) => h.id)).size, HIKES.length, 'each has its own id');
   for (const h of HIKES) {
     assert.ok(Math.hypot(...h.at) - h.radius - h.fade > 1500, `${h.id} is out in the world, clear of where people start`);
-    // (at the world's scale, whatever its own land's is: a life-size place too)
-    const [x, z] = project(centreOf(h).lat, centreOf(h).lon, EARTH.scale);
-    assert.ok(Math.hypot(x - h.at[0], z - h.at[1]) < 400, `${h.id} is where it really is`);
+    // The first in its part of the world is where it really is, at the
+    // world's scale, whatever its own land's is (a life-size place too); one
+    // that meets it is placed from it, exactly, at its scale (Washington,
+    // life size round the zoo).
+    const first = HIKES.find((o) => o.datum && h.datum && o.at[0] === h.datum.at[0] && o.at[1] === h.datum.at[1]);
+    if (!first || first === h) {
+      const [x, z] = project(centreOf(h).lat, centreOf(h).lon, EARTH.scale);
+      assert.ok(Math.hypot(x - h.at[0], z - h.at[1]) < 400, `${h.id} is where it really is`);
+    } else {
+      const [e, n] = localFrame(centreOf(first).lat, centreOf(first).lon).toEN(centreOf(h).lat, centreOf(h).lon);
+      const [x, z] = [first.at[0] + e * first.scale, first.at[1] - n * first.scale];
+      assert.ok(Math.hypot(x - h.at[0], z - h.at[1]) < 1, `${h.id} is placed exactly from ${first.id}`);
+    }
     assert.ok(h.datum && h.base !== undefined, `${h.id} says what its heights stand on`);
     for (const o of HIKES) {
       if (o === h || Math.hypot(h.at[0] - o.at[0], h.at[1] - o.at[1]) > h.radius + h.fade + o.radius + o.fade) continue;

@@ -19,7 +19,6 @@
 //   look.js      (fetched) a Zoo: everything stood up, and what the forest keeps off
 //     plan.js      (written by the importer) what it's built from
 //     site.js      the plan laid out in the world: what's on each square metre, the pens
-//     shapes.js    rings in plan: area, inside, edge distance
 //     buildings.js the buildings: their surveyed roofs, walls and windows
 //     grounds.js   the paths, plazas and footbridges; benches, kiosks, statues
 //     fences.js    walls and fences, round the pens and as the map draws them; the signs
@@ -227,7 +226,7 @@ export function installZoo(game: Game) {
     icon: pictures.PANDA,
     run() {
       const d = Math.hypot(player.pos.x - gate.x, player.pos.z - gate.z);
-      hud.flash(d < SHOW ? `the ${ZOO.name}: its gate on Connecticut Avenue is ${formatDistance(d)} off · its exhibits are on the map, under zoo` : `the ${ZOO.name} is in Washington, DC, ${formatDistance(d)} off · it's on the map, under zoo, and there's an airfield near it`, 6000);
+      hud.flash(d < SHOW ? `the ${ZOO.name}: its gate on Connecticut Avenue is ${formatDistance(d)} off · its exhibits are on the map, under zoo` : `the ${ZOO.name} is in Washington, DC, ${formatDistance(d)} off · it's on the map, under zoo`, 6000);
       return true;
     },
   });

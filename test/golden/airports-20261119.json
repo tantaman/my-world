@@ -78,13 +78,13 @@
   ]
  },
  {
-  "id": "airfield:768061:-36451",
+  "id": "airfield:787632:-36439",
   "region": "national-zoo",
   "name": "Talbot Airfield",
-  "x": 768061.2,
-  "z": -36450.7,
-  "yaw": 2.88,
-  "mid": -10.135,
+  "x": 787632.43,
+  "z": -36439.47,
+  "yaw": 1.309,
+  "mid": -29.635,
   "clear": [
    true,
    true

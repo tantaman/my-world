@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { Mesher } from '../build/geometry.js';
 import { SURF, UPRIGHT } from '../build/surfaces.js';
-import { inside, area } from './shapes.js';
+import { inside, area } from '../core/rings.js';
 
 // What a building is made of, by its name: its walls, its roof (null: as the
 // survey says, flat or pitched) and how much of its walls are glass.

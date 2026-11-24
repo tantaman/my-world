@@ -10,7 +10,9 @@
 // hike in the order they were brought in, unless it's within SHARE of a part
 // that has one already, in which case that one is its airfield too. So the
 // four hikes on Maui share one, and adding a hike never moves an airfield
-// that was there: it joins one, or has one of its own.
+// that was there: it joins one, or has one of its own. (Unless it's a place
+// all round that part's middle, as Washington, life size, is round the zoo:
+// the airfield is out past it.)
 //
 // Where in that part: grown from the seed and the land, like the old places
 // and the launch site, so everyone in a world finds it in the same place and
@@ -119,6 +121,13 @@ export function regionsOf(cards, start, seed = 0) {
     const near = regions.find((g) => Math.hypot(c.at[0] - g.x, c.at[1] - g.z) < SHARE);
     if (near) {
       near.hikes.push(c.id);
+      // (a place round the region's middle, as Washington is round the zoo,
+      // has the airfield out past it: the ring starts beyond its reach)
+      const d = Math.hypot(c.at[0] - near.x, c.at[1] - near.z);
+      if (d < reachOf(c) && near.id !== 'home') {
+        near.r0 = Math.max(near.r0, d + reachOf(c) + HIKE_RING[0]);
+        near.r1 = near.r0 + HIKE_RING[1];
+      }
       continue;
     }
     const r0 = reachOf(c) + HIKE_RING[0];

@@ -19,6 +19,7 @@
     "together": "node test/together.mjs",
     "hike": "node tools/hike.mjs",
     "zoo": "node tools/zoo.mjs",
+    "dc": "node --max-old-space-size=8000 tools/dc.mjs",
     "earth": "node --max-old-space-size=8000 tools/earth.mjs",
     "typecheck": "tsc --noEmit"
   },

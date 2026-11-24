@@ -120,7 +120,15 @@ export function withRealPlaces(Land) {
       L.settled();
       // (on the Earth its sea is the Earth's, and runs on past its edge)
       if (this.earth) L.openToSea();
-      this.landforms.push(L);
+      // A place inside a bigger one (the zoo, in Washington) is over it: the
+      // bigger ones first, so that what's blended in turn ends on the
+      // innermost, and what's looked up first-come is looked up from the
+      // end. (Places the same size by their ids: every world that grows
+      // them has them in the same order, whichever came first.)
+      const over = (a, b) => a.outer < b.outer || (a.outer === b.outer && a.id > b.id);
+      let at = this.landforms.length;
+      while (at > 0 && over(this.landforms[at - 1], L)) at--;
+      this.landforms.splice(at, 0, L);
       this.hikes.push(def);
       // (a structure on real land stands on the real ground)
       for (const p of this.pads) p.y = this.naturalHeight(p.x, p.z);
@@ -255,8 +263,9 @@ export function withRealPlaces(Land) {
         const w = L.weight(x, z);
         if (w <= 0) continue;
         let g = L.ground(x, z) + L.offset;
-        // the small bumps, and a path a touch sunken, as in the forest
-        if (detail) g += this._detailHeight(x, z) * (1 - pm * 0.9) - pm * 0.14;
+        // the small bumps, and a path a touch sunken, as in the forest (but
+        // no bumps on a city's graded ground: landform.js)
+        if (detail) g += (L.graded ? 0 : this._detailHeight(x, z) * (1 - pm * 0.9)) - pm * 0.14;
         h += (g - h) * w;
       }
       return h;
@@ -283,15 +292,15 @@ export function withRealPlaces(Land) {
     //
     // On the Earth, though, a real place stands at its real height: its sea
     // at the Earth's sea, and its land where the Earth's land is (the same
-    // land, finer). The real height its heights start from (`base`, its
-    // lowest) stands where the Earth has that height, at the Earth's scale;
-    // so one brought in at a scale of its own (life size, a zoo) has its
-    // lowest ground where the Earth has it, and the rest at its own scale
-    // above that.
+    // land, finer). A real height stands that far over the sea at the
+    // place's own scale: at the Earth's, for a place at 1 : 5 as the Earth
+    // is; and life size for one brought in life size (a zoo, a city), so
+    // that two life-size places that meet (the zoo, in Washington) stand at
+    // the same heights, and Washington's tidal rivers at the sea's level.
     _settle(L) {
       const def = L.def;
       if (this.earth) {
-        L.offset = this.sea.level + (def.base || 0) * EARTH.scale;
+        L.offset = this.sea.level + (def.base || 0) * (def.scale || EARTH.scale);
         return;
       }
       const d = def.datum || this._ownDatum(L);
@@ -385,7 +394,8 @@ export function withRealPlaces(Land) {
       let most = 0;
       for (const L of this.landforms) {
         const w = L.weight(x, z);
-        if (w <= most) continue;
+        // (the innermost, of two as much here: see addHike)
+        if (w < most || w <= 0) continue;
         most = w;
         const g = L.country.ground;
         // bare in patches, the size of a clearing, unless it's all bare or none is
@@ -426,7 +436,8 @@ export function withRealPlaces(Land) {
     // On the Earth, where it's more than half the Earth's, its country there
     // (or null where that's the forest).
     countryAt(x, z) {
-      for (const L of this.landforms) if (L.weight(x, z) > 0.5) return L.country;
+      const Ls = this.landforms;
+      for (let k = Ls.length - 1; k >= 0; k--) if (Ls[k].weight(x, z) > 0.5) return Ls[k].country;
       if (this.earth) {
         const c = this._earthCountry(x, z);
         if (c !== COUNTRY.forest) return c;
@@ -450,7 +461,8 @@ export function withRealPlaces(Land) {
     // bank or a lake's shore (negative in it); far, off real land or with
     // none near. (The forest's water gives way on real land, so it isn't asked.)
     realWater(x, z) {
-      for (const L of this.landforms) if (L.weight(x, z) > 0.5) return L.waterNear(x, z);
+      const Ls = this.landforms;
+      for (let k = Ls.length - 1; k >= 0; k--) if (Ls[k].weight(x, z) > 0.5) return Ls[k].waterNear(x, z);
       return 1e9;
     }
 
