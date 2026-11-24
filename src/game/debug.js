@@ -1,6 +1,12 @@
 // Looking under the bonnet: the stats line (frame stats, on the settings
 // panel), and helpers for the console.
 //
+// The stats line ends with what the searches in the background are taking of
+// each frame (game/budget.ts) and which of them most: `searching 3.9 ms
+// (roads)`. Standing still it should be gone within a couple of minutes of
+// the world opening. If it never goes, something is sending for more for
+// ever; if it's well over the allowance, a search's steps are too long.
+//
 //   await world.teleport(120, -40)     jump somewhere, once it has streamed in
 //   world.look(yaw, pitch, dist)       point the camera
 //   world.stats()                      draw calls, triangles, chunks, plants drawn into shadows
@@ -12,10 +18,12 @@ import { CONFIG } from '../config.js';
 const SET_DOWN = 200;
 
 export function installDebug(game) {
-  const { renderer, pipeline, chunks, grass, player, hud, landforms } = game;
+  const { renderer, pipeline, chunks, grass, player, hud, landforms, budget } = game;
   let show = CONFIG.debug;
   let seconds = 0;
   let frames = 0;
+  let searching = 0; // ms the searches have taken since the line was last written...
+  const by = {}; // ...and each of them, by name
 
   hud.setting({ id: 'stats', group: 'PICTURE', label: 'frame stats', get: () => show, set: (on) => (show = on) });
 
@@ -25,15 +33,25 @@ export function installDebug(game) {
     update({ dt }) {
       seconds += dt;
       frames++;
+      searching += budget.spent;
+      for (const name in budget.by) by[name] = (by[name] || 0) + budget.by[name];
       if (seconds <= 0.5) return;
       const fps = Math.round(frames / seconds);
+      const each = searching / frames;
+      let most = '';
+      for (const name in by) {
+        if (!most || by[name] > by[most]) most = name;
+      }
+      const jobs = each > 0.05 ? ` · searching ${each.toFixed(1)} ms (${most})` : '';
+      for (const name in by) delete by[name];
       seconds = 0;
       frames = 0;
+      searching = 0;
       if (!show) return hud.setDebug('');
       const s = chunks.stats();
       const info = renderer.info.render;
       hud.setDebug(
-        `${fps} fps · ${pipeline.lowW}×${pipeline.lowH} · ${s.chunks} chunks · ${s.instances} plants · ${grass.tiles.size} grass tiles · ${info.calls} calls · ${(info.triangles / 1000).toFixed(0)}k tris`,
+        `${fps} fps · ${pipeline.lowW}×${pipeline.lowH} · ${s.chunks} chunks · ${s.instances} plants · ${grass.tiles.size} grass tiles · ${info.calls} calls · ${(info.triangles / 1000).toFixed(0)}k tris${jobs}`,
       );
     },
   });

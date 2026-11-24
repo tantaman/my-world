@@ -308,12 +308,13 @@ export class Roads {
   }
 
   // Ask for the roads within r of (x, z) to be surveyed in the background,
-  // nearest first.
+  // nearest first. (Those asked for before are asked for again: what's
+  // asked for last is looked for first, core/searches.ts.)
   prefetch(x, z, r) {
     const want = [];
     for (const [ci, cj, dir] of this._candidates(x - r, z - r, x + r, z + r)) {
       const k = key(ci, cj, dir);
-      if (this.links.has(k) || this.queue.has(k)) continue;
+      if (this.links.has(k)) continue;
       const [di, dj] = DIRS[dir];
       const mx = (ci + 0.5 + di * 0.75) * CELL;
       const mz = (cj + 0.5 + dj * 0.75) * CELL;
