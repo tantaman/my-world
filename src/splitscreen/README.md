@@ -17,12 +17,9 @@ keyboard and the mouse. You keep everything you can do: the tools, the map,
 your pack, getting into things and onto them. Your tool bar, prompts and
 panels keep to your part of the screen.
 
-**Each other pad is somebody else**, set down beside you as a different
-hiker: the first of the hikers nobody else is, in the order
-`player/hikers.js` lists them (*the hiker*, Lauren, Oliver, Elliott, and
-anyone added there later). Each pad is remembered as whoever it was last
-time. They walk, run, jump, swim and dive, and look
-about, with a camera of their own on their own part of the screen:
+**Each other pad is somebody else**, set down beside you. They walk, run,
+jump, swim and dive, and look about, with a camera of their own on their own
+part of the screen:
 
 | on the other pads | does |
 |---|---|
@@ -31,13 +28,44 @@ about, with a camera of their own on their own part of the screen:
 | **A** | jump · out of your depth, come up |
 | **B**, held | run · out of your depth, dive |
 | d-pad **↑ ↓** | zoom in · out · held in, look out of your own eyes |
-| **select** | be someone else: the next hiker nobody is |
-| **start** | back beside the first hiker |
+| **select** | be someone else: the next of the hikers |
+| **start** | their own settings |
+
+**Each of them has a HUD of their own** on their part: who they are; where
+they are, which way they're looking and the hour, as yours says of you; the
+place your HUD is pointing to (a mark you're tracking, the view at the end
+of a hike), with how far it is and which way *from them*; and a word now and
+then that is only for them.
+
+**And settings of their own**, on a panel their **start** opens over their
+part, as **O** opens yours. While it's up their pad works it and their hiker
+stands still: d-pad **↑ ↓** goes from row to row, **← →** or **A** changes
+the row they're on, and **B** or **start** puts it away. Under the rows it
+lists what their pad does.
+
+| their panel | |
+|---|---|
+| who is hiking | **← →** goes round the hikers, either way |
+| camera locked behind you | on or off, for them alone |
+| back beside *whoever you are* | **A** sets them down beside you again |
+
+**Anybody can be any of the hikers**, the same one as somebody else too:
+two people can both be *the hiker*. Someone new is the first of the hikers
+nobody is yet, in the order `player/hikers.js` lists them (*the hiker*,
+Lauren, Oliver, Elliott, and anyone added there later), and from then on who
+they are is theirs to choose, with **select** or on their panel, as who you
+are is yours on the settings panel. Nobody is made to change because of who
+someone else has become.
 
 Their cameras are locked behind them to begin with, so one stick does it
 all: left and right turn them, as *camera locked behind you* does for you
-([the hiker](../player/README.md#the-camera-behind-you)). It's a switch on
-the settings panel (**O**), under *split screen*.
+([the hiker](../player/README.md#the-camera-behind-you)). Each of them
+switches their own, on their panel; yours is where it was, on the settings
+panel under *you*.
+
+What someone chose (who they are, their camera) is remembered by the browser
+for their part of the screen, so the same pad finds it as they left it next
+time.
 
 They can't use tools, ride anything or open the map. Everything the game
 does is still done by and for the first hiker. Go somewhere new (back to the
@@ -77,13 +105,17 @@ Nothing else knows about it. It uses things other features offer:
   (`player/bake.js`). With everyone together, four parts cost about two and
   a half times the draw calls one picture did before any of this, and three
   times the triangles.
-- `#hud`'s box (`index.html`): your HUD lays itself out in your part
+- `#hud`'s box (`index.html`): your HUD lays itself out in your part. Each
+  of the others' is made here (`partHud.ts`), and says where they are in the
+  words yours does (`core/format.js`); where to point them is where yours
+  is pointing (`hud.guided`)
 
 ## Files
 
 ```
-index.ts         plugs it into the game: who has a pad, the others' hikers and cameras, each part as it's drawn
-layout.js        where each part of the screen goes, and who each hiker on it is
-pad.js           one pad as the whole of someone's controls
-splitscreen.css  the lines between the parts, and who's on each
+index.ts         plugs it into the game: who has a pad, the others' hikers and cameras, what each chose, each part as it's drawn
+layout.js        where each part of the screen goes, and who someone new is
+pad.js           one pad as the whole of someone's controls, and what it does, in words
+partHud.ts       the HUD on one of the others' parts, and their panel
+splitscreen.css  the lines between the parts, and how the others' HUDs look
 ```

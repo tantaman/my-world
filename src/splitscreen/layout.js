@@ -14,8 +14,8 @@ export const MOST = 4;
 //       other two side by side under it)
 //   4   quarters
 //
-// The first part is always the one whose HUD it is (the tool bar, the
-// prompts): the hiker the keyboard and mouse drive too.
+// The first part is always the one with the game's own HUD on it (the tool
+// bar, the prompts): the hiker the keyboard and mouse drive too.
 export function layout(n, aspect = 16 / 9) {
   const wide = aspect >= 1;
   const rect = (x, y, w, h) => ({ x, y, w, h });
@@ -32,9 +32,9 @@ export function layout(n, aspect = 16 / 9) {
 // Who someone joining is. ids: every hiker's, in the order they're offered
 // (player/hikers.js) · taken: the ids already being hiked as · kept: who
 // was last on this part of the screen, if anyone.
-// Whoever was there before, if nobody else is them now; otherwise the first
-// nobody is; and once everybody is somebody, two can be the same: whoever
-// was there before (or the first) after all.
+// Whoever was there before, whether or not somebody else is them now (who
+// you are is yours to choose, and two can be the same); for someone new, the
+// first nobody is; and once everybody is somebody, the first.
 /**
  * @param {string[]} ids
  * @param {string[]} taken
@@ -42,24 +42,19 @@ export function layout(n, aspect = 16 / 9) {
  * @returns {string}
  */
 export function cast(ids, taken, kept = null) {
-  const known = kept !== null && ids.includes(kept);
-  if (known && !taken.includes(kept)) return kept;
-  return ids.find((id) => !taken.includes(id)) ?? (known ? kept : ids[0]);
+  if (kept !== null && ids.includes(kept)) return kept;
+  return ids.find((id) => !taken.includes(id)) ?? ids[0];
 }
 
-// The next hiker after `id` that nobody else is (round from the end of the
-// list), or `id` itself if each of the others is taken.
+// The hiker `by` places on from `id` in the list (the one before it: -1),
+// round from either end: anyone, whoever else is them already.
 /**
  * @param {string[]} ids
  * @param {string} id
- * @param {string[]} taken
+ * @param {number} [by]
  * @returns {string}
  */
-export function next(ids, id, taken) {
-  const at = ids.indexOf(id);
-  for (let k = 1; k <= ids.length; k++) {
-    const c = ids[(at + k + ids.length) % ids.length];
-    if (c !== id && !taken.includes(c)) return c;
-  }
-  return id;
+export function next(ids, id, by = 1) {
+  const n = ids.length;
+  return ids[(((ids.indexOf(id) + by) % n) + n) % n];
 }

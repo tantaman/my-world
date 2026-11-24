@@ -1,11 +1,13 @@
-/* The settings panel. Uses the colour tokens defined on :root in index.html. */
+/* The settings panel. Uses the colour tokens defined on :root in index.html.
+   Sized by the box it's in (#hud), not the window: on a split screen that is
+   your part of it, and the panel keeps to it as the rest of your HUD does. */
 
 #settings {
   position: absolute;
   right: calc(16px + var(--inset-r));
   top: calc(16px + var(--inset-t));
-  width: min(300px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px - var(--inset-t) - var(--inset-b));
+  width: min(300px, calc(100% - 32px));
+  max-height: calc(100% - 32px - var(--inset-t) - var(--inset-b));
   overflow-y: auto;
   padding: 10px 16px 14px;
   font-size: 11.5px;

@@ -1,12 +1,15 @@
 // A split screen (src/splitscreen/): how the screen is shared out between two,
-// three or four, who each hiker on it is, and a pad as the whole of
-// someone's controls, walking a hiker of their own while yours stands still.
+// three or four, who each hiker on it is, a pad as the whole of someone's
+// controls, walking a hiker of their own while yours stands still, and the
+// panel each of them has to themselves.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { layout, cast, next, MOST } from '../src/splitscreen/layout.js';
 import { PadControls } from '../src/splitscreen/pad.js';
+import { Menu } from '../src/splitscreen/partHud.ts';
+import { formatWhere, formatTrack, formatHeading, formatClock } from '../src/core/format.js';
 import { Pads, PAD_BUTTONS } from '../src/player/gamepad.js';
 import { Player } from '../src/player/player.js';
 import { HIKERS, hiker } from '../src/player/hikers.js';
@@ -59,21 +62,24 @@ test('two are side by side on a wide screen and one over the other on a tall one
   assert.ok(pictures.every((p) => p > 0.8 && p < 1.9), `none of them a sliver (${pictures.map((p) => p.toFixed(2))})`);
 });
 
-test('each hiker on the screen is somebody different, while there is somebody left to be', () => {
+test('someone new is a hiker nobody is yet; after that, who anyone is is theirs to choose', () => {
   const ids = ['hiker', 'oliver', 'elliott'];
   assert.equal(cast(ids, ['hiker']), 'oliver', 'the first nobody is');
   assert.equal(cast(ids, ['hiker', 'oliver']), 'elliott');
-  assert.equal(cast(ids, ['hiker'], 'elliott'), 'elliott', 'or whoever was on that part last time');
-  assert.equal(cast(ids, ['elliott'], 'elliott'), 'hiker', 'unless somebody else is them now');
-  assert.equal(cast(ids, ids, 'oliver'), 'oliver', 'and once everybody is somebody, two can be the same');
-  assert.equal(cast(ids, ids), 'hiker');
+  assert.equal(cast(ids, ids), 'hiker', 'and once everybody is somebody, the first');
+  assert.equal(cast(ids, ['hiker'], 'elliott'), 'elliott', 'or whoever they chose to be on that part last time');
+  assert.equal(cast(ids, ['hiker'], 'hiker'), 'hiker', 'whether or not somebody else is them now: two can be the same');
   assert.equal(cast(ids, ['hiker'], 'someone-from-a-newer-build'), 'oliver', 'someone this build has never heard of is nobody');
   // and whoever is added after: just another line in HIKERS
   assert.equal(cast([...ids, 'fifth'], ids), 'fifth');
 
-  assert.equal(next(ids, 'oliver', ['hiker']), 'elliott', 'select: the next one nobody is');
-  assert.equal(next(ids, 'elliott', ['oliver']), 'hiker', 'round from the end');
-  assert.equal(next(ids, 'oliver', ['hiker', 'elliott']), 'oliver', 'and nobody, if everyone else is taken');
+  assert.equal(next(ids, 'hiker'), 'oliver', 'select: the next of them');
+  assert.equal(next(ids, 'elliott'), 'hiker', 'round from the end');
+  assert.equal(next(ids, 'hiker', -1), 'elliott', 'and the one before, round from the start');
+  // round the whole list, nobody is left out, whoever the others are
+  const round = [];
+  for (let id = 'oliver', k = 0; k < ids.length; k++) round.push((id = next(ids, id)));
+  assert.deepEqual(round.sort(), [...ids].sort(), 'anyone can be any of them');
   assert.ok(HIKERS.length >= 4, 'there are hikers enough for four different people');
 });
 
@@ -136,6 +142,94 @@ test('a pad of their own walks someone else, and leaves you be', () => {
   a.press('PadA');
   controls.read();
   assert.equal(controls.jumped(), false, "your A isn't theirs");
+});
+
+test("while their panel has their pad, it doesn't walk them", () => {
+  const b = fakePad(1);
+  const controls = new PadControls(1, () => [null, b]);
+  const world = { heightAt: () => 0, waterAt: () => false, forEachCollider() {} };
+  const them = new Player({ scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(), world, input: controls, who: hiker('oliver') });
+  them.spawn(0, 0, 0);
+
+  controls.blocked = true;
+  b.axes = [1, -1, 1, 0]; // both sticks pushed
+  b.press('PadA').press('PadB').press('PadUp');
+  const yaw = them.camYaw;
+  for (let i = 0; i < 30; i++) {
+    controls.read();
+    them.update(1 / 60);
+  }
+  assert.ok(Math.hypot(them.pos.x, them.pos.z) < 0.01, 'they stand where they were');
+  assert.equal(them.camYaw, yaw, 'looking where they looked');
+  assert.equal(controls.jumped(), false, 'A is the panel\'s');
+  assert.equal(controls.isDown('run') || controls.isDown('zoomIn'), false, 'and so are B and the d-pad');
+  assert.equal(controls.pressed('PadA'), false, 'held, not pressed again');
+  b.press('PadA', false);
+  controls.read();
+  b.press('PadA');
+  controls.read();
+  assert.equal(controls.pressed('PadA'), true, 'the panel is still told what is pressed');
+
+  // put away with A still down: it was the panel's press, not a jump
+  controls.blocked = false;
+  assert.equal(controls.jumped(), false);
+  for (let i = 0; i < 30; i++) {
+    controls.read();
+    them.update(1 / 60);
+  }
+  assert.ok(Math.hypot(them.pos.x, them.pos.z) > 0.3, 'and the stick walks them again');
+});
+
+test('a panel of their own: the d-pad goes round its rows, changes the one they are on, and A does it', () => {
+  let who = 1;
+  let behind = true;
+  let back = 0;
+  const menu = new Menu([
+    { id: 'who', label: () => 'who is hiking', value: () => String(who), step: (by) => void (who += by) },
+    { id: 'behind', label: () => 'camera locked behind you', value: () => (behind ? 'on' : 'off'), step: () => void (behind = !behind) },
+    { id: 'back', label: () => 'back beside the hiker', press: () => void back++, closes: true },
+  ]);
+  menu.step(1);
+  menu.press();
+  assert.deepEqual([who, behind, back], [1, true, 0], 'shut, it does nothing');
+
+  menu.open();
+  assert.equal(menu.at, 0, 'opened on its first row');
+  menu.step(1);
+  menu.step(1);
+  menu.step(-1);
+  assert.equal(who, 2, 'left and right: the one before, the next');
+  menu.press();
+  assert.equal(who, 3, 'A is the next too');
+  menu.move(1);
+  menu.step(-1);
+  assert.equal(behind, false, 'a switch flips either way');
+  menu.press();
+  assert.equal(behind, true, 'and with A');
+  assert.equal(menu.isOpen, true, 'and the panel stays up to be set');
+  menu.move(-2);
+  assert.equal(menu.at, 2, 'up from the top is the bottom');
+  menu.step(1);
+  assert.equal(back, 0, 'something to do is not done by left and right');
+  menu.press();
+  assert.deepEqual([back, menu.isOpen], [1, false], 'A does it, and the panel is put away');
+  menu.open();
+  assert.equal(menu.at, 0, 'and it opens on its first row again');
+});
+
+test('what a HUD says of where someone is, whoever they are', () => {
+  assert.equal(formatClock(7.09), '07:05');
+  assert.equal(formatHeading(0), 'N', 'a camera that has not turned looks north (-z)');
+  assert.equal(formatHeading(-Math.PI / 2), 'E');
+  assert.equal(formatHeading(Math.PI), 'S');
+  assert.equal(formatHeading(Math.PI / 4), 'NW');
+  assert.equal(formatWhere({ x: 119.6, z: -45.2 }, -Math.PI / 2, 13.5), '120, -45  ·  E  ·  13:30');
+  // one mark, two people looking the same way from either side of it: each is pointed their own way
+  const mark = { label: 'the falls', x: 0, z: -100 };
+  assert.equal(formatTrack(mark, { x: 0, z: 0 }, 0), '◆ the falls · 100 m ↑');
+  assert.equal(formatTrack(mark, { x: 0, z: -200 }, 0), '◆ the falls · 100 m ↓');
+  assert.equal(formatTrack(mark, { x: -1500, z: -100 }, 0), '◆ the falls · 1.5 km →');
+  assert.equal(formatTrack(mark, { x: 3, z: -98 }, 0), "◆ the falls · you're here");
 });
 
 test("each part draws only the grass round its own hiker, which is all it could show", async () => {

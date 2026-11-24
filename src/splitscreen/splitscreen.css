@@ -1,13 +1,52 @@
-/* The parts of a split screen (index.ts): a thin dark line round each, and on
-   each of the others' parts, who that is and what their pad's spare buttons
-   do. Under the HUD, which keeps to the first part. */
+/* The parts of a split screen (index.ts): a thin dark line round each, and over
+   each of the others' parts, a HUD of their own (partHud.ts): who that is,
+   where they are, a word for a moment, and their panel. Under the game's HUD,
+   which keeps to the first part. Its colours are index.html's. */
 #split { position: fixed; inset: 0; pointer-events: none; z-index: 9; }
 #split[hidden] { display: none; }
-#split .part { position: absolute; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.8); }
+#split .part {
+  position: absolute; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.8); overflow: hidden;
+  font-family: var(--font); color: var(--ink);
+}
 #split .who {
   position: absolute; left: calc(14px + var(--inset-l, 0px)); top: calc(12px + var(--inset-t, 0px)); max-width: calc(100% - 28px);
-  font-family: var(--font); font-size: 12px; letter-spacing: 0.06em; color: var(--ink);
+  font-size: 12px; letter-spacing: 0.06em;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75), 0 0 6px rgba(0, 0, 0, 0.5);
 }
 #split .who b { font-weight: 600; color: var(--accent); }
 #split .who i { display: block; margin-top: 3px; font-style: normal; font-size: 10.5px; color: var(--ink-dim); white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+/* where they are and where they're heading, as #coords and #track say it of you */
+#split .where {
+  position: absolute; left: calc(16px + var(--inset-l, 0px)); bottom: calc(14px + var(--inset-b, 0px)); font-size: 11px; letter-spacing: 0.08em;
+  color: var(--ink-dim); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6); white-space: pre;
+}
+#split .track {
+  position: absolute; left: calc(16px + var(--inset-l, 0px)); bottom: calc(32px + var(--inset-b, 0px)); font-size: 12px; letter-spacing: 0.06em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75), 0 0 6px rgba(0, 0, 0, 0.5); max-width: calc(100% - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* a word for a moment, under their name */
+#split .word {
+  position: absolute; left: 50%; top: calc(50px + var(--inset-t, 0px)); transform: translateX(-50%); font-size: 12px; padding: 6px 12px; white-space: nowrap;
+  max-width: calc(100% - 28px); overflow: hidden; text-overflow: ellipsis;
+  background: var(--panel); border: 1px solid var(--line); opacity: 0; transition: opacity 0.25s;
+}
+#split .word.show { opacity: 1; }
+/* their panel, where yours are: the rows that are theirs to set, the one
+   they're on ringed, then what their pad does */
+#split .panel {
+  position: absolute; right: calc(14px + var(--inset-r, 0px)); top: calc(12px + var(--inset-t, 0px)); width: min(340px, calc(100% - 28px));
+  max-height: calc(100% - 24px); overflow: hidden; padding: 10px 12px 10px; font-size: 11.5px; line-height: 1.6;
+  background: var(--panel); border: 1px solid var(--line);
+}
+#split .panel[hidden] { display: none; }
+#split .panel h2 { margin: 0 0 6px 4px; font-size: 11px; letter-spacing: 0.25em; color: var(--accent); font-weight: 600; }
+#split .panel .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 26px; padding: 0 4px; border: 1px solid transparent; color: var(--ink-dim); }
+#split .panel .row b { font-weight: 400; white-space: nowrap; }
+#split .panel .row.at { color: var(--ink); border-color: var(--accent); }
+#split .panel .row.at b { color: var(--accent); }
+#split .panel hr { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
+#split .panel .key { display: flex; justify-content: space-between; gap: 12px; padding: 0 4px; }
+#split .panel .key kbd { font-family: var(--font); color: var(--ink); white-space: nowrap; }
+#split .panel .key span { color: var(--ink-dim); text-align: right; }
+#split .panel .foot { margin: 8px 4px 0; font-size: 10.5px; color: var(--ink-dim); }
+@media (prefers-reduced-motion: reduce) { #split .word { transition: none; } }

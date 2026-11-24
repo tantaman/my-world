@@ -3,12 +3,8 @@
 // panel, and the building HUD: tool bar, materials, what the tool in hand
 // would do, and a progress bar for press-and-hold work.
 
-import { formatDistance } from '../core/format.js';
+import { formatWhere, formatTrack, ARRIVED } from '../core/format.js';
 
-const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-// relative to where the camera looks: ahead, ahead-right, right, ...
-const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
-const ARRIVED = 8; // meters
 const FAN_SHOWS = 2200; // ms a kit's fan stays open after it's picked
 
 // A prompt with the keys in it in bold (<b>Z</b> ride, <b>hold click</b> dig),
@@ -58,6 +54,11 @@ export class Hud {
     this._padNames = null;
     this._words = null;
     this.guides = []; // see guide()
+    // Where it's pointing now, as of the last frame, or null: for whoever
+    // else is to be pointed there from where they are (the others on a
+    // split screen).
+    /** @type {{ id: string, label: string, color: string, x: number, z: number } | null} */
+    this.guided = null;
   }
 
   // Somewhere to head for, shown under the coordinates. More than one feature
@@ -71,6 +72,7 @@ export class Hud {
   updateGuide(pos, camYaw) {
     let to = null;
     for (const g of this.guides) if ((to = g())) break;
+    this.guided = to;
     this.updateTrack(to, pos, camYaw);
   }
 
@@ -186,14 +188,7 @@ export class Hud {
   }
 
   update(pos, camYaw, hours) {
-    // camera looks along -sin/-cos(camYaw); north = -z
-    const fx = -Math.sin(camYaw);
-    const fz = -Math.cos(camYaw);
-    const ang = (Math.atan2(fx, -fz) * 180) / Math.PI;
-    const heading = COMPASS[Math.round((((ang % 360) + 360) % 360) / 45) % 8];
-    const h = Math.floor(hours);
-    const m = Math.floor((hours - h) * 60);
-    const txt = `${Math.round(pos.x)}, ${Math.round(pos.z)}  ·  ${heading}  ·  ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    const txt = formatWhere(pos, camYaw, hours);
     if (txt !== this._last) {
       this.coords.textContent = txt;
       this._last = txt;
@@ -207,23 +202,14 @@ export class Hud {
     if (!this.track) return;
     let txt = '';
     if (mark) {
-      const dx = mark.x - pos.x;
-      const dz = mark.z - pos.z;
-      const d = Math.hypot(dx, dz);
+      const d = Math.hypot(mark.x - pos.x, mark.z - pos.z);
       if (d < ARRIVED) {
-        txt = `◆ ${mark.label} · you're here`;
         if (this._arrivedAt !== mark.id) {
           this._arrivedAt = mark.id;
           this.flash(`arrived · ${mark.label}`);
         }
-      } else {
-        if (d > ARRIVED * 2) this._arrivedAt = null;
-        const fx = -Math.sin(camYaw);
-        const fz = -Math.cos(camYaw);
-        const rel = Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz);
-        const arrow = ARROWS[((Math.round(rel / (Math.PI / 4)) % 8) + 8) % 8];
-        txt = `◆ ${mark.label} · ${formatDistance(d)} ${arrow}`;
-      }
+      } else if (d > ARRIVED * 2) this._arrivedAt = null;
+      txt = formatTrack(mark, pos, camYaw);
     } else this._arrivedAt = null;
     if (txt !== this._lastTrack) {
       this.track.textContent = txt;
