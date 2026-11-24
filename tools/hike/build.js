@@ -81,6 +81,10 @@ const BANKED = 0.3;
 // ground's), and how far round it that reaches
 const POOL_CELL = 0.5;
 const POOL_MARGIN = 6;
+// A lake narrower than this many of the ground's cells across (its
+// thickness: twice its area over its shoreline, which for a ring of water is
+// how wide the ring is) is a pool on a grid of its own as well.
+const NARROW = 3;
 // game m: the spacing of a beach's own grid, and how far round it that reaches
 const BEACH_CELL = 1.5;
 const BEACH_MARGIN = 6;
@@ -181,7 +185,10 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
     }
   }
   for (const w of tidal ? [] : waters) {
-    const rings = w.rings.map((r) => r.map(toGame));
+    // (an island is a hole in it: inside an odd number of rings is in the
+    // water, as signedDistance has it)
+    const holes = (w.holes || []).map((r) => r.map(toGame));
+    const rings = [...w.rings.map((r) => r.map(toGame)), ...holes];
     let [x0, z0, x1, z1] = [Infinity, Infinity, -Infinity, -Infinity];
     for (const r of rings) {
       for (const [x, z] of r) {
@@ -216,10 +223,11 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
         if (v < 0) wet.push((j0 + j) * n + i0 + i);
       }
     }
-    if (wet.length < 4) {
+    if (wet.length < 4 || thickness(rings.slice(0, rings.length - holes.length), holes) < NARROW * cell) {
       // A pool too small for the ground's grid (the one at the foot of a
-      // fall): its shore on a grid of its own, and its level from the finer
-      // heights where there are any.
+      // fall), or too narrow for it (a moat round an island): its shore on a
+      // grid of its own, and its level from the finer heights where there
+      // are any.
       const pool = poolOf(rings, [x0, z0, x1, z1], Rl, (x, z) => {
         const e = fineElevation(...fromGame(x, z));
         return Number.isFinite(e) ? e : elevation(...fromGame(x, z));
@@ -671,6 +679,21 @@ function watered(lakes, first, cell, x, z, e) {
     if (l.sea || d < 3) e = Math.max(e, l.levelReal + BANK);
   }
   return e;
+}
+
+// How wide some water is (game m): twice its area over the length of its
+// shore. A round lake's is its radius; a ring of water's, how wide the ring
+// is. outer: its shores; holes: its islands'.
+function thickness(outer, holes) {
+  const area = (r) => {
+    let a = 0;
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += r[j][0] * r[i][1] - r[i][0] * r[j][1];
+    return Math.abs(a / 2);
+  };
+  const length = (r) => r.reduce((t, p, i) => t + Math.hypot(p[0] - r[(i + 1) % r.length][0], p[1] - r[(i + 1) % r.length][1]), 0);
+  const wet = outer.reduce((t, r) => t + area(r), 0) - holes.reduce((t, r) => t + area(r), 0);
+  const shore = [...outer, ...holes].reduce((t, r) => t + length(r), 0);
+  return shore > 0 ? (2 * Math.max(wet, 0)) / shore : 0;
 }
 
 // The signed distance to a lake's shore at (x, z), from a grid of its own
