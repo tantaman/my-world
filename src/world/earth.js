@@ -135,6 +135,8 @@ export const TILE_DEGREES = 15;
 export const TILE_CELLS = TILE_DEGREES * PER_DEGREE;
 const GRID_W = 360 * PER_DEGREE;
 const GRID_H = 180 * PER_DEGREE;
+const TILES_ACROSS = 360 / TILE_DEGREES;
+const TILES_DOWN = 180 / TILE_DEGREES;
 
 // Where the land is a range of mountains (`relief` real m or more over a cell
 // and those next to it), the grid is finer: a height every 1' of arc (about
@@ -438,7 +440,8 @@ export class Earth {
     this._m = { height: 0, w: 0 };
     this._mv = new Float64Array(4); // the finer heights at the four corners round a point
     this._mf = new Uint8Array(4); // and which of them there are
-    this._lt = { ti: 0, tj: 0, t: null };
+    // the tiles that have come, by where they are (tj * TILES_ACROSS + ti)
+    this._byPlace = new Array(TILES_ACROSS * TILES_DOWN).fill(null);
   }
 
   // A tile: { name, bytes } (bytes as encodeTile makes them, inflated), or
@@ -515,13 +518,7 @@ export class Earth {
         const j = j0 + b;
         const ti = Math.floor(i / TILE_CELLS);
         const tj = Math.floor(j / TILE_CELLS);
-        const name = tileName(ti, tj);
-        const t = this.tiles.get(name);
-        if (!t) {
-          this.missed = true;
-          if (this.wants) this.wants(name);
-          throw new NotYet(`the Earth's tile ${name}`);
-        }
+        const t = this._tile(ti, tj);
         const k = (j - tj * TILE_CELLS) * TILE_CELLS + (i - ti * TILE_CELLS);
         c.land += t.land[k] * w;
         c.sea += t.sea[k] * w;
@@ -575,20 +572,21 @@ export class Earth {
     return o;
   }
 
-  // Tile (ti, tj), the last asked kept (it's nearly always the same again).
+  // Tile (ti, tj). Once it has come it's found by where it is: its name is
+  // only put together to look for it the first time, and to send for it
+  // (this is asked four times for every point of the Earth worked out).
   _tile(ti, tj) {
-    const L = this._lt;
-    if (L.t && L.ti === ti && L.tj === tj) return L.t;
+    const at = tj * TILES_ACROSS + ti;
+    let t = this._byPlace[at];
+    if (t) return t;
     const name = tileName(ti, tj);
-    const t = this.tiles.get(name);
+    t = this.tiles.get(name);
     if (!t) {
       this.missed = true;
       if (this.wants) this.wants(name);
       throw new NotYet(`the Earth's tile ${name}`);
     }
-    L.ti = ti;
-    L.tj = tj;
-    L.t = t;
+    this._byPlace[at] = t;
     return t;
   }
 
@@ -608,8 +606,12 @@ export class Earth {
   //           the real valleys and ridges are in its heights already
   //   mid     0..1, how far it is a range of mountains' finer heights
   //           (MOUNTAIN): there the ranges' own ridges and valleys are
-  // Worked out on a grid of points EARTH.node m apart, a block of them at a
-  // time, and taken between them: it's the same wherever it's asked.
+  // Worked out on a grid of points EARTH.node m apart, and taken between
+  // them: it's the same wherever it's asked. The points are kept a block at
+  // a time, each worked out the first time it's wanted (_point): the water's
+  // network asks about one spot here and one a kilometre off, and a search
+  // along a line, and a whole block of points for each of those was most of
+  // what a height cost wherever nobody had been yet.
   at(x, z, out) {
     const N = EARTH.node;
     const B = EARTH.block;
@@ -632,6 +634,11 @@ export class Earth {
     const fz = v - j;
     const S = B + 1;
     const k = j * S + i;
+    const has = blk.has;
+    if (!has[k]) this._point(blk, i, j);
+    if (!has[k + 1]) this._point(blk, i + 1, j);
+    if (!has[k + S]) this._point(blk, i, j + 1);
+    if (!has[k + S + 1]) this._point(blk, i + 1, j + 1);
     const f = blk.f;
     const mix = (o) => {
       const a = f[o][k] + (f[o][k + 1] - f[o][k]) * fx;
@@ -650,39 +657,45 @@ export class Earth {
     return out;
   }
 
+  // A block of points, none of them worked out yet.
   _block(bx, bz, key) {
     const B = EARTH.block;
-    const N = EARTH.node;
     const S = B + 1;
     const f = [0, 1, 2, 3, 4, 5, 6].map(() => new Float32Array(S * S));
+    // (longitude is carried on unwrapped across the block from its first point)
     const ll = this._ll;
-    let lon0 = null;
-    for (let j = 0; j < S; j++) {
-      for (let i = 0; i < S; i++) {
-        const k = j * S + i;
-        unproject((bx * B + i) * N, (bz * B + j) * N, EARTH.scale, ll);
-        const c = this._cell(ll[0], ll[1]);
-        const m = this._mid(ll[0], ll[1]);
-        if (m.w > 0) c.land = m.height;
-        const d = this._detail(ll[0], ll[1]);
-        const h = this._height(c);
-        f[0][k] = (h + (d.w > 0 ? (d.height - h) * d.w : 0)) * EARTH.scale;
-        f[1][k] = c.relief * EARTH.scale;
-        f[2][k] = d.w > 0 ? c.coast + (d.coast - c.coast) * d.w : c.coast;
-        f[5][k] = d.w;
-        f[6][k] = m.w;
-        f[3][k] = ll[0];
-        let lon = ll[1];
-        if (lon0 === null) lon0 = lon;
-        if (lon - lon0 > 180) lon -= 360;
-        else if (lon - lon0 < -180) lon += 360;
-        f[4][k] = lon;
-      }
-    }
-    const blk = { bx, bz, f };
+    unproject(bx * B * EARTH.node, bz * B * EARTH.node, EARTH.scale, ll);
+    const blk = { bx, bz, f, has: new Uint8Array(S * S), lon0: ll[1] };
     this._blocks.set(key, blk);
     if (this._blocks.size > EARTH.blocks) this._blocks.delete(this._blocks.keys().next().value);
     return blk;
+  }
+
+  // Point (i, j) of a block, worked out. (If what it needs hasn't come, this
+  // throws, and it's left to be worked out when it has.)
+  _point(blk, i, j) {
+    const B = EARTH.block;
+    const N = EARTH.node;
+    const k = j * (B + 1) + i;
+    const f = blk.f;
+    const ll = this._ll;
+    unproject((blk.bx * B + i) * N, (blk.bz * B + j) * N, EARTH.scale, ll);
+    const c = this._cell(ll[0], ll[1]);
+    const m = this._mid(ll[0], ll[1]);
+    if (m.w > 0) c.land = m.height;
+    const d = this._detail(ll[0], ll[1]);
+    const h = this._height(c);
+    f[0][k] = (h + (d.w > 0 ? (d.height - h) * d.w : 0)) * EARTH.scale;
+    f[1][k] = c.relief * EARTH.scale;
+    f[2][k] = d.w > 0 ? c.coast + (d.coast - c.coast) * d.w : c.coast;
+    f[5][k] = d.w;
+    f[6][k] = m.w;
+    f[3][k] = ll[0];
+    let lon = ll[1];
+    if (lon - blk.lon0 > 180) lon -= 360;
+    else if (lon - blk.lon0 < -180) lon += 360;
+    f[4][k] = lon;
+    blk.has[k] = 1;
   }
 
   // The real place whose reach (x, z) is in, into `into`: { country, out }

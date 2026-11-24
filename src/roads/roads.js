@@ -95,6 +95,12 @@ const GATE_KEEP = 30; // m from a gate within which a road may come near its own
 const CHANCE = 0.85; // that a town has a road each way (east, south), if the land takes one
 const DETOUR = [1.7, 300]; // a road no longer than this many times the straight way between its gates, and this many m
 const GRID = 12; // m between the points of the survey's grid
+// A survey stops to let the frame go on every millisecond or two of work
+// (game/budget.ts), and nearly all of its work is asking about the land: so,
+// every this many points of its grid, and every this many m of what it keeps
+// clear of asked about (what's there may have to be found first).
+const POINTS_A_STEP = 20;
+const CLEAR_STEP = 160; // (about a square of the caves', or of the old places': one found at a time)
 const MARGIN = 300; // m the survey looks round the straight way between the gates
 export const OUT = 480; // m: the furthest a road strays out of its towns' squares
 const START_CLEAR = 140; // m between a road and where people first arrive
@@ -404,6 +410,17 @@ export class Roads {
         yield;
       }
     }
+    // (asked a square at a time first, when there's no hurry: whatever has
+    // to be found to answer, an old place or a cave's way in, is found a
+    // little at a time, and all of it is then asked of what is known)
+    if (this.patient) {
+      for (let z = z0; z < z1; z += CLEAR_STEP) {
+        for (let x = x0; x < x1; x += CLEAR_STEP) {
+          this.clear(x, z, Math.min(x + CLEAR_STEP, x1), Math.min(z + CLEAR_STEP, z1));
+          yield;
+        }
+      }
+    }
     for (const s of this.clear(x0, z0, x1, z1)) shapes.push(s);
     yield;
     const lines = this.lines(x0, z0, x1, z1);
@@ -426,8 +443,8 @@ export class Roads {
         w.probe(x, z);
         if ((w.kind === 'lake' || w.kind === 'pond' || w.kind === 'sea') && w.edge < LAKE_KEEP) blocked[k] = 1;
         else if (w.edge < 0) extra[k] += w.kind === 'river' ? RIVER_COST : STREAM_COST;
+        if (k % POINTS_A_STEP === POINTS_A_STEP - 1) yield;
       }
-      if (j % 2 === 1) yield;
     }
     const nodeX = (i) => x0 + i * GRID;
     const nodeZ = (j) => z0 + j * GRID;
@@ -633,7 +650,7 @@ export class Roads {
     // lifted clear of the ground where it would come up through the top: by
     // a few centimetres here and there, after it's judged worth building, so
     // that a road on the edge of having too much bridge doesn't come and go
-    h = closer(gen, curve, floor, h, pin, steep);
+    h = yield* closerSteps(gen, curve, floor, h, pin, steep);
 
     // ── Writing it down ──
     const road = {
@@ -941,6 +958,14 @@ function groundAcross(gen, x, z, tx, tz) {
 // under the round where the roads meet, and by a crossing it's the
 // railway's ground.
 function closer(gen, way, floor, h, pin, steep = null) {
+  const steps = closerSteps(gen, way, floor, h, pin, steep);
+  let r = steps.next();
+  while (!r.done) r = steps.next();
+  return r.value;
+}
+// ...as a generator, for a survey run a little at a time: it yields every
+// few dozen heights it asks of the land.
+function* closerSteps(gen, way, floor, h, pin, steep = null) {
   const { n, ds, x, z } = way;
   const lift = Float64Array.from(floor);
   let more = false;
@@ -955,6 +980,7 @@ function closer(gen, way, floor, h, pin, steep = null) {
     const l = Math.hypot(x[b] - x[a], z[b] - z[a]) || 1;
     const short = groundAcross(gen, x[i], z[i], (x[b] - x[a]) / l, (z[b] - z[a]) / l) + BED - lift[i];
     if (short > 0) raise(i, short);
+    if (i % 3 === 2) yield;
   }
   for (let i = 0; i < n - 1; i++) {
     if (pin[i] || pin[i + 1]) continue;
@@ -967,6 +993,7 @@ function closer(gen, way, floor, h, pin, steep = null) {
       raise(i, short);
       raise(i + 1, short);
     }
+    yield;
   }
   if (!more) return h;
   const out = envelope(lift, ds, GRADE, steep);

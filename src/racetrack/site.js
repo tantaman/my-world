@@ -78,7 +78,12 @@ const WET = 3;
 const CULVERT = 0.9;
 const CLEAR = 16; // m round its grounds kept clear of anything else grown from the seed
 const TILE = 90; // m: its grounds are asked about in squares no bigger than this
-const YIELD_EVERY = 24; // spots looked at between yields
+// A search stops to let the frame go on every millisecond or two of work
+// (game/budget.ts), and nearly all of its work is asking the land how high
+// it is: so, every few dozen heights. That's this many spots given the quick
+// look, and this many looks across the surface of one looked at all round.
+const YIELD_EVERY = 4;
+const LOOKS_A_STEP = 8;
 // The racing surface stands this far (m) over the highest ground across it;
 // it leans across as the land does, but no more steeply than CAMBER (rise
 // over run); and its rise and fall along the lap, and its lean, are evened
@@ -230,6 +235,7 @@ export function* trackSite(gen, town, layout, cell, keepOff = () => false, patie
           }
           g[j][i] = h;
         }
+        if (i % LOOKS_A_STEP === LOOKS_A_STEP - 1) yield;
       }
       // the paddock, on dry ground
       for (const [u, v] of padPts) {

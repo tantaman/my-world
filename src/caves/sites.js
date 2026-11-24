@@ -64,8 +64,26 @@ export function daylight(cave, d) {
   return past <= 0 ? 1 : Math.exp(-past / CAVE.light);
 }
 
-// The cave in square (cx, cz), or null. Deterministic for a seed.
+// The cave in square (cx, cz), or null. Deterministic for a seed: so it is
+// laid out once for a world, whoever asks (the caves themselves, a town
+// keeping clear of a mouth, a road, the railway, the gate to Hell), and
+// handed to each of them. Nobody changes one: it is what the seed grows.
+const LAID = new WeakMap(); // gen -> Map("cx:cz" -> cave or null)
+const LAID_MOST = 20000; // squares kept, before they're let go and laid out again when asked
 export function layoutCave(gen, cx, cz) {
+  let laid = LAID.get(gen);
+  if (!laid) LAID.set(gen, (laid = new Map()));
+  const k = `${cx}:${cz}`;
+  let cave = laid.get(k);
+  if (cave !== undefined) return cave;
+  // (if the land there hasn't come yet this throws, and nothing is kept: core/notYet.ts)
+  cave = layOut(gen, cx, cz);
+  if (laid.size >= LAID_MOST) laid.clear();
+  laid.set(k, cave);
+  return cave;
+}
+
+function layOut(gen, cx, cz) {
   const rng = mulberry32(hash2i(cx, cz, (gen.seed ^ SALT) | 0));
   if (rng() > CAVE.chance) return null;
   const x0 = cx * CAVE.cell;
