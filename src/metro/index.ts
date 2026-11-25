@@ -40,6 +40,7 @@
 import type { Game } from '../game/game.ts';
 import type { Object3D, Material, Color } from 'three';
 import { lazy } from '../core/lazy.ts';
+import { isNotYet } from '../core/notYet.ts';
 import { formatDistance } from '../core/format.js';
 import { VEG_STRIDE } from '../world/flora.js';
 import { inflate } from '../world/earth.js';
@@ -75,7 +76,7 @@ interface MetroService {
   ready(): Promise<unknown>;
   exits(): Array<{ x: number; y: number; z: number; yaw: number; station: string }>;
   toTrain(): boolean;
-  stats(): { under: number; over: number; queued: number; below: boolean; loaded: boolean };
+  stats(): { under: number; over: number; queued: number; waiting: string[]; below: boolean; loaded: boolean };
   aboard(): { line: string; to: string; at: string | null; next: string | null } | null;
 }
 
@@ -92,7 +93,10 @@ const BOARD = 2.6; // m from a car's side that you can get on it
 const AT_HAND = 3.2; // m from an entrance's pylon, or the foot of an escalator, that F takes you
 const CHANGE = 9; // m from a level's middle that F takes you to another level
 const ARRIVE = 7; // m along the platform from the foot of its escalators that you arrive
+const ASIDE = 1.1; // ...and across from its middle
 const DOWN_AT = 0.62; // how far down an entrance's escalators you're taken down to the platform
+const VAULT_PARTS = 4; // a station's vault is built in this many steps
+const PIECE = 120; // m of track built and shown together
 const CUTS = 4; // entrances whose wells are cut into the ground at once (world/cuts.js)
 const CUT_NEAR = 140; // m
 const STOOD = 0.05; // m/s: a train slower than this is standing
@@ -104,9 +108,10 @@ const SITTING = { spread: 0.12, hang: 0.48, fwd: 0.38, lean: -0.05, reins: 0 };
 const PLANTS_OFF: Record<string, number> = { pine: 4.5, broad: 5, birch: 4, bush: 3, fern: 2, rock: 2.5, log: 3 };
 const ID = 'metro:';
 
-// (after the caves and the far view, whose say about how shut in you sound
-// and how far you see each frame the Metro's has to come after, underground)
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'act', 'caves', 'far', 'washington'];
+// (after the caves, the far view and the country, whose say each frame about
+// how shut in you sound, how far you see and how hazy the air is the
+// Metro's has to come after, underground)
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save', 'act', 'caves', 'far', 'country', 'washington'];
 export function installMetro(game: Game) {
   const { scene, pipeline, gen, chunks, grass, spaces, solids, landforms, player, builder, map, hud, commands, save, sound, act } = game;
   const card = landforms.cards.find((c: { id: string }) => c.id === METRO.place);
@@ -115,7 +120,6 @@ export function installMetro(game: Game) {
   const look = lazy(() => import('./look.js'));
   const data = lazy(() => import('./system.js'));
   const ground = (x: number, z: number) => gen.height(x, z);
-  const colours = new Map(METRO.lines.map((l: { id: string; colour: string }) => [l.id, l.colour]));
   const lineName = new Map(METRO.lines.map((l: { id: string; name: string }) => [l.id, l.name]));
   let shift = 0; // s added to the clock: only from the console, to try things out
   const clock = () => Date.now() / 1000 + shift;
@@ -144,7 +148,7 @@ export function installMetro(game: Game) {
       // each service a fraction of its timetable on from the others
       tables = n.patterns.map((p: Network['patterns'][number], k: number) => new Timetable(p, (k * 0.618034) % 1));
       for (const t of n.tracks) {
-        const count = Math.max(1, Math.round(t.length / 120));
+        const count = Math.max(1, Math.round(t.length / PIECE));
         for (let p = 0; p < count; p++) {
           const s0 = (t.length * p) / count;
           const s1 = (t.length * (p + 1)) / count;
@@ -180,7 +184,7 @@ export function installMetro(game: Game) {
     return loading;
   }
   const inReach = (x: number, z: number, more = 0) => Math.hypot(x - cx, z - cz) < card.radius + more;
-  // where you'd be, on the street, if you're not in the Metro
+  // the Metro here, and what builds it
   const ready = async () => {
     await load();
     await look.ready();
@@ -298,6 +302,11 @@ export function installMetro(game: Game) {
       const d = Math.hypot(L.x - x, L.z - z) - 100;
       if (!(under ? below && d < UNDER_VIEW : d < OVER_VIEW)) continue;
       out.push({ key: `level:${L.k}`, x: L.x, z: L.z, r: 110, d, build: (m) => buildLevel(m, L) });
+      // (its vault a part at a time: a vault is thousands of coffers)
+      for (let k = 0; under && k < VAULT_PARTS; k++) {
+        const key = `vault:${L.k}:${k}`;
+        out.push({ key, x: L.x, z: L.z, r: 110, d: d + 0.01 * (k + 1), build: (m) => ({ key, x: L.x, z: L.z, r: 110, over: null, under: m.buildVault(L, space!.roomOf(L), mats!, k, VAULT_PARTS) }) });
+      }
     }
     for (const st of net.stations) {
       for (const e of st.entrances) {
@@ -309,9 +318,11 @@ export function installMetro(game: Game) {
     return out;
   }
   function buildLevel(m: Look, L: Level): Built {
-    const b = m.buildLevel(L, space!.roomOf(L), { ground, mats: mats! });
+    const b = m.buildLevel(L, space!.roomOf(L), { ground, mats: mats!, vault: false });
     const under = b.under;
-    return { key: `level:${L.k}`, x: L.x, z: L.z, r: 110, over: under ? null : b.group, under: under ? b.group : null, level: L, edges: b.edges, spots: b.spots };
+    const key = `level:${L.k}`;
+    solids.set(`${ID}${key}`, b.posts);
+    return { key, x: L.x, z: L.z, r: 110, over: under ? null : b.group, under: under ? b.group : null, level: L, edges: b.edges, spots: b.spots, dispose: () => solids.clear(`${ID}${key}`) };
   }
   function buildEntrance(m: Look, st: Station, e: Entrance): Built {
     const under = st.kind === 'underground';
@@ -373,7 +384,7 @@ export function installMetro(game: Game) {
       try {
         show(w.build(m));
       } catch (err) {
-        if ((err as { name?: string })?.name !== 'NotYet') throw err;
+        if (!isNotYet(err)) throw err;
       }
     }
   }
@@ -392,7 +403,7 @@ export function installMetro(game: Game) {
           show(w.build(m));
         } catch (err) {
           // (the ground there not in yet: asked again on the next look round)
-          if ((err as { name?: string })?.name !== 'NotYet') throw err;
+          if (!isNotYet(err)) throw err;
         }
       }
       return queue.length > 0;
@@ -431,6 +442,15 @@ export function installMetro(game: Game) {
       shared.add(kit.signPlane);
     }
     const f = game.focus;
+    // (nowhere near: none)
+    if (!aboard && !inReach(f.x, f.z, TRAIN_VIEW)) {
+      for (const [key, r] of trains) {
+        scene.remove(r.train.object);
+        spare.push(r.train);
+        trains.delete(key);
+      }
+      return;
+    }
     const near: Array<{ key: string; k: number; j: number; d: number }> = [];
     for (let k = 0; k < tables.length; k++) {
       const tt = tables[k];
@@ -609,8 +629,9 @@ export function installMetro(game: Game) {
     // (a few steps on from the foot of the escalators, facing along the
     // platform, the camera behind you)
     const yaw = at.yaw + Math.PI;
-    const x = at.x - Math.sin(at.yaw) * ARRIVE;
-    const z = at.z - Math.cos(at.yaw) * ARRIVE;
+    // (and a step to the side of the platform's middle, where its pylons stand)
+    const x = at.x - Math.sin(at.yaw) * ARRIVE + Math.cos(at.yaw) * ASIDE;
+    const z = at.z - Math.cos(at.yaw) * ARRIVE - Math.sin(at.yaw) * ASIDE;
     player.camPitch = 0.08;
     player.spawn(x, z, yaw, yaw + Math.PI, lvl.floor);
     reached.add(st.id);
@@ -832,7 +853,6 @@ export function installMetro(game: Game) {
 
   // ── Each frame ─────────────────────────────────────────────────────────────
   let lookIn = 0;
-  let hazeKept: number | null = null;
   let cutsShown = false;
   let lastBelow = false;
   game.addSystem({
@@ -859,16 +879,11 @@ export function installMetro(game: Game) {
         lookIn = 0;
       }
       if (below) sound.setEnclosed(Math.max(sound.enclosed || 0, ENCLOSED));
-      // underground, no daylight haze in the air, and nothing lost in the distance
+      // underground, no daylight haze in the air, and nothing lost in the
+      // distance (back up, the country eases its own haze back in)
       if (below) {
-        if (hazeKept === null) {
-          hazeKept = pipeline.haze;
-          pipeline.haze = 0;
-        }
+        pipeline.haze = 0;
         pipeline.fogFar = 1e5;
-      } else if (hazeKept !== null) {
-        if (pipeline.haze === 0) pipeline.haze = hazeKept;
-        hazeKept = null;
       }
 
       // what's stood up round you
@@ -947,7 +962,20 @@ export function installMetro(game: Game) {
       // aboard: where it goes next, and off at the end of the line here
       if (aboard) {
         const run = runOf();
-        if (!run || !run.route) return;
+        // (it ran on out past life-size Washington before you got off, the
+        // frame that it pulled out of its last station here being a slow one:
+        // you got off there after all)
+        if (!run || !run.route || (run.w.at < 0 && run.w.next < 0)) {
+          const way = run?.route || tables[aboard.k].pattern.ways[0];
+          const last = way.stops[way.stops.length - 1];
+          aboard = null;
+          hold?.release();
+          hold = null;
+          player.character.seat(null);
+          hud.cue(null, 'metro');
+          descend(last.level.station, null, last.level).catch(() => {});
+          return;
+        }
         const w = run.w;
         const stop = stopOf(run, w.at >= 0 ? w.at : w.next);
         const line = run.route.line.name;
@@ -1017,7 +1045,7 @@ export function installMetro(game: Game) {
         if (b.under) under++;
         if (b.over) over++;
       }
-      return { under, over, queued: queue.length, below, loaded: !!net };
+      return { under, over, queued: queue.length, waiting: queue.slice(0, 6).map((w) => w.key), below, loaded: !!net };
     },
     toTrain() {
       // the nearest door of a train standing at your platform, and stand by it

@@ -14,7 +14,7 @@ import * as THREE from 'three';
 import { createBuildingMaterial } from '../build/surfaces.js';
 
 export { buildPiece, piecesOf, PIECE } from './track.js';
-export { buildLevel, buildEntrance, ENTRANCE } from './stations.js';
+export { buildLevel, buildVault, buildEntrance, ENTRANCE } from './stations.js';
 export { MetroTrain, TrainKit, SEATS, CAR } from './trains.js';
 
 const LIT = { vault: 0.62, solid: 0.55, tube: 0.16, car: 0.6 };
