@@ -17,10 +17,13 @@
 // for each line; under the street, the escalators going down beside it,
 // walled in granite.
 //
-//   buildLevel(L, room, { ground, mats }) -> { group, edges, under, spots }
+//   buildLevel(L, room, { ground, mats, vault }) -> { group, edges, under, spots, posts }
 //     group:  everything, built round itself; edges: the material of its
 //     platform-edge lights; under: whether it's under the street; spots: the
-//     foot of each platform's escalator ({ x, y, z, yaw }), where you go up
+//     foot of each platform's escalator ({ x, y, z, yaw }), where you go up;
+//     posts: what stands on its platforms, as solids (world/solids.js)
+//     (vault: false leaves out the coffered vault, to be built in parts:)
+//   buildVault(L, room, mats, part, parts) -> Mesh
 //   buildEntrance(e, station, { ground, mats, under }) -> Group
 //
 // Everything is placed in a level's own frame (along it, a; across it, c, +
@@ -110,7 +113,7 @@ function vaultAt(room, th) {
   return { c, y, nc, ny };
 }
 
-export function buildLevel(L, room, { ground, mats }) {
+export function buildLevel(L, room, { ground, mats, vault = true }) {
   const group = new THREE.Group();
   const m = new Mesher(); // what's built of boxes, seen from all round
   const shell = new Mesher(); // the vault and its ends, seen from inside
@@ -124,44 +127,17 @@ export function buildLevel(L, room, { ground, mats }) {
   const right = [-L.dz, 0, L.dx];
   const up = [0, 1, 0];
   const spots = [];
+  // what stands on the platforms, to walk round: capsules (world/solids.js)
+  const posts = [];
+  const post = (a0, a1, c, r, top) => {
+    const [x0, , z0] = W(L, a0, c, 0);
+    const [x1, , z1] = W(L, a1, c, 0);
+    posts.push({ ax: x0, az: z0, bx: x1, bz: z1, r, bottom: L.floor - 0.5, topA: L.floor + top, topB: L.floor + top });
+  };
 
   if (under) {
-    // ── the vault ──
-    const k = room.crown - room.spring;
-    const arc = Math.PI * Math.sqrt((room.half * room.half + k * k) / 2);
-    const nTh = Math.max(6, Math.round(arc / COFFER.size));
-    const nA = Math.max(4, Math.round((room.a1 - room.a0) / COFFER.size));
-    const shade = (y) => _c.copy(PAL.vault).multiplyScalar(1.18 - 0.62 * Math.min(1, Math.max(0, (y - room.spring) / k)));
-    for (let i = 0; i < nTh; i++) {
-      const t0 = (i / nTh) * Math.PI;
-      const t1 = ((i + 1) / nTh) * Math.PI;
-      const tm = (t0 + t1) / 2;
-      const p0 = vaultAt(room, t0);
-      const p1 = vaultAt(room, t1);
-      const pm = vaultAt(room, tm);
-      for (let j = 0; j < nA; j++) {
-        const a0 = room.a0 + ((room.a1 - room.a0) * j) / nA;
-        const a1 = room.a0 + ((room.a1 - room.a0) * (j + 1)) / nA;
-        const am = (a0 + a1) / 2;
-        // the cell on the vault's surface, and the coffer's back, set into it
-        const outer = [
-          [a0, p0.c, p0.y],
-          [a1, p0.c, p0.y],
-          [a1, p1.c, p1.y],
-          [a0, p1.c, p1.y],
-        ];
-        const inner = outer.map(([a, c, y]) => [am + (a - am) * (1 - COFFER.inset * 2), pm.c + (c - pm.c) * (1 - COFFER.inset * 2) - pm.nc * COFFER.depth, pm.y + (y - pm.y) * (1 - COFFER.inset * 2) - pm.ny * COFFER.depth]);
-        const toW = ([a, c, y]) => W(L, a, c, y);
-        const into = [right[0] * pm.nc, pm.ny, right[2] * pm.nc];
-        const col = shade(pm.y);
-        face(shell, toW(inner[0]), toW(inner[1]), toW(inner[2]), toW(inner[3]), lit(col, toW(inner[0]), toW(inner[1]), toW(inner[3]), into, 0.78), into);
-        for (let e = 0; e < 4; e++) {
-          const f = (e + 1) % 4;
-          const [a, b, c, d] = [toW(outer[e]), toW(outer[f]), toW(inner[f]), toW(inner[e])];
-          face(shell, a, b, c, d, lit(col, a, b, d, into, 1), into);
-        }
-      }
-    }
+    // ── the vault (or a part of it, on its own: buildVault) ──
+    if (vault) vaultPart(shell, L, room, 0, 1);
     // ── its ends: a wall each, with the tunnels' mouths in it ──
     for (const [a, sign] of [[room.a0, 1], [room.a1, -1]]) {
       const into = [along[0] * sign, 0, along[2] * sign];
@@ -228,10 +204,13 @@ export function buildLevel(L, room, { ground, mats }) {
     m.surf = SURF.concrete;
     // pylons along it, with the name on (signs: below)
     if (p.c1 - p.c0 > 2.6) {
-      for (let a = p.a0 + 20; a < p.a1 - 15; a += PYLON_EVERY) pylonAt(L, a, cm, yaw, m, group, mats);
+      for (let a = p.a0 + 20; a < p.a1 - 15; a += PYLON_EVERY) {
+        pylonAt(L, a, cm, yaw, m, group, mats);
+        post(a - 0.62, a + 0.62, cm, 0.2, 2.9);
+      }
     }
     // under the open sky, a canopy
-    if (!under) canopy(L, p, m, edges);
+    if (!under) for (const a of canopy(L, p, m)) post(a, a, cm, 0.24, CANOPY.up);
   }
 
   // ── the mezzanine, and the escalators up to it ──
@@ -260,6 +239,7 @@ export function buildLevel(L, room, { ground, mats }) {
         for (let k = 0; k < n; k++) {
           const c = cm + (k - (n - 1) / 2) * ESCALATOR.every;
           escalator(m, L, foot, front, L.floor, deck, c, yaw);
+          post(foot + 0.4, front, c, ESCALATOR.half, MEZZ.up);
         }
         // and a wall under the mezzanine's front, behind them
         const at = W(L, foot - 1.6, cm, L.floor);
@@ -279,7 +259,55 @@ export function buildLevel(L, room, { ground, mats }) {
   if (!glow.empty) group.add(meshOf(glow, mats.glow));
   const edges = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide });
   if (!edgeMesh.empty) group.add(meshOf(edgeMesh, edges));
-  return { group, edges, under, spots };
+  return { group, edges, under, spots, posts };
+}
+
+// The coffered vault over a level, or the `part`th of `parts` of it along
+// its length (so that building one is never one long step).
+export function buildVault(L, room, mats, part = 0, parts = 1) {
+  const shell = new Mesher();
+  shell.surf = SURF.concrete;
+  vaultPart(shell, L, room, part, parts);
+  return meshOf(shell, mats.vault);
+}
+
+function vaultPart(shell, L, room, part, parts) {
+  const right = [-L.dz, 0, L.dx];
+  const k = room.crown - room.spring;
+  const arc = Math.PI * Math.sqrt((room.half * room.half + k * k) / 2);
+  const nTh = Math.max(6, Math.round(arc / COFFER.size));
+  const nA = Math.max(4, Math.round((room.a1 - room.a0) / COFFER.size));
+  const shade = (y) => _c.copy(PAL.vault).multiplyScalar(1.18 - 0.62 * Math.min(1, Math.max(0, (y - room.spring) / k)));
+  for (let i = 0; i < nTh; i++) {
+    const t0 = (i / nTh) * Math.PI;
+    const t1 = ((i + 1) / nTh) * Math.PI;
+    const tm = (t0 + t1) / 2;
+    const p0 = vaultAt(room, t0);
+    const p1 = vaultAt(room, t1);
+    const pm = vaultAt(room, tm);
+    for (let j = Math.floor((nA * part) / parts); j < Math.floor((nA * (part + 1)) / parts); j++) {
+      const a0 = room.a0 + ((room.a1 - room.a0) * j) / nA;
+      const a1 = room.a0 + ((room.a1 - room.a0) * (j + 1)) / nA;
+      const am = (a0 + a1) / 2;
+      // the cell on the vault's surface, and the coffer's back, set into it
+      const outer = [
+        [a0, p0.c, p0.y],
+        [a1, p0.c, p0.y],
+        [a1, p1.c, p1.y],
+        [a0, p1.c, p1.y],
+      ];
+      const inner = outer.map(([a, c, y]) => [am + (a - am) * (1 - COFFER.inset * 2), pm.c + (c - pm.c) * (1 - COFFER.inset * 2) - pm.nc * COFFER.depth, pm.y + (y - pm.y) * (1 - COFFER.inset * 2) - pm.ny * COFFER.depth]);
+      const toW = ([a, c, y]) => W(L, a, c, y);
+      const into = [right[0] * pm.nc, pm.ny, right[2] * pm.nc];
+      const col = shade(pm.y);
+      face(shell, toW(inner[0]), toW(inner[1]), toW(inner[2]), toW(inner[3]), lit(col, toW(inner[0]), toW(inner[1]), toW(inner[3]), into, 0.78), into);
+      for (let e = 0; e < 4; e++) {
+        const f = (e + 1) % 4;
+        const [a, b, c, d] = [toW(outer[e]), toW(outer[f]), toW(inner[f]), toW(inner[e])];
+        face(shell, a, b, c, d, lit(col, a, b, d, into, 1), into);
+      }
+    }
+  }
 }
 
 function roofOf(room, c) {
@@ -330,15 +358,18 @@ function pylonAt(L, a, c, yaw, m, group, mats) {
 
 // The wings over an open platform: a row of columns down its middle, and a
 // roof that rises from over them to either side.
-function canopy(L, p, m, edges) {
-  void edges;
+function canopy(L, p, m) {
   const cm = (p.c0 + p.c1) / 2;
   const half = (p.c1 - p.c0) / 2 + 0.4;
   const a0 = p.a0 + 4;
   const a1 = p.a1 - 4;
   const y = L.floor + CANOPY.up;
   const yaw = Math.atan2(L.dx, L.dz);
-  for (let a = a0 + 3; a < a1 - 2; a += CANOPY.every) box(m, ...W(L, a, cm, L.floor + CANOPY.up / 2), 0.22, CANOPY.up / 2, 0.22, yaw, PAL.column);
+  const columns = [];
+  for (let a = a0 + 3; a < a1 - 2; a += CANOPY.every) {
+    box(m, ...W(L, a, cm, L.floor + CANOPY.up / 2), 0.22, CANOPY.up / 2, 0.22, yaw, PAL.column);
+    columns.push(a);
+  }
   for (const s of [-1, 1]) {
     const cIn = cm;
     const cOut = cm + s * half;
@@ -354,6 +385,7 @@ function canopy(L, p, m, edges) {
     face(m, A0, A1, A2, A3, PAL.canopy, [-L.dx, 0, -L.dz]);
     face(m, B0, B1, B2, B3, PAL.canopy, [L.dx, 0, L.dz]);
   }
+  return columns;
 }
 
 // An entrance: its pylon, and (under the street) the escalators going down

@@ -42,7 +42,19 @@ export default async function ({ page, step, frames, shot }) {
     await frames(10);
     const aboard = await page.evaluate(() => world.metro.aboard());
     assert.ok(aboard && aboard.line === 'red', 'aboard a Red Line train');
-    return aboard;
+    // and heard: the play-through is muted, so sound on for a moment, with the train standing by you
+    const heard = await page.evaluate(async () => {
+      const s = world.sound;
+      s.setEnabled(true);
+      if (!(await T.until(() => s.running, 5000))) return { running: false };
+      s.footstep('platform', 0.5);
+      await T.frames(30);
+      const out = { running: true, metro: s.buses.has('metro') };
+      s.setEnabled(false);
+      return out;
+    });
+    if (heard.running) assert.ok(heard.metro, 'the train heard, on a bus of its own');
+    return { ...aboard, heard };
   });
 
   await step('along the tunnel to the next station, and off', async () => {
