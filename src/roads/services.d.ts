@@ -7,8 +7,33 @@
 import type { Roads } from './roads.js';
 import type { firstThere } from './clear.js';
 
-// The roads, and what they keep clear of (clear.js firstThere's).
-type RoadsAndWhatWasThere = { roads: Roads; there: ReturnType<typeof firstThere> };
+// The roads and towns' gates round a spot (around()), to ask under() about
+// again and again, a frame at a time.
+export interface RoadsAround {
+  roads: object[];
+  gates: object[];
+}
+// The road at a spot (under()): the height of its top there, what it's made
+// of, whether that's on the road itself rather than its shoulder, and which
+// way it runs.
+export interface RoadUnder {
+  road: object | null; // (null on a town's gate)
+  top: number;
+  surface: 'paved' | 'gravel';
+  on: boolean;
+  s: number;
+  dx: number;
+  dz: number;
+}
+
+// The roads, and what they keep clear of (clear.js firstThere's); and for
+// anything that rolls along them, what's underfoot on one.
+type RoadsAndWhatWasThere = {
+  roads: Roads;
+  there: ReturnType<typeof firstThere>;
+  around(x: number, z: number, r: number): RoadsAround;
+  under(x: number, z: number, here?: RoadsAround): RoadUnder | null;
+};
 
 declare module '../game/game.ts' {
   interface Services {

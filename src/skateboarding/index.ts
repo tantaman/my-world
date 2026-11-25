@@ -25,6 +25,7 @@
 
 import type { Game } from '../game/game.ts';
 import type { Placed } from '../player/rides.ts';
+import type { RoadsAround } from '../roads/services.d.ts';
 import { Skater, rolls, setsOff, DECK, REACH } from './skater.js';
 import { Session } from './session.js';
 import { Pose } from './pose.js';
@@ -76,6 +77,14 @@ const BUILT = 'built';
 // Land poking up through something laid on it by less than this (m) is
 // ridden over: the tarmac is what's underfoot.
 const BURIED = 0.25;
+// Where a road is, the board rides the top of the road itself (roads.under),
+// and anything laid there no more than this (m) over it is the road too: its
+// solids are short pieces, wide enough to overlap, and where it rises and
+// falls the ends of the next ones stand a little over the road where you are.
+const ROAD_OVER = 0.5;
+// m round you within which the roads are looked at, each frame
+const AROUND = 30;
+const ROAD_SURFACE = { paved: 'tarmac', gravel: 'gravel' };
 // How long (ms) a word stays on the screen.
 const SAY = 2600;
 const QUIPS = ['slam!', 'bail!', 'eat it!', 'ouch!', 'gnarly!', 'that’ll leave a mark'];
@@ -86,9 +95,9 @@ const _w = waterSample();
 const fmt = (n: number) => Math.round(n).toLocaleString('en');
 
 // The features this uses, so it is installed after them (game/features.js).
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'act'];
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'act', 'roads'];
 export function installSkateboarding(game: Game) {
-  const { scene, chunks, solids, player, input, hud, commands, save, sound, builder, peers, act } = game;
+  const { scene, chunks, solids, player, input, hud, commands, save, sound, builder, peers, act, roads } = game;
 
   // ── What's under the wheels, and what's in the way ────────────────────────
   // The land, called what it looks like: what you're thrown onto.
@@ -99,16 +108,28 @@ export function installSkateboarding(game: Game) {
     if (_land.path > 0.45 || _land.above > 0.6 || _land.bare > 0.5) return 'the dirt';
     return _land.forest > 0.62 ? 'the leaves' : 'the grass';
   }
+  // The roads round you, looked at once a frame (roads.around).
+  let here: RoadsAround = { roads: [], gates: [] };
+  const lookRound = (x: number, z: number) => (here = roads.around(x, z, AROUND));
+  // The top of the road at (x, z), if there's one there; -Infinity if not.
+  const roadTop = (x: number, z: number) => roads.under(x, z, here)?.top ?? -Infinity;
   const ground = {
-    // the top of the highest thing laid there no higher than `reach`, or the land
+    // the top of the road there, or of the highest thing laid there, no
+    // higher than `reach`; or the land
     at(x: number, z: number, reach: number, out: { y: number; surface: string; what: string; water: number }) {
       let top = -Infinity;
       let surface = '';
+      const road = roads.under(x, z, here);
+      if (road && road.top <= reach) {
+        top = road.top;
+        surface = ROAD_SURFACE[road.surface] || 'gravel';
+      }
+      const over = road ? road.top + ROAD_OVER : -Infinity;
       solids.forEachNear(x, z, 1, (s: Solid) => {
         segDist(x, z, s.ax, s.az, s.bx, s.bz, _seg);
         if (_seg.d > s.r) return;
         const t = s.topA + (s.topB - s.topA) * _seg.t;
-        if (t > top && t <= reach) {
+        if (t > top && t <= reach && t > over) {
           top = t;
           surface = s.surface || BUILT;
         }
@@ -144,12 +165,14 @@ export function installSkateboarding(game: Game) {
         out.depth = depth;
         out.what = boulder ? 'a boulder' : 'a tree';
       });
+      const over = roadTop(x, z) + ROAD_OVER;
       solids.forEachNear(x, z, 1.2 + r, (s: Solid) => {
         segDist(x, z, s.ax, s.az, s.bx, s.bz, _seg);
         const depth = s.r + r - _seg.d;
         if (depth <= best) return;
         const top = s.topA + (s.topB - s.topA) * _seg.t;
-        if (top <= y + REACH || y + 1.6 < s.bottom) return;
+        // (the road itself, where it is, is ridden on: see at())
+        if (top <= y + REACH || top <= over || y + 1.6 < s.bottom) return;
         best = depth;
         out.nx = _seg.nx;
         out.nz = _seg.nz;
@@ -180,6 +203,7 @@ export function installSkateboarding(game: Game) {
     slack: MOVED,
     place(out: Placed, dt: number) {
       readControls(input, c);
+      lookRound(skater.x, skater.z);
       skater.step(dt, c);
       // stepped off as it went (rolled onto the grass): on your feet, where off() put you
       if (!active) {
@@ -216,6 +240,7 @@ export function installSkateboarding(game: Game) {
     if (!hold) return hud.flash(player.rides.why());
     const v = player.vel;
     const s = Math.hypot(v.x, v.z);
+    lookRound(player.pos.x, player.pos.z);
     // stepping on at a run carries some of it
     skater.start(player.pos.x, player.pos.z, s > 0.5 ? Math.atan2(v.x, v.z) : player.yaw, Math.min(s, 3), player.pos.y);
     heading = skater.heading;
@@ -447,6 +472,7 @@ export function installSkateboarding(game: Game) {
       fakie: skater.fakie,
       pushing: skater.pushing,
       surface: skater.surface,
+      controls: { ...c },
       x: Math.round(skater.x * 10) / 10,
       z: Math.round(skater.z * 10) / 10,
       session: { time: Math.round(session.time * 10) / 10, distance: Math.round(session.distance), top: Math.round(session.top * 3.6), points: session.points, pending: session.pending, bails: session.bails },

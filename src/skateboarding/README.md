@@ -83,7 +83,9 @@ skateboarding.css  the readout
 pictures.js      what a skateboard looks like in your pack
 ```
 
-Anything solid that says it's made of `tarmac`, `asphalt`, `marble`, `stone`
-or `boards` (world/solids.js: the same `surface` your footsteps hear) can be
-skated on, so a new place laid with one of those is skateable without
-telling this.
+On a road the board rides the top of the road itself, as a car does
+(`roads.under`, see [Roads](../roads/README.md)). Anything else solid that
+says it's made of `tarmac`, `asphalt`, `marble`, `stone` or `boards`
+(world/solids.js: the same `surface` your footsteps hear) can be skated on
+too, so a new place laid with one of those is skateable without telling
+this.
