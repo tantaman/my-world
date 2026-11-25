@@ -24,6 +24,7 @@
 
 import * as THREE from 'three';
 import { Batch } from './batch.js';
+import { buildCapitol } from './capitol.js';
 import { SURF, FACADE } from '../build/surfaces.js';
 
 // What a landmark is made of: its walls, its roof, its kind of front.
@@ -80,14 +81,38 @@ const hash = (n) => {
 };
 const _c = new THREE.Color();
 
-export function* buildBuildings(buildings, { ground, offset, names = new Map(), seed = 0 }) {
-  const roofs = new Batch(1 << 14);
-  const walls = new Batch(1 << 15);
+// Survey duplicates cause two walls to fight for the same pixels. Preserve
+// the entry with a name so a landmark keeps its authored appearance.
+function uniqueBuildings(buildings, names) {
+  const groups = new Map();
+  const unique = [];
+  for (const [k, b] of buildings.entries()) {
+    const { pts, faces } = b;
+    const key = `${pts.length}:${faces.length}:${pts[0]}:${pts[1]}:${pts.at(-3)}:${pts.at(-2)}`;
+    let group = groups.get(key);
+    if (!group) groups.set(key, (group = []));
+    const match = group.find((i) => {
+      const a = buildings[unique[i]];
+      return pts.every((p, j) => p === a.pts[j]) && faces.every((f, j) => f.length === a.faces[j].length &&
+        f.every((r, l) => r.length === a.faces[j][l].length && r.every((p, m) => p === a.faces[j][l][m])));
+    });
+    if (match === undefined) {
+      group.push(unique.length);
+      unique.push(k);
+    } else if (names.get(k) && !names.get(unique[match])) unique[match] = k;
+  }
+  return unique;
+}
+
+export function* buildBuildings(buildings, { ground, offset, names = new Map(), seed = 0, detail = true }) {
+  const roofs = new Batch(detail ? 1 << 14 : 1 << 11);
+  const walls = new Batch(detail ? 1 << 15 : 1 << 12);
   const solids = [];
   const obstacles = [];
   const outlines = [];
-  for (let k = 0; k < buildings.length; k++) {
-    if (k % PER_STEP === PER_STEP - 1) yield;
+  let built = 0;
+  for (const k of uniqueBuildings(buildings, names)) {
+    if (++built % PER_STEP === 0) yield;
     const b = buildings[k];
     const P = b.pts;
     const np = P.length / 3;
@@ -96,10 +121,14 @@ export function* buildBuildings(buildings, { ground, offset, names = new Map(), 
     const Y = (i) => P[i * 3 + 2] + offset;
     // its footprint, how high it stands and how big it is
     let [cx, cz, top] = [0, 0, -Infinity];
+    let peak = 0;
     for (let i = 0; i < np; i++) {
       cx += X(i) / np;
       cz += Z(i) / np;
-      top = Math.max(top, Y(i));
+      if (Y(i) > top) {
+        top = Y(i);
+        peak = i;
+      }
     }
     let r = 0;
     for (let i = 0; i < np; i++) r = Math.max(r, Math.hypot(X(i) - cx, Z(i) - cz));
@@ -115,19 +144,26 @@ export function* buildBuildings(buildings, { ground, offset, names = new Map(), 
     const wallSurf = front === null ? SURF.stone : SURF.facade + front;
     const wallCol = _c.set(look.wall).clone();
     const roofCol = _c.set(look.roof).clone();
-    const roofSurf = b.roof === 'flat' || b.roof === 'default' ? SURF.clay : b.roof === 'dome' ? SURF.tin : SURF.slate;
+    const roofSurf = look.roof === MARBLE ? SURF.concrete : b.roof === 'flat' || b.roof === 'default' ? SURF.asphalt : b.roof === 'dome' ? SURF.steel : SURF.slate;
+    const capitol = name === 'United States Capitol' ? { x: X(peak), z: Z(peak), base: top - 43.5, ground, detail } : null;
+    const onDome = (i) => Math.hypot(X(i) - capitol.x, Z(i) - capitol.z) < 30;
+    const faces = capitol ? b.faces.filter(([outer]) => !outer.every((i) => Y(i) > capitol.base + 6)) : b.faces;
+    // The original roof meets the model's plinth. Mixed roof faces can
+    // still have a corner in the surveyed drum, so trim those corners too.
+    const roofY = capitol ? (i) => onDome(i) ? Math.min(Y(i), capitol.base) : Y(i) : Y;
 
     // ── the roof, a face at a time
-    for (const face of b.faces) {
-      outlines.push(face[0].map((i) => [X(i), Z(i)]));
-      roofFace(roofs, face, X, Y, Z, roofCol, roofSurf, 0.92 + hash(k * 31 + face.length) * 0.14);
+    if (detail) for (const [outer] of b.faces) outlines.push(outer.map((i) => [X(i), Z(i)]));
+    for (const face of faces) {
+      roofFace(roofs, face, X, roofY, Z, roofCol, roofSurf, 0.92 + hash(k * 31 + face.length) * 0.14);
     }
+    if (capitol) buildCapitol(roofs, capitol);
 
     // ── the walls: each edge only one face has, down to the ground; each
     // edge two faces share at different heights, the step between them
     const edges = new Map();
-    for (let f = 0; f < b.faces.length; f++) {
-      for (const ring of b.faces[f]) {
+    for (const face of faces) {
+      for (const ring of face) {
         for (let e = 0; e < ring.length; e++) {
           const a = ring[e];
           const c = ring[(e + 1) % ring.length];
@@ -150,21 +186,27 @@ export function* buildBuildings(buildings, { ground, offset, names = new Map(), 
       let tops;
       let bottoms;
       if (list.length === 1) {
-        tops = [Y(a), Y(c)];
+        tops = [roofY(a), roofY(c)];
         let lo = Math.min(ground(ax, az), ground(bx, bz));
-        for (let t = 0.25; t < 1; t += 0.25) lo = Math.min(lo, ground(ax + (bx - ax) * t, az + (bz - az) * t));
+        if (detail) for (let t = 0.25; t < 1; t += 0.25) lo = Math.min(lo, ground(ax + (bx - ax) * t, az + (bz - az) * t));
         bottoms = [lo - SINK, lo - SINK];
-        solids.push({ ax, az, bx, bz, r: WALL_R, bottom: lo - 1, topA: tops[0], topB: tops[1], wall: true });
+        if (detail) solids.push({ ax, az, bx, bz, r: WALL_R, bottom: lo - 1, topA: tops[0], topB: tops[1], wall: true });
       } else {
-        tops = [Math.max(...list.map((p) => Y(p[0]))), Math.max(...list.map((p) => Y(p[1])))];
-        bottoms = [Math.min(...list.map((p) => Y(p[0]))), Math.min(...list.map((p) => Y(p[1])))];
+        tops = [Math.max(...list.map((p) => roofY(p[0]))), Math.max(...list.map((p) => roofY(p[1])))];
+        bottoms = [Math.min(...list.map((p) => roofY(p[0]))), Math.min(...list.map((p) => roofY(p[1])))];
         if (tops[0] - bottoms[0] < STEP && tops[1] - bottoms[1] < STEP) continue;
       }
       if (tops[0] <= bottoms[0] && tops[1] <= bottoms[1]) continue;
-      // (its grain along the wall, and up it from the foot of the building)
-      walls.quad([ax, bottoms[0], az], [bx, bottoms[1], bz], [bx, tops[1], bz], [ax, tops[0], az], wallCol.r, wallCol.g, wallCol.b, wallSurf, [0, bottoms[0] - foot, len, bottoms[1] - foot, len, tops[1] - foot, 0, tops[0] - foot]);
+      // Fit whole window bays between the corners. Short jogs and roof
+      // steps are solid masonry, and the bays align vertically around the building.
+      const bay = front === FACADE.row ? 2.4 : front === FACADE.glass ? 1.6 : 2.9;
+      const hasWindows = front !== null && len > bay * 0.64 && list.length === 1;
+      const u = hasWindows ? Math.max(1, Math.round(len / bay)) * bay : len;
+      const tone = !detail && hasWindows ? 0.85 : 1;
+      walls.quad([ax, bottoms[0], az], [bx, bottoms[1], bz], [bx, tops[1], bz], [ax, tops[0], az], wallCol.r * tone, wallCol.g * tone, wallCol.b * tone,
+        hasWindows ? wallSurf : SURF.stone, [0, bottoms[0] - foot, u, bottoms[1] - foot, u, tops[1] - foot, 0, tops[0] - foot]);
     }
-    obstacles.push({ x: cx, z: cz, r, what: name || 'a building in Washington' });
+    if (detail) obstacles.push({ x: cx, z: cz, r, what: name || 'a building in Washington' });
   }
   return { roofs, walls, solids, obstacles, outlines };
 }

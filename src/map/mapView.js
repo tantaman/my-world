@@ -121,7 +121,7 @@ const TEMPLATE = /* html */ `
 
 export class MapView {
   // onOpen(): it's about to open (so whatever else is up can close first)
-  // travel(x, z, label, yaw): take the player to somewhere chosen on the map
+  // travel(x, z, label, yaw, pitch): take the player to somewhere chosen on the map
   constructor({ seed, land = 1, structures = [], hikes = [], earth = null, ready, marks, player, input, places = new Places(), onOpen = () => {}, travel = () => false }) {
     this.marks = marks;
     this.onOpen = onOpen;
@@ -1312,7 +1312,7 @@ export class MapView {
       }
       case 'place-go': {
         const p = this.places.get(this.placeSel);
-        if (p) this.travel(p.x, p.z, p.name, p.yaw);
+        if (p) this.travel(p.x, p.z, p.name, p.yaw, p.pitch);
         return;
       }
       case 'place-done':

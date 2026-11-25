@@ -29,9 +29,8 @@ const CANOPY = 11; // m: how far the crowns of a closed wood stand over the grou
 const SINK = 45; // m: how far it drops out of sight under the loaded chunks
 const SINK_BAND = 48; // m inside their edge over which it drops
 const UNDER = 0.8; // m: it always sits this far under the real ground
-// m: nothing of it is drawn further from the camera than this. Much past
-// here the picture can't tell land from sky (the composite pass reads the far
-// end of the depth range as sky), so the fog must have closed in by then.
+// Default draw range in metres. A longer view also needs a longer camera
+// projection so the composite can still distinguish its depth from the sky.
 export const FAR_CLIP = 1000;
 
 // Linear colours, as the forest reads from a long way off.
@@ -56,7 +55,7 @@ export class FarView {
     // slid with the scene (origin.place).
     this.mid = { value: new THREE.Vector2() };
     this.half = { value: 0 };
-    this.material = this._material();
+    this.materials = new Map();
   }
 
   has(id) {
@@ -64,11 +63,13 @@ export class FarView {
   }
 
   // A grid from sampleFar() → a mesh for hike `id`.
-  add(id, grid) {
+  add(id, grid, clip = FAR_CLIP) {
     this.remove(id);
-    const mesh = new THREE.Mesh(buildGeometry(grid), this.material);
+    if (!this.materials.has(clip)) this.materials.set(clip, this._material(clip));
+    const mesh = new THREE.Mesh(buildGeometry(grid), this.materials.get(clip));
     mesh.name = `far view: ${id}`;
     mesh.userData.grid = { x0: grid.x0, z0: grid.z0, x1: grid.x0 + (grid.n - 1) * grid.step, z1: grid.z0 + (grid.n - 1) * grid.step };
+    mesh.userData.clip = clip;
     mesh.position.set(grid.x0, 0, grid.z0);
     this.scene.add(mesh);
     this.meshes.set(id, mesh);
@@ -84,11 +85,12 @@ export class FarView {
 
   // How far (m) from (x, z) to the nearest edge of any far view it's inside
   // of: as far as there is land drawn in every direction. 0 if outside them all.
-  reach(x, z) {
+  reach(x, z, short = 0) {
     let best = 0;
     for (const m of this.meshes.values()) {
       const g = m.userData.grid;
-      const e = Math.min(x - g.x0, g.x1 - x, z - g.z0, g.z1 - z);
+      let e = Math.min(x - g.x0, g.x1 - x, z - g.z0, g.z1 - z);
+      if (short) e = Math.min(e - short, m.userData.clip - 30);
       if (e > best) best = e;
     }
     return best;
@@ -104,7 +106,7 @@ export class FarView {
     this.half.value = (R + 0.5) * S;
   }
 
-  _material() {
+  _material(clip) {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
     mat.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, SKY, { uMid: this.mid, uHalf: this.half });
@@ -145,7 +147,7 @@ export class FarView {
         .replace(
           '#include <clipping_planes_fragment>',
           `#include <clipping_planes_fragment>
-          if (distance(vWPos, cameraPosition) > ${FAR_CLIP.toFixed(1)}) discard;`,
+          if (distance(vWPos, cameraPosition) > ${clip.toFixed(1)}) discard;`,
         )
         .replace(
           '#include <opaque_fragment>',
@@ -159,7 +161,7 @@ export class FarView {
           #include <opaque_fragment>`,
         );
     };
-    mat.customProgramCacheKey = () => 'far-view-v3';
+    mat.customProgramCacheKey = () => `far-view-v4-${clip}`;
     return mat;
   }
 }

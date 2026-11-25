@@ -13,6 +13,7 @@ const num = (key, fallback) => {
 
 // ?q=low trades distance and grass density for speed on modest GPUs.
 const low = params.get('q') === 'low';
+const viewRadius = num('view', low ? 3 : 4);
 
 export const CONFIG = {
   // The world is generated from this seed. Changing it gives a whole new forest.
@@ -24,7 +25,8 @@ export const CONFIG = {
 
   // Terrain streaming
   chunkSize: 64, // meters per chunk side
-  viewRadius: num('view', low ? 3 : 4), // chunks loaded around the player
+  viewRadius, // chunks loaded around the player
+  cityView: Math.min(2200, Math.max(850, viewRadius * 440)), // m of city to stream in
   // meters between terrain vertices by ring distance (0-1, 2, 3+)
   lodSteps: [1, 2, 4],
 

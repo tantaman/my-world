@@ -41,6 +41,7 @@
 //            drawn under its shapes at every zoom
 //   yaw      optional: which way to face when `go here` sets you down at
 //            x, z (the way in, say); otherwise the way you were facing
+//   pitch    optional: how far down the camera looks on arrival (radians)
 
 import { ListNearest, MergeNearest, FilterNearest, ReachNearest } from '../core/nearest.js';
 

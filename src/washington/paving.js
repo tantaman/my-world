@@ -16,18 +16,18 @@
 import * as THREE from 'three';
 import { Batch } from './batch.js';
 import { SURF } from '../build/surfaces.js';
-import { inside, area } from '../core/rings.js';
+import { inside, area, edgeDistance } from '../core/rings.js';
 
 // What each kind of paving looks like: its colour, its surface, and how far
 // over the ground it's laid (m): a road's, a little; a sidewalk's, a curb's
 // height; a curb drops to the road's.
 export const LOOKS = {
-  road: { col: 0x3a3c3e, surf: SURF.clay, lift: 0.04 },
-  alley: { col: 0x625f5a, surf: SURF.clay, lift: 0.045 },
-  drive: { col: 0x46474a, surf: SURF.clay, lift: 0.05 },
-  parking: { col: 0x4c4d4f, surf: SURF.clay, lift: 0.045 },
-  island: { col: 0x8c8880, surf: SURF.clay, lift: 0.14, curb: true },
-  sidewalk: { col: 0x9e9990, surf: SURF.clay, lift: 0.14, curb: true },
+  road: { col: 0x494b4d, surf: SURF.asphalt, lift: 0.09 },
+  alley: { col: 0x625f5a, surf: SURF.asphalt, lift: 0.095 },
+  drive: { col: 0x515052, surf: SURF.asphalt, lift: 0.10 },
+  parking: { col: 0x555456, surf: SURF.asphalt, lift: 0.095 },
+  island: { col: 0x8c8880, surf: SURF.concrete, lift: 0.17, curb: true },
+  sidewalk: { col: 0xaba69d, surf: SURF.concrete, lift: 0.17, curb: true },
   stairs: { col: 0x8e8a82, surf: SURF.stone, lift: 0.16 },
   bridge: { col: 0x7a7874, surf: SURF.clay, lift: 0.02 },
   footbridge: { col: 0x7a7874, surf: SURF.clay, lift: 0.02 },
@@ -37,7 +37,7 @@ export const LOOKS = {
 const BRICK = { col: 0x8a4c3e, surf: SURF.stone, share: 0.3, most: 3000 };
 const ROAD_LIFT = LOOKS.road.lift;
 // m: the longest side a triangle laid on the ground is left with
-const FINE = 4;
+const FINE = 6;
 // A bridge: how deep its deck (m), how high the parapet over it, how far
 // apart its piers and how wide, and how much room there must be under it
 // (m) for a pier to stand; and its deck cut into pieces this long (m) to
@@ -45,9 +45,6 @@ const FINE = 4;
 const DECK = { deep: 1.2, parapet: 0.9, wall: 0.3, pier: 36, pierWide: 1.6, under: 3, piece: 20 };
 const DECK_COL = 0x8c8a84;
 const PER_STEP = 30; // polygons laid between one step and the next
-// How much more than a polygon's area its triangles may cover before
-// they're taken to be wrong.
-const OVERFILL = 1.02;
 
 const _c = new THREE.Color();
 const hash = (n) => {
@@ -73,10 +70,11 @@ export function deckAt(decks, x, z) {
   return y;
 }
 
-export function* buildPaving(tile, { ground, offset, seed = 0 }) {
-  const paving = new Batch(1 << 15);
-  const bridges = new Batch(1 << 12);
+export function* buildPaving(tile, { ground, offset, seed = 0, detail = true, ownsDeck = (x, z) => true }) {
+  const paving = new Batch(detail ? 1 << 15 : 1 << 12);
+  const bridges = new Batch(detail ? 1 << 12 : 1 << 9);
   const solids = [];
+  const fine = detail ? FINE : 24;
   // the decks, in game heights
   const decks = tile.bridges.map((b) => {
     const outline = [];
@@ -101,8 +99,9 @@ export function* buildPaving(tile, { ground, offset, seed = 0 }) {
     const col = _c.set(look.col).clone();
     const tone = 0.94 + hash(seed + k * 7) * 0.1;
     for (const poly of polygonsOf(p.rings)) {
-      lay(paving, poly, under, look.lift, col.r * tone, col.g * tone, col.b * tone, look.surf);
-      if (look.curb) for (const ring of [poly.outer, ...poly.holes]) curb(paving, ring, under, look.lift, col.r * tone * 0.85, col.g * tone * 0.85, col.b * tone * 0.85);
+      const stripe = detail && p.kind === 'road' ? stripeOf(poly) : null;
+      yield* lay(paving, poly, under, look.lift, col.r * tone, col.g * tone, col.b * tone, look.surf, fine, false, stripe);
+      if (detail && look.curb) for (const ring of [poly.outer, ...poly.holes]) curb(paving, ring, under, look.lift, col.r * tone * 0.85, col.g * tone * 0.85, col.b * tone * 0.85);
     }
   }
 
@@ -118,10 +117,23 @@ export function* buildPaving(tile, { ground, offset, seed = 0 }) {
       const t = Math.max(0, Math.min(1, ((x - ax) * ux + (z - az) * uz) / len));
       return ay + (by - ay) * t;
     };
+    // Keep the deck walkable from any detailed tile it crosses, including
+    // when the tile that owns its mesh has yet to stream in.
+    if (detail) {
+      const pieces = Math.max(1, Math.ceil(len / DECK.piece));
+      for (let s = 0; s < pieces; s++) {
+        const [t0, t1] = [(len * s) / pieces, (len * (s + 1)) / pieces];
+        const [x0, z0, x1, z1] = [ax + ux * t0, az + uz * t0, ax + ux * t1, az + uz * t1];
+        const [y0, y1] = [deckY(x0, z0) + ROAD_LIFT, deckY(x1, z1) + ROAD_LIFT];
+        solids.push({ ax: x0, az: z0, bx: x1, bz: z1, r: d.half, bottom: Math.min(y0, y1) - DECK.deep, topA: y0, topB: y1 });
+      }
+    }
+    if (!ownsDeck((ax + bx) / 2, (az + bz) / 2)) continue;
     // its top, under whatever road is on it, and its underside
     const poly = { outer: d.outline, holes: [] };
-    lay(bridges, poly, (x, z) => Math.max(deckY(x, z), ground(x, z)), LOOKS.bridge.lift, dc.r, dc.g, dc.b, SURF.clay);
-    lay(bridges, poly, (x, z) => Math.max(deckY(x, z), ground(x, z)) - DECK.deep, 0, dc.r * 0.6, dc.g * 0.6, dc.b * 0.6, SURF.clay, true);
+    yield* lay(bridges, poly, (x, z) => Math.max(deckY(x, z), ground(x, z)), LOOKS.bridge.lift, dc.r, dc.g, dc.b, SURF.concrete, fine);
+    if (!detail) continue;
+    yield* lay(bridges, poly, (x, z) => Math.max(deckY(x, z), ground(x, z)) - DECK.deep, 0, dc.r * 0.6, dc.g * 0.6, dc.b * 0.6, SURF.concrete, fine, true);
     // its sides, and a parapet along those that run with it (not across its ends)
     const O = d.outline;
     for (let i = 0; i < O.length; i++) {
@@ -158,16 +170,39 @@ export function* buildPaving(tile, { ground, offset, seed = 0 }) {
         bridges.quad([p0[0], g - 1, p0[1]], [p1[0], g - 1, p1[1]], [p1[0], top, p1[1]], [p0[0], top, p0[1]], dc.r * 0.8, dc.g * 0.8, dc.b * 0.8, SURF.stone, [0, 0, 1, 0, 1, top - g, 0, top - g]);
       }
     }
-    // what's walked on: the deck in pieces, each as high as it is there
-    const pieces = Math.max(1, Math.ceil(len / DECK.piece));
-    for (let s = 0; s < pieces; s++) {
-      const [t0, t1] = [(len * s) / pieces, (len * (s + 1)) / pieces];
-      const [x0, z0, x1, z1] = [ax + ux * t0, az + uz * t0, ax + ux * t1, az + uz * t1];
-      const [y0, y1] = [deckY(x0, z0) + ROAD_LIFT, deckY(x1, z1) + ROAD_LIFT];
-      solids.push({ ax: x0, az: z0, bx: x1, bz: z1, r: d.half, bottom: Math.min(y0, y1) - DECK.deep, topA: y0, topB: y1 });
-    }
   }
   return { paving, bridges, solids, decks };
+}
+
+// The outline alone identifies some straight blocks reliably. Curves,
+// intersections, plazas and streets of varying width are left unmarked.
+function stripeOf({ outer, holes }) {
+  if (holes.length) return null;
+  let length = 0;
+  let ux = 0;
+  let uz = 0;
+  for (let i = 0; i < outer.length; i++) {
+    const [ax, az] = outer[i];
+    const [bx, bz] = outer[(i + 1) % outer.length];
+    const l = Math.hypot(bx - ax, bz - az);
+    if (l <= length) continue;
+    length = l;
+    ux = (bx - ax) / l;
+    uz = (bz - az) / l;
+  }
+  let [u0, u1, v0, v1] = [Infinity, -Infinity, Infinity, -Infinity];
+  for (const [x, z] of outer) {
+    const u = x * ux + z * uz;
+    const v = z * ux - x * uz;
+    u0 = Math.min(u0, u);
+    u1 = Math.max(u1, u);
+    v0 = Math.min(v0, v);
+    v1 = Math.max(v1, v);
+  }
+  const w = v1 - v0;
+  const span = u1 - u0;
+  if (w < 8 || w > 24 || span < w * 3.5 || span > 400 || length < span * 0.5 || Math.abs(area(outer)) < w * span * 0.82) return null;
+  return { ux, uz, center: (v0 + v1) / 2, start: u0, surface: SURF.asphalt + 0.5 + span / 1000 };
 }
 
 // m² inside a ring kept as [x, z, x, z, ...].
@@ -183,18 +218,32 @@ export function polygonsOf(rings) {
   const rs = rings
     .map((r) => {
       const pts = [];
-      for (let i = 0; i < r.length; i += 2) pts.push([r[i], r[i + 1]]);
-      return { pts, a: Math.abs(area(pts)) };
+      let [x0, z0, x1, z1] = [Infinity, Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < r.length; i += 2) {
+        const [x, z] = [r[i], r[i + 1]];
+        pts.push([x, z]);
+        x0 = Math.min(x0, x);
+        z0 = Math.min(z0, z);
+        x1 = Math.max(x1, x);
+        z1 = Math.max(z1, z);
+      }
+      return { pts, a: Math.abs(area(pts)), x0, z0, x1, z1 };
     })
     .filter((r) => r.pts.length >= 3 && r.a > 0.01)
     .sort((p, q) => q.a - p.a);
   const out = [];
   const owner = [];
   for (let i = 0; i < rs.length; i++) {
-    const [x, z] = rs[i].pts[0];
+    const child = rs[i];
     // the rings it's in, smallest last
     const ins = [];
-    for (let j = 0; j < i; j++) if (inside(rs[j].pts, x, z)) ins.push(j);
+    for (let j = 0; j < i; j++) {
+      const parent = rs[j];
+      if (child.x0 < parent.x0 || child.z0 < parent.z0 || child.x1 > parent.x1 || child.z1 > parent.z1) continue;
+      // Skip a shared boundary vertex when deciding which side the ring is on.
+      const point = child.pts.find(([x, z]) => edgeDistance(parent.pts, x, z) > 1e-5);
+      if (point && inside(parent.pts, point[0], point[1])) ins.push(j);
+    }
     if (ins.length % 2 === 0) {
       owner[i] = out.length;
       out.push({ outer: rs[i].pts, holes: [] });
@@ -209,30 +258,13 @@ export function polygonsOf(rings) {
 // A polygon laid on the ground: cut into triangles, those cut again until
 // no side is longer than FINE, each corner at height(x, z) + lift. down:
 // facing down (a deck's underside).
-function lay(batch, { outer, holes }, height, lift, r, g, b, surf, down = false) {
-  // Cut into triangles with its holes; but where a hole touches the edge
-  // (the survey's sidewalks round a lawn), that can come out covering far
-  // more than the polygon does: then the outline alone is cut, and what
-  // lies in a hole is left out, a small triangle at a time.
-  const want = Math.abs(area(outer)) - holes.reduce((sum, h) => sum + Math.abs(area(h)), 0);
-  let all = holes.length ? [...outer, ...holes.flat()] : outer;
-  let tris = cut(outer, holes);
-  let inHole = null;
-  if (!tris || covered(tris, all) > want * OVERFILL + 1) {
-    all = outer;
-    tris = cut(outer, []);
-    if (!tris || covered(tris, all) > Math.abs(area(outer)) * OVERFILL + 1) return;
-    const boxes = holes.map((h) => {
-      let q = [Infinity, Infinity, -Infinity, -Infinity];
-      for (const [x, z] of h) q = [Math.min(q[0], x), Math.min(q[1], z), Math.max(q[2], x), Math.max(q[3], z)];
-      return q;
-    });
-    inHole = (x, z) => holes.some((h, k) => x >= boxes[k][0] && x <= boxes[k][2] && z >= boxes[k][1] && z <= boxes[k][3] && inside(h, x, z));
-  }
+function* lay(batch, { outer, holes }, height, lift, r, g, b, surf, fine, down = false, stripe = null) {
   const stack = [];
-  for (const [i, j, k] of tris) {
-    stack.push(all[i][0], all[i][1], all[j][0], all[j][1], all[k][0], all[k][1]);
+  let work = 0;
+  for (const tri of trianglesOf(outer, holes)) {
+    stack.push(...tri);
     while (stack.length) {
+      if (++work % 500 === 0) yield;
       const cz = stack.pop();
       const cx = stack.pop();
       const bz = stack.pop();
@@ -243,7 +275,7 @@ function lay(batch, { outer, holes }, height, lift, r, g, b, surf, down = false)
       const bc = (cx - bx) ** 2 + (cz - bz) ** 2;
       const ca = (ax - cx) ** 2 + (az - cz) ** 2;
       const most = Math.max(ab, bc, ca);
-      if (most > FINE * FINE) {
+      if (most > fine * fine) {
         // split the longest side
         if (most === ab) {
           const [mx, mz] = [(ax + bx) / 2, (az + bz) / 2];
@@ -257,17 +289,65 @@ function lay(batch, { outer, holes }, height, lift, r, g, b, surf, down = false)
         }
         continue;
       }
-      if (inHole && inHole((ax + bx + cx) / 3, (az + bz + cz) / 3)) continue;
       // (wound to face up, or down)
-      const up = (bz - az) * (cx - ax) - (bx - ax) * (cz - az) >= 0;
+      const ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
+      if (Math.abs(ny) < 1e-6) continue;
+      const up = ny > 0;
       const flip = up === down;
       const v = batch.n;
-      const ny = down ? -1 : 1;
-      batch.vertex(ax, height(ax, az) + lift, az, 0, ny, 0, r, g, b, surf, ax, az);
-      batch.vertex(bx, height(bx, bz) + lift, bz, 0, ny, 0, r, g, b, surf, bx, bz);
-      batch.vertex(cx, height(cx, cz) + lift, cz, 0, ny, 0, r, g, b, surf, cx, cz);
+      const [ay, by, cy] = [height(ax, az), height(bx, bz), height(cx, cz)];
+      const nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay);
+      const nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+      const scale = (flip ? -1 : 1) / (Math.hypot(nx, ny, nz) || 1);
+      for (const [x, y, z] of [[ax, ay, az], [bx, by, bz], [cx, cy, cz]]) {
+        const u = stripe ? x * stripe.ux + z * stripe.uz - stripe.start : x;
+        const across = stripe ? z * stripe.ux - x * stripe.uz - stripe.center : z;
+        batch.vertex(x, y + lift, z, nx * scale, ny * scale, nz * scale, r, g, b, stripe?.surface ?? surf, u, across);
+      }
       if (flip) batch.tri(v, v + 2, v + 1);
       else batch.tri(v, v + 1, v + 2);
+    }
+  }
+}
+
+function* trianglesOf(outer, holes) {
+  const want = Math.abs(area(outer)) - holes.reduce((sum, h) => sum + Math.abs(area(h)), 0);
+  const all = holes.length ? [...outer, ...holes.flat()] : outer;
+  const tris = cut(outer, holes);
+  if (tris && Math.abs(covered(tris, all) - want) <= Math.max(1, want * 0.02)) {
+    for (const [i, j, k] of tris) yield [...all[i], ...all[j], ...all[k]];
+    return;
+  }
+
+  // Some sidewalk holes share an edge with the outer ring. Sweep between
+  // vertex rows and fill paired crossings so the lawn edges stay straight.
+  const edges = [];
+  const rows = new Set();
+  for (const ring of [outer, ...holes]) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [a, b] = ring[j][1] < ring[i][1] ? [ring[j], ring[i]] : [ring[i], ring[j]];
+      const [x, z] = a;
+      const end = b[1];
+      if (end === z) continue;
+      edges.push({ x, z, end, slope: (b[0] - x) / (end - z) });
+      rows.add(z);
+      rows.add(end);
+    }
+  }
+  edges.sort((a, b) => a.z - b.z);
+  const cuts = [...rows].sort((a, b) => a - b);
+  let active = [];
+  let next = 0;
+  for (let k = 1; k < cuts.length; k++) {
+    const [z0, z1] = [cuts[k - 1], cuts[k]];
+    active = active.filter((e) => e.end > z0);
+    while (next < edges.length && edges[next].z <= z0) active.push(edges[next++]);
+    const crossings = active.map((e) => [e.x + (z0 - e.z) * e.slope, e.x + (z1 - e.z) * e.slope]);
+    crossings.sort((a, b) => a[0] + a[1] - b[0] - b[1]);
+    for (let i = 0; i + 1 < crossings.length; i += 2) {
+      const [a, b] = [crossings[i], crossings[i + 1]];
+      yield [a[0], z0, b[0], z0, a[1], z1];
+      yield [b[0], z0, b[1], z1, a[1], z1];
     }
   }
 }
@@ -298,7 +378,7 @@ function curb(batch, ring, height, lift, r, g, b) {
     const [qx, qz] = ring[(i + 1) % ring.length];
     const el = Math.hypot(qx - px, qz - pz);
     if (el < 0.05) continue;
-    const n = Math.max(1, Math.ceil(el / FINE));
+    const n = 2 ** Math.max(0, Math.ceil(Math.log2(el / FINE)));
     for (let s = 0; s < n; s++) {
       const [x0, z0] = [px + ((qx - px) * s) / n, pz + ((qz - pz) * s) / n];
       const [x1, z1] = [px + ((qx - px) * (s + 1)) / n, pz + ((qz - pz) * (s + 1)) / n];

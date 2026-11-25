@@ -46,17 +46,17 @@ building is that roof with its walls dropped to the ground (and the step
 where a higher roof meets a lower one). The 11,000 the roof survey hasn't
 (built since it flew, such as the National Museum of African American
 History and Culture) are the city's later blocks of them, flat-topped.
-Anything over a storey tall has a front: a row house's brick with tall
-narrow windows, an office's stone with its windows in a grid, a newer one's
-floors banded in glass; and at night a light is on in some of them. The
-landmarks are what they're made of: the Capitol and the memorials white
-marble, the Smithsonian's Castle red sandstone, the Library of Congress's
-dome green copper. You can't go in, and a wall stops you.
+Taller buildings have brick, stone or glass fronts. Window bays fit between
+the corners and have sills, frames and recessed glazing. At night a light
+is on in some of them. Landmarks use the colors of their materials, such as
+the Smithsonian Castle's red sandstone and the Library of Congress dome's
+green copper. The Capitol has a modeled white dome, colonnade and East Front
+portico. The buildings' walls stop you. [Capitol Dome](https://www.aoc.gov/explore-capitol-campus/buildings-grounds/capitol-building/capitol-dome)
 
-**The streets** are the city's own survey of them from the air: every
-road, intersection, alley, drive and car park the shape it is, every
-sidewalk and traffic island raised on a curb, brick here and there as so
-many of Washington's are, every flight of steps. Its 330 bridges carry the
+**The streets** follow the city's aerial survey. Roads, intersections, alleys,
+drives and car parks have asphalt with subtle wear. Regular straight blocks
+have inferred center markings. Sidewalks and traffic islands sit on curbs,
+with some sidewalks laid in brick. Its 330 bridges carry the
 road over on a deck from one bank to the other, with a parapet along each
 side and piers under it where there's room, and you walk over on the deck,
 not down in the creek (Calvert Street and Connecticut Avenue over Rock
@@ -64,12 +64,11 @@ Creek, 30 m and more over it). The **street trees** are the 199,000 the
 city planted, each in its tree box, as tall as the city's lidar measured
 its crown.
 
-It's stood up round you a tile 500 m square at a time as you come near,
-built a little at a time so the walk doesn't stutter, and taken down as you
-leave; nearer than 650 m it's there (less on a modest machine, `?q=low`),
-and you see about a kilometre. The forest's own trees keep off the
-buildings and the paving, and the grass doesn't grow on them. Close up, the
-map draws its streets and roofs.
+The city streams in 500 m tiles. At default quality, the detailed tiles
+extend 500 m from you and simpler streets, buildings and trees carry the
+view out to about 1.7 km. Use `?q=low` for a shorter view. The forest's own
+trees and grass keep off the buildings and paving. Close up, the map draws
+the streets and roofs.
 
 The landmarks you've been to are counted (they're yours, saved), and each
 says so on the map.
@@ -123,6 +122,7 @@ pictures.js     the city in your pack
 onMap.js        the city on the map, close up: its streets and its roofs
 look.js         (fetched) a CityTile: a tile stood up a little at a time, and what's on each square metre of it
 buildings.js    the buildings: their surveyed roofs, their walls, their fronts
+capitol.js      the Capitol's dome and East Front portico
 paving.js       the roads, sidewalks and curbs, laid on the ground; the bridges' decks, parapets and piers
 trees.js        the street trees, on the forest's own models
 batch.js        geometry written straight into arrays, for the building material

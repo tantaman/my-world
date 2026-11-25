@@ -85,8 +85,11 @@ export function installFar(game) {
     try {
       worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
       worker.onmessage = (e) => {
-        sampling.delete(e.data.id);
-        far.add(e.data.id, e.data.grid);
+        const { id, grid } = e.data;
+        const box = square.get(id);
+        if (!box || box.x0 !== grid.x0 || box.z0 !== grid.z0 || box.step !== grid.step) return;
+        sampling.delete(id);
+        far.add(id, grid, box.clip);
       };
       worker.onerror = (e) => {
         console.warn('far view worker failed, drawing it on the main thread', e.message);
@@ -104,9 +107,9 @@ export function installFar(game) {
   // asking for a different one replaces it, and what is already drawn stays
   // up until the new square arrives, so there is no gap.
   const square = new Map(); // id -> the square drawn, or gone for sampling
-  const same = (a, b) => !!a && a.x0 === b.x0 && a.z0 === b.z0 && a.x1 === b.x1 && a.z1 === b.z1 && a.step === b.step;
-  function want(id, x0, z0, x1, z1, step) {
-    const box = { x0, z0, x1, z1, step };
+  const same = (a, b) => !!a && a.x0 === b.x0 && a.z0 === b.z0 && a.x1 === b.x1 && a.z1 === b.z1 && a.step === b.step && a.clip === b.clip;
+  function want(id, x0, z0, x1, z1, step, clip = FAR_CLIP) {
+    const box = { x0, z0, x1, z1, step, clip };
     if (same(square.get(id), box) || same(waiting.get(id), box)) return;
     waiting.set(id, box);
   }
@@ -114,6 +117,7 @@ export function installFar(game) {
   function drop(id) {
     waiting.delete(id);
     square.delete(id);
+    sampling.delete(id);
     far.remove(id);
   }
 
@@ -130,7 +134,7 @@ export function installFar(game) {
         sampling.add(id);
         worker.postMessage({ type: 'far', id, x0: box.x0, z0: box.z0, n, step: box.step });
       } else {
-        far.add(id, sampleFar(gen, box.x0, box.z0, n, box.step));
+        far.add(id, sampleFar(gen, box.x0, box.z0, n, box.step), box.clip);
       }
     }
   }
@@ -201,7 +205,7 @@ export function installFar(game) {
       far.update(focus);
       // As far as there is land drawn in every direction, the air is clear.
       const base = (CONFIG.viewRadius - 0.15) * CONFIG.chunkSize;
-      const clear = Math.min(FAR_CLIP - 30, Math.max(base, far.reach(camera.position.x, camera.position.z) - FOG_SHORT));
+      const clear = Math.max(base, far.reach(camera.position.x, camera.position.z, FOG_SHORT));
       fog = fog ? fog + (clear - fog) * (1 - Math.exp(-dt * FOG_EASE)) : clear;
       pipeline.fogFar = fog > base + 1 ? fog : 0;
     },

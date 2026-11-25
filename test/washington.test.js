@@ -16,7 +16,7 @@ import { inflateRawSync } from 'node:zlib';
 import { Writer, Reader, decodeTile, TILE, PAVING } from '../src/washington/codec.js';
 import { encodeTile, buildingFrom, deckOf, pavingKind, treeKind, treeHeight } from '../tools/dc/encode.js';
 import { ringsOf, watersOf, streamsOf, coversOf, TIDE_TOP, TIDE_NAME, WOODS } from '../tools/hike/dcgis.js';
-import { polygonsOf } from '../src/washington/paving.js';
+import { buildPaving, polygonsOf } from '../src/washington/paving.js';
 import { CityTile, makeMaterials, USE } from '../src/washington/look.js';
 import { CITY } from '../src/washington/city.js';
 import { area, inside } from '../src/core/rings.js';
@@ -181,6 +181,23 @@ test('even-odd rings are polygons with their holes, however they come', () => {
   assert.equal(polys.length, 2);
   const big = polys.find((p) => Math.abs(area(p.outer)) > 50);
   assert.equal(big.holes.length, 1, 'the small square is a hole in the big one');
+  const [walk] = polygonsOf([sq(0, 0, 10), [10, 3, 8, 3, 8, 7, 10, 7]]);
+  assert.equal(walk.holes.length, 1, 'a lawn that shares the sidewalk edge is still a hole');
+});
+
+test('a shared bridge is drawn once and stays walkable from the neighboring tile', () => {
+  const tile = { paving: [], bridges: [{ a: [0, 10, 15], b: [40, 10, 16], half: 5, ring: [0, 5, 40, 5, 40, 15, 0, 15] }] };
+  const build = (ownsDeck) => {
+    const steps = buildPaving(tile, { ground: () => 0, offset: 0, ownsDeck });
+    let step = steps.next();
+    while (!step.done) step = steps.next();
+    return step.value;
+  };
+  const owner = build((x, z) => x === 20 && z === 10);
+  const neighbor = build(() => false);
+  assert.ok(!owner.bridges.empty && neighbor.bridges.empty);
+  assert.ok(owner.solids.length > 0);
+  assert.deepEqual(neighbor.solids, owner.solids);
 });
 
 test('a tile of the city stands up a little at a time: its buildings, its streets laid as they are, its trees, the forest kept off', async () => {
@@ -195,11 +212,15 @@ test('a tile of the city stands up a little at a time: its buildings, its street
   assert.ok(t.ready && steps > 3, `built over ${steps} steps`);
   const d = t.data;
   assert.ok(d.buildings.length > 10, `its buildings (${d.buildings.length})`);
-  assert.ok([...d.names.values()].some((k) => CITY.names[k] === 'United States Capitol'), 'the Capitol among them, by name');
+  const capitol = [...d.names].find(([, k]) => CITY.names[k] === 'United States Capitol');
+  assert.ok(capitol, 'the Capitol among them, by name');
+  assert.equal(t.obstacles.filter((o) => Math.hypot(o.x - 474.4, o.z - 423.3) < 0.2).length, 1, 'the overlapping Capitol survey record is drawn once');
   // every building's walls stand on the ground and its roof over them
   const meshes = [];
   t.group.traverse((o) => o.isMesh && meshes.push(o));
   assert.ok(meshes.length >= 3, 'roofs, walls and paving');
+  const surveyedDome = Math.max(...d.buildings[capitol[0]].pts.filter((_, i) => i % 3 === 2));
+  assert.ok(meshes.some((m) => m.geometry.boundingBox.max.y > surveyedDome + 20), 'the modeled dome restores the Capitol silhouette');
   // the paving covers no more than the survey's polygons do (a polygon whose
   // holes touch its edge can come out of the triangles over all its holes)
   const paved = meshes.find((m) => m.material.polygonOffset);
@@ -232,6 +253,22 @@ test('a tile of the city stands up a little at a time: its buildings, its street
   assert.ok(t.solids.some((s) => s.wall), 'the walls stop you');
   assert.ok(t.solids.every((s) => Number.isFinite(s.ax + s.az + s.bx + s.bz + s.topA + s.topB + s.bottom)));
   t.dispose();
+});
+
+test('a distant city tile draws the same block with a smaller mesh and no collision grid', async () => {
+  const key = '0_0';
+  const args = { key, corner: [0, 0], bytes: await tileBytes(key), ground: () => 2, offset: 0, materials: makeMaterials() };
+  const near = new CityTile(args);
+  const far = new CityTile({ ...args, detail: false });
+  near.pump(Infinity);
+  far.pump(Infinity);
+  const triangles = (t) => t.group.children.reduce((n, mesh) => n + mesh.geometry.index.count / 3, 0);
+  assert.ok(triangles(far) > 0 && triangles(far) < triangles(near) / 3);
+  assert.ok(far.group.children.every((mesh) => !mesh.castShadow));
+  assert.equal(far.solids.length, 0);
+  assert.equal(far.grid.length, 0);
+  near.dispose();
+  far.dispose();
 });
 
 test('every landmark is on a tile there is, and arrived at out from under any roof', async () => {

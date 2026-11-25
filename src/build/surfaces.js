@@ -44,7 +44,7 @@
 // little mottling and nothing else.
 
 import * as THREE from 'three';
-import { NOISE_GLSL, WORLD_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL } from '../render/glsl.js';
+import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL } from '../render/glsl.js';
 import { SHARED, SKY } from '../render/uniforms.js';
 
 export const SURF = {
@@ -63,6 +63,8 @@ export const SURF = {
   cloth: 12,
   steel: 13,
   facade: 14,
+  asphalt: 15,
+  concrete: 16,
 };
 // The kinds of front a facade is, as its wear (0..1): a row house's, brick,
 // its windows tall and narrow; an older office's or a government building's,
@@ -132,6 +134,7 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
         varying vec3 vWNormal;
         ${NOISE_GLSL}
         ${WORLD_GLSL}
+        ${WORLD_NOISE_GLSL}
         ${SKY_GLSL}
         ${SURF_GLSL}`,
       )
@@ -280,6 +283,21 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
           col *= (0.88 + 0.2 * sand) * (1.0 - 0.35 * crack);
           relief = (sand * 0.4 - crack) * ${RELIEF.clay};
           rough = 0.97;
+        } else if (kind == S_ASPHALT || kind == S_CONCRETE) {
+          vec2 p = worldXZ(vWPos);
+          float aggregate = wnoise(p, 24.0) * shows(0.04, fw);
+          float wearPattern = wnoise(p, 0.38) * 0.7 + wnoise(p, 1.9) * 0.3;
+          col *= 0.87 + 0.23 * wearPattern + 0.12 * aggregate;
+          rough = 0.94;
+          if (kind == S_ASPHALT && wear > 0.5) {
+            // The survey gives the outline. Only straight, regular street blocks carry inferred paint.
+            float aa = max(fwidth(uv.y) * 0.5, 0.008);
+            float stroke = 1.0 - smoothstep(0.045 - aa, 0.045 + aa, abs(uv.y));
+            float dash = min(fract(uv.x / 9.0), 1.0 - fract(uv.x / 9.0));
+            float ends = min(uv.x, (wear - 0.501) * 1000.0 - uv.x);
+            float paint = stroke * (1.0 - smoothstep(0.17, 0.19, dash)) * smoothstep(4.0, 5.0, ends) * shows(0.12, fw);
+            col = mix(col, vec3(0.66, 0.43, 0.085) * (0.8 + wearPattern * 0.3), paint);
+          }
         } else if (kind == S_FACADE) {
           // which kind of front: a row house's, stone, or banded in glass
           float style = wear;
@@ -290,29 +308,45 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
           float floorN = floor(uv.y / storey);
           float bayN = floor(uv.x / bay);
           vec2 inCell = vec2(fract(uv.x / bay) * bay, fract(uv.y / storey) * storey);
-          float edge = 0.05;
-          float wx = smoothstep(0.0, edge, inCell.x - (bay - wide) * 0.5) * smoothstep(0.0, edge, (bay + wide) * 0.5 - inCell.x);
-          float wy = smoothstep(0.0, edge, inCell.y - sill.x) * smoothstep(0.0, edge, sill.y - inCell.y);
-          // (no windows under the first storey's sill: the foot of the wall)
-          float win = wx * wy * step(0.0, uv.y - sill.x) * shows(0.35, fw);
+          float side = wide * 0.5 - abs(inCell.x - bay * 0.5);
+          float head = sill.y - inCell.y;
+          float bottom = inCell.y - sill.x;
+          float opening = min(side, min(head, bottom));
+          float aa = max(fw * 0.5, 0.012);
+          float detail = shows(0.09, fw);
+          float windowShow = step(sill.x, uv.y) * shows(wide, fw);
+          float frame = smoothstep(-aa, aa, opening + 0.085) * windowShow;
+          float win = smoothstep(-aa, aa, opening - 0.055 * detail) * windowShow;
           // the wall itself: brick in courses, or dressed stone, or render
           if (style < 0.33) {
             vec4 c = courses(uv, 0.215, 0.075);
             float mortar = (1.0 - smoothstep(0.0, 0.06, c.z) * (1.0 - smoothstep(0.94, 1.0, c.z)) * smoothstep(0.0, 0.12, c.w)) * shows(0.03, fw);
-            col *= (0.86 + 0.24 * hash12(c.xy)) * mix(1.0, 1.25, mortar * 0.6);
+            col *= mix(1.0, 0.86 + 0.24 * hash12(c.xy), shows(0.12, fw)) * (1.0 + mortar * 0.15);
             relief = -mortar * 0.004;
           } else {
             float block = courses(uv, 1.2, 0.6).z;
             col *= 0.9 + 0.16 * vnoise(uv * 2.0) + 0.06 * (1.0 - smoothstep(0.0, 0.02, block)) * shows(0.05, fw);
           }
-          // the glass: dark, a little different pane to pane, a frame round it
+          float base = smoothstep(0.08, 0.18, uv.y) * (1.0 - smoothstep(0.42, 0.50, uv.y));
+          float band = (1.0 - smoothstep(0.035, 0.085, min(inCell.y, storey - inCell.y))) * detail;
+          col *= (1.0 - base * 0.17) * (1.0 - band * (style < 0.33 ? 0.08 : 0.20));
+          float ledge = (1.0 - smoothstep(0.025, 0.095, abs(bottom + 0.06))) * step(-0.13, side) * windowShow * detail;
+          col = mix(col, col * 1.28 + 0.015, ledge * 0.82);
+          // Deep jambs, trim and a sash catch light differently from the glass.
           float pane = hash12(vec2(bayN, floorN) + 7.1);
-          vec3 glass = vec3(0.05, 0.065, 0.08) * (0.8 + 0.5 * pane);
+          float sash = (1.0 - smoothstep(0.015, 0.05, abs(inCell.y - mix(sill.x, sill.y, 0.46)))) * detail;
+          float mullion = (1.0 - smoothstep(0.018, 0.045, abs(inCell.x - bay * 0.5))) * detail * step(0.33, style);
+          float bar = max(sash * (1.0 - step(0.66, style)), mullion);
+          vec3 trim = mix(col * 1.18 + 0.025, vec3(0.08, 0.09, 0.095), step(0.66, style));
+          col = mix(col, trim * mix(0.55, 1.0, smoothstep(-0.055, 0.04, head)), frame);
+          vec3 glass = vec3(0.033, 0.048, 0.064) * (0.7 + 0.7 * pane) * mix(0.75, 1.15, clamp(bottom / (sill.y - sill.x), 0.0, 1.0));
           col = mix(col, glass, win);
-          glazing = win;
-          rough = mix(0.9, 0.08, win);
+          col = mix(col, trim, win * bar);
+          glazing = win * (1.0 - bar);
+          relief += (ledge * 0.014 - win * (1.0 - bar) * 0.023) * detail;
+          rough = mix(0.9, 0.14, glazing);
           // at night, a light on in some of them
-          float lit = step(0.62, hash12(vec2(bayN * 1.7 + 3.0, floorN * 2.3 - 1.0))) * uNight * win;
+          float lit = step(0.62, hash12(vec2(bayN * 1.7 + 3.0, floorN * 2.3 - 1.0))) * uNight * glazing;
           totalEmissiveRadiance += vec3(1.0, 0.78, 0.45) * lit * (0.55 + 0.45 * pane);
         } else if (kind == S_CLOTH) {
           vec2 w = fract(uv * 220.0);
@@ -394,6 +428,6 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
         #include <opaque_fragment>`,
       );
   };
-  mat.customProgramCacheKey = () => 'building-v4';
+  mat.customProgramCacheKey = () => 'building-v5';
   return mat;
 }

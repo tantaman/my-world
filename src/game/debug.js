@@ -59,9 +59,10 @@ export function installDebug(game) {
   const frame = () => new Promise((r) => requestAnimationFrame(r));
   Object.assign(game.api, {
     // Resolves once the destination has streamed in.
-    async teleport(x, z, yaw = player.yaw) {
+    async teleport(x, z, yaw = player.yaw, pitch) {
       // (the land there first, where it's fetched: a hike's, the real Earth's)
       while (landforms && !landforms.ready(x - SET_DOWN, z - SET_DOWN, x + SET_DOWN, z + SET_DOWN)) await frame();
+      if (Number.isFinite(pitch)) player.camPitch = pitch;
       player.spawn(x, z, yaw, yaw + Math.PI);
       do await frame();
       while (!chunks.isFullyLoaded());

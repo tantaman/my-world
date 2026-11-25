@@ -29,7 +29,7 @@ const TRUNK = { least: 0.18, high: 2.5 };
 // pruned up and slimmer than one in the woods.
 const SLIM = 0.85;
 
-export function streetTrees(trees, { models, material, shadow, ground }) {
+export function streetTrees(trees, { models, material, shadow, ground, detail = true }) {
   const n = trees.length / 4;
   const byKind = new Map();
   for (let k = 0; k < n; k++) {
@@ -42,7 +42,7 @@ export function streetTrees(trees, { models, material, shadow, ground }) {
   for (const [kind, ks] of byKind) {
     const model = models[kind];
     if (!model) continue;
-    const mesh = new THREE.InstancedMesh(model.lod0, material, ks.length);
+    const mesh = new THREE.InstancedMesh(detail ? model.lod0 : model.lod2, material, ks.length);
     ks.forEach((k, i) => {
       const [x, z, h] = [trees[k * 4], trees[k * 4 + 1], trees[k * 4 + 2]];
       const y = ground(x, z);
@@ -56,13 +56,13 @@ export function streetTrees(trees, { models, material, shadow, ground }) {
       mesh.setMatrixAt(i, _m);
       mesh.setColorAt(i, tint(kind, t, _c));
       const r = Math.max(TRUNK.least, model.trunkRadius * s * SLIM);
-      solids.push({ ax: x, az: z, bx: x, bz: z, r, bottom: y - 0.5, topA: y + TRUNK.high, topB: y + TRUNK.high });
+      if (detail) solids.push({ ax: x, az: z, bx: x, bz: z, r, bottom: y - 0.5, topA: y + TRUNK.high, topB: y + TRUNK.high });
     });
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mesh.computeBoundingSphere();
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    mesh.castShadow = detail;
+    mesh.receiveShadow = detail;
     if (shadow) mesh.customDepthMaterial = shadow;
     meshes.push({ mesh, kind, model });
   }

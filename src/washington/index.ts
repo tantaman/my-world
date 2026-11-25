@@ -52,7 +52,7 @@ declare module '../game/game.ts' {
 interface WashingtonService {
   landmarks(): Array<{ id: string; name: string; been: boolean }>;
   go(id?: string): Promise<boolean>;
-  tiles(): { up: string[]; building: string[]; settled: boolean };
+  tiles(): { up: string[]; distant: string[]; building: string[]; settled: boolean };
   decks(): Array<{ a: number[]; b: number[]; half: number }>;
   at(x: number, z: number): string | null;
   standUp(x: number, z: number): Promise<void>;
@@ -68,13 +68,11 @@ interface Landmark {
   open?: boolean;
 }
 
-// m from you to a tile's edge: nearer than NEAR it's stood up, and past FAR
-// taken down (as far again as the forest's own reach is, of the usual: so
-// less of it with ?q=low or a shorter ?view). Its trees are drawn finer
-// nearer than LOD (m to its middle).
-const REACH = CONFIG.viewRadius / 4;
-const NEAR = 650 * REACH;
-const FAR = 950 * REACH;
+// m to a tile's edge. Keep a band between loading and unloading so the
+// meshes aren't rebuilt repeatedly while you move along a tile boundary.
+const NEAR = Math.min(700, 500 * CONFIG.viewRadius / 4);
+const FAR = CONFIG.cityView;
+const BUFFER = 150;
 const LOD = [400, 750];
 // tiles fetched at once, at most
 const FETCHING = 3;
@@ -82,6 +80,8 @@ const FETCHING = 3;
 // stood up before you're there: what's under you, and what's in view
 const UNDER = 60;
 const IN_VIEW = 300;
+const VIEW_PITCH = -0.035; // landmarks are framed just above eye level
+const CAPITOL_PITCH = -0.22;
 // m from a landmark's spot that counts as having been there
 const BEEN = 40;
 const ID = 'washington:';
@@ -96,13 +96,14 @@ export function installWashington(game: Game) {
   const [cx, cz] = card.at;
   const T = CITY.tile;
   const exists = new Set(CITY.tiles.split(' '));
-  const boxOf = (name: string) => {
+  const boxes = new Map([...exists].map((name) => {
     const [i, j] = name.split('_').map(Number);
-    return [cx + i * T, cz + j * T, cx + (i + 1) * T, cz + (j + 1) * T];
-  };
+    return [name, [cx + i * T, cz + j * T, cx + (i + 1) * T, cz + (j + 1) * T]];
+  }));
+  const boxOf = (name: string) => boxes.get(name)!;
   const fromBox = (b: number[], x: number, z: number) => Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.max(b[1] - z, 0, z - b[3]));
   const landmarks: Landmark[] = CITY.landmarks;
-  const spot = (m: Landmark) => ({ x: cx + m.at[0], z: cz + m.at[1], yaw: m.yaw });
+  const spot = (m: Landmark) => ({ x: cx + m.at[0], z: cz + m.at[1], yaw: m.yaw, pitch: m.id === 'capitol' ? CAPITOL_PITCH : VIEW_PITCH });
 
   // ── What's yours: the landmarks you've been to ─────────────────────────────
   const been = new Set<string>();
@@ -127,14 +128,17 @@ export function installWashington(game: Game) {
   // all built.
   const look = lazy(() => import('./look.js'));
   let mats: ReturnType<typeof import('./look.js').makeMaterials> | null = null;
-  const up = new Map<string, CityTile>(); // stood up
+  const up = new Map<string, CityTile>(); // detailed, with gameplay data
+  const distant = new Map<string, CityTile>(); // simpler city beyond the detailed tiles
   const building = new Map<string, CityTile>(); // being built
   const fetching = new Map<string, Promise<Uint8Array>>(); // on the way
-  const fetched = new Map<string, Uint8Array>(); // here, not yet being built
+  const fetched = new Map<string, Uint8Array>(); // available for either level of detail
   const failed = new Map<string, number>(); // name -> when it can be asked for again
   const land = () => gen.landforms.find((l: { id: string }) => l.id === CITY.place);
 
   function fetchTile(name: string) {
+    const bytes = fetched.get(name);
+    if (bytes) return Promise.resolve(bytes);
     let p = fetching.get(name);
     if (p) return p;
     p = import(`./tiles/${name}.js`)
@@ -155,29 +159,41 @@ export function installWashington(game: Game) {
     fetching.set(name, p);
     return p;
   }
-  function startBuilding(name: string, bytes = fetched.get(name)) {
+  function startBuilding(name: string, detail: boolean, bytes = fetched.get(name)) {
     const m = look.want();
     const L = land();
     if (!m || !L || !bytes) return null;
-    fetched.delete(name);
+    building.get(name)?.dispose();
+    fetched.set(name, bytes);
     if (!mats) mats = m.makeMaterials();
     const [x0, z0] = boxOf(name);
     const t = new m.CityTile({
       key: name,
       corner: [x0, z0],
       bytes,
-      ground: (x: number, z: number) => gen.height(x, z),
+      ground: detail ? (x, z) => gen.height(x, z) : (x, z) => L.ground(x, z) + L.offset,
       offset: L.offset,
       names: (k: number) => CITY.names[k],
       materials: mats,
       trees: { models: chunks.models, material: materials.vegetation, shadow: materials.vegetationShadow },
       seed: x0 * 31 + z0,
+      detail,
+      // Each copy still positions the local street polygons on the deck.
+      // Only the tile containing the midpoint draws it.
+      ownsDeck: (x, z) => name === `${Math.floor((x0 - cx + x) / T)}_${Math.floor((z0 - cz + z) / T)}`,
     });
     building.set(name, t);
     return t;
   }
   function putUp(t: CityTile) {
     building.delete(t.key);
+    removeTile(distant, t.key);
+    if (!t.detail) {
+      removeTile(up, t.key);
+      distant.set(t.key, t);
+      scene.add(t.group);
+      return;
+    }
     up.set(t.key, t);
     scene.add(t.group);
     solids.set(`${ID}${t.key}`, t.solids);
@@ -185,19 +201,13 @@ export function installWashington(game: Game) {
     for (const ch of chunks.chunks.values()) clearChunk(ch, [t]);
     grass.invalidate(...t.box);
   }
-  function takeDown(name: string) {
-    const b = building.get(name);
-    if (b) {
-      b.dispose();
-      building.delete(name);
-    }
-    fetched.delete(name);
-    const t = up.get(name);
+  function removeTile(tiles: Map<string, CityTile>, name: string) {
+    const t = tiles.get(name);
     if (!t) return;
     scene.remove(t.group);
-    solids.clear(`${ID}${name}`);
+    if (tiles === up) solids.clear(`${ID}${name}`);
     t.dispose();
-    up.delete(name);
+    tiles.delete(name);
   }
   // The tiles under (x, z) and round it (within r m), stood up now, not a
   // little at a time: you're about to be there.
@@ -210,20 +220,33 @@ export function installWashington(game: Game) {
     const bytes = await Promise.all(names.map(fetchTile));
     for (const [k, n] of names.entries()) {
       if (up.has(n)) continue;
-      const t = building.get(n) || startBuilding(n, bytes[k]);
+      const queued = building.get(n);
+      const t = queued?.detail ? queued : startBuilding(n, true, bytes[k]);
       if (!t) continue;
       t.pump(Infinity);
       putUp(t);
     }
   }
+  let buildTurn = 0;
   game.budget.add({
     name: 'washington',
+    pressing: () => building.size > 0,
     work(ms: number) {
-      // the nearest first
+      // Build the nearest in each tier. Give the skyline a turn while the
+      // denser street meshes are being built.
+      const preferDetail = buildTurn++ % 3 !== 0;
+      const { x, z } = player.pos;
+      const fx = -Math.sin(player.camYaw);
+      const fz = -Math.cos(player.camYaw);
       let best: CityTile | null = null;
       let bd = Infinity;
       for (const t of building.values()) {
-        const d = fromBox(t.box, player.pos.x, player.pos.z);
+        const distance = fromBox(boxOf(t.key), x, z);
+        const dx = t.corner[0] + T / 2 - x;
+        const dz = t.corner[1] + T / 2 - z;
+        const ahead = (dx * fx + dz * fz) / (Math.hypot(dx, dz) || 1);
+        const priority = t.detail ? distance : distance * (1.15 - ahead * 0.55);
+        const d = priority + (t.detail === preferDetail || (t.detail && distance < UNDER) ? 0 : FAR * 2);
         if (d < bd) [best, bd] = [t, d];
       }
       if (!best) return false;
@@ -300,6 +323,7 @@ export function installWashington(game: Game) {
       x: s.x,
       z: s.z,
       yaw: s.yaw,
+      pitch: s.pitch,
       name: m.name,
       kind: 'Washington',
       note: `in Washington, DC, life size${been.has(m.id) ? ' · been' : ''}`,
@@ -338,6 +362,7 @@ export function installWashington(game: Game) {
     const s = spot(m);
     // (and what you'll see from there: the landmark itself, whatever's round it)
     await standUpAt(s.x, s.z, IN_VIEW);
+    player.camPitch = s.pitch;
     player.spawn(s.x, s.z, s.yaw, s.yaw + Math.PI);
     return true;
   }
@@ -356,35 +381,48 @@ export function installWashington(game: Game) {
     phase: 'world',
     update({ now }) {
       const { x, z } = player.pos;
-      const inCity = Math.hypot(x - cx, z - cz) < card.radius + card.fade + FAR;
+      const inCity = Math.hypot(x - cx, z - cz) < card.radius + card.fade + FAR + BUFFER;
       // the tiles wanted: those near enough, here
       if (inCity && landforms.has(CITY.place)) {
         const want: Array<[string, number]> = [];
-        const [i0, j0] = [Math.floor((x - NEAR - cx) / T), Math.floor((z - NEAR - cz) / T)];
-        const [i1, j1] = [Math.floor((x + NEAR - cx) / T), Math.floor((z + NEAR - cz) / T)];
+        const [i0, j0] = [Math.floor((x - FAR - cx) / T), Math.floor((z - FAR - cz) / T)];
+        const [i1, j1] = [Math.floor((x + FAR - cx) / T), Math.floor((z + FAR - cz) / T)];
         for (let i = i0; i <= i1; i++) {
           for (let j = j0; j <= j1; j++) {
             const name = `${i}_${j}`;
             if (!exists.has(name)) continue;
             const d = fromBox(boxOf(name), x, z);
-            if (d < NEAR) want.push([name, d]);
+            if (d < FAR) want.push([name, d]);
           }
         }
         want.sort((a, b) => a[1] - b[1]);
         if (want.length) look.want();
-        for (const [name] of want) {
-          if (up.has(name) || building.has(name)) continue;
-          if (fetched.has(name)) startBuilding(name);
+        for (const [name, d] of want) {
+          const current = up.get(name) || distant.get(name);
+          const queued = building.get(name);
+          const detail = d < NEAR || (d < NEAR + BUFFER && (up.has(name) || queued?.detail === true));
+          if (current?.detail === detail) {
+            if (queued && queued.detail !== detail) removeTile(building, name);
+            continue;
+          }
+          if (queued?.detail === detail) continue;
+          if (fetched.has(name)) startBuilding(name, detail);
           else if (fetching.size < FETCHING && !fetching.has(name) && !((failed.get(name) || 0) > now)) fetchTile(name);
         }
       }
       // and those gone too far
-      for (const name of [...up.keys(), ...building.keys(), ...fetched.keys()]) if (!inCity || fromBox(boxOf(name), x, z) > FAR) takeDown(name);
+      for (const name of fetched.keys()) {
+        if (inCity && fromBox(boxOf(name), x, z) <= FAR + BUFFER) continue;
+        removeTile(building, name);
+        removeTile(up, name);
+        removeTile(distant, name);
+        fetched.delete(name);
+      }
       // the trees drawn finer nearer, a few times a second
       if (now - lastLod > 300) {
         lastLod = now;
         for (const t of up.values()) {
-          const d = Math.hypot(x - (t.box[0] + t.box[2]) / 2, z - (t.box[1] + t.box[3]) / 2);
+          const d = Math.hypot(x - t.corner[0] - T / 2, z - t.corner[1] - T / 2);
           t.lod(d < LOD[0] ? 0 : d < LOD[1] ? 1 : 2);
         }
       }
@@ -403,7 +441,7 @@ export function installWashington(game: Game) {
   game.provide('washington', {
     landmarks: () => landmarks.map((m) => ({ id: m.id, name: m.name, been: been.has(m.id) })),
     go,
-    tiles: () => ({ up: [...up.keys()], building: [...building.keys()], settled: settled() }),
+    tiles: () => ({ up: [...up.keys()], distant: [...distant.keys()], building: [...building.keys()], settled: settled() }),
     decks: () => [...up.values()].flatMap((t) => t.decks),
     at(x: number, z: number) {
       for (const t of up.values()) {

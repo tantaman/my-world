@@ -37,6 +37,7 @@ declare module '../game/game.ts' {
 }
 
 const PIXEL_MAX = 12; // screen pixels per art pixel, at the most
+const CAMERA_FAR = 1200;
 
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['ui'];
@@ -53,7 +54,7 @@ export function installRender(game: Game) {
   document.getElementById('app')!.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 1200);
+  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, CAMERA_FAR);
   const pipeline = new Pipeline(renderer);
   const origin = new Origin();
   origin.place(SHARED.uPlayer);
@@ -158,6 +159,11 @@ export function installRender(game: Game) {
   // The scene from a camera, through a pipeline: drawn from an origin near
   // the camera (origin.js).
   function draw(through: Pipeline, eye: THREE.PerspectiveCamera, dt: number) {
+    const longView = eye.far === CAMERA_FAR && through.fogFar > 1000 && through.fogFar <= CONFIG.cityView;
+    if (longView) {
+      eye.far = Math.max(2400, through.fogFar * 1.5);
+      eye.updateProjectionMatrix();
+    }
     origin.follow(eye.position.x, eye.position.z);
     origin.wrapped(PERIOD, SHARED.uOrigin.value);
     origin.begin(scene, eye);
@@ -165,6 +171,10 @@ export function installRender(game: Game) {
       through.render(scene, eye, game.sky ? game.sky.exposure : 1, game.sky ? game.sky.open : 1, dt);
     } finally {
       origin.end(scene, eye);
+      if (longView) {
+        eye.far = CAMERA_FAR;
+        eye.updateProjectionMatrix();
+      }
     }
   }
 

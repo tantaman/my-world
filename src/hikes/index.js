@@ -226,6 +226,14 @@ export function installHikes(game) {
   // (for one too big for that, the square round (x, z): on a grid, so that
   // it's asked for again only once you've gone FAR_ROUND.move)
   const farBox = (c, x = game.focus.x, z = game.focus.z) => {
+    if (c.graded) {
+      const { move } = FAR_ROUND;
+      const step = 20;
+      const reach = CONFIG.cityView;
+      const half = Math.ceil((reach + move / 2 + 120) / step) * step;
+      const [mx, mz] = [Math.round(x / move) * move, Math.round(z / move) * move];
+      return [mx - half, mz - half, mx + half, mz + half, step, reach];
+    }
     if (outer(c) > FAR_WHOLE) {
       const { half, step, move } = FAR_ROUND;
       const [mx, mz] = [Math.round(x / move) * move, Math.round(z / move) * move];

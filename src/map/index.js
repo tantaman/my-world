@@ -63,13 +63,13 @@ export function installMap(game) {
   // spot is on one (the chunks send for it as they ask whether they may grow).
   // Not while something is carrying you or moving you: get off it first, or
   // it would be left behind with you still sitting on it.
-  async function travel(x, z, label, yaw) {
+  async function travel(x, z, label, yaw, pitch) {
     if (!player.rides.free) {
       hud.flash(player.rides.why());
       return false;
     }
     map.close();
-    await game.api.teleport(x, z, yaw);
+    await game.api.teleport(x, z, yaw, pitch);
     if (label) hud.flash(label);
     return true;
   }

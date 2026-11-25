@@ -22,9 +22,9 @@ You never ask for it. Whoever has something worth seeing does: the land,
 where it stands high enough to be worth it (on the real Earth, 1,500 m over
 the sea somewhere near: the Olympics' summits, not the Hoh's valley under
 them; see [the world](../world/README.md)), and a hike, for the real place
-you are standing on ([hikes](../hikes/README.md)). Nothing is drawn further off than a kilometre,
-whatever asks: past that the picture can no longer tell land from sky, so the
-haze has closed in by then regardless.
+you are standing on ([hikes](../hikes/README.md)). The default range is one
+kilometre. Graded city terrain requests a longer range alongside its distant
+building and street meshes. Fog closes in just before the terrain ends.
 
 Land that is really there is what gets drawn. A real place's land is fetched
 from the network when it is first needed, so a square waiting on one is held

@@ -30,8 +30,7 @@ export const USE = { building: 1, paved: 2 };
 export const KEEP = { building: 2.5, paved: 0.8, small: 0.6 };
 const CELL = 1; // m, the grid's squares
 const PAD = 40; // m of grid round the tile, for what strays over its edge
-const GROUND_CELL = 4; // m between the heights the buildings and trees stand on
-const HEIGHTS_A_STEP = 600; // heights asked of the land between one step and the next
+const GROUND_CELL = 2; // sample on the same grid and diagonal as the terrain
 // what the map draws as a sidewalk; the rest of the paving, as a road
 const WALKS = new Set(['sidewalk', 'island', 'stairs']);
 
@@ -40,24 +39,28 @@ export function makeMaterials() {
   const solid = createBuildingMaterial();
   const paving = createBuildingMaterial();
   Object.assign(paving, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
-  return { solid, paving };
+  const distant = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide });
+  const distantPaving = distant.clone();
+  Object.assign(distantPaving, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+  return { solid, paving, distant, distantPaving };
 }
 
 /**
  * @typedef {{ models: Record<string, any>, material: THREE.Material, shadow?: THREE.Material }} TreeKit
  * @typedef {{ key: string, corner: number[], bytes: Uint8Array, ground: (x: number, z: number) => number,
  *   offset: number, names?: (k: number) => string, materials: ReturnType<typeof makeMaterials>,
- *   trees?: TreeKit | null, seed?: number }} TileArgs
+ *   trees?: TreeKit | null, seed?: number, detail?: boolean, ownsDeck?: (x: number, z: number) => boolean }} TileArgs
  */
 export class CityTile {
   /** @param {TileArgs} args */
-  constructor({ key, corner, bytes, ground, offset, names = () => '', materials, trees = null, seed = 0 }) {
+  constructor({ key, corner, bytes, ground, offset, names = () => '', materials, trees = null, seed = 0, detail = true, ownsDeck }) {
     this.key = key;
     this.corner = corner;
     this.group = new THREE.Group();
     this.group.name = `washington ${key}`;
     this.group.position.set(corner[0], 0, corner[1]);
     this.ready = false;
+    this.detail = detail;
     this.solids = [];
     this.obstacles = [];
     /** @type {Array<{ a: number[], b: number[], half: number }>} */
@@ -74,7 +77,7 @@ export class CityTile {
     this.h = this.w;
     this.grid = new Uint8Array(0);
     this.box = [this.x0, this.z0, this.x0 + this.w * CELL, this.z0 + this.h * CELL];
-    this._steps = this._build({ bytes, ground, offset, names, materials, trees, seed });
+    this._steps = this._build({ bytes, ground, offset, names, materials, trees, seed, ownsDeck });
   }
 
   // Build up to about ms more of it. → whether there's more to do.
@@ -87,75 +90,81 @@ export class CityTile {
     return false;
   }
 
-  *_build({ bytes, ground, offset, names, materials, trees, seed }) {
+  *_build({ bytes, ground, offset, names, materials, trees, seed, ownsDeck }) {
     const [cx, cz] = this.corner;
-    this.data = decodeTile(bytes);
-    const d = this.data;
-    this._grid(d);
-    yield;
-    // the ground, on a grid over all of it: what the buildings and trees stand on
-    const G = GROUND_CELL;
-    const [gx0, gz0] = [this.x0 - cx, this.z0 - cz]; // (tile metres)
-    const gw = Math.ceil((this.w * CELL) / G) + 1;
-    const gh = Math.ceil((this.h * CELL) / G) + 1;
-    const H = new Float32Array(gw * gh);
-    for (let k = 0; k < H.length; k++) {
-      if (k % HEIGHTS_A_STEP === HEIGHTS_A_STEP - 1) yield;
-      H[k] = ground(this.x0 + (k % gw) * G, this.z0 + Math.floor(k / gw) * G);
+    const d = decodeTile(bytes);
+    const detail = this.detail;
+    if (detail) {
+      this.data = d;
+      this._grid(d);
     }
-    const onGrid = (x, z) => {
-      const fx = Math.max(0, Math.min(gw - 1.001, (x - gx0) / G));
-      const fz = Math.max(0, Math.min(gh - 1.001, (z - gz0) / G));
-      const [i, j] = [Math.floor(fx), Math.floor(fz)];
-      const [u, v] = [fx - i, fz - j];
-      const k = j * gw + i;
-      return (H[k] * (1 - u) + H[k + 1] * u) * (1 - v) + (H[k + gw] * (1 - u) + H[k + gw + 1] * u) * v;
-    };
-    // (the paving lies on the ground itself, each corner asked once)
+    yield;
+    // Sample terrain vertices once per tile. In a dense block many thousands
+    // of road vertices lie over the same terrain cells.
     const asked = new Map();
     const exact = (x, z) => {
-      const key = Math.round(x * 8) * 1e6 + Math.round(z * 8);
+      const key = (x - Math.floor(cx)) * 65536 + z - Math.floor(cz);
       let h = asked.get(key);
-      if (h === undefined) asked.set(key, (h = ground(cx + x, cz + z)));
+      if (h === undefined) asked.set(key, (h = ground(x, z)));
       return h;
     };
+    const G = detail ? GROUND_CELL : 8;
+    const onGrid = (x, z) => {
+      const [wx, wz] = [cx + x, cz + z];
+      const x0 = Math.floor(wx / G) * G;
+      const z0 = Math.floor(wz / G) * G;
+      const u = (wx - x0) / G;
+      const v = (wz - z0) / G;
+      const b = exact(x0 + G, z0);
+      const c = exact(x0, z0 + G);
+      if (u + v <= 1) {
+        const a = exact(x0, z0);
+        return a + (b - a) * u + (c - a) * v;
+      }
+      const d = exact(x0 + G, z0 + G);
+      return d + (c - d) * (1 - u) + (b - d) * (1 - v);
+    };
     const nameOf = new Map([...d.names].map(([b, n]) => [b, names(n)]));
-    const b = yield* buildBuildings(d.buildings, { ground: onGrid, offset, names: nameOf, seed });
-    const p = yield* buildPaving(d, { ground: exact, offset, seed });
+    const b = yield* buildBuildings(d.buildings, { ground: onGrid, offset, names: nameOf, seed, detail });
+    const p = yield* buildPaving(d, { ground: onGrid, offset, seed, detail, ownsDeck });
     // the street trees
     let t = { meshes: [], solids: [] };
-    if (trees && d.trees.length) t = streetTrees(d.trees, { ...trees, ground: onGrid });
+    if (trees && d.trees.length) t = streetTrees(d.trees, { ...trees, ground: onGrid, detail });
     yield;
     // what's where, a square metre at a time
-    for (const ring of b.outlines) this._fill([ring], USE.building);
-    yield;
-    for (let k = 0; k < d.paving.length; k++) {
-      if (k % 200 === 199) yield;
-      for (const poly of polygonsOf(d.paving[k].rings)) this._fill([poly.outer, ...poly.holes], USE.paved);
+    if (detail) {
+      for (const ring of b.outlines) this._fill([ring], USE.building);
+      yield;
+      for (let k = 0; k < d.paving.length; k++) {
+        if (k % 100 === 99) yield;
+        for (const poly of polygonsOf(d.paving[k].rings)) this._fill([poly.outer, ...poly.holes], USE.paved);
+      }
+      yield;
     }
-    yield;
     // the meshes, each in a step of its own
     const add = (batch, mat, cast = true) => {
       if (batch.empty) return;
       const mesh = new THREE.Mesh(batch.build(), mat);
-      mesh.castShadow = cast;
-      mesh.receiveShadow = true;
+      mesh.castShadow = detail && cast;
+      mesh.receiveShadow = detail;
       mesh.matrixAutoUpdate = false;
       this.group.add(mesh);
     };
-    add(b.roofs, materials.solid);
+    const solid = detail ? materials.solid : materials.distant;
+    add(b.roofs, solid);
     yield;
-    add(b.walls, materials.solid);
+    add(b.walls, solid);
     yield;
-    add(p.paving, materials.paving, false);
+    add(p.paving, detail ? materials.paving : materials.distantPaving, false);
     yield;
-    add(p.bridges, materials.solid);
+    add(p.bridges, solid);
     for (const { mesh } of t.meshes) {
       mesh.matrixAutoUpdate = false;
       this.group.add(mesh);
     }
     this.trees = t.meshes;
     this.group.updateMatrixWorld(true);
+    if (!detail) return;
     // what you bump into, and what a builder's tools go round: in the world's coordinates
     const W = (s) => ({ ...s, ax: s.ax + cx, az: s.az + cz, bx: s.bx + cx, bz: s.bz + cz });
     this.solids = [...b.solids.map(W), ...p.solids.map(W), ...t.solids.map(W)];
@@ -199,7 +208,7 @@ export class CityTile {
   use(x, z) {
     const i = Math.floor((x - this.x0) / CELL);
     const j = Math.floor((z - this.z0) / CELL);
-    if (i < 0 || j < 0 || i >= this.w || j >= this.h) return 0;
+    if (!this.detail || i < 0 || j < 0 || i >= this.w || j >= this.h) return 0;
     return this.grid[j * this.w + i];
   }
   // Whether anything in `flags` is within r m of (x, z).
