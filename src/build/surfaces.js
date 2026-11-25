@@ -47,6 +47,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL } from '../render/glsl.js';
 import { SHARED, SKY } from '../render/uniforms.js';
+import { CUTS, CUT_GLSL } from '../world/cuts.js';
 
 export const SURF = {
   plain: 0,
@@ -102,10 +103,12 @@ vec4 courses(vec2 uv, float w, float h) {
 }
 `;
 
-export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = false } = {}) {
+// cut: whether it gives way, as the ground does, where the ground is cut
+// (world/cuts.js): a city's paving, over the well of a Metro entrance.
+export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = false, cut = false } = {}) {
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, side });
   mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, SKY, { uOrigin: SHARED.uOrigin });
+    Object.assign(shader.uniforms, SKY, { uOrigin: SHARED.uOrigin }, cut ? CUTS : {});
     if (roadGrade) {
       shader.uniforms.uRoadPlayer = SHARED.uPlayer;
       shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
@@ -451,7 +454,12 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
         }
         #include <opaque_fragment>`,
       );
+    if (cut) {
+      shader.fragmentShader = shader.fragmentShader
+        .replace('void main() {', `${CUT_GLSL}\nvoid main() {`)
+        .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (inCut(vWPos)) discard;');
+    }
   };
-  mat.customProgramCacheKey = () => roadGrade ? 'road-grade-v2' : 'building-v7';
+  mat.customProgramCacheKey = () => (roadGrade ? 'road-grade-v2' : 'building-v7') + (cut ? '-cut' : '');
   return mat;
 }

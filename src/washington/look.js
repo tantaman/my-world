@@ -40,9 +40,10 @@ const WALKS = new Set(['sidewalk', 'island', 'stairs']);
 // The materials every tile is drawn with.
 export function makeMaterials() {
   const solid = createBuildingMaterial();
-  const paving = createBuildingMaterial();
+  // (paving gives way where the ground is cut: over the well of a Metro entrance)
+  const paving = createBuildingMaterial({ cut: true });
   Object.assign(paving, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
-  const gradedPaving = createBuildingMaterial({ roadGrade: true });
+  const gradedPaving = createBuildingMaterial({ roadGrade: true, cut: true });
   Object.assign(gradedPaving, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   const distant = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide });
   const distantPaving = distant.clone();

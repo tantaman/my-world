@@ -56,6 +56,7 @@ npm run hike -- photo.heic   # put a hike you've done into the world (see src/hi
 npm run earth        # the real Earth under the world (see src/world/README.md)
 npm run zoo          # a real zoo's buildings and exhibits on its real ground (see src/zoo/README.md)
 npm run dc           # the city round it, Washington, DC, life size (see src/washington/README.md)
+npm run metro        # its Metro, under and over it (see src/metro/README.md)
 ```
 
 The game is a static site and runs on its own; `npm run api` adds the save
@@ -278,7 +279,7 @@ place in that order, not at the end:
 | `world/claims.ts` | what a search for somewhere to put a thing keeps clear of, from what was there first | `keepClear([landOf(landforms), placesOf(sites), …])` → `keepOff(x0, z0, x1, z1)`, `keepOff.ready` |
 | `world/country.js` | a kind of country (its ground, plants, sky, animals, what its trees are called) | an entry in `COUNTRY` |
 | `world/country.js` | what kind of country a climate is, out on the real Earth | an entry in `EARTH_COUNTRY` |
-| `world/cuts.js` | a hole in the ground, for something to stand in for it | `setCuts([{ ax, az, bx, bz, fa, fb, w, h }], owner)` |
+| `world/cuts.js` | a hole in the ground, for something to stand in for it | `setCuts([{ ax, az, bx, bz, fa, fb, w, h }], owner)`; what's laid on the ground and should open with it (a city's paving) is drawn with `createBuildingMaterial({ cut: true })` |
 | `world/flora.js` | a plant | an entry in `FLORA`, a model, and where it grows (`chunkGen.js`) |
 | `world/frame.js` | a place laid out on a plan of its own: from its frame to the world and back, and what it covers | `toWorld(site, lx, lz)`, `toLocal`, `onPlan`, `planDiscs`, `boxOf` |
 | `world/grass.js` | somewhere grass doesn't grow | `game.grass.addClearing(fn)` |
@@ -507,6 +508,8 @@ tools/
   zoo/                    reading the city's surveyed roofs; the zoo's plan
   dc.mjs                  npm run dc: Washington, DC, from the city's roofs, streets and street trees
   dc/                     a tile of the city's bytes; its landmarks
+  metro.mjs               npm run metro: Washington's Metro, from OpenStreetMap's lines and the city's survey of its entrances
+  metro/                  how high its rails run
 worker/
   index.js                the front door: mint an id, route to the world
   world.js                a world's Durable Object — the only writer, and who is who
