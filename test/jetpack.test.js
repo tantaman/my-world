@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { Player } from '../src/player/player.js';
 import { MOUNTS } from '../src/mounts/kinds.js';
-import { Jets, HOLD, FLIGHT, BURN, LEAN, FLYING } from '../src/jetpack/jets.js';
+import { Jets, HOLD, FLIGHT, BURN, LEAN, FLYING, LIT, aimAlong } from '../src/jetpack/jets.js';
 import { Jetpackers } from '../src/jetpack/others.js';
 import { Character } from '../src/player/character.js';
 import { rackAt, RACK } from '../src/jetpack/rack.js';
@@ -244,6 +244,46 @@ test('asked for a push, the jets catch after the same moment and go full blast, 
   assert.equal(jets.thrust, 0, 'and they die away to nothing');
 });
 
+test('pushing something along, the jetpack swings round flat on your back to point the jets back the way it goes', () => {
+  const { jets, frame } = make();
+  // the back as a skater has it, stood across the board: the board goes to
+  // the hiker's left, along the ground
+  const toBack = (v) => ({ x: v.x, y: v.y, z: v.z });
+  const left = { x: 1, y: 0, z: 0 };
+  const go = (n, toward = left) => {
+    for (let i = 0; i < n; i++) {
+      jets.want(toward);
+      frame();
+      jets.swing(1 / 60, toBack);
+    }
+  };
+  // the nozzles' way out, in the back's frame (they point down its spine, -y, turned round z)
+  const out = () => ({ x: Math.sin(jets.swivel), y: -Math.cos(jets.swivel) });
+  go(3);
+  assert.equal(jets.pushing, false);
+  assert.equal(jets.swivel, 0, 'a tap of the push leaves it hanging as it was');
+  go(60);
+  assert.ok(jets.pushing);
+  const o = out();
+  assert.ok(o.x < -0.99 && Math.abs(o.y) < 0.05, `the jets point back along the way you go, flat to the ground (${o.x.toFixed(2)}, ${o.y.toFixed(2)})`);
+  // let go: it stays round while the flames die, then hangs upright again
+  frame();
+  jets.swing(1 / 60, toBack);
+  assert.ok(!jets.pushing && jets.thrust > LIT && jets.swivel < -1.5, 'still round while the flames die away');
+  for (let i = 0; i < 120; i++) {
+    frame();
+    jets.swing(1 / 60, toBack);
+  }
+  assert.ok(Math.abs(jets.swivel) < 0.01, `upright again once they're out (${jets.swivel.toFixed(3)})`);
+  // up a hill, the jets point back down it; the other way round, the other way
+  assert.ok(Math.abs(aimAlong({ x: 0.9, y: 0.436, z: 0 }) - aimAlong(left) - 0.452) < 0.01, 'tipped with the slope');
+  assert.ok(Math.abs(aimAlong({ x: -1, y: 0, z: 0 }) - Math.PI / 2) < 1e-9, 'round the other way');
+  // the way through your back can't be pointed along: it stays as it was
+  assert.equal(aimAlong({ x: 0.1, y: 0, z: 1 }), null);
+  go(60, { x: 0.1, y: 0, z: -1 });
+  assert.ok(Math.abs(jets.swivel + Math.PI / 2) < 0.01, 'kept turned the way it was');
+});
+
 test('nothing is pushed with the jetpack on its rack, and a flight of your own comes first', () => {
   const off = make({ worn: false });
   for (let i = 0; i < 60; i++) {
@@ -318,6 +358,7 @@ test("someone else's jetpack: on their back while they have it, and up where the
     },
   });
   const back = () => someone.character.back.children.length;
+  const pack = () => someone.character.back.children[0];
   others.hear('them', { have: true });
   assert.equal(back(), 1, 'strapped on: on their back');
   others.hear('them', { have: true });
@@ -353,6 +394,14 @@ test("someone else's jetpack: on their back while they have it, and up where the
   assert.equal(someone.character.stood, null, 'on their own feet, not hanging under it');
   assert.equal(someone.character.root.position.y, 3, 'and on the ground, where they were put');
   assert.ok(loud > 0.8, `their jets heard all the same (${loud.toFixed(2)})`);
+  assert.equal(pack().rotation.z, 0, 'said nothing of where they point: hanging as it does');
+  // ...swung round on their back, as they say, to push them along
+  others.hear('them', { have: true, burn: 1, aim: -Math.PI / 2 });
+  for (let i = 0; i < 60; i++) others.update(1 / 60, { x: 0, z: 0 });
+  assert.ok(Math.abs(pack().rotation.z + Math.PI / 2) < 0.01, `swung round as they said (${pack().rotation.z.toFixed(2)})`);
+  others.hear('them', { have: true });
+  for (let i = 0; i < 60; i++) others.update(1 / 60, { x: 0, z: 0 });
+  assert.ok(Math.abs(pack().rotation.z) < 0.01, 'and back again once they are out');
   // hung back up, or gone: off their back
   others.hear('them', { have: false });
   assert.equal(back(), 0, 'hung up: off their back');

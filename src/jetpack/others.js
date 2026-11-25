@@ -5,15 +5,17 @@
 // cut out, and a few times a second while they're flying; nothing about it
 // is kept.
 //
-//   { have: bool, y?: m, burn?: 0..1 }
+//   { have: bool, y?: m, burn?: 0..1, aim?: radians }
 //
 // The burn comes while the jets do anything: a flight of their own, which
 // says `y` too, because nobody else knows how high they are; or a push for
-// something that carries them (a skateboard), which says only the burn,
-// since they're wherever everyone else already has them.
+// something that carries them (a skateboard), which says how far the jetpack
+// is swung round on their back for it (`aim`, jets.js swing()) and not where
+// they are, since they're wherever everyone else already has them.
 
-import { FLYING } from './jets.js';
+import { FLYING, SWING } from './jets.js';
 import { clamp } from '../noise.js';
+import { wrapAngle as wrap } from '../core/geom.js';
 
 const EASE = 6; // how hard a flier is pulled toward the height they said (1/s)
 const FLAG = 2.25; // m from their feet up to their pennant (player/peers.js)
@@ -25,7 +27,7 @@ export class Jetpackers {
   constructor({ peers, make }) {
     this.peers = peers;
     this.make = make;
-    this.all = new Map(); // peer id -> { pack, character, y, said, burn }
+    this.all = new Map(); // peer id -> { pack, character, y, said, burn, aim, swivel }
   }
 
   // What someone said about their jetpack.
@@ -39,12 +41,13 @@ export class Jetpackers {
     }
     if (!have || !p) return;
     if (!r) {
-      r = { pack: this.make(), character: p.character, y: NaN, said: null, burn: 0 };
+      r = { pack: this.make(), character: p.character, y: NaN, said: null, burn: 0, aim: 0, swivel: 0 };
       p.character.addOnBack(r.pack.object);
       this.all.set(id, r);
     }
     r.said = Number.isFinite(body.y) ? body.y : null;
     r.burn = Number.isFinite(body.burn) ? clamp(body.burn, 0, 1) : 0;
+    r.aim = Number.isFinite(body.aim) ? wrap(body.aim) : 0;
   }
 
   // After everyone else has been put where they are. near: where you are
@@ -71,6 +74,9 @@ export class Jetpackers {
         p.flag.position.y = r.y + FLAG;
       }
       r.pack.burn(r.burn);
+      // swung round on their back to push them along, or upright
+      r.swivel += wrap(r.aim - r.swivel) * (1 - Math.exp(-dt * SWING.ease));
+      r.pack.object.rotation.z = r.swivel;
       if (r.burn > 0 && near) loud = Math.max(loud, r.burn * Math.max(0, 1 - Math.hypot(p.pos.x - near.x, p.pos.z - near.z) / HEARD));
     }
     return loud;

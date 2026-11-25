@@ -5,7 +5,8 @@
 // at the launch site, in the launch site's colours.
 //
 // The jetpack is built in the frame of the hiker's back (Character.addOnBack):
-// its origin on the back of the daypack, +z into it, y up the spine. Hung on
+// its origin on the back of the daypack, +z into it, y up the spine, and it
+// turns about that z on its mount (jets.js swing()). Hung on
 // the rack, the same model is turned round to show its tanks. Each is built
 // round its own origin and the group is what's placed (render/origin.js).
 //
@@ -17,6 +18,7 @@
 import * as THREE from 'three';
 import { Mesher } from '../build/geometry.js';
 import { lerp } from '../noise.js';
+import { LIT } from './jets.js';
 
 const col = (hex) => new THREE.Color(hex);
 const PAL = {
@@ -161,7 +163,7 @@ export function makeJetpack() {
     // how hard the jets are going, 0..1 (0: out)
     burn(thrust) {
       for (const f of flames) {
-        f.visible = thrust > 0.02;
+        f.visible = thrust > LIT;
         if (!f.visible) continue;
         const flicker = 1 + FLAME.flicker * (Math.random() - 0.5);
         const w = lerp(FLAME.wide[0], FLAME.wide[1], thrust);

@@ -35,9 +35,13 @@ out with a sputter, and you're on your own feet again.
 of flying you, and the one thing that asks is the board in your pack (see
 [Skateboarding](../skateboarding/README.md)). Rolling along with the jetpack
 on, hold the push key and they catch and shove you down the tarmac, out to
-about 125 km/h crouched — half as fast again as they'll fly you. They don't
-lift you: the wheels stay down, you steer with the trucks, and everything
-that throws you off a board throws you off it just the same.
+about 125 km/h crouched — half as fast again as they'll fly you. As they
+catch, the jetpack swings round on its mount, flat to your back, until the
+jets point straight back along the board, level with the ground under it,
+and you square your shoulders across the board to keep them there; once
+their flames are out it swings back upright. They don't lift you: the wheels
+stay down, you steer with the trucks, and everything that throws you off a
+board throws you off it just the same.
 
 In a shared world everyone sees the jetpack on your back, and when you fly,
 how high you are and the jets burning; and you see theirs, and hear them
@@ -50,14 +54,14 @@ From the console:
 world.jetpack.rack          // where the rack is
 await world.jetpack.go()    // stand in front of it
 world.jetpack.give()        // strapped on, wherever you are (give(false): off again)
-world.jetpack.state()       // whether you have it, whether the jets burn or push, how high
+world.jetpack.state()       // whether you have it, whether the jets burn or push, how high, how far it's swung round
 ```
 
 ## Files
 
 ```
 index.js     plugs it in: the rack at the launch site, F there, the jets, how you hang under them, saved as yours
-jets.js      when the jets fire and cut out, how they carry you (Player.carrier) or push whatever does, how hard they go, the tilt
+jets.js      when the jets fire and cut out, how they carry you (Player.carrier) or push whatever does, how hard they go, the tilt, the swing round on your back
 rack.js      where the rack stands at the launch site, in the pad's own frame
 model.js     the jetpack, its flames, its vapour, and the rack
 others.js    other people's jetpacks: on their backs, and how high they fly

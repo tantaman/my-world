@@ -8,10 +8,13 @@
 // Pushing, you turn to face along it, the front foot turned with you, and
 // the back foot steps off beside it, down onto the ground, kicks back, and
 // comes up again. Braking slowly, the back foot drags along behind; at speed
-// you turn the board out sideways under you and lean back against it. The
-// body tips with the ground and leans into the turns. In the air the feet
-// come up, the board drops away from them a little to flip or turn, and
-// comes back up to meet them. Bailed, you tumble over and over without it.
+// you turn the board out sideways under you and lean back against it. With
+// the jets on your back pushing you along, you square your shoulders across
+// the board, for them to point straight back along it (`along`: which way
+// that is). The body tips with the ground and leans into the turns. In the
+// air the feet come up, the board drops away from them a little to flip or
+// turn, and comes back up to meet them. Bailed, you tumble over and over
+// without it.
 //
 // Where the feet go is said on the board: `a` along it toward the nose (the
 // way you'd ride it, not fakie), `c` across it to its left, `lift` up off
@@ -72,6 +75,8 @@ export class Pose {
     this.rx = 0; // the root's tip forward and roll to the right
     this.rz = 0;
     this.up = { x: 0, y: 1, z: 0 };
+    this.along = { x: 0, y: 0, z: 1 }; // which way the board goes, along the ground under it (a unit vector)
+    this.squared = 0; // 0..1 the shoulders squared across the board, for the jets on your back
     this.lean = 0;
     this.tumble = 0;
     this.pushing = 0; // 0..1 turned to push
@@ -81,10 +86,11 @@ export class Pose {
     this.standing();
   }
 
-  // Standing on it, still: how someone else here is seen on theirs.
-  standing() {
+  // Standing on it, still: how someone else here is seen on theirs. jets:
+  // with the jets on their back pushing them, squared up across it.
+  standing(jets = false) {
     place(this.stance, RIDE.face, RIDE.front, RIDE.back);
-    Object.assign(this.stance, { crouch: 0.25, lean: RIDE.lean, twist: RIDE.twist, look: RIDE.look, tuck: 0, pitch: 0, roll: 0 });
+    Object.assign(this.stance, { crouch: 0.25, lean: RIDE.lean, twist: jets ? 0 : RIDE.twist, look: RIDE.look, tuck: 0, pitch: 0, roll: 0 });
     this._board(RIDE.face, 0, 0, 0);
     return this.stance;
   }
@@ -131,6 +137,15 @@ export class Pose {
     this.up.x += ((-g * dx) / nl - this.up.x) * ks;
     this.up.y += (1 / nl - this.up.y) * ks;
     this.up.z += ((-g * dz) / nl - this.up.z) * ks;
+    // the way you're going, laid along the ground as the body's tipped to it
+    const ud = dx * this.up.x + dz * this.up.z;
+    const ax = dx - ud * this.up.x;
+    const ay = -ud * this.up.y;
+    const az = dz - ud * this.up.z;
+    const al = Math.hypot(ax, ay, az) || 1;
+    this.along.x = ax / al;
+    this.along.y = ay / al;
+    this.along.z = az / al;
     let lean = clamp(Math.atan2(sk.lateral, GRAVITY), -LEAN_MOST, LEAN_MOST);
     if (fallen || flying) lean = 0;
     this.lean += (lean - this.lean) * k(8);
@@ -165,7 +180,9 @@ export class Pose {
     S.crouch += (clamp(crouch, 0, 1) - S.crouch) * k(10);
     S.tuck += ((fallen ? 0.9 : tuck) - S.tuck) * k(flying || fallen ? 14 : 9);
     S.lean = lerp(RIDE.lean, PUSH.lean, p) + sk.crouch * 0.2 - sk.slide * 0.3;
-    S.twist = sk.fakie ? -0.2 : lerp(RIDE.twist, PUSH.twist, p);
+    // squared up across the board while the jets push it, so they point back along it
+    this.squared += ((sk.jets > 0 ? 1 : 0) - this.squared) * k(EASE.push);
+    S.twist = (sk.fakie ? -0.2 : lerp(RIDE.twist, PUSH.twist, p)) * (1 - this.squared);
     S.look = sk.fakie ? -1.0 : lerp(RIDE.look, PUSH.look, p);
     S.pitch = this.rx;
     S.roll = this.rz;

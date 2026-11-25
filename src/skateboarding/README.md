@@ -30,8 +30,10 @@ round on the board, until a push turns you round.
 **With the jetpack.** Past the hills there are the jets. With the
 [jetpack](../jetpack/README.md) on your back, **W** is them and not your
 foot: hold it, and a moment after the kick that starts you off they catch
-with a whump and shove you along the tarmac, the flames under your heels and
-the vapour streaming out flat across the road behind you. Nothing holds them
+with a whump and shove you along the tarmac. The jetpack swings round flat
+on your back as they do, and you square your shoulders across the board, so
+the flames and the vapour stream straight out behind you, level with the
+road. Nothing holds them
 back but the air, so you wind up doing about 95 km/h standing up and 125
 tucked down under **shift** — half as fast again as the jetpack will ever
 fly you. They burn on in the air too, so an ollie off a kerb at that speed
@@ -88,7 +90,7 @@ skater.js        the physics: rolling, pushing, carving, braking, the air, landi
 tricks.js        what you did in the air: whether you landed it, what it's called, what it's worth
 session.js       a session's tally: how far, how fast, points and lines
 controls.js      the keys, read into what the skater is told; what to say they do
-pose.js          how you stand on it, push it and brake, lean and tumble; the board flipping under your feet
+pose.js          how you stand on it, push it and brake, square up for the jets, lean and tumble; the board flipping under your feet
 board.js         the skateboard: deck, grip, trucks and wheels that turn
 sound.js         the wheels on the tarmac, boards and gravel, the slide, the wind; push, pop, land, bail
 others.js        what other people here are on

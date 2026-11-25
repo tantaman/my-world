@@ -3,7 +3,9 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
 import { Skater, PUSH, JETS, rolls, setsOff } from '../src/skateboarding/skater.js';
+import { Pose } from '../src/skateboarding/pose.js';
 import { bail, nameOf, score, counts, LAND } from '../src/skateboarding/tricks.js';
 import { Session, LINE } from '../src/skateboarding/session.js';
 
@@ -115,6 +117,28 @@ test('the jets burn on in the air, carrying you a little further over a gap', ()
   const held = gap(1);
   assert.ok(off > 10, `an ollie at that speed goes a long way anyway (${off.toFixed(1)} m)`);
   assert.ok(held > off + 0.5, `and further with them held (${held.toFixed(1)} m, at ${JETS} m/s²)`);
+});
+
+test('with the jets pushing you square up across the board, and it says which way it goes along the ground for them to point back along', () => {
+  const sk = new Skater(ground({ slope: 0.1 }));
+  sk.start(0, 0, 0, 2); // down the hill
+  const pose = new Pose({ object: new THREE.Group(), turn: new THREE.Group() });
+  const go = (secs, ctl = {}) => {
+    for (let t = 0; t < secs; t += 1 / 60) {
+      sk.step(1 / 60, { ...idle, ...ctl });
+      pose.update(1 / 60, sk);
+    }
+  };
+  go(1);
+  const riding = pose.stance.twist;
+  assert.ok(riding > 0.3, `riding, the shoulders turned round toward the nose (${riding.toFixed(2)} rad)`);
+  go(1, { push: true, jets: 1 });
+  assert.ok(Math.abs(pose.stance.twist) < 0.01, `squared up across the board while the jets push (${pose.stance.twist.toFixed(3)} rad)`);
+  const a = pose.along;
+  assert.ok(Math.abs(Math.hypot(a.x, a.y, a.z) - 1) < 1e-9, 'a way, not a speed');
+  assert.ok(a.z > 0.99 && Math.abs(a.y + 0.1 / Math.hypot(1, 0.1)) < 0.005, `down the hill, tipped with it (${a.x.toFixed(3)}, ${a.y.toFixed(3)}, ${a.z.toFixed(3)})`);
+  go(1);
+  assert.ok(Math.abs(pose.stance.twist - riding) < 0.01, 'and turned back round once they let go');
 });
 
 test('steering carves you round; braking drags a foot, or slides the board out at speed', () => {
