@@ -82,6 +82,7 @@ const UNDER = 60;
 const IN_VIEW = 300;
 const VIEW_PITCH = -0.035; // landmarks are framed just above eye level
 const CAPITOL_PITCH = -0.22;
+const CATHEDRAL_VIEW = { x: -4993, z: -4017, yaw: 2.36, pitch: -0.31 };
 // m from a landmark's spot that counts as having been there
 const BEEN = 40;
 const ID = 'washington:';
@@ -93,6 +94,7 @@ export function installWashington(game: Game) {
   const { scene, gen, chunks, grass, solids, landforms, player, builder, map, hud, commands, save, materials } = game;
   const card = landforms.cards.find((c: { id: string }) => c.id === CITY.place);
   if (!card) return;
+  const zooGround = landforms.cards.find((c: { id: string }) => c.id === 'national-zoo');
   const [cx, cz] = card.at;
   const T = CITY.tile;
   const exists = new Set(CITY.tiles.split(' '));
@@ -102,8 +104,12 @@ export function installWashington(game: Game) {
   }));
   const boxOf = (name: string) => boxes.get(name)!;
   const fromBox = (b: number[], x: number, z: number) => Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.max(b[1] - z, 0, z - b[3]));
+  const finerGround = (name: string) => !!zooGround && fromBox(boxOf(name), zooGround.at[0], zooGround.at[1]) < zooGround.radius + zooGround.fade;
   const landmarks: Landmark[] = CITY.landmarks;
-  const spot = (m: Landmark) => ({ x: cx + m.at[0], z: cz + m.at[1], yaw: m.yaw, pitch: m.id === 'capitol' ? CAPITOL_PITCH : VIEW_PITCH });
+  const spot = (m: Landmark) => {
+    if (m.id === 'national-cathedral') return { ...CATHEDRAL_VIEW, x: cx + CATHEDRAL_VIEW.x, z: cz + CATHEDRAL_VIEW.z };
+    return { x: cx + m.at[0], z: cz + m.at[1], yaw: m.yaw, pitch: m.id === 'capitol' ? CAPITOL_PITCH : VIEW_PITCH };
+  };
 
   // ── What's yours: the landmarks you've been to ─────────────────────────────
   const been = new Set<string>();
@@ -163,6 +169,11 @@ export function installWashington(game: Game) {
     const m = look.want();
     const L = land();
     if (!m || !L || !bytes) return null;
+    const finePaving = detail && finerGround(name);
+    if (finePaving && zooGround && !landforms.has(zooGround.id)) {
+      landforms.ensure(zooGround.id).catch(() => {});
+      return null;
+    }
     building.get(name)?.dispose();
     fetched.set(name, bytes);
     if (!mats) mats = m.makeMaterials();
@@ -178,6 +189,8 @@ export function installWashington(game: Game) {
       trees: { models: chunks.models, material: materials.vegetation, shadow: materials.vegetationShadow },
       seed: x0 * 31 + z0,
       detail,
+      finePaving,
+      cityCorner: [x0 - cx, z0 - cz],
       // Each copy still positions the local street polygons on the deck.
       // Only the tile containing the midpoint draws it.
       ownsDeck: (x, z) => name === `${Math.floor((x0 - cx + x) / T)}_${Math.floor((z0 - cz + z) / T)}`,
@@ -215,6 +228,7 @@ export function installWashington(game: Game) {
     if (!landforms.has(CITY.place)) await landforms.ensure(CITY.place);
     await look.ready();
     const names = [...exists].filter((n) => fromBox(boxOf(n), x, z) < r);
+    if (zooGround && names.some(finerGround) && !landforms.has(zooGround.id)) await landforms.ensure(zooGround.id);
     // (each from what came for it here: until you're there, the frame takes
     // down whatever's far from you, what's been fetched for there included)
     const bytes = await Promise.all(names.map(fetchTile));

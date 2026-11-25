@@ -14,9 +14,10 @@
 import * as THREE from 'three';
 
 export class Batch {
-  constructor(size = 4096) {
+  constructor(size = 4096, grade = false) {
     this.n = 0; // vertices
     this.m = 0; // indices
+    this.grade = grade ? new Float32Array(0) : null;
     this._alloc(size, size * 2);
   }
 
@@ -31,6 +32,7 @@ export class Batch {
     this.col = this.col ? grow(this.col, nv * 3) : new Float32Array(nv * 3);
     this.surf = this.surf ? grow(this.surf, nv) : new Float32Array(nv);
     this.uv = this.uv ? grow(this.uv, nv * 2) : new Float32Array(nv * 2);
+    if (this.grade) this.grade = grow(this.grade, nv * 2);
     this.idx = this.idx ? grow(this.idx, ni) : new Uint32Array(ni);
   }
 
@@ -88,6 +90,7 @@ export class Batch {
     g.setAttribute('color', new THREE.BufferAttribute(this.col.slice(0, n * 3), 3));
     g.setAttribute('aSurf', new THREE.BufferAttribute(this.surf.slice(0, n), 1));
     g.setAttribute('aUV', new THREE.BufferAttribute(this.uv.slice(0, n * 2), 2));
+    if (this.grade) g.setAttribute('aRoadGrade', new THREE.BufferAttribute(this.grade.slice(0, n * 2), 2));
     g.setIndex(new THREE.BufferAttribute(n > 65535 ? this.idx.slice(0, this.m) : Uint16Array.from(this.idx.subarray(0, this.m)), 1));
     g.computeBoundingSphere();
     g.computeBoundingBox();

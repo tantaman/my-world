@@ -25,6 +25,8 @@
 import * as THREE from 'three';
 import { Batch } from './batch.js';
 import { buildCapitol } from './capitol.js';
+import { buildCathedral } from './cathedral.js';
+import { buildFront, frontage, streetStyle } from './facades.js';
 import { SURF, FACADE } from '../build/surfaces.js';
 
 // What a landmark is made of: its walls, its roof, its kind of front.
@@ -49,7 +51,7 @@ export const LOOKS = {
   'National Archives': { wall: LIMESTONE, roof: COPPER, front: FACADE.stone },
   'National Gallery of Art': { wall: 0xd8b8a8, roof: LEAD, front: FACADE.stone },
   'National Museum of African American History and Culture': { wall: 0x8a5a32, roof: 0x5a4030, front: FACADE.glass },
-  'Washington National Cathedral': { wall: 0xbcae96, roof: 0x5a5c5e, front: FACADE.stone },
+  'Washington National Cathedral': { wall: 0xc7bda9, roof: 0x515256, front: null },
   'Union Station': { wall: 0xdcd6c8, roof: LEAD, front: FACADE.stone },
   'Old Post Office': { wall: 0xb4aa9c, roof: 0x4a4c4e, front: FACADE.stone },
 };
@@ -104,7 +106,7 @@ function uniqueBuildings(buildings, names) {
   return unique;
 }
 
-export function* buildBuildings(buildings, { ground, offset, names = new Map(), seed = 0, detail = true }) {
+export function* buildBuildings(buildings, { ground, offset, names = new Map(), seed = 0, detail = true, street = (x, z) => false, cityCorner = [0, 0] }) {
   const roofs = new Batch(detail ? 1 << 14 : 1 << 11);
   const walls = new Batch(detail ? 1 << 15 : 1 << 12);
   const solids = [];
@@ -141,11 +143,15 @@ export function* buildBuildings(buildings, { ground, offset, names = new Map(), 
     const h = hash(seed * 7919 + k);
     const look = (name && LOOKS[name]) || lookOf(tall, roofArea, b.roof, h);
     const front = tall > FRONT_FROM ? look.front : null;
+    const mode = detail && streetStyle(name, front, cityCorner[0] + cx, cityCorner[1] + cz, tall, roofArea);
+    let entrance = null;
     const wallSurf = front === null ? SURF.stone : SURF.facade + front;
     const wallCol = _c.set(look.wall).clone();
     const roofCol = _c.set(look.roof).clone();
     const roofSurf = look.roof === MARBLE ? SURF.concrete : b.roof === 'flat' || b.roof === 'default' ? SURF.asphalt : b.roof === 'dome' ? SURF.steel : SURF.slate;
     const capitol = name === 'United States Capitol' ? { x: X(peak), z: Z(peak), base: top - 43.5, ground, detail } : null;
+    const cathedral = name === 'Washington National Cathedral';
+    const annex = top - 66.3; // Above this, the modeled Gothic exterior takes over.
     const onDome = (i) => Math.hypot(X(i) - capitol.x, Z(i) - capitol.z) < 30;
     const faces = capitol ? b.faces.filter(([outer]) => !outer.every((i) => Y(i) > capitol.base + 6)) : b.faces;
     // The original roof meets the model's plinth. Mixed roof faces can
@@ -155,15 +161,27 @@ export function* buildBuildings(buildings, { ground, offset, names = new Map(), 
     // ── the roof, a face at a time
     if (detail) for (const [outer] of b.faces) outlines.push(outer.map((i) => [X(i), Z(i)]));
     for (const face of faces) {
+      if (cathedral && face[0].some((i) => Y(i) > annex)) continue;
       roofFace(roofs, face, X, roofY, Z, roofCol, roofSurf, 0.92 + hash(k * 31 + face.length) * 0.14);
     }
     if (capitol) buildCapitol(roofs, capitol);
+    if (cathedral) {
+      let [x, z, n] = [0, 0, 0];
+      for (let i = 0; i < np; i++) {
+        if (Y(i) < top - 0.35) continue;
+        x += X(i);
+        z += Z(i);
+        n++;
+      }
+      buildCathedral(roofs, { x: x / n, z: z / n, top, ground, detail });
+    }
 
     // ── the walls: each edge only one face has, down to the ground; each
     // edge two faces share at different heights, the step between them
     const edges = new Map();
     for (const face of faces) {
       for (const ring of face) {
+        const side = mode ? Math.sign(ringArea(ring, X, Z)) * (ring === face[0] ? 1 : -1) : 0;
         for (let e = 0; e < ring.length; e++) {
           const a = ring[e];
           const c = ring[(e + 1) % ring.length];
@@ -172,7 +190,7 @@ export function* buildBuildings(buildings, { ground, offset, names = new Map(), 
           if (ka === kc) continue;
           const key = ka < kc ? `${ka}|${kc}` : `${kc}|${ka}`;
           // (each kept running the same way, so the ends line up)
-          const pair = ka < kc ? [a, c] : [c, a];
+          const pair = ka < kc ? [a, c, side] : [c, a, -side];
           const list = edges.get(key);
           if (list) list.push(pair);
           else edges.set(key, [pair]);
@@ -180,7 +198,7 @@ export function* buildBuildings(buildings, { ground, offset, names = new Map(), 
       }
     }
     for (const list of edges.values()) {
-      const [a, c] = list[0];
+      const [a, c, side] = list[0];
       const [ax, az, bx, bz] = [X(a), Z(a), X(c), Z(c)];
       const len = Math.hypot(bx - ax, bz - az);
       let tops;
@@ -197,6 +215,11 @@ export function* buildBuildings(buildings, { ground, offset, names = new Map(), 
         if (tops[0] - bottoms[0] < STEP && tops[1] - bottoms[1] < STEP) continue;
       }
       if (tops[0] <= bottoms[0] && tops[1] <= bottoms[1]) continue;
+      if (cathedral && Math.max(...tops) > annex) continue;
+      if (mode && side && list.length === 1) {
+        const edge = frontage([ax, az], [bx, bz], side, tops, street, mode);
+        if (edge && (!entrance || edge.score < entrance.score)) entrance = edge;
+      }
       // Fit whole window bays between the corners. Short jogs and roof
       // steps are solid masonry, and the bays align vertically around the building.
       const bay = front === FACADE.row ? 2.4 : front === FACADE.glass ? 1.6 : 2.9;
@@ -206,6 +229,7 @@ export function* buildBuildings(buildings, { ground, offset, names = new Map(), 
       walls.quad([ax, bottoms[0], az], [bx, bottoms[1], bz], [bx, tops[1], bz], [ax, tops[0], az], wallCol.r * tone, wallCol.g * tone, wallCol.b * tone,
         hasWindows ? wallSurf : SURF.stone, [0, bottoms[0] - foot, u, bottoms[1] - foot, u, tops[1] - foot, 0, tops[0] - foot]);
     }
+    if (entrance) buildFront(walls, entrance, { mode, ground, foot, wall: wallCol, variant: h, street, solids });
     if (detail) obstacles.push({ x: cx, z: cz, r, what: name || 'a building in Washington' });
   }
   return { roofs, walls, solids, obstacles, outlines };

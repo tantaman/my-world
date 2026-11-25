@@ -44,6 +44,7 @@
 // little mottling and nothing else.
 
 import * as THREE from 'three';
+import { CONFIG } from '../config.js';
 import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL } from '../render/glsl.js';
 import { SHARED, SKY } from '../render/uniforms.js';
 
@@ -65,6 +66,7 @@ export const SURF = {
   facade: 14,
   asphalt: 15,
   concrete: 16,
+  masonry: 17,
 };
 // The kinds of front a facade is, as its wear (0..1): a row house's, brick,
 // its windows tall and narrow; an older office's or a government building's,
@@ -100,10 +102,22 @@ vec4 courses(vec2 uv, float w, float h) {
 }
 `;
 
-export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
+export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = false } = {}) {
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, side });
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, SKY, { uOrigin: SHARED.uOrigin });
+    if (roadGrade) {
+      shader.uniforms.uRoadPlayer = SHARED.uPlayer;
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
+        uniform vec2 uOrigin;
+        uniform vec3 uRoadPlayer;
+        attribute vec2 aRoadGrade;`)
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vec2 wRoad = (modelMatrix * vec4(transformed, 1.0)).xz + uOrigin;
+        vec2 roadRing = abs(floor(wRoad / ${CONFIG.chunkSize.toFixed(1)}) - floor((uRoadPlayer.xz + uOrigin) / ${CONFIG.chunkSize.toFixed(1)}));
+        float ring = max(roadRing.x, roadRing.y);
+        if (ring >= 2.0) transformed.y += ring < 3.0 ? aRoadGrade.x : aRoadGrade.y;`);
+    }
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -298,6 +312,15 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
             float paint = stroke * (1.0 - smoothstep(0.17, 0.19, dash)) * smoothstep(4.0, 5.0, ends) * shows(0.12, fw);
             col = mix(col, vec3(0.66, 0.43, 0.085) * (0.8 + wearPattern * 0.3), paint);
           }
+        } else if (kind == S_MASONRY) {
+          bool brick = wear > 0.2;
+          vec4 course = courses(uv, brick ? 0.22 : 1.05, brick ? 0.076 : 0.47);
+          float joint = min(min(course.z, 1.0 - course.z), course.w);
+          float seam = (1.0 - smoothstep(0.014, brick ? 0.06 : 0.028, joint)) * shows(brick ? 0.035 : 0.12, fw);
+          float shade = mix(1.0, 0.92 + hash12(course.xy) * 0.16, shows(brick ? 0.075 : 0.42, fw));
+          col = mix(col * shade, col * (brick ? 1.34 : 0.71), seam * 0.62);
+          relief = -seam * (brick ? 0.004 : 0.008);
+          rough = 0.92;
         } else if (kind == S_FACADE) {
           // which kind of front: a row house's, stone, or banded in glass
           float style = wear;
@@ -359,7 +382,8 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
 
         // Weather: wherever it isn't glass or metal, streaks down the walls
         // where the rain runs, and moss and lichen on what faces the sky.
-        if (kind != S_GLASS && kind != S_TIN && kind != S_IRON && kind != S_STEEL) {
+        // Asphalt uses the wear field to locate lane paint along a block.
+        if (kind != S_GLASS && kind != S_TIN && kind != S_IRON && kind != S_STEEL && kind != S_ASPHALT) {
           vec2 wp = worldXZ(vWPos);
           float up = wn.y;
           if (abs(up) < 0.6) {
@@ -428,6 +452,6 @@ export function createBuildingMaterial({ side = THREE.DoubleSide } = {}) {
         #include <opaque_fragment>`,
       );
   };
-  mat.customProgramCacheKey = () => 'building-v5';
+  mat.customProgramCacheKey = () => roadGrade ? 'road-grade-v2' : 'building-v7';
   return mat;
 }

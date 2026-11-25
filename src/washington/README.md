@@ -53,6 +53,17 @@ the Smithsonian Castle's red sandstone and the Library of Congress dome's
 green copper. The Capitol has a modeled white dome, colonnade and East Front
 portico. The buildings' walls stop you. [Capitol Dome](https://www.aoc.gov/explore-capitol-campus/buildings-grounds/capitol-building/capitol-dome)
 
+Street-facing homes have painted doors, stoops and projecting bays. The
+storefronts on selected commercial streets have display windows, transoms
+and awnings. Civic buildings use heavier entrances, cornices and pilasters.
+The details are inferred from the surveyed footprint and street frontage.
+[Historic commercial building guidelines](https://planning.dc.gov/publication/design-guidelines-historic-commercial-buildings)
+
+The National Cathedral has a modeled limestone exterior with three towers,
+pointed stained-glass windows, flying buttresses and a west rose window.
+Its map destination faces the west front.
+[National Cathedral architecture](https://cathedral.org/discover/art-architecture/gothic-architecture-101/)
+
 **The streets** follow the city's aerial survey. Roads, intersections, alleys,
 drives and car parks have asphalt with subtle wear. Regular straight blocks
 have inferred center markings. Sidewalks and traffic islands sit on curbs,
@@ -63,6 +74,9 @@ not down in the creek (Calvert Street and Connecticut Avenue over Rock
 Creek, 30 m and more over it). The **street trees** are the 199,000 the
 city planted, each in its tree box, as tall as the city's lidar measured
 its crown.
+
+Roads around the National Zoo follow the fine terrain grid. Grass clearance
+extends past the surveyed pavement edges so blades stay on the verge.
 
 The city streams in 500 m tiles. At default quality, the detailed tiles
 extend 500 m from you and simpler streets, buildings and trees carry the
@@ -123,6 +137,9 @@ onMap.js        the city on the map, close up: its streets and its roofs
 look.js         (fetched) a CityTile: a tile stood up a little at a time, and what's on each square metre of it
 buildings.js    the buildings: their surveyed roofs, their walls, their fronts
 capitol.js      the Capitol's dome and East Front portico
+cathedral.js    the National Cathedral's exterior
+facades.js      street-facing doors, stoops, shopfronts and civic detail
+architecture.js boxes and faces for building details, in local coordinates
 paving.js       the roads, sidewalks and curbs, laid on the ground; the bridges' decks, parapets and piers
 trees.js        the street trees, on the forest's own models
 batch.js        geometry written straight into arrays, for the building material

@@ -70,8 +70,8 @@ export function deckAt(decks, x, z) {
   return y;
 }
 
-export function* buildPaving(tile, { ground, offset, seed = 0, detail = true, ownsDeck = (x, z) => true }) {
-  const paving = new Batch(detail ? 1 << 15 : 1 << 12);
+export function* buildPaving(tile, { ground, offset, seed = 0, detail = true, ownsDeck = (x, z) => true, terrainGrid = null, coarse = [] }) {
+  const paving = new Batch(detail ? 1 << 15 : 1 << 12, !!terrainGrid);
   const bridges = new Batch(detail ? 1 << 12 : 1 << 9);
   const solids = [];
   const fine = detail ? FINE : 24;
@@ -100,7 +100,8 @@ export function* buildPaving(tile, { ground, offset, seed = 0, detail = true, ow
     const tone = 0.94 + hash(seed + k * 7) * 0.1;
     for (const poly of polygonsOf(p.rings)) {
       const stripe = detail && p.kind === 'road' ? stripeOf(poly) : null;
-      yield* lay(paving, poly, under, look.lift, col.r * tone, col.g * tone, col.b * tone, look.surf, fine, false, stripe);
+      const grid = look.surf === SURF.asphalt ? terrainGrid : null;
+      yield* lay(paving, poly, under, look.lift, col.r * tone, col.g * tone, col.b * tone, look.surf, fine, false, stripe, grid, grid ? coarse : []);
       if (detail && look.curb) for (const ring of [poly.outer, ...poly.holes]) curb(paving, ring, under, look.lift, col.r * tone * 0.85, col.g * tone * 0.85, col.b * tone * 0.85);
     }
   }
@@ -258,11 +259,19 @@ export function polygonsOf(rings) {
 // A polygon laid on the ground: cut into triangles, those cut again until
 // no side is longer than FINE, each corner at height(x, z) + lift. down:
 // facing down (a deck's underside).
-function* lay(batch, { outer, holes }, height, lift, r, g, b, surf, fine, down = false, stripe = null) {
+function* lay(batch, { outer, holes }, height, lift, r, g, b, surf, fine, down = false, stripe = null, grid = null, coarse = []) {
   const stack = [];
+  const vertices = grid && new Map();
   let work = 0;
-  for (const tri of trianglesOf(outer, holes)) {
-    stack.push(...tri);
+  for (const [x0, z0, x1, z1, x2, z2] of trianglesOf(outer, holes)) {
+    if (grid) {
+      for (const [a, b, c] of terrainTriangles([[x0, z0], [x1, z1], [x2, z2]], grid)) {
+        add(...a, ...b, ...c);
+        if (++work % 500 === 0) yield;
+      }
+      continue;
+    }
+    stack.push(x0, z0, x1, z1, x2, z2);
     while (stack.length) {
       if (++work % 500 === 0) yield;
       const cz = stack.pop();
@@ -289,25 +298,87 @@ function* lay(batch, { outer, holes }, height, lift, r, g, b, surf, fine, down =
         }
         continue;
       }
-      // (wound to face up, or down)
-      const ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
-      if (Math.abs(ny) < 1e-6) continue;
-      const up = ny > 0;
-      const flip = up === down;
-      const v = batch.n;
-      const [ay, by, cy] = [height(ax, az), height(bx, bz), height(cx, cz)];
-      const nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay);
-      const nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
-      const scale = (flip ? -1 : 1) / (Math.hypot(nx, ny, nz) || 1);
-      for (const [x, y, z] of [[ax, ay, az], [bx, by, bz], [cx, cy, cz]]) {
-        const u = stripe ? x * stripe.ux + z * stripe.uz - stripe.start : x;
-        const across = stripe ? z * stripe.ux - x * stripe.uz - stripe.center : z;
-        batch.vertex(x, y + lift, z, nx * scale, ny * scale, nz * scale, r, g, b, stripe?.surface ?? surf, u, across);
-      }
-      if (flip) batch.tri(v, v + 2, v + 1);
-      else batch.tri(v, v + 1, v + 2);
+      add(ax, az, bx, bz, cx, cz);
     }
   }
+
+  function add(ax, az, bx, bz, cx, cz) {
+    const ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
+    if (Math.abs(ny) < 1e-6) return;
+    const flip = (ny > 0) === down;
+    const [ay, by, cy] = [height(ax, az), height(bx, bz), height(cx, cz)];
+    const nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay);
+    const nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+    const scale = (flip ? -1 : 1) / Math.hypot(nx, ny, nz);
+    const corner = (x, y, z) => {
+      const key = Math.round(x * 1e4) * 1e8 + Math.round(z * 1e4);
+      const prior = vertices?.get(key);
+      if (prior !== undefined) return prior;
+      const u = stripe ? x * stripe.ux + z * stripe.uz - stripe.start : x;
+      const across = stripe ? z * stripe.ux - x * stripe.uz - stripe.center : z;
+      let normalX = nx * scale, normalY = ny * scale, normalZ = nz * scale;
+      if (vertices) {
+        // The road follows the ground without inheriting the little dips'
+        // sharp lighting changes. Shade it by the slope across its width.
+        const dx = height(x - 4, z) - height(x + 4, z);
+        const dz = height(x, z - 4) - height(x, z + 4);
+        const length = Math.hypot(dx, 8, dz);
+        [normalX, normalY, normalZ] = [dx / length, 8 / length, dz / length];
+      }
+      const k = batch.vertex(x, y + lift, z, normalX, normalY, normalZ, r, g, b, stripe?.surface ?? surf, u, across);
+      if (batch.grade) {
+        for (let j = 0; j < coarse.length; j++) batch.grade[k * 2 + j] = Math.max(0, coarse[j](x, z) - y);
+      }
+      vertices?.set(key, k);
+      return k;
+    };
+    const ia = corner(ax, ay, az);
+    const ib = corner(bx, by, bz);
+    const ic = corner(cx, cy, cz);
+    if (flip) batch.tri(ia, ic, ib);
+    else batch.tri(ia, ib, ic);
+  }
+}
+
+// Cut a paving triangle against the metre squares and diagonals of
+// the full-resolution terrain. Its plane then follows the terrain all the
+// way across each piece, including the steep joins around the zoo.
+function* terrainTriangles(points, [ox, oz]) {
+  const zs = points.map((p) => p[1]);
+  for (let j = Math.floor(Math.min(...zs) - oz); j < Math.ceil(Math.max(...zs) - oz); j++) {
+    const z = j + oz;
+    const row = clip(clip(points, 0, -1, -z), 0, 1, z + 1);
+    if (row.length < 3) continue;
+    const left = Math.floor(Math.min(...row.map((p) => p[0])) - ox);
+    const right = Math.ceil(Math.max(...row.map((p) => p[0])) - ox);
+    for (let i = left; i < right; i++) {
+      const x = i + ox;
+      const cell = clip(clip(row, -1, 0, -x), 1, 0, x + 1);
+      if (cell.length < 3) continue;
+      const diagonal = x + z + 1;
+      for (const part of [clip(cell, 1, 1, diagonal), clip(cell, -1, -1, -diagonal)]) {
+        for (let k = 2; k < part.length; k++) yield [part[0], part[k - 1], part[k]];
+      }
+    }
+  }
+}
+
+function clip(poly, nx, nz, limit) {
+  const out = [];
+  if (!poly.length) return out;
+  let a = poly.at(-1);
+  let da = a[0] * nx + a[1] * nz - limit;
+  for (const b of poly) {
+    const db = b[0] * nx + b[1] * nz - limit;
+    if ((da < 0 && db > 0) || (da > 0 && db < 0)) {
+      const t = da / (da - db);
+      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+    }
+    if (db <= 0) out.push(b);
+    a = b;
+    da = db;
+  }
+  return out;
 }
 
 function* trianglesOf(outer, holes) {

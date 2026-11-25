@@ -18,6 +18,8 @@ import { encodeTile, buildingFrom, deckOf, pavingKind, treeKind, treeHeight } fr
 import { ringsOf, watersOf, streamsOf, coversOf, TIDE_TOP, TIDE_NAME, WOODS } from '../tools/hike/dcgis.js';
 import { buildPaving, polygonsOf } from '../src/washington/paving.js';
 import { CityTile, makeMaterials, USE } from '../src/washington/look.js';
+import { buildBuildings } from '../src/washington/buildings.js';
+import { SURF } from '../src/build/surfaces.js';
 import { CITY } from '../src/washington/city.js';
 import { area, inside } from '../src/core/rings.js';
 import { HIKES } from '../src/world/hikes.js';
@@ -198,6 +200,63 @@ test('a shared bridge is drawn once and stays walkable from the neighboring tile
   assert.ok(!owner.bridges.empty && neighbor.bridges.empty);
   assert.ok(owner.solids.length > 0);
   assert.deepEqual(neighbor.solids, owner.solids);
+});
+
+test('a road on fine terrain clears an entire metre-grid ridge and keeps grass off its edge', () => {
+  const tile = { at: [0, 0], buildings: [], paving: [{ kind: 'road', rings: [[[2, 3], [28, 3], [28, 6.25], [2, 6.25]]] }], bridges: [], trees: [], names: [] };
+  const ground = (x) => 2.1 * Math.max(0, 1 - Math.abs(x - 10));
+  const t = new CityTile({ key: '0_0', corner: [0, 0], bytes: encodeTile(tile), ground, offset: 0, materials: makeMaterials(), finePaving: true });
+  t.pump(Infinity);
+  const { attributes, index } = t.group.children[0].geometry;
+  const p = attributes.position;
+  for (const [level, step] of [1, 2, 4].entries()) {
+    let clearance = Infinity;
+    const rise = level === 0 ? () => 0 : level === 1 ? (k) => attributes.aRoadGrade.getX(k) : (k) => attributes.aRoadGrade.getY(k);
+    for (let i = 0; i < index.count; i += 3) {
+      const ids = [index.getX(i), index.getX(i + 1), index.getX(i + 2)];
+      const x = ids.reduce((sum, k) => sum + p.getX(k), 0) / 3;
+      const y = ids.reduce((sum, k) => sum + p.getY(k) + rise(k), 0) / 3;
+      const base = Math.floor(x / step) * step;
+      const along = (x - base) / step;
+      const terrain = ground(base) * (1 - along) + ground(base + step) * along;
+      clearance = Math.min(clearance, y - terrain);
+    }
+    assert.ok(clearance > 0.02 && clearance <= 0.1, `road above ${step} m terrain by ${clearance} m`);
+  }
+  assert.equal(t.use(15, 2.55), 0);
+  assert.ok(t.bare(15, 2.55), 'blades rooted next to the asphalt are kept clear');
+  assert.equal(t.bare(15, 0.6), false, 'grass stays beyond the road edge');
+  t.dispose();
+});
+
+function finish(steps) {
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+test('a rowhouse places its entrance and walkable stoop on the side facing the street', () => {
+  const b = buildingFrom([[[[0, 0, 10], [6, 0, 10], [6, 12, 10], [0, 12, 10]]]], 'flat');
+  const house = { ...b, pts: Float32Array.from(b.pts.flat()) };
+  const kept = finish(buildBuildings([house], { ground: () => 0, offset: 0, street: (x, z) => z < -1.8 }));
+  const street = kept.solids.filter((s) => s.step === 0.32);
+  assert.equal(street.length, 3);
+  assert.ok(street.every((s) => s.az < 0 && s.bz < 0 && s.topA > 0));
+  const noRoad = finish(buildBuildings([house], { ground: () => 0, offset: 0 }));
+  assert.equal(noRoad.solids.some((s) => s.step === 0.32), false);
+});
+
+test('the National Cathedral has stone towers above the surveyed shell and keeps its footprint collision', async () => {
+  const d = decodeTile(await tileBytes('-10_-9'));
+  const [k] = [...d.names].find(([, n]) => CITY.names[n] === 'Washington National Cathedral');
+  const cathedral = d.buildings[k];
+  const b = finish(buildBuildings([cathedral], { offset: 0, ground: () => 115, names: new Map([[0, 'Washington National Cathedral']]) }));
+  const g = b.roofs.build();
+  assert.ok(g.boundingBox.max.y > 200, 'the central tower has pinnacles');
+  assert.ok(g.attributes.aSurf.array.includes(SURF.masonry));
+  assert.ok(b.walls.surf.subarray(0, b.walls.n).every((surface) => Math.floor(surface) !== SURF.facade));
+  assert.ok(b.solids.some((s) => s.wall));
+  g.dispose();
 });
 
 test('a tile of the city stands up a little at a time: its buildings, its streets laid as they are, its trees, the forest kept off', async () => {

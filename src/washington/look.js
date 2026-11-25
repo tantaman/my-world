@@ -25,6 +25,9 @@ import { createBuildingMaterial } from '../build/surfaces.js';
 
 export { TILE };
 export const USE = { building: 1, paved: 2 };
+const STREET = 4;
+const VERGE = 8;
+const GRASS_CLEARANCE = 1.1; // blade lean and the half-diagonal of a mask cell
 // What the forest keeps off (m): how far a tree keeps from a wall, and from
 // the kerb; a bush or a fern, from a wall.
 export const KEEP = { building: 2.5, paved: 0.8, small: 0.6 };
@@ -39,21 +42,24 @@ export function makeMaterials() {
   const solid = createBuildingMaterial();
   const paving = createBuildingMaterial();
   Object.assign(paving, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+  const gradedPaving = createBuildingMaterial({ roadGrade: true });
+  Object.assign(gradedPaving, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   const distant = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide });
   const distantPaving = distant.clone();
   Object.assign(distantPaving, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
-  return { solid, paving, distant, distantPaving };
+  return { solid, paving, gradedPaving, distant, distantPaving };
 }
 
 /**
  * @typedef {{ models: Record<string, any>, material: THREE.Material, shadow?: THREE.Material }} TreeKit
  * @typedef {{ key: string, corner: number[], bytes: Uint8Array, ground: (x: number, z: number) => number,
  *   offset: number, names?: (k: number) => string, materials: ReturnType<typeof makeMaterials>,
- *   trees?: TreeKit | null, seed?: number, detail?: boolean, ownsDeck?: (x: number, z: number) => boolean }} TileArgs
+ *   trees?: TreeKit | null, seed?: number, detail?: boolean, finePaving?: boolean, cityCorner?: number[],
+ *   ownsDeck?: (x: number, z: number) => boolean }} TileArgs
  */
 export class CityTile {
   /** @param {TileArgs} args */
-  constructor({ key, corner, bytes, ground, offset, names = () => '', materials, trees = null, seed = 0, detail = true, ownsDeck }) {
+  constructor({ key, corner, bytes, ground, offset, names = () => '', materials, trees = null, seed = 0, detail = true, finePaving = false, cityCorner = [0, 0], ownsDeck }) {
     this.key = key;
     this.corner = corner;
     this.group = new THREE.Group();
@@ -77,7 +83,7 @@ export class CityTile {
     this.h = this.w;
     this.grid = new Uint8Array(0);
     this.box = [this.x0, this.z0, this.x0 + this.w * CELL, this.z0 + this.h * CELL];
-    this._steps = this._build({ bytes, ground, offset, names, materials, trees, seed, ownsDeck });
+    this._steps = this._build({ bytes, ground, offset, names, materials, trees, seed, finePaving, cityCorner, ownsDeck });
   }
 
   // Build up to about ms more of it. → whether there's more to do.
@@ -90,7 +96,7 @@ export class CityTile {
     return false;
   }
 
-  *_build({ bytes, ground, offset, names, materials, trees, seed, ownsDeck }) {
+  *_build({ bytes, ground, offset, names, materials, trees, seed, finePaving, cityCorner, ownsDeck }) {
     const [cx, cz] = this.corner;
     const d = decodeTile(bytes);
     const detail = this.detail;
@@ -108,8 +114,7 @@ export class CityTile {
       if (h === undefined) asked.set(key, (h = ground(x, z)));
       return h;
     };
-    const G = detail ? GROUND_CELL : 8;
-    const onGrid = (x, z) => {
+    const sample = (G) => (x, z) => {
       const [wx, wz] = [cx + x, cz + z];
       const x0 = Math.floor(wx / G) * G;
       const z0 = Math.floor(wz / G) * G;
@@ -124,9 +129,26 @@ export class CityTile {
       const d = exact(x0 + G, z0 + G);
       return d + (c - d) * (1 - u) + (b - d) * (1 - v);
     };
+    const onGrid = sample(detail ? GROUND_CELL : 8);
+    if (detail) {
+      for (let k = 0; k < d.paving.length; k++) {
+        if (k % 50 === 49) yield;
+        const { kind, rings } = d.paving[k];
+        for (const { outer, holes } of polygonsOf(rings)) {
+          const all = [outer, ...holes];
+          this._fill(all, USE.paved | (kind === 'road' ? STREET : 0));
+          for (const ring of all) this._clearEdge(ring);
+        }
+      }
+    }
     const nameOf = new Map([...d.names].map(([b, n]) => [b, names(n)]));
-    const b = yield* buildBuildings(d.buildings, { ground: onGrid, offset, names: nameOf, seed, detail });
-    const p = yield* buildPaving(d, { ground: onGrid, offset, seed, detail, ownsDeck });
+    const street = (x, z) => !!(this._flags(cx + x, cz + z) & STREET);
+    const b = yield* buildBuildings(d.buildings, { ground: onGrid, offset, names: nameOf, seed, detail, street, cityCorner });
+    const p = yield* buildPaving(d, {
+      ground: finePaving ? sample(1) : onGrid, offset, seed, detail, ownsDeck,
+      terrainGrid: finePaving ? [Math.floor(cx) - cx, Math.floor(cz) - cz] : null,
+      coarse: finePaving ? [onGrid, sample(4)] : [],
+    });
     // the street trees
     let t = { meshes: [], solids: [] };
     if (trees && d.trees.length) t = streetTrees(d.trees, { ...trees, ground: onGrid, detail });
@@ -134,11 +156,6 @@ export class CityTile {
     // what's where, a square metre at a time
     if (detail) {
       for (const ring of b.outlines) this._fill([ring], USE.building);
-      yield;
-      for (let k = 0; k < d.paving.length; k++) {
-        if (k % 100 === 99) yield;
-        for (const poly of polygonsOf(d.paving[k].rings)) this._fill([poly.outer, ...poly.holes], USE.paved);
-      }
       yield;
     }
     // the meshes, each in a step of its own
@@ -155,7 +172,7 @@ export class CityTile {
     yield;
     add(b.walls, solid);
     yield;
-    add(p.paving, detail ? materials.paving : materials.distantPaving, false);
+    add(p.paving, finePaving ? materials.gradedPaving : detail ? materials.paving : materials.distantPaving, false);
     yield;
     add(p.bridges, solid);
     for (const { mesh } of t.meshes) {
@@ -196,16 +213,19 @@ export class CityTile {
     };
     for (const b of d.buildings) for (let i = 0; i < b.pts.length; i += 3) grow(b.pts[i], b.pts[i + 1]);
     for (const p of d.paving) for (const r of p.rings) for (let i = 0; i < r.length; i += 2) grow(r[i], r[i + 1]);
-    this.x0 = cx + Math.floor(x0) - 1;
-    this.z0 = cz + Math.floor(z0) - 1;
-    this.w = Math.ceil((x1 - x0) / CELL) + 3;
-    this.h = Math.ceil((z1 - z0) / CELL) + 3;
+    this.x0 = cx + Math.floor(x0) - 2;
+    this.z0 = cz + Math.floor(z0) - 2;
+    this.w = Math.ceil((x1 - x0) / CELL) + 5;
+    this.h = Math.ceil((z1 - z0) / CELL) + 5;
     this.grid = new Uint8Array(this.w * this.h);
     this.box = [this.x0, this.z0, this.x0 + this.w * CELL, this.z0 + this.h * CELL];
   }
 
   // What's on the square at (x, z) (world coordinates): USE flags.
   use(x, z) {
+    return this._flags(x, z) & (USE.building | USE.paved);
+  }
+  _flags(x, z) {
     const i = Math.floor((x - this.x0) / CELL);
     const j = Math.floor((z - this.z0) / CELL);
     if (!this.detail || i < 0 || j < 0 || i >= this.w || j >= this.h) return 0;
@@ -230,7 +250,21 @@ export class CityTile {
   }
   // Whether grass grows at (x, z): not on what's paved or built.
   bare(x, z) {
-    return this.use(x, z) !== 0;
+    return this._flags(x, z) !== 0;
+  }
+
+  // Keep blade roots off the edge as well as the pavement itself. Using
+  // the actual outlines keeps lawns in the holes of the survey polygons.
+  _clearEdge(ring) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [a, b] = [ring[j], ring[i]];
+      const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (!length) continue;
+      const u = (b[0] - a[0]) * GRASS_CLEARANCE / length;
+      const v = (b[1] - a[1]) * GRASS_CLEARANCE / length;
+      this._fill([[[a[0] - u - v, a[1] - v + u], [b[0] + u - v, b[1] + v + u],
+        [b[0] + u + v, b[1] + v - u], [a[0] - u + v, a[1] - v - u]]], VERGE);
+    }
   }
 
   // Fill rings (tile metres; even-odd) on the grid: each square whose middle
