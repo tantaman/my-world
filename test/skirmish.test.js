@@ -877,6 +877,13 @@ test('alone you run the match yourself; whoever walks in after is your guest, an
   for (const f of a.match.fighters) if (f.bot) f.bot.think = () => ({ wish: { x: 0, z: 0 } });
   const victim = a.match.fighters.find((f) => f.team !== mine.team && f.bot && f.alive);
   a.match._place(victim, 0, 0, 36, 0);
+  // and nobody else in the way: the bots stand wherever they were, and that is
+  // the attackers' spawn, where one of the victim's side may be standing on
+  // the very spot (and takes the shot instead)
+  for (const f of a.match.fighters) {
+    const { x, z } = f.body.pos;
+    if (f !== victim && f.id !== mine.id && Math.abs(x) < 2 && z > 28) a.match._place(f, x < 0 ? -9 : 9, 0, z, f.yaw);
+  }
   t.run(0.3);
   put(mine, 0, 30, Math.PI);
   t.run(0.4);
