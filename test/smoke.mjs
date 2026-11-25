@@ -155,6 +155,16 @@ function installHelpers() {
     }
     return false;
   };
+  // Set down somewhere new (`go here` on the map, a teleport), and the ground
+  // round you in: until it is, the teleport isn't done, and once it is it
+  // sets you down again where it put you, wherever you've gone since (and the
+  // map says where you are, over whatever else is on the screen by then).
+  // -> whether it came in
+  T.settled = async (ms = 60000) => {
+    const ok = await T.until(() => w.chunks.isFullyLoaded(), ms);
+    await T.frames(10);
+    return ok;
+  };
   // Stand at (px, pz) and put the crosshair on (gx, gy, gz).
   T.standAndAim = async (px, pz, gx, gy, gz) => {
     const yaw = Math.atan2(gx - px, gz - pz);

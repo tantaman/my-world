@@ -55,7 +55,9 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.ok(await page.evaluate((s) => T.until(() => !world.map.isOpen && Math.hypot(world.player.pos.x - s.door.x, world.player.pos.z - s.door.z) < 1), site), 'go here sets you down at the paddock gate');
     assert.ok((await page.evaluate((s) => Math.cos(world.player.yaw - s.door.yaw), site)) > 0.99, 'facing the track');
     assert.ok(await page.evaluate(() => T.until(() => world.racetrack.ready, 60000)), 'the track stands there');
-    await frames(10);
+    // and the ground round it in, or `go here` sets you down at the gate again
+    // once it is, out of the car it's about to put you in
+    assert.ok(await page.evaluate(() => T.settled()), 'the ground round it in');
     assert.ok(await page.evaluate((id) => world.racetrack.record.been.includes(id), site.id), 'and you have been');
     await shot('the paddock gate');
     return site;

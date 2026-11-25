@@ -65,6 +65,9 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.ok(facing > 0.99, 'facing them');
     assert.equal(await page.evaluate(() => world.map.isOpen), false, 'and the map is closed');
     assert.ok(await page.evaluate(() => T.until(() => world.videostore.ready, 60000)), 'the store stands there');
+    // and the ground round it in, or `go here` sets you down at the doors
+    // again once it is, wherever you've gone
+    assert.ok(await page.evaluate(() => T.settled()), 'the ground round it in');
     await shot('the video store');
     return { site: site.id };
   });
