@@ -96,6 +96,7 @@ const ARRIVE = 7; // m along the platform from the foot of its escalators that y
 const ASIDE = 1.1; // ...and across from its middle
 const DOWN_AT = 0.62; // how far down an entrance's escalators you're taken down to the platform
 const VAULT_PARTS = 4; // a station's vault is built in this many steps
+const STATIONS_FIRST = 250; // m nearer than they are that stations are taken to be, to build, under the street
 const PIECE = 120; // m of track built and shown together
 const CUTS = 4; // entrances whose wells are cut into the ground at once (world/cuts.js)
 const CUT_NEAR = 140; // m
@@ -902,6 +903,9 @@ export function installMetro(game: Game) {
             w.d *= 1.2 - 0.6 * (((w.x - f.x) * fx + (w.z - f.z) * fz) / l);
           }
         }
+        // (and under the street, the stations before the tunnels between them:
+        // a train gets to the next one sooner than you'd see down a tunnel)
+        if (below) for (const w of want) if (w.key.startsWith('level:') || w.key.startsWith('vault:')) w.d -= STATIONS_FIRST;
         queue = want.filter((w) => !built.has(w.key)).sort((a, b) => a.d - b.d);
         const keys = new Set(want.map((w) => w.key));
         for (const b of [...built.values()]) {
