@@ -3,38 +3,65 @@
 // kickflips; pointed off the road onto the grass, the wheels dig in and you
 // step off; F steps off.
 //
-// Needs: nothing of what came before. Leaves: you on foot, beside a paved road.
+// Needs: nothing of what came before. Leaves: you on foot, beside the paved
+// road nearest the start.
 
 import assert from 'node:assert/strict';
 
 export default async function ({ page, step, key, frames, shot }) {
   let paved = null; // the road skated on
+  let along = 0.5; // ...and how far along it (of its length)
   await step('onto a paved road, and onto your skateboard', async () => {
-    // the nearest paved road: the roads within a few kilometres surveyed
-    // now, rather than waited for a little at a time (the near ones may all
-    // run to ghost towns, and be gravel)
+    // back to the start: the part before may have left you somewhere roads
+    // keep away from (a real place brought in from a photo)
+    await page.evaluate(async () => {
+      const s = world.player.start;
+      await world.teleport(s.x, s.z, s.yaw);
+    });
+    await page.waitForFunction(() => world.chunks.isFullyLoaded(), null, { timeout: 120000 });
+    // a paved road: the roads within a few kilometres surveyed now, nearest
+    // first, rather than left to the game's own pace (the near ones may all
+    // run to ghost towns, and be gravel). A little each frame, as the game
+    // does it: a survey that has to wait for something else to be found
+    // can't be run to its end there and then.
     paved = await page.evaluate(async () => {
       const R = world.roads.roads;
       const p = world.player.pos;
-      const far = 4000;
-      let best = null;
-      for (const [ci, cj, dir] of R._candidates(p.x - far, p.z - far, p.x + far, p.z + far)) {
-        const road = R.link(ci, cj, dir);
-        await new Promise((ok) => setTimeout(ok, 0));
-        if (!road || road.surface !== 'paved' || !world.roads.stands(road)) continue;
-        const d = Math.hypot(road.x[road.n >> 1] - p.x, road.z[road.n >> 1] - p.z);
-        if (!best || d < best.d) best = { id: road.id, d };
+      R.prefetch(p.x, p.z, 4000);
+      const t0 = performance.now();
+      while (performance.now() - t0 < 300000) {
+        R.pump(40);
+        const found = world.roads.list(5000).find((r) => r.surface === 'paved');
+        if (found) return found.id;
+        await new Promise((ok) => requestAnimationFrame(ok));
       }
-      return best && best.id;
+      return null;
     });
     assert.ok(paved, 'a paved road near enough');
-    const r = await page.evaluate((id) => world.roads.go(id), paved);
-    assert.ok(r, 'onto it');
-    await page.waitForFunction(() => world.chunks.isFullyLoaded(), null, { timeout: 120000 });
-    await page.waitForFunction(() => world.roads.shown.size > 0, null, { timeout: 60000 });
-    await frames(20);
-    const here = await page.evaluate(() => ({ foot: world.player.underfoot && world.player.underfoot.surface, at: world.act.here() && world.act.here().word }));
-    assert.equal(here.foot, 'tarmac', 'on its tarmac');
+    // onto it somewhere along it that's on the ground (its middle may be a
+    // bridge, and set down there you'd be set down on the bank beside it)
+    let here = null;
+    for (const f of [0.5, 0.3, 0.7, 0.15, 0.85]) {
+      const r = await page.evaluate(([id, f]) => {
+        const road = world.roads.list(6000).find((x) => x.id === id);
+        return road && world.roads.go(id, road.length * f);
+      }, [paved, f]);
+      assert.ok(r, 'onto it');
+      await page.waitForFunction(() => world.chunks.isFullyLoaded(), null, { timeout: 120000 });
+      // the road there stood up, and you on it
+      await page.evaluate(() => T.until(() => world.player.grounded && world.player.underfoot, 20000));
+      await frames(20);
+      here = await page.evaluate(() => {
+        const p = world.player.pos;
+        const u = world.roads.under(p.x, p.z);
+        return { foot: world.player.underfoot && world.player.underfoot.surface, at: world.act.here() && world.act.here().word, p: [p.x, p.y, p.z].map(Math.round), top: u && +u.top.toFixed(2) };
+      });
+      if (here.foot === 'tarmac') {
+        along = f;
+        break;
+      }
+    }
+    assert.equal(here.foot, 'tarmac', `on its tarmac (${paved}: ${JSON.stringify(here)})`);
     assert.equal(here.at, 'skate', 'F would put you on your board');
     await key('KeyF');
     const on = await page.evaluate(() => ({ active: world.skateboarding.active, board: !!(world.player.character.stood && world.player.character.stood.board), idle: world.builder.idle, said: document.getElementById('toast').textContent, at: world.act.here().word }));
@@ -48,7 +75,7 @@ export default async function ({ page, step, key, frames, shot }) {
       window._skate = [];
       for (const e of ['push', 'takeoff', 'land', 'crash', 'up', 'off']) world.skateboarding.skater.on(e, (...a) => window._skate.push([e, ...a.map((v) => (v && v.air ? v.name : v))]));
     });
-    return { road: r && r.id, ...here };
+    return { road: paved, along, ...here };
   });
 
   await step('push along it, ollie and kickflip, and brake', async () => {
@@ -114,7 +141,8 @@ export default async function ({ page, step, key, frames, shot }) {
 
   await step('F onto it and off again', async () => {
     assert.ok(paved, 'the paved road from before');
-    await page.evaluate((id) => world.roads.go(id), paved);
+    await page.evaluate(([id, f]) => world.roads.go(id, world.roads.list(6000).find((x) => x.id === id).length * f), [paved, along]);
+    await page.evaluate(() => T.until(() => world.player.grounded && world.player.underfoot, 20000));
     await frames(20);
     assert.equal(await page.evaluate(() => world.act.here() && world.act.here().word), 'skate', 'back on its tarmac, F would put you on your board');
     await key('KeyF');
