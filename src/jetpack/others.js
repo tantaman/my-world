@@ -5,7 +5,12 @@
 // cut out, and a few times a second while they're flying; nothing about it
 // is kept.
 //
-//   { have: bool, y?: m, burn?: 0..1 }   y and burn only while the jets burn
+//   { have: bool, y?: m, burn?: 0..1 }
+//
+// The burn comes while the jets do anything: a flight of their own, which
+// says `y` too, because nobody else knows how high they are; or a push for
+// something that carries them (a skateboard), which says only the burn,
+// since they're wherever everyone else already has them.
 
 import { FLYING } from './jets.js';
 import { clamp } from '../noise.js';
@@ -65,8 +70,8 @@ export class Jetpackers {
         ch.root.position.y = r.y;
         p.flag.position.y = r.y + FLAG;
       }
-      r.pack.burn(flying ? r.burn : 0);
-      if (flying && near) loud = Math.max(loud, r.burn * Math.max(0, 1 - Math.hypot(p.pos.x - near.x, p.pos.z - near.z) / HEARD));
+      r.pack.burn(r.burn);
+      if (r.burn > 0 && near) loud = Math.max(loud, r.burn * Math.max(0, 1 - Math.hypot(p.pos.x - near.x, p.pos.z - near.z) / HEARD));
     }
     return loud;
   }

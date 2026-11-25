@@ -14,6 +14,12 @@
 // backwards and you're riding fakie, the other way round on the board, until
 // a push turns you round.
 //
+// A push can come from the jets on your back instead (`jets`, the jetpack):
+// they don't care how fast the wheels are already turning, so they take you
+// on past anything a foot or a hill can do, until the air holds you — much
+// further crouched — and they burn on in the air, carrying you a little
+// further over a gap.
+//
 // What's under the wheels matters. Tarmac rolls best; stone and boards a
 // little worse; gravel badly, and at speed a stone in it stops a wheel and
 // throws you. Off the hard stuff, onto the grass or the dirt or into the
@@ -52,6 +58,7 @@
 //   pop     an ollie (pressed this frame)
 //   flip    -1..1 in the air: + a kickflip, - a heelflip
 //   shove   held, in the air: the board turns under you
+//   jets    0..1: the jets on your back, pushing you along
 //
 // Emits:
 //   'push'     ()                   a foot down on the ground, kicking
@@ -92,6 +99,7 @@ const PEBBLE_FROM = 3; // m/s
 // m from the ground to the top of the deck, where your soles are.
 export const DECK = 0.09;
 const STEP = 1 / 120; // s: the most one step of the sum takes
+const STEP_FAR = 0.2; // m: ...and the furthest it may take you, so that at jet speeds a trunk still comes between two of them
 export const REACH = 0.1; // m: the wheels roll up onto something no higher than this over them (with a bump)
 const SPAN = 0.35; // m either way along the board to find how the ground slopes
 const GRADE_MOST = 0.45; // rise over run: no steeper than this is felt (an edge between samples)
@@ -101,6 +109,10 @@ const DRAG = { up: 0.006, crouch: 0.0035, air: 0.004 };
 // foot is kicking, one push every `period` (s), the foot on the ground from
 // `kick[0]` to `kick[1]` of the way through it.
 export const PUSH = { top: 7, acc: 6, period: 0.75, kick: [0.25, 0.65] };
+// The jets on your back (the jetpack), pushing you along the board: m/s² at
+// full thrust. Nothing but the air holds them back, so on the flat that's
+// about 95 km/h standing up and 125 crouched, and more down a hill.
+export const JETS = 4.5;
 // Braking: a foot dragged (m/s²); at `from` m/s or faster, a powerslide.
 export const BRAKE = { drag: 2.2, slide: 5.5, from: 3.5 };
 // Turning: rad/s at a standstill (a kick turn), m/s² round a carve (more
@@ -170,6 +182,7 @@ export class Skater extends Emitter {
     this.slide = 0; // 0..1 how far into a powerslide
     this.dragging = false; // a foot dragged to brake
     this.crouch = 0; // 0..1
+    this.jets = 0; // 0..1 how hard the jets on your back are pushing you along
     this.lateral = 0; // m/s² round the turn you're carving (+ to the left)
     this.grade = 0; // rise over run along the way you're going
     this.compress = 0; // 0..1 the knees taking a bump or a landing
@@ -225,6 +238,7 @@ export class Skater extends Emitter {
     this.pushT = -1;
     this.slide = 0;
     this.dragging = false;
+    this.jets = 0;
     this.down = -1;
     this.roll = 0;
     this.compress = 0;
@@ -238,7 +252,7 @@ export class Skater extends Emitter {
     this._last.steer = c.steer || 0;
     this._last.flip = c.flip || 0;
     this._last.shove = c.shove ? 1 : 0;
-    const n = Math.max(1, Math.ceil(dt / STEP));
+    const n = Math.max(1, Math.ceil(dt / STEP), Math.ceil((this.speed * dt) / STEP_FAR));
     const h = dt / n;
     let pop = !!c.pop;
     for (let i = 0; i < n; i++) {
@@ -257,7 +271,10 @@ export class Skater extends Emitter {
   _roll(h, c, pop) {
     const steer = c.steer || 0;
     const brake = c.brake || 0;
-    const pushing = !!c.push && brake === 0;
+    // the jets on your back, once they've caught: the foot goes back on the
+    // board, there being nothing left for it to add
+    this.jets = c.jets || 0;
+    const pushing = !!c.push && brake === 0 && !this.jets;
     this.crouch += ((c.crouch && !this.pushing ? 1 : 0) - this.crouch) * (1 - Math.exp(-h * 10));
     let v = this.v;
 
@@ -287,6 +304,14 @@ export class Skater extends Emitter {
     const drag = DRAG.up + (DRAG.crouch - DRAG.up) * this.crouch;
     const slow = surf.roll + drag * v * v + brake * (sliding ? BRAKE.slide : BRAKE.drag);
     v = sign(v) * Math.max(0, Math.abs(v) - slow * h);
+
+    // the jets, which go on pushing whatever the wheels are doing. They're on
+    // your back, so as a kick of the foot does, they turn you round to face
+    // the way you're going first.
+    if (this.jets > 0) {
+      if (this.fakie) this.face = 0;
+      v += JETS * this.jets * h;
+    }
 
     // a push: a foot down, kicked back, and back up onto the board. Riding
     // fakie, a push turns you round first.
@@ -434,6 +459,14 @@ export class Skater extends Emitter {
     const k = 1 - DRAG.air * this.speed * h;
     this.vx *= k;
     this.vz *= k;
+    // the jets burn on in the air, pushing you the way you're going, which
+    // carries you a little further over a gap than the speed alone would
+    this.jets = c.jets || 0;
+    if (this.jets > 0) {
+      const a = JETS * this.jets * h;
+      this.vx += Math.sin(this.heading) * a;
+      this.vz += Math.cos(this.heading) * a;
+    }
     this.x += this.vx * h;
     this.y += this.vy * h;
     this.z += this.vz * h;
@@ -547,6 +580,7 @@ export class Skater extends Emitter {
 
   _tumble(h) {
     this.down += h;
+    this.jets = 0;
     const g = this.ground.at(this.x, this.z, this.y + REACH, _g);
     if (this.y > g.y + 0.03 || this.vy > 0) {
       this.vy -= GRAVITY * h;

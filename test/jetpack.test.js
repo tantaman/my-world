@@ -213,6 +213,60 @@ test('without it on, or with something else carrying you, they never fire; and a
   assert.ok(!flying.jets.on && flying.p.carrier.walk === MOUNTS.horse.carrier.walk, 'the horse is left carrying you');
 });
 
+// ── A push for whatever carries you ─────────────────────────────────────────
+// A skateboard under your feet asks the jets for a push along instead of a
+// flight (skateboarding/), and does the pushing itself with what they give.
+
+test('asked for a push, the jets catch after the same moment and go full blast, and fly you nowhere', () => {
+  const { p, jets, said, frame } = make();
+  jets.want();
+  frame();
+  assert.equal(jets.pushing, false, 'a tap of it is still a tap');
+  let held = 0;
+  for (; !jets.pushing && held < 1; held += 1 / 60) {
+    jets.want();
+    frame();
+  }
+  assert.ok(held >= HOLD - 0.02 && held < HOLD + 0.05, `held, and they catch (${held.toFixed(2)} s, where a flight waits ${HOLD})`);
+  for (let i = 0; i < 60; i++) {
+    jets.want();
+    frame();
+  }
+  assert.ok(jets.along > BURN.along * 0.95, `going full blast (${jets.along.toFixed(2)})`);
+  assert.equal(jets.along, jets.thrust, 'which is what the flames and the roar are made of');
+  assert.deepEqual(said, [], 'and no flight of their own');
+  assert.ok(p.grounded && !p.carrier && p.rides.free, 'nothing of the jetpack has you: the pushing is the asker’s');
+  // stop asking, and that is the end of it
+  frame();
+  assert.equal(jets.pushing, false, 'out as soon as you stop asking');
+  assert.equal(jets.along, 0);
+  for (let i = 0; i < 120; i++) frame();
+  assert.equal(jets.thrust, 0, 'and they die away to nothing');
+});
+
+test('nothing is pushed with the jetpack on its rack, and a flight of your own comes first', () => {
+  const off = make({ worn: false });
+  for (let i = 0; i < 60; i++) {
+    off.jets.want();
+    off.frame();
+  }
+  assert.equal(off.jets.pushing, false, 'it is on its rack: there is nothing to ask');
+  assert.equal(off.jets.thrust, 0, 'and nothing burns');
+  // flying, an ask gets nothing: the jets have you themselves
+  const flying = make();
+  flying.input.tapJump();
+  flying.input.held.add('jump');
+  flying.run(1);
+  assert.ok(flying.jets.on, 'flying');
+  for (let i = 0; i < 60; i++) {
+    flying.jets.want();
+    flying.frame();
+  }
+  assert.ok(flying.jets.on && !flying.jets.pushing, 'still flying, and pushing nobody along');
+  assert.equal(flying.jets.along, 0, 'nothing for an asker');
+  assert.ok(flying.jets.thrust > 0.9, `the jets going for the flight (${flying.jets.thrust.toFixed(2)})`);
+});
+
 // ── The rack ────────────────────────────────────────────────────────────────
 
 const SEED = 20261119;
@@ -289,6 +343,16 @@ test("someone else's jetpack: on their back while they have it, and up where the
   assert.equal(someone.character.root.position.y, 3, 'on the ground');
   assert.equal(loud, 0);
   assert.equal(back(), 1);
+  // ...and on a board of their own: the jets burning, with no height to put
+  // them at, because they're wherever everyone else already has them
+  others.hear('them', { have: true, burn: 1 });
+  for (let i = 0; i < 60; i++) {
+    someone.character.root.position.copy(someone.pos);
+    loud = others.update(1 / 60, { x: 0, z: 0 });
+  }
+  assert.equal(someone.character.stood, null, 'on their own feet, not hanging under it');
+  assert.equal(someone.character.root.position.y, 3, 'and on the ground, where they were put');
+  assert.ok(loud > 0.8, `their jets heard all the same (${loud.toFixed(2)})`);
   // hung back up, or gone: off their back
   others.hear('them', { have: false });
   assert.equal(back(), 0, 'hung up: off their back');

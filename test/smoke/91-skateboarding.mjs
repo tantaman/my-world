@@ -1,10 +1,10 @@
 // Skateboarding: onto a paved road, F (the act key), and you're on your
 // board; W pushes you along it, S brakes, space ollies and W in the air
 // kickflips; pointed off the road onto the grass, the wheels dig in and you
-// step off; F steps off.
+// step off; F steps off. Then a jetpack on your back, and W is the jets.
 //
-// Needs: nothing of what came before. Leaves: you on foot, beside the paved
-// road nearest the start.
+// Needs: nothing of what came before. Leaves: you on foot, on or beside the
+// paved road nearest the start, the jetpack off your back again.
 
 import assert from 'node:assert/strict';
 
@@ -152,5 +152,51 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.ok(!off.active && !off.aboard, 'off');
     assert.match(off.said, /board under your arm/);
     return off;
+  });
+
+  await step('a jetpack on your back, and the jets take the board to a silly speed', async () => {
+    assert.equal(await page.evaluate(() => world.jetpack.give()), true, 'a jetpack strapped on where you stand');
+    await frames(5);
+    await key('KeyF');
+    assert.ok(await page.evaluate(() => world.skateboarding.active), 'back on your board');
+    const prompt = await page.evaluate(() => T.prompt());
+    assert.match(prompt, /W jets/, `the push key is the jets now (${prompt})`);
+    // pointed along the road, and down it where it runs down: a carve would do
+    // this, and it keeps the tarmac under the wheels while the jets wind up
+    const aim = await page.evaluate(() => {
+      const sk = world.skateboarding.skater;
+      const u = world.roads.under(sk.x, sk.z);
+      if (!u) return null;
+      const yaw = Math.atan2(u.dx, u.dz);
+      const ahead = (s) => world.roads.under(sk.x + Math.sin(yaw) * s * 12, sk.z + Math.cos(yaw) * s * 12);
+      const down = (ahead(1)?.top ?? Infinity) <= (ahead(-1)?.top ?? Infinity) ? 1 : -1;
+      sk.start(sk.x, sk.z, down > 0 ? yaw : yaw + Math.PI, 0, sk.y);
+      return { down };
+    });
+    assert.ok(aim, 'the board pointed along the road');
+    // hold the push, tucked down out of the wind: a kick of the foot, and then
+    // the jets catch and shove you along until the road runs out from under you
+    await page.keyboard.down('ShiftLeft');
+    await page.keyboard.down('KeyW');
+    const lit = await page.evaluate(() => T.until(() => world.jetpack.state().pushing, 6000));
+    const full = await page.evaluate(() => T.until(() => world.skateboarding.skater.jets > 0.9, 4000));
+    // on until it is going properly, or the road runs out from under you
+    const fast = await page.evaluate(() => T.until(() => world.skateboarding.session.top > 12 || !world.skateboarding.active, 20000));
+    const going = await page.evaluate(() => ({ top: Math.round(world.skateboarding.session.top * 3.6), kmh: world.skateboarding.state().kmh, on: world.skateboarding.active, flying: world.jetpack.state().flying, burn: world.jetpack.state().thrust }));
+    await shot('jet-skating');
+    await page.keyboard.up('KeyW');
+    await page.keyboard.up('ShiftLeft');
+    assert.ok(lit, 'holding the push, the jets catch');
+    assert.ok(full, 'and go full blast, pushing the board along');
+    assert.equal(going.flying, false, 'they fly you nowhere: the wheels stay down');
+    // (a foot tops out at 25 km/h, whatever you do with it: PUSH.top, skater.js)
+    assert.ok(fast && going.top > 28, `and shove you far past what a foot can (${JSON.stringify(going)})`);
+    // let go, and they are out; then the board and the jetpack away again
+    await frames(30);
+    const after = await page.evaluate(() => ({ pushing: world.jetpack.state().pushing, jets: world.skateboarding.active ? world.skateboarding.skater.jets : 0 }));
+    assert.deepEqual(after, { pushing: false, jets: 0 }, 'let go, and the jets are out');
+    await page.evaluate(() => world.skateboarding.active && world.skateboarding.off());
+    assert.equal(await page.evaluate(() => world.jetpack.give(false)), false, 'and the jetpack off your back again');
+    return { top: going.top, downhill: aim.down > 0, burn: going.burn };
   });
 }
