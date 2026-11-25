@@ -3,7 +3,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Skater, PUSH, rolls, setsOff } from '../src/skateboarding/skater.js';
+import { Skater, PUSH, JETS, rolls, setsOff } from '../src/skateboarding/skater.js';
 import { bail, nameOf, score, counts, LAND } from '../src/skateboarding/tricks.js';
 import { Session, LINE } from '../src/skateboarding/session.js';
 
@@ -19,7 +19,7 @@ const ground = ({ slope = 0, surface = () => 'tarmac', height = null, hit = () =
   },
   hit,
 });
-const idle = { push: false, brake: 0, steer: 0, crouch: false, pop: false, flip: 0, shove: false };
+const idle = { push: false, brake: 0, steer: 0, crouch: false, pop: false, flip: 0, shove: false, jets: 0 };
 // Ride for `secs`, with controls that can change as it goes; what happened.
 function ride(sk, secs, ctl = () => idle, dt = 1 / 60) {
   const events = [];
@@ -64,6 +64,57 @@ test('down a hill you pick up speed, faster crouched, and the air holds you to s
   ride(up, 6);
   assert.ok(up.fakie, 'rolling back down it, you ride fakie');
   assert.ok(up.vz > 0.5, 'down the hill');
+});
+
+test('the jets on your back push you on past any hill, faster crouched, and the foot comes back on the board', () => {
+  const sk = new Skater(ground());
+  sk.start(0, 0, 0);
+  ride(sk, 40, () => ({ push: true, jets: 1 }));
+  const standing = sk.v;
+  assert.ok(standing > 3 * PUSH.top, `standing up, far past what a foot can do (${(standing * 3.6).toFixed(0)} km/h, where a push does ${(PUSH.top * 3.6).toFixed(0)})`);
+  assert.equal(sk.pushing, false, 'and the foot back on the board: there is nothing it could add');
+  assert.equal(sk.jets, 1, 'the jets full on');
+  ride(sk, 40, () => ({ push: true, jets: 1, crouch: true }));
+  assert.ok(sk.v > standing + 5, `crouched down out of the wind, faster still (${(sk.v * 3.6).toFixed(0)} km/h)`);
+  assert.ok(sk.v < 40, `though the air still holds them to something (${(sk.v * 3.6).toFixed(0)} km/h)`);
+  assert.ok(sk.grounded && sk.down < 0, 'and the wheels on the ground the whole way');
+  // let go, and the air has it off you again
+  ride(sk, 30);
+  assert.equal(sk.jets, 0, 'let go, and nothing is pushing you');
+  assert.ok(sk.v < standing / 2, `the air taking most of it back (${(sk.v * 3.6).toFixed(0)} km/h)`);
+});
+
+test('the jets push the way the board goes: round a carve, and never fakie', () => {
+  const sk = new Skater(ground());
+  sk.start(0, 0, 0, 2);
+  ride(sk, 3, () => ({ push: true, jets: 1, steer: 1 }));
+  assert.ok(sk.heading < -0.5, `carving under them turns you round (${sk.heading.toFixed(2)} rad)`);
+  assert.ok(Math.abs(Math.hypot(sk.vx, sk.vz) - sk.v) < 1e-9, 'and you go where the board points, as ever');
+  // rolling backwards, the jets on your back turn you round first, as a kick does
+  const back = new Skater(ground());
+  back.start(0, 0, 0, 2);
+  back.face = Math.PI;
+  assert.ok(back.fakie, 'riding fakie');
+  ride(back, 1, () => ({ push: true, jets: 1 }));
+  assert.equal(back.fakie, false, 'the jets turn you round to face the way you are going');
+});
+
+test('the jets burn on in the air, carrying you a little further over a gap', () => {
+  const gap = (jets) => {
+    const sk = new Skater(ground());
+    sk.start(0, 0, 0, 20);
+    let from = 0;
+    let to = 0;
+    sk.on('takeoff', () => (from = sk.z));
+    sk.on('land', () => (to = to || sk.z));
+    const events = ride(sk, 3, (t) => (t < 1 / 60 ? { pop: true, jets } : { jets }));
+    assert.deepEqual(named(events, 'crash'), [], 'landed it');
+    return to - from;
+  };
+  const off = gap(0);
+  const held = gap(1);
+  assert.ok(off > 10, `an ollie at that speed goes a long way anyway (${off.toFixed(1)} m)`);
+  assert.ok(held > off + 0.5, `and further with them held (${held.toFixed(1)} m, at ${JETS} m/s²)`);
 });
 
 test('steering carves you round; braking drags a foot, or slides the board out at speed', () => {

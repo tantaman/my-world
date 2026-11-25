@@ -5,6 +5,12 @@
 // shift the jets throttle back and let you down slowly. Touch down and they
 // cut out, and you walk on as before.
 //
+// Something that carries you can ask the jets for a push along instead of a
+// flight, and go where no wheels of its own would take it: a skateboard does
+// (skateboarding/, which holds the key and does the pushing). Here that is
+// the same jets, the same flames, vapour and roar, told to whoever else is
+// here the same way.
+//
 //   jets.js     when the jets fire and cut out, how they carry you, how you hang
 //   rack.js     where the rack stands at the launch site
 //   model.js    the jetpack, its flames, its vapour, and the rack
@@ -64,6 +70,7 @@ export function installJetpack(game) {
   const jets = new Jets();
   let time = 0; // s since the game began, by this feature's frames
   let toldAt = -Infinity; // when the others were last told how you are (tell())
+  let pushing = false; // the jets were pushing whatever carries you, last frame
 
   // ── On your back ──────────────────────────────────────────────────────────
   const pack = makeJetpack();
@@ -235,7 +242,10 @@ export function installJetpack(game) {
   // see theirs.
   function tell() {
     toldAt = time;
-    save.say('jetpack', jets.on ? { have: true, y: round(player.pos.y), burn: round(jets.thrust, 100) } : { have: jets.worn });
+    // flying, how high you are, for them to put you up there. Pushing
+    // something that carries you, only the burn: you're wherever it is.
+    const burn = round(jets.thrust, 100);
+    save.say('jetpack', jets.on ? { have: true, y: round(player.pos.y), burn } : jets.pushing ? { have: true, burn } : { have: jets.worn });
   }
   if (peers) {
     const others = new Jetpackers({ peers, make: makeJetpack });
@@ -260,6 +270,13 @@ export function installJetpack(game) {
         if (what === 'landed') sound.sfx('jet-cut');
       }
       jets.update(dt, player, input.running());
+      // a push caught, or went out: whatever carries you does the pushing,
+      // the jets are still ours to light and to be heard
+      if (jets.pushing !== pushing) {
+        pushing = jets.pushing;
+        sound.sfx(pushing ? 'jet-ignite' : 'jet-cut');
+        tell();
+      }
       if (jets.on) {
         // tipped about the hips, not the feet
         const root = player.character.root;
@@ -270,7 +287,7 @@ export function installJetpack(game) {
         root.position.y += PIVOT - _o.y;
         root.position.z -= _o.z;
         if (time - toldAt > TELL) tell();
-      }
+      } else if (jets.pushing && time - toldAt > TELL) tell();
       pack.burn(jets.thrust);
       vapour(dt);
       heard.thrust = jets.thrust;
@@ -303,6 +320,14 @@ export function installJetpack(game) {
     get flying() {
       return jets.on;
     },
+    // Something that carries you asking the jets for a push along instead of
+    // a flight (jets.js want()): say so each frame while you want one, and
+    // what comes back is how hard they're going for you, 0..1 — nothing until
+    // they catch, a moment after. The pushing is yours to do.
+    want: () => jets.want(),
+    get along() {
+      return jets.along;
+    },
     // stand in front of the rack, facing it
     async go() {
       if (!rack) return null;
@@ -310,10 +335,11 @@ export function installJetpack(game) {
       await game.api.teleport(f.x, f.z, f.yaw);
       return { x: f.x, z: f.z };
     },
-    give() {
-      wear(true, true);
+    // strapped on where you stand, or (false) off your back again
+    give(on = true) {
+      wear(on, true);
       return jets.worn;
     },
-    state: () => ({ have: jets.worn, flying: jets.on, thrust: round(jets.thrust, 100), height: round(player.height) }),
+    state: () => ({ have: jets.worn, flying: jets.on, pushing: jets.pushing, thrust: round(jets.thrust, 100), height: round(player.height) }),
   });
 }

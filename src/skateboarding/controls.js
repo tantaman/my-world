@@ -9,6 +9,10 @@
 //
 // On a touch screen the stick does what W A S D do (pushed all the way, it's
 // shift), holding the use button is shift, and a tap is space.
+//
+// With the jetpack on your back, holding the push holds the jets on as well,
+// and they do the pushing: index.ts asks for them and fills in `jets` (how
+// hard they're going), since whether you have one is no business of the keys.
 
 // input: the hiker's controls (player/input.js); c: the skater's, filled in -> c
 export function readControls(input, c) {
@@ -26,10 +30,12 @@ export function readControls(input, c) {
   return c;
 }
 
-// What the keys do now, for the HUD's cue. off: how the act key is named (F).
-export function cueFor(input, sk, off) {
+// What the keys do now, for the HUD's cue. off: how the act key is named (F);
+// jets: the jetpack is on your back, so the push is the jets'.
+export function cueFor(input, sk, off, jets = false) {
   const touch = input.isTouch;
+  const go = jets ? 'jets' : 'push';
   if (sk.down >= 0) return 'bailed…';
   if (!sk.grounded) return touch ? 'stick: spin, flip · hold <b>use</b>: shove-it' : '<b>A D</b> spin · <b>W</b> kickflip · <b>S</b> heelflip · <b>shift</b> shove-it';
-  return touch ? 'stick: push, carve, brake · hold <b>use</b>: crouch · tap: ollie' : `<b>W</b> push · <b>A D</b> carve · <b>S</b> brake · <b>shift</b> crouch · <b>space</b> ollie · <b>${off}</b> off`;
+  return touch ? `stick: ${go}, carve, brake · hold <b>use</b>: crouch · tap: ollie` : `<b>W</b> ${go} · <b>A D</b> carve · <b>S</b> brake · <b>shift</b> crouch · <b>space</b> ollie · <b>${off}</b> off`;
 }

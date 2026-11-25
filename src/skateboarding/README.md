@@ -27,6 +27,19 @@ in ten, and down one of those you'll be doing 40 km/h standing up and more
 than 50 crouched. Roll backwards and you're riding fakie, the other way
 round on the board, until a push turns you round.
 
+**With the jetpack.** Past the hills there are the jets. With the
+[jetpack](../jetpack/README.md) on your back, **W** is them and not your
+foot: hold it, and a moment after the kick that starts you off they catch
+with a whump and shove you along the tarmac, the flames under your heels and
+the vapour streaming out flat across the road behind you. Nothing holds them
+back but the air, so you wind up doing about 95 km/h standing up and 125
+tucked down under **shift** — half as fast again as the jetpack will ever
+fly you. They burn on in the air too, so an ollie off a kerb at that speed
+carries you twenty-odd metres. Let go of **W** and they cut out with a
+sputter, and then **S** will slow you; and
+everything else here still holds at that speed, so the gravel, a tree, a
+kerb, or the grass at the edge of the tarmac will all still have you off.
+
 What's underfoot matters. Tarmac rolls best; boards and stone a little
 worse; a gravel road badly, and at speed a stone in it stops a wheel and
 throws you. Roll off the edge onto the grass or the dirt, or into the water,
@@ -64,7 +77,7 @@ From the console:
 ```js
 world.skateboarding.on()      // onto your board, here, whatever's underfoot
 world.skateboarding.off()
-world.skateboarding.state()   // how you're going, and this session's tally
+world.skateboarding.state()   // how you're going (`jets`: the push behind you), and this session's tally
 ```
 
 ## Files

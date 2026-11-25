@@ -20,6 +20,7 @@ in the air. (Step off a ledge and press space, and they catch then too.)
 | **W A S D** | fly where the camera faces, at 12 m/s |
 | **shift** | dive, and go faster: 24 m/s along |
 | neither space nor shift | the jets throttle back, and let you down slowly |
+| the push key, held, on a skateboard | fire the jets · they shove the board along |
 | on a pad | **A** held to climb, **B** to dive, the left stick to steer; **Y** is F |
 | on a touch screen | at the rack, the *strap on* (or *hang up*) button · tap jump in the air to climb |
 
@@ -30,24 +31,33 @@ It flies as high as 120 m over the ground. Your tools are put away while the
 jets burn. Touch down, on the ground, on a roof or in the water, and they cut
 out with a sputter, and you're on your own feet again.
 
+**On a skateboard.** The jets will push something that carries you instead
+of flying you, and the one thing that asks is the board in your pack (see
+[Skateboarding](../skateboarding/README.md)). Rolling along with the jetpack
+on, hold the push key and they catch and shove you down the tarmac, out to
+about 125 km/h crouched — half as fast again as they'll fly you. They don't
+lift you: the wheels stay down, you steer with the trucks, and everything
+that throws you off a board throws you off it just the same.
+
 In a shared world everyone sees the jetpack on your back, and when you fly,
 how high you are and the jets burning; and you see theirs, and hear them
-nearby. Each of you takes your own off the rack.
+nearby — on a board as well as in the air. Each of you takes your own off the
+rack.
 
 From the console:
 
 ```js
 world.jetpack.rack          // where the rack is
 await world.jetpack.go()    // stand in front of it
-world.jetpack.give()        // strapped on, wherever you are
-world.jetpack.state()       // whether you have it, whether the jets burn, how high
+world.jetpack.give()        // strapped on, wherever you are (give(false): off again)
+world.jetpack.state()       // whether you have it, whether the jets burn or push, how high
 ```
 
 ## Files
 
 ```
 index.js     plugs it in: the rack at the launch site, F there, the jets, how you hang under them, saved as yours
-jets.js      when the jets fire and cut out, how they carry you (Player.carrier), how hard they go, the tilt
+jets.js      when the jets fire and cut out, how they carry you (Player.carrier) or push whatever does, how hard they go, the tilt
 rack.js      where the rack stands at the launch site, in the pad's own frame
 model.js     the jetpack, its flames, its vapour, and the rack
 others.js    other people's jetpacks: on their backs, and how high they fly

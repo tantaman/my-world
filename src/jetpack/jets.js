@@ -15,13 +15,20 @@
 //   'ignite'  the jets fired: you're flying
 //   'landed'  you touched down, and they cut out
 //   'lost'    something else carries you now (a horse you called): they're out
+//
+// Something else that carries you can ask the jets for a push along instead
+// of a flight: a skateboard under your feet (skateboarding/). It says it
+// wants one each frame (want()), and once they've caught, `along` is how hard
+// they're going for it. They fly you nowhere while they do it, so none of the
+// above applies: the pushing is the carrier's own to do.
 
 import { CONFIG } from '../config.js';
 import { SWIM_DEPTH } from '../player/player.js';
 import { clamp } from '../noise.js';
 
 // s of jump held off the ground before the jets fire: longer than a jump
-// takes to tap, so an ordinary jump is still a jump.
+// takes to tap, so an ordinary jump is still a jump. A push asked for by
+// whatever carries you waits the same, so a tap of it is still a tap.
 export const HOLD = 0.22;
 // m/s up the jets give you as they catch, so lighting them feels like a kick
 // (the climb itself builds up from there).
@@ -31,9 +38,10 @@ const KICK = 3;
 // and cut to a flicker (dive, with shift); how high over the ground it goes
 // (m), and how quickly it gets up to speed and slows (1/s).
 export const FLIGHT = { cruise: 12, fast: 24, climb: 8, glide: -1.6, dive: -14, ceiling: 120, agility: 2.2 };
-// How hard the jets go (0..1) climbing, gliding and diving, and how quickly
-// (1/s) they spool up and down to it.
-export const BURN = { climb: 1, glide: 0.42, dive: 0.12, spool: 6 };
+// How hard the jets go (0..1) climbing, gliding, diving, and pushing along
+// whatever carries you (full blast: there's nothing to come down from), and
+// how quickly (1/s) they spool up and down to it.
+export const BURN = { climb: 1, glide: 0.42, dive: 0.12, along: 1, spool: 6 };
 // How you hang under it: tipped forward into the way you're going, up to
 // `most` radians at full speed; banked into turns, `bank` radians per m/s of
 // speed per rad/s of turn, up to `bankMost`; eased at `ease` (1/s).
@@ -87,6 +95,9 @@ export class Jets {
     this.roll = 0; // ...and banked to the right
     this.aloft = false; // off the ground, on your own feet, last frame
     this.air = 0; // s off the ground so far
+    this.asked = false; // whatever carries you has asked for a push along
+    this.ask = 0; // ...and how long (s) it has been asking
+    this.pushing = false; // the jets have caught, and are pushing it along
   }
 
   // After the hiker has moved this frame.
@@ -128,6 +139,22 @@ export class Jets {
     return null;
   }
 
+  // Something else that carries you — a skateboard under your feet — asking
+  // the jets for a push along instead of a flight. Say so each frame while you
+  // want one: held for HOLD they catch, and they're out as soon as you stop
+  // asking. What comes back is how hard they're going for you, which is
+  // nothing until they catch; the push itself is yours to give.
+  // -> 0..1
+  want() {
+    this.asked = true;
+    return this.along;
+  }
+
+  // How hard the jets are pushing whatever has you along (0..1).
+  get along() {
+    return this.pushing ? this.thrust : 0;
+  }
+
   // Cut them out now, wherever you are (taken off, moved somewhere else).
   stop(player) {
     if (!this.on) return;
@@ -146,11 +173,19 @@ export class Jets {
   }
 
   // How hard the jets are going and how you hang under them, after step().
+  // A push asked for by whatever carries you (want()) catches and goes out
+  // here too, there being nothing else of it the jetpack does.
   // diving: shift is down.
   update(dt, player, diving) {
-    const want = !this.on ? 0 : player.climbing ? BURN.climb : diving ? BURN.dive : BURN.glide;
+    // asked for a push, with the jetpack on your back to give it and no
+    // flight of its own in the way: held a moment and the jets catch
+    const asked = this.asked && this.worn && !this.on;
+    this.asked = false;
+    this.ask = asked ? this.ask + dt : 0;
+    this.pushing = this.ask >= HOLD;
+    const want = this.on ? (player.climbing ? BURN.climb : diving ? BURN.dive : BURN.glide) : this.pushing ? BURN.along : 0;
     this.thrust += (want - this.thrust) * (1 - Math.exp(-dt * BURN.spool));
-    if (this.thrust < 1e-3 && !this.on) this.thrust = 0;
+    if (this.thrust < 1e-3 && !this.on && !this.pushing) this.thrust = 0;
     if (!this.on) return;
     const sy = Math.sin(player.yaw);
     const cy = Math.cos(player.yaw);

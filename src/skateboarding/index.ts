@@ -14,6 +14,9 @@
 //   sound.js     the wheels on the tarmac, the slide, the wind; push, pop, land, bail
 //   others.js    other people here on theirs
 //
+// With the jetpack on your back (jetpack/), holding the push holds the jets
+// on, and they shove you along the board out past anything a hill can do.
+//
 // While you skate the board moves you (player.aboard), you stand on it
 // (Character.stance), and the tools are put away (builder.idleWhile). Your
 // best in this world is yours, saved (the 'skateboarding' domain).
@@ -94,10 +97,11 @@ const _seg = { d: 0, t: 0, nx: 0, nz: 0 };
 const _w = waterSample();
 const fmt = (n: number) => Math.round(n).toLocaleString('en');
 
-// The features this uses, so it is installed after them (game/features.js).
-export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'act', 'roads'];
+// The features this uses, so it is installed after them (game/features.js);
+// jetpack because its jets will push the board along, if you have one.
+export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'jetpack', 'act', 'roads'];
 export function installSkateboarding(game: Game) {
-  const { scene, chunks, solids, player, input, hud, commands, save, sound, builder, peers, act, roads } = game;
+  const { scene, chunks, solids, player, input, hud, commands, save, sound, builder, peers, jetpack, act, roads } = game;
 
   // ── What's under the wheels, and what's in the way ────────────────────────
   // The land, called what it looks like: what you're thrown onto.
@@ -196,13 +200,22 @@ export function installSkateboarding(game: Game) {
   let best: Best | null = null;
   let hold: ReturnType<typeof player.rides.take> = null;
   let heading = 0; // which way you were going, for the camera to keep to while you're down
-  const c = { push: false, brake: 0, steer: 0, crouch: false, pop: false, flip: 0, shove: false };
+  const c = { push: false, brake: 0, steer: 0, crouch: false, pop: false, flip: 0, shove: false, jets: 0 };
   builder.idleWhile(() => active);
+
+  // ── The jetpack on your back ──────────────────────────────────────────────
+  // With one on (jetpack/README.md) the push key does more than a foot can:
+  // hold it and the jets catch a moment later and shove you along. They stay
+  // the jetpack's — it lights them, draws the flames and the vapour, makes
+  // the roar and tells everyone else — so each frame we say we want them, and
+  // push the board with however hard they're going (skater.js `jets`).
+  const jetting = () => (jetpack.have && active && skater.down < 0 && c.push ? jetpack.want() : 0);
 
   const mover = {
     slack: MOVED,
     place(out: Placed, dt: number) {
       readControls(input, c);
+      c.jets = jetting();
       lookRound(skater.x, skater.z);
       skater.step(dt, c);
       // stepped off as it went (rolled onto the grass): on your feet, where off() put you
@@ -361,7 +374,8 @@ export function installSkateboarding(game: Game) {
   commands.describe({ group: 'WANDER', help: 'F', pad: ['PadY'], label: 'on tarmac or boards: onto your skateboard · on it: step off' });
   commands.describe({ group: 'WANDER', help: 'skating', label: 'W push · A D carve · S brake, slide · shift crouch · space ollie' });
   commands.describe({ group: 'WANDER', help: 'skating, in the air', label: 'W kickflip · S heelflip · shift shove-it · A D spin' });
-  const cueWords = () => cueFor(input, skater, act.key('step off')).replace(/<\/?b>/g, '');
+  commands.describe({ group: 'WANDER', help: 'skating, with a jetpack', label: 'W: the jets instead of your foot, and the board does 125 km/h' });
+  const cueWords = () => cueFor(input, skater, act.key('step off'), jetpack.have).replace(/<\/?b>/g, '');
 
   // ── The readout: how fast, and the points ─────────────────────────────────
   const readout = document.createElement('div');
@@ -387,7 +401,7 @@ export function installSkateboarding(game: Game) {
   // What the keys do now, in place of the tool's prompt.
   function cue() {
     if (!active) return hud.cue(null, 'skateboarding');
-    hud.cue({ html: cueFor(input, skater, act.key('step off')) }, 'skateboarding');
+    hud.cue({ html: cueFor(input, skater, act.key('step off'), jetpack.have) }, 'skateboarding');
   }
 
   // ── Every frame ───────────────────────────────────────────────────────────
@@ -471,6 +485,7 @@ export function installSkateboarding(game: Game) {
       down: skater.down >= 0,
       fakie: skater.fakie,
       pushing: skater.pushing,
+      jets: Math.round(skater.jets * 100) / 100,
       surface: skater.surface,
       controls: { ...c },
       x: Math.round(skater.x * 10) / 10,
