@@ -94,12 +94,7 @@ export default async function ({ page, step, key, frames, open, shot }) {
     // and the ground round it in: until it is, `go here` isn't done, and once
     // it is it sets you down at the foot of the steps again and says where you
     // are, over whatever the steward has said by then
-    const settled = await page.evaluate(async () => {
-      const ok = await T.until(() => world.chunks.isFullyLoaded(), 60000);
-      await T.frames(10);
-      return ok;
-    });
-    assert.ok(settled, 'the ground round it in');
+    assert.ok(await page.evaluate(() => T.settled()), 'the ground round it in');
     await shot('the hunt club');
     return { site: site.id, name: site.name };
   });

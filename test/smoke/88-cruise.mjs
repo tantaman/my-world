@@ -69,6 +69,9 @@ export default async function ({ page, step, frames, shot }) {
     assert.ok(there, 'go here sets you down at the foot of her gangway');
     assert.ok((await page.evaluate((s) => Math.cos(world.player.yaw - s.door.yaw), site)) > 0.99, 'facing it');
     assert.ok(await page.evaluate(() => T.until(() => world.cruise.ready, 120000)), 'she lies there, solid');
+    // and the ground round her in, or `go here` sets you down at the gangway
+    // again once it is, wherever you've gone
+    assert.ok(await page.evaluate(() => T.settled()), 'the ground round her in');
     await shot('the ship at her pier');
     return { site: site.id };
   });

@@ -16,7 +16,9 @@ export default async function ({ page, key, frames, step, shot, open }) {
         document.querySelector('#place-card [data-act="place-go"]').click();
       }, s);
       assert.ok(await page.evaluate((site) => T.until(() => !world.map.isOpen && Math.hypot(world.player.pos.x - site.door.x, world.player.pos.z - site.door.z) < 1), s));
-      await frames(5);
+      // the ground round it in, or `go here` sets you down at the steps again
+      // once it is, halfway up them
+      assert.ok(await page.evaluate(() => T.settled()), 'the ground round it in');
       await shot(s.name + ' entrance');
       // Let the room use the real audio graph while walking its floor.
       await page.evaluate(() => world.sound.setEnabled(true));

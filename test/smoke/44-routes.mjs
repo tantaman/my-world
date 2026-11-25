@@ -9,11 +9,13 @@ export default async function ({ page, step, key, frames, shot }) {
     const option = (prefix) => page.locator(`button[data-destination^="${prefix}"]`).first();
     const list = (name) => page.click(`.route-lists button[data-list="${name}"]`);
     const rows = () => page.locator('.route-options button').count();
-    // everywhere, nearest first, and more as the end of it comes into view
-    await page.waitForFunction(() => document.querySelectorAll('.route-options button').length >= 20);
+    // everywhere, nearest first, and more as the end of it comes into view.
+    // The places are found a little at a time, while the map is still: the
+    // first twenty take about 40 s on CI, from where the parts before leave you.
+    await page.waitForFunction(() => document.querySelectorAll('.route-options button').length >= 20, null, { timeout: 90000 });
     const first = await rows();
     await page.locator('.route-more').scrollIntoViewIfNeeded();
-    await page.waitForFunction((n) => document.querySelectorAll('.route-options button').length > n, first, { timeout: 30000 });
+    await page.waitForFunction((n) => document.querySelectorAll('.route-options button').length > n, first, { timeout: 90000 });
     await list('launch sites');
     await option('spaceport:').waitFor();
     await list('ski');
