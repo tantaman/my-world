@@ -57,10 +57,12 @@ export default async function ({ page, step, key, frames, open }) {
     // Back where the next part expects you, tracking nothing: a tracked mark
     // holds the HUD's guide for good (the first source with one wins, see
     // ui/hud.js), so anything later that points the way somewhere of its own
-    // would never get a look in.
-    await page.evaluate((w) => {
+    // would never get a look in. Waited for: a teleport sets you down again
+    // once the ground there has come in, and on a slow machine that's after
+    // the next part has started walking you somewhere.
+    await page.evaluate(async (w) => {
       world.marks.setTracked(null);
-      world.teleport(w.x, w.z, w.yaw);
+      await world.teleport(w.x, w.z, w.yaw);
     }, was);
     return { away: Math.round(away), said: shut.said };
   });

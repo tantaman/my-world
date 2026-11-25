@@ -100,11 +100,18 @@ const problems = [];
 const server = await preview({ preview: { port: 0, strictPort: false }, logLevel: 'silent' });
 const base = server.resolvedUrls.local[0];
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
-const page = await browser.newPage({ viewport: { width: 960, height: 600 }, deviceScaleFactor: 1 });
-page.on('console', (m) => {
-  if (m.type() === 'error') problems.push(`console: ${m.text()}`);
-});
-page.on('pageerror', (e) => problems.push(`error: ${e.message}`));
+// One browser context for the whole play, so what the game saves (in the
+// page's storage) outlives any one page of it (reopen()).
+const context = await browser.newContext({ viewport: { width: 960, height: 600 }, deviceScaleFactor: 1 });
+const newPage = async () => {
+  const p = await context.newPage();
+  p.on('console', (m) => {
+    if (m.type() === 'error') problems.push(`console: ${m.text()}`);
+  });
+  p.on('pageerror', (e) => problems.push(`error: ${e.message}`));
+  return p;
+};
+let page = await newPage();
 
 // ── Driving the game ────────────────────────────────────────────────────────
 
@@ -114,6 +121,21 @@ async function open(extra = '') {
   await page.evaluate(installHelpers);
   for (const more of inPage) await page.evaluate(more);
   await frames(5);
+}
+
+// The game opened again after a part has failed. What it left may be too
+// busy to go anywhere (drawing its picture in software GL, the first time
+// anything is drawn, can take minutes on a slow machine), so if the page
+// won't, it's closed and the game opened in a new one: what was saved is
+// kept in the context either way.
+async function reopen() {
+  try {
+    await open();
+  } catch {
+    await page.close().catch(() => {});
+    page = await newPage();
+    await open();
+  }
 }
 
 // Helpers that live in the page. Everything here goes through window.world.
@@ -230,12 +252,22 @@ const shot = async (name, numbered = true) => {
   await page.evaluate(() => T.picture(false));
 };
 // The game as a part that failed left it, where --failures (or --shots) says.
+// Given up on after SHOT_WAIT ms: the page may be too busy to draw it.
+const SHOT_WAIT = 60000;
 const failureShot = async (part) => {
   if (!failDir) return;
-  await page.evaluate(() => T.picture(true));
-  await frames(3);
-  await page.screenshot({ path: `${failDir}/failure-${part}.png` });
-  await page.evaluate(() => T.picture(false));
+  let late;
+  const shoot = async () => {
+    await page.evaluate(() => T.picture(true));
+    await frames(3);
+    await page.screenshot({ path: `${failDir}/failure-${part}.png` });
+    await page.evaluate(() => T.picture(false));
+  };
+  try {
+    await Promise.race([shoot(), new Promise((_, no) => (late = setTimeout(() => no(new Error('no picture: the page is too busy')), SHOT_WAIT)))]);
+  } finally {
+    clearTimeout(late);
+  }
 };
 const step = async (name, fn) => {
   if (name in report.steps) throw new Error(`two steps are called "${name}"`);
@@ -278,7 +310,7 @@ try {
       failed.push({ part: part.name, message: err.message });
       console.error(`  FAILED: ${err.message}`);
       await failureShot(part.name).catch(() => {});
-      if (part !== parts.at(-1)) await open();
+      if (part !== parts.at(-1)) await reopen();
     }
   }
   const played = asked.length ? ` (${parts.map((p) => p.name).join(', ')})` : '';

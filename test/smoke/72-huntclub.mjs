@@ -91,6 +91,15 @@ export default async function ({ page, step, key, frames, open, shot }) {
     assert.ok(there, 'go here sets you down at the foot of its steps');
     assert.ok(await page.evaluate((s) => Math.cos(world.player.yaw - s.door.yaw), site) > 0.99, 'facing them');
     assert.ok(await page.evaluate((s) => T.until(() => world.huntclub.ready && world.huntclub.site.id === s.id, 60000), site), 'the club stands there');
+    // and the ground round it in: until it is, `go here` isn't done, and once
+    // it is it sets you down at the foot of the steps again and says where you
+    // are, over whatever the steward has said by then
+    const settled = await page.evaluate(async () => {
+      const ok = await T.until(() => world.chunks.isFullyLoaded(), 60000);
+      await T.frames(10);
+      return ok;
+    });
+    assert.ok(settled, 'the ground round it in');
     await shot('the hunt club');
     return { site: site.id, name: site.name };
   });
@@ -106,7 +115,8 @@ export default async function ({ page, step, key, frames, open, shot }) {
     await page.evaluate(() => world.huntclub.toCounter());
     await frames(8);
     assert.equal(await prompt(), 'F ask the steward for a shotgun');
-    assert.match(await toast(), new RegExp(`^${await page.evaluate(() => world.huntclub.steward)}: “`), 'the steward says hello');
+    const hello = await toast();
+    assert.match(hello, new RegExp(`^${await page.evaluate(() => world.huntclub.steward)}: “`), `the steward says hello (${hello})`);
     await shot('the hatch');
     await key('KeyF');
     const got = await page.evaluate(() => ({ owned: world.huntclub.owned, tool: T.tool(), slot: world.builder.slotOf('shotgun'), rifle: world.builder.slotOf('rifle'), kit: world.builder.kits.find((k) => k.tools.some((t) => t.id === 'shotgun')).label }));

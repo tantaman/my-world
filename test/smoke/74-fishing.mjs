@@ -25,6 +25,27 @@ export function inPage() {
     w.look(Math.atan2(dx, dz), Math.asin(dy / Math.hypot(dx, dy, dz)), 5);
     await T.frames(6);
   };
+  // Somewhere along the bank s (facing out over the water, s.yaw) to cast
+  // `out` m from: dry where you stand, open water deep enough for fish out
+  // there, and nothing of the bank between your eye and it. `side` m along
+  // it first, then further either way. -> { x, z } or null
+  T.bankToFish = (s, out, side = 8) => {
+    const o = { level: 0, depth: 0, flowX: 0, flowZ: 0, foam: 0 };
+    const ux = Math.sin(s.yaw);
+    const uz = Math.cos(s.yaw);
+    const wet = (x, z) => w.chunks.waterAt(x, z, o) && o.depth > 0.02;
+    for (const along of [side, -side, side * 1.75, -side * 1.75, side / 2, -side / 2, side * 2.5, -side * 2.5]) {
+      const x = s.x - ux * 0.6 + uz * along;
+      const z = s.z - uz * 0.6 - ux * along;
+      if (wet(x, z) || !wet(x + ux * out, z + uz * out) || o.depth < 1) continue;
+      const level = o.level;
+      const eye = w.chunks.heightAt(x, z) + w.player.eye;
+      let clear = true;
+      for (let k = 0.05; k < 1 && clear; k += 0.05) clear = w.chunks.heightAt(x + ux * out * k, z + uz * out * k) < eye + (level - eye) * k - 0.05;
+      if (clear) return { x, z };
+    }
+    return null;
+  };
   T.playIn = async () => {
     const L = w.fishing.line;
     const said = new Set();
@@ -84,11 +105,16 @@ export default async function ({ page, step, key, frames, open, shot, made }) {
 
   await step('fishing from the bank', async () => {
     // a little way along the bank from where the canoe was built, facing out
-    await page.evaluate(async (s) => {
-      const side = 8;
-      await world.teleport(s.x - Math.sin(s.yaw) * 0.6 + Math.cos(s.yaw) * side, s.z - Math.cos(s.yaw) * 0.6 - Math.sin(s.yaw) * side, s.yaw);
-      await T.frames(6);
+    // over open water (not where a stream runs in, or the bank juts out)
+    const bank = await page.evaluate(async (s) => {
+      const at = T.bankToFish(s, 11);
+      if (at) {
+        await world.teleport(at.x, at.z, s.yaw);
+        await T.frames(6);
+      }
+      return at;
     }, canoe.bank);
+    assert.ok(bank, 'somewhere along the bank to cast from');
     const facts = await fish(11);
     await shot('caught-from-the-bank');
     assert.equal(await page.evaluate(() => world.builder.inv.fish), 1, 'in your pack');

@@ -17,10 +17,33 @@ export function inPage() {
     const lake = w.underwater.find('lake', { depth: 2.5, reach: 2000 });
     return lake && w.boats.shore(kind, { x: lake.x, z: lake.z, reach: 250 });
   };
-  // stand `back` m up the bank from s, the way it faces, and aim at it
+  // stand `back` m up the bank from s, the way it faces, and aim at it; or
+  // nearer or further back, where the lip of the bank would be in the way
+  // (the tool builds where the crosshair meets the ground, not beyond it)
   T.atShore = async (s, back = 2.4) => {
     const g = w.chunks.heightAt(s.x, s.z);
-    await T.standAndAim(s.x - Math.sin(s.yaw) * back, s.z - Math.cos(s.yaw) * back, s.x, g, s.z);
+    const ux = Math.sin(s.yaw);
+    const uz = Math.cos(s.yaw);
+    const sees = (b) => {
+      const x0 = s.x - ux * b;
+      const z0 = s.z - uz * b;
+      const eye = w.chunks.heightAt(x0, z0) + w.player.eye;
+      for (let k = 0.05; k < 0.96; k += 0.05) {
+        if (w.chunks.heightAt(x0 + ux * b * k, z0 + uz * b * k) > eye + (g - eye) * k - 0.03) return false;
+      }
+      return true;
+    };
+    const b = [1, 0.75, 1.3, 0.55, 1.6].map((f) => back * f).find(sees) ?? back;
+    await T.standAndAim(s.x - ux * b, s.z - uz * b, s.x, g, s.z);
+    // and again from where you've settled on the slope of the bank, a few
+    // centimetres from where you were set down, which is enough to tip the
+    // aim off the spot onto the next
+    const p = w.player.pos;
+    const dx = p.x - s.x;
+    const dy = p.y + w.player.eye - g;
+    const dz = p.z - s.z;
+    w.look(Math.atan2(dx, dz), Math.asin(dy / Math.hypot(dx, dy, dz)), 3);
+    await T.frames(4);
   };
   T.depthHere = () => {
     const o = { level: 0, depth: 0, flowX: 0, flowZ: 0, foam: 0 };
@@ -40,7 +63,16 @@ export default async function ({ page, step, key, frames, open, shot, made }) {
 
   let spot = null;
   await step('the boat tool', async () => {
-    spot = await page.evaluate(() => T.lakeShore('canoe'));
+    // the lake first, then its bank: until the ground there has come in, its
+    // heights are worked out exactly, and once it has, they're sampled every
+    // metre, as the tool sees them (a bank found from afar can be somewhere
+    // else, and a lip in it in the way of the aim)
+    spot = await page.evaluate(async () => {
+      const far = T.lakeShore('canoe');
+      if (!far) return null;
+      await world.teleport(far.x - Math.sin(far.yaw) * 3, far.z - Math.cos(far.yaw) * 3, far.yaw);
+      return T.lakeShore('canoe');
+    });
     assert.ok(spot, 'a lake with a bank to build on');
     await page.evaluate(async (s) => {
       world.builder.gain('log', 30);
@@ -65,7 +97,7 @@ export default async function ({ page, step, key, frames, open, shot, made }) {
     assert.ok(ok, 'it is made');
     const [b] = await page.evaluate(() => world.boats.list());
     assert.equal(b.kind, 'canoe');
-    assert.ok(Math.hypot(b.x - spot.x, b.z - spot.z) < 0.01, 'where it was aimed');
+    assert.ok(Math.hypot(b.x - spot.x, b.z - spot.z) < 0.01, `where it was aimed (${JSON.stringify({ at: [b.x, b.z, b.yaw], aimed: [spot.x, spot.z, spot.yaw] })})`);
     assert.equal(await page.evaluate(() => world.builder.inv.log), logs - 5, 'from 5 m of log');
     assert.match(await toast(), /a dugout canoe, at the water’s edge · F to get in/);
     assert.match(await prompt(), /F get in the canoe · hold right-click break it up \(\+3 m of log\)/);
