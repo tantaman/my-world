@@ -182,13 +182,16 @@ export default async function ({ page, step, key, frames, shot }) {
     const full = await page.evaluate(() => T.until(() => world.skateboarding.skater.jets > 0.9, 4000));
     // on until it is going properly, or the road runs out from under you
     const fast = await page.evaluate(() => T.until(() => world.skateboarding.session.top > 12 || !world.skateboarding.active, 20000));
-    const going = await page.evaluate(() => ({ top: Math.round(world.skateboarding.session.top * 3.6), kmh: world.skateboarding.state().kmh, on: world.skateboarding.active, flying: world.jetpack.state().flying, burn: world.jetpack.state().thrust }));
+    const going = await page.evaluate(() => ({ top: Math.round(world.skateboarding.session.top * 3.6), kmh: world.skateboarding.state().kmh, on: world.skateboarding.active, flying: world.jetpack.state().flying, burn: world.jetpack.state().thrust, swivel: world.jetpack.state().swivel }));
     await shot('jet-skating');
     await page.keyboard.up('KeyW');
     await page.keyboard.up('ShiftLeft');
     assert.ok(lit, 'holding the push, the jets catch');
     assert.ok(full, 'and go full blast, pushing the board along');
     assert.equal(going.flying, false, 'they fly you nowhere: the wheels stay down');
+    // stood across the board, the jetpack a quarter turn round on your back
+    // points them back along it
+    assert.ok(Math.abs(Math.abs(going.swivel) - Math.PI / 2) < 0.35, `the jetpack swung round to point them back along the board (${going.swivel} rad)`);
     // (a foot tops out at 25 km/h, whatever you do with it: PUSH.top, skater.js)
     assert.ok(fast && going.top > 28, `and shove you far past what a foot can (${JSON.stringify(going)})`);
     // let go, and they are out; then the board and the jetpack away again

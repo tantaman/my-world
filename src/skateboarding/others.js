@@ -1,9 +1,9 @@
 // Other people on their skateboards. Each of you rides your own way, but when
 // someone rolls by you see them on theirs. They say so to everyone here
-// (save.say on the 'skate' channel) as they step on and off; nothing about it
-// is kept.
+// (save.say on the 'skate' channel) as they step on and off, and as the jets
+// on their back start and stop pushing them; nothing about it is kept.
 //
-//   { on: true | false }
+//   { on: true | false, jets?: true }
 
 import { Pose } from './pose.js';
 import { makeBoard } from './board.js';
@@ -28,7 +28,7 @@ export class Skaters {
     }
     // a board of their own, painted differently from yours
     if (!r) this.all.set(id, (r = { pose: new Pose(makeBoard(++this._made)), character: p.character }));
-    r.character.stance(r.pose.standing());
+    r.character.stance(r.pose.standing(body.jets === true));
   }
 
   // Forget whoever has gone.

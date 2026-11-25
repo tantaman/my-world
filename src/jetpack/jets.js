@@ -20,11 +20,14 @@
 // of a flight: a skateboard under your feet (skateboarding/). It says it
 // wants one each frame (want()), and once they've caught, `along` is how hard
 // they're going for it. They fly you nowhere while they do it, so none of the
-// above applies: the pushing is the carrier's own to do.
+// above applies: the pushing is the carrier's own to do. It can say which way
+// it's going, and the jetpack swings round on your back as they catch, flat
+// to it, to point them back that way (swing()).
 
 import { CONFIG } from '../config.js';
 import { SWIM_DEPTH } from '../player/player.js';
 import { clamp } from '../noise.js';
+import { wrapAngle as wrap } from '../core/geom.js';
 
 // s of jump held off the ground before the jets fire: longer than a jump
 // takes to tap, so an ordinary jump is still a jump. A push asked for by
@@ -46,6 +49,13 @@ export const BURN = { climb: 1, glide: 0.42, dive: 0.12, along: 1, spool: 6 };
 // `most` radians at full speed; banked into turns, `bank` radians per m/s of
 // speed per rad/s of turn, up to `bankMost`; eased at `ease` (1/s).
 export const LEAN = { most: 0.55, bank: 0.03, bankMost: 0.5, ease: 4 };
+// Pushing something along, the jetpack turns on its mount, flat to your back,
+// to point the jets back the way it goes: round at `ease` (1/s), as long as
+// `across` (0..1) of that way lies across your back. (Any less and the way
+// goes through you, and it stays turned as it was.)
+export const SWING = { ease: 12, across: 0.35 };
+// The flames show above this much thrust (model.js).
+export const LIT = 0.02;
 
 // How you hold yourself flying (Character.stance): feet together and a
 // little drawn up, the body upright over them, arms out for balance. The
@@ -98,6 +108,11 @@ export class Jets {
     this.asked = false; // whatever carries you has asked for a push along
     this.ask = 0; // ...and how long (s) it has been asking
     this.pushing = false; // the jets have caught, and are pushing it along
+    this.toward = { x: 0, y: 0, z: 1 }; // ...which way it said it goes, in the world
+    this.aimed = false; // ...said since the last swing()
+    this.aim = 0; // how far round on your back the jetpack swings to push that way (radians)
+    this.swung = false; // swung round for a push, until its flames are out
+    this.swivel = 0; // how far round it is now (radians about your back's normal: + turns its top to your right)
   }
 
   // After the hiker has moved this frame.
@@ -144,9 +159,17 @@ export class Jets {
   // want one: held for HOLD they catch, and they're out as soon as you stop
   // asking. What comes back is how hard they're going for you, which is
   // nothing until they catch; the push itself is yours to give.
+  // toward: which way it goes, if you'd say ({ x, y, z }, a unit vector in the
+  // world: along the ground, say), for the jets to point back along
   // -> 0..1
-  want() {
+  want(toward = null) {
     this.asked = true;
+    if (toward) {
+      this.toward.x = toward.x;
+      this.toward.y = toward.y;
+      this.toward.z = toward.z;
+      this.aimed = true;
+    }
     return this.along;
   }
 
@@ -197,4 +220,31 @@ export class Jets {
     this.pitch += (pitch - this.pitch) * k;
     this.roll += (roll - this.roll) * k;
   }
+
+  // How far the jetpack is turned round on your back, after update(). Flat
+  // to your back it hangs upright, the nozzles down; pushing something along,
+  // it swings round as they catch to point them back the way it goes (as near
+  // as your back lets it), and back upright once their flames are out.
+  // toBack(v): v, a direction in the world, turned into the frame of your back
+  // (+z into the body, y up the spine, +x to your left), as a new vector or a
+  // scratch one. -> radians about your back's normal
+  swing(dt, toBack) {
+    if (this.aimed) {
+      const a = aimAlong(toBack(this.toward));
+      if (a !== null) this.aim = a;
+      this.aimed = false;
+    }
+    if (this.pushing) this.swung = true;
+    else if (this.on || this.thrust <= LIT) this.swung = false;
+    this.swivel += wrap((this.swung ? this.aim : 0) - this.swivel) * (1 - Math.exp(-dt * SWING.ease));
+    return this.swivel;
+  }
+}
+
+// How far round on your back to turn the jetpack (radians about the back's
+// normal) for its jets to point back along d, a direction in the back's
+// frame; null if d goes through your back more than across it.
+export function aimAlong(d) {
+  if (Math.hypot(d.x, d.y) < SWING.across * Math.hypot(d.x, d.y, d.z)) return null;
+  return Math.atan2(-d.x, d.y);
 }

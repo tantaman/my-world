@@ -208,8 +208,11 @@ export function installSkateboarding(game: Game) {
   // hold it and the jets catch a moment later and shove you along. They stay
   // the jetpack's — it lights them, draws the flames and the vapour, makes
   // the roar and tells everyone else — so each frame we say we want them, and
-  // push the board with however hard they're going (skater.js `jets`).
-  const jetting = () => (jetpack.have && active && skater.down < 0 && c.push ? jetpack.want() : 0);
+  // push the board with however hard they're going (skater.js `jets`). We
+  // say which way the board goes, along the ground, and the jetpack swings
+  // round on your back to point them back along it.
+  const jetting = () => (jetpack.have && active && skater.down < 0 && c.push ? jetpack.want(pose.along) : 0);
+  let jetted = false; // the jets were pushing you, as everyone else was last told
 
   const mover = {
     slack: MOVED,
@@ -339,9 +342,11 @@ export function installSkateboarding(game: Game) {
   skater.on('off', (where: string) => off(false, `${where === 'the water' ? 'into' : 'onto'} ${where} · board under your arm`));
 
   // ── Everyone else here ────────────────────────────────────────────────────
-  // They're told whether you're on a board, and you see whether they are.
+  // They're told whether you're on a board, and whether the jets on your back
+  // are pushing it, and you see whether they are.
   function tell() {
-    save.say('skate', { on: active });
+    jetted = active && skater.jets > 0;
+    save.say('skate', jetted ? { on: true, jets: true } : { on: active });
   }
   if (peers) {
     const skaters = new Skaters(peers);
@@ -428,6 +433,7 @@ export function installSkateboarding(game: Game) {
         loose.turn.rotation.set(b.flip, 0, 0, 'YXZ');
         loose.roll(b.v * dt);
       }
+      if (skater.jets > 0 !== jetted) tell();
       const banked = session.update(dt, skater.x, skater.z, skater.speed, rolling);
       if (banked) hud.flash(`line banked +${fmt(banked)}`, SAY);
       heard.on = true;

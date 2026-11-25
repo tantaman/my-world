@@ -10,13 +10,15 @@ export interface Jetpack {
   readonly have: boolean; // it's on your back
   readonly flying: boolean; // ...and the jets are carrying you
   // Something that carries you asking the jets for a push along instead of a
-  // flight: say so each frame while you want one. -> 0..1, how hard they're
-  // going for you (nothing until they catch, a moment after).
-  want(): number;
+  // flight: say so each frame while you want one, and which way it goes (a
+  // unit vector in the world) for the jetpack to swing round and point them
+  // back along. -> 0..1, how hard they're going for you (nothing until they
+  // catch, a moment after).
+  want(toward?: { x: number; y: number; z: number }): number;
   readonly along: number; // the same, without asking
   go(): Promise<{ x: number; z: number } | null>; // stand in front of the rack
   give(on?: boolean): boolean; // strapped on, or off again, wherever you are
-  state(): { have: boolean; flying: boolean; pushing: boolean; thrust: number; height: number };
+  state(): { have: boolean; flying: boolean; pushing: boolean; thrust: number; swivel: number; height: number };
 }
 
 declare module '../game/game.ts' {
