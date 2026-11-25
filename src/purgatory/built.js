@@ -19,7 +19,7 @@ import { createFigureMaterial } from './models.js';
 import { R, AT, BURROW, TERRACES, WIDE, WAYS, GATE } from './plan.js';
 import { DOOR } from './land.js';
 
-const MARBLE = [0.66, 0.64, 0.6];
+const MARBLE = [0.64, 0.62, 0.58];
 const BRONZE = [0.11, 0.08, 0.05];
 const OPEN_IN = 3.2; // s the door takes to swing open
 const CARVINGS = [16, 38, 60]; // m on round from where you come up onto the first terrace that each carving stands
@@ -125,17 +125,26 @@ export class Built {
     this.gate = g;
   }
 
-  // The carvings in the marble bank of the first terrace, each a slab
-  // standing against the foot of the bank with its story in relief.
+  // Fit each relief to the slope of the bank. Its surround buries its
+  // edges in the marble, and the story stands proud of its recessed face.
   _carvings() {
     const T = TERRACES[0];
     const from = WAYS[0].a1;
-    const into = WIDE + 0.15;
+    const r = T.r - WIDE;
+    const inset = 1.4; // m into the bank, to measure its slope at relief height
+    const shear = new THREE.Matrix4();
     const stories = [annunciation, david, trajan];
     CARVINGS.forEach((m, i) => {
-      const r = T.r - into;
       const th = from - m / r;
-      this._put(stories[i](), this.stone, r, th, T.h, this._yawIn(r, th) + Math.PI);
+      const at = this.land.place(r - inset, th, _q);
+      const dz = -inset / (this.land.height(at.x, at.z) - this.land.top - T.h);
+      shear.set(
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, dz, 1, 0,
+        0, 0, 0, 1,
+      );
+      this._put(stories[i]().applyMatrix4(shear), this.stone, r, th, T.h, this._yawIn(r, th) + Math.PI);
     });
   }
 
@@ -182,29 +191,46 @@ export class Built {
 }
 
 // ── The carvings ────────────────────────────────────────────────────────────
-// A marble slab, 3.4 m by 2.8, its face toward +z; figures on it in relief,
-// flattened into it (Sculpt's frame).
-function slab(s) {
-  s.box(0, 1.5, 0, 3.6, 3.0, 0.32, MARBLE);
-  s.box(0, 0.08, 0.05, 3.8, 0.16, 0.45, vary(MARBLE, 0.3));
-  s.frame = new THREE.Matrix4().makeTranslation(0, 0.2, 0.18).multiply(new THREE.Matrix4().makeScale(1, 1, 0.22));
+// A chiseled surround, with the front of the marble facing +z. The figures
+// share the face's stone, with enough depth for sunlight to pick out a fold.
+function relief(s) {
+  const face = (half, bottom, top, z) => [[-half, bottom, z], [half, bottom, z], [half, top, z], [-half, top, z]];
+  const wall = face(2.04, -0.09, 3, -0.11);
+  const rim = face(1.87, 0.12, 2.84, 0.15);
+  const recess = face(1.72, 0.31, 2.69, 0.08);
+  s.quad(...recess, vary(MARBLE, 0.22, 0.15), 0.55);
+  for (let i = 0; i < rim.length; i++) {
+    const j = (i + 1) % rim.length;
+    s.quad(wall[i], wall[j], rim[j], rim[i], MARBLE, 0.62);
+    s.quad(rim[i], rim[j], recess[j], recess[i], vary(MARBLE, 0.33, 0.14), 0.52);
+  }
+  s.frame = new THREE.Matrix4().makeScale(1, 1, 0.66).setPosition(0, 0.32, 0.1);
 }
 function figure(s, x, kneel = false, lean = 0) {
-  const c = vary(MARBLE, 0.65, 0.08);
-  const h = kneel ? 0.9 : 1.55;
-  s.drum(x, 0, 0, 0.16, 0.32, h, c, { sides: 8, rz: lean });
-  s.ball(x + lean * -1.2, h + 0.18, 0.02, 0.14, c);
-  s.limb([x - 0.2, h - 0.12, 0], [x - 0.3, h - 0.55, 0.12], 0.05, 0.04, c, { sides: 5 });
-  s.limb([x + 0.2, h - 0.12, 0], [x + 0.36, h + 0.1, 0.15], 0.05, 0.04, c, { sides: 5 });
+  const c = vary(MARBLE, 0.65, 0.12);
+  const h = kneel ? 0.96 : 1.5;
+  const shoulder = x - lean * h;
+  s.drum(x, 0.04, 0, 0.21, 0.32, h, c, { sides: 10, rz: lean, hot: 0.5 });
+  if (kneel) s.limb([x - 0.28, 0.16, 0.08], [x - 0.06, 0.34, 0.16], 0.16, 0.24, c, { sides: 9 });
+  s.ball(shoulder, h + 0.18, 0.11, 0.17, c, { sy: 1.15 });
+  s.ball(shoulder + 0.045, h + 0.16, 0.26, 0.045, c, { sy: 1.4 });
+  s.limb([shoulder - 0.18, h - 0.1, 0.08], [shoulder - 0.4, h - 0.46, 0.18], 0.105, 0.07, c, { sides: 8 });
+  s.limb([shoulder + 0.18, h - 0.1, 0.1], [shoulder + 0.3, h - 0.28, 0.28], 0.105, 0.075, c, { sides: 8 });
+  s.limb([shoulder + 0.3, h - 0.28, 0.28], [shoulder + 0.44, h - 0.02, 0.24], 0.075, 0.055, c, { sides: 8 });
+  for (const off of [-0.13, 0, 0.13]) {
+    s.limb([x + off * 1.6, 0.18, 0.19], [shoulder + off, h * 0.7, 0.22], 0.048, 0.028, vary(c, 0.35), { sides: 6 });
+  }
 }
 function wings(s, x) {
-  const c = vary(MARBLE, 0.8, 0.06);
-  for (let f = 0; f < 4; f++) s.quad([x - 0.1, 1.35 - f * 0.05, -0.1], [x - 0.12, 1.2 - f * 0.05, -0.1], [x - 0.75 - f * 0.08, 1.9 - f * 0.28, -0.1], [x - 0.7 - f * 0.08, 2.05 - f * 0.28, -0.1], c);
+  for (let f = 0; f < 5; f++) {
+    const c = vary(MARBLE, 0.4 + 0.08 * f);
+    s.limb([x - 0.12, 1.38 - f * 0.11, 0.1], [x - 0.68 - f * 0.06, 2.06 - f * 0.22, 0.11], 0.145, 0.043, c, { sides: 8 });
+  }
 }
 // the Angel saying "Ave", and Mary, "Ecce ancilla Dei"
 function annunciation() {
   const s = new Sculpt();
-  slab(s);
+  relief(s);
   figure(s, -0.7, false, -0.08);
   wings(s, -0.7);
   figure(s, 0.8, true);
@@ -213,25 +239,44 @@ function annunciation() {
 // David dancing before the Ark, and Michal at her window
 function david() {
   const s = new Sculpt();
-  slab(s);
+  relief(s);
   const c = vary(MARBLE, 0.6, 0.08);
-  s.box(-0.9, 0.75, 0, 0.9, 0.6, 0.5, c);
-  s.box(-0.9, 0.9, 0.1, 1.6, 0.06, 0.06, c);
+  s.box(-0.86, 0.79, 0.06, 0.88, 0.54, 0.46, c);
+  s.box(-0.86, 1.08, 0.07, 0.99, 0.12, 0.5, MARBLE);
+  s.box(-0.86, 0.66, 0.29, 1.42, 0.065, 0.065, MARBLE);
+  for (const x of [-1.09, -0.63]) {
+    s.limb([x, 1.12, 0.06], [x, 1.32, 0.11], 0.1, 0.045, c);
+    s.limb([x, 1.2, 0.1], [x + (x < -0.86 ? 0.19 : -0.19), 1.43, 0.13], 0.07, 0.03, MARBLE);
+  }
   figure(s, 0.2, false, 0.18);
-  s.box(1.1, 1.9, -0.05, 0.7, 0.8, 0.1, vary(MARBLE, 0.4, 0.1));
-  s.ball(1.1, 1.95, 0.05, 0.12, c);
+  const sill = 1.61;
+  s.box(1.13, sill + 0.42, 0.01, 0.54, 0.84, 0.2, vary(MARBLE, 0.05, 0.25));
+  for (const x of [0.85, 1.41]) s.box(x, sill + 0.42, 0.13, 0.07, 0.84, 0.16, c);
+  for (const y of [sill, sill + 0.84]) s.box(1.13, y, 0.13, 0.63, 0.09, 0.16, c);
+  s.drum(1.13, sill + 0.08, 0.14, 0.1, 0.16, 0.3, c, { sides: 8 });
+  s.ball(1.13, sill + 0.46, 0.16, 0.105, c);
   return s.build();
 }
 // Trajan on his horse, and the widow at his bridle
 function trajan() {
   const s = new Sculpt();
-  slab(s);
+  relief(s);
   const c = vary(MARBLE, 0.6, 0.08);
-  s.box(-0.2, 1.05, 0, 1.3, 0.5, 0.45, c);
-  for (const lx of [-0.75, -0.55, 0.15, 0.35]) s.limb([lx, 0.85, 0], [lx + 0.05, 0.05, 0], 0.07, 0.05, c, { sides: 5 });
-  s.limb([0.4, 1.2, 0], [0.75, 1.65, 0], 0.13, 0.09, c, { sides: 6 });
-  s.ball(0.85, 1.65, 0, 0.17, c, { sx: 1.5 });
-  figure(s, -0.2, false);
+  s.ball(-0.23, 1.03, 0.08, 0.43, c, { sx: 1.62, sy: 0.67, sz: 0.69 });
+  for (const [hoof, knee, z] of [[-0.8, -0.65, 0.13], [-0.41, -0.52, 0], [0.13, 0.25, 0], [0.59, 0.37, 0.14]]) {
+    s.limb([knee, 0.98, z], [knee + 0.04, 0.46, z + 0.015], 0.105, 0.061, c, { sides: 7 });
+    s.limb([knee + 0.04, 0.46, z + 0.015], [hoof, 0.12, z + 0.02], 0.063, 0.055, c, { sides: 7 });
+  }
+  s.limb([0.28, 1.02, 0.1], [0.55, 1.6, 0.12], 0.24, 0.13, c, { sides: 10 });
+  s.limb([0.55, 1.6, 0.12], [0.79, 1.5, 0.17], 0.13, 0.09, c, { sides: 8 });
+  s.limb([0.52, 1.63, 0.12], [0.51, 1.79, 0.14], 0.07, 0.025, c, { sides: 6 });
+  s.limb([-0.82, 1.05, 0.11], [-0.99, 0.42, 0.12], 0.09, 0.051, c, { sides: 7 });
+  s.drum(-0.22, 1.15, 0.15, 0.22, 0.25, 0.59, MARBLE, { sides: 9, rz: -0.09 });
+  s.ball(-0.15, 1.9, 0.16, 0.15, MARBLE, { sy: 1.17 });
+  s.limb([-0.11, 1.27, 0.29], [0.04, 1.02, 0.37], 0.1, 0.09, MARBLE, { sides: 8 });
+  s.limb([0.04, 1.02, 0.37], [-0.13, 0.76, 0.38], 0.09, 0.061, MARBLE, { sides: 8 });
+  s.limb([0.02, 1.64, 0.23], [0.33, 1.47, 0.29], 0.094, 0.055, MARBLE, { sides: 8 });
+  s.limb([0.33, 1.47, 0.29], [0.66, 1.48, 0.26], 0.021, 0.021, vary(c, 0.1), { sides: 5 });
   figure(s, 1.2, true, 0.1);
   return s.build();
 }

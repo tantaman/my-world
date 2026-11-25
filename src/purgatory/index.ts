@@ -34,7 +34,7 @@ import { MountAir } from './air.js';
 import { placeOf } from './site.js';
 import { Brow } from './brow.js';
 import { mountSounds } from './sound.js';
-import { R, H, AT, BURROW, CLEFT, VALLEY, GATE, WAYS, TERRACES, DAY, REGIONS, LIQUID, STREAM, regionAt, terraceAt } from './plan.js';
+import { R, H, AT, BURROW, CLEFT, VALLEY, GATE, WAYS, TERRACES, DAY, LIQUID, STREAM, regionAt, terraceAt } from './plan.js';
 import { WORDS, ARRIVAL, ANGELS, DREAMS, SLEEP, SAID, VOICES } from './words.js';
 import * as pictures from './pictures.js';
 
@@ -76,7 +76,6 @@ const VOICE_EVERY = [22, 38]; // s between the voices over the second terrace
 const QUAKE_EVERY = [240, 520]; // s between the mountain's trembling
 const QUAKE_LONG = 6; // s it goes on
 const QUAKE_SHAKE = 0.07; // m the eye is shaken, at worst
-const SMOKE_CLEAR = { from: 18, to: 45 }; // m along the third terrace from where you come up, and before its stair, that are clear of the smoke
 const FIRE = { into: 0.05, glow: 'rgba(255, 120, 40, 0.55)' }; // how far up the last stair the fire reaches (u), and what you see in it
 // What the ground of each region sounds like underfoot (audio/footsteps.js;
 // 'stone' is sound.js's).
@@ -106,7 +105,7 @@ export function installPurgatory(game: Game) {
   // Purgatory's own scene: what is drawn while you're there.
   const under = new THREE.Scene();
   under.userData.heat = true; // (the air shimmers over the fire of the seventh terrace)
-  const air = new MountAir(sky);
+  const air = new MountAir(sky, land);
   const card = new Card({ id: 'purgatory', book: 'Purgatorio' });
   const brow = new Brow();
   const heard = { inside: 0, region: '', sea: 0, high: 0, fire: 0, quake: 0, birds: 0, chant: '', chantFor: 0, moments: [] as string[] };
@@ -445,7 +444,7 @@ export function installPurgatory(game: Game) {
       }
       brow.show(marked && !done ? 7 - wiped : 0, false);
       const eye = camera.position;
-      air.update(dt, smokeAt(here, r, th));
+      air.update(dt, here === 'wrath', r, th);
       air.lendHour(hours, game.focus, eye);
       if (v) v.update(dt, eye, { r, th, h, hours, region: here, wiped });
       heard.inside = 1;
@@ -460,16 +459,6 @@ export function installPurgatory(game: Game) {
       sound.setEnclosed(0);
     },
   });
-
-  // How thick the smoke of the third terrace is where you are (0..1).
-  function smokeAt(here: string, r: number, th: number) {
-    if (!REGIONS[here as keyof typeof REGIONS] || !('smoke' in REGIONS[here as keyof typeof REGIONS])) return 0;
-    const from = WAYS[2].a1; // where you come up onto it
-    const to = WAYS[3].a0; // its stair's foot
-    const along = wrap(from - th) * r; // m on round from where you came up
-    const left = wrap(th - to) * r; // m still to go to the stair
-    return Math.min(1, Math.max(0, (along - SMOKE_CLEAR.from) / 25), Math.max(0, (left - SMOKE_CLEAR.to) / 25));
-  }
 
   // What happens where: the poem's moments, each where it has them.
   function moments(dt: number, r: number, th: number, h: number) {

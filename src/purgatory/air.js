@@ -13,30 +13,54 @@
 // On the third terrace, the smoke: "darkness of hell, and of a night
 // deprived of every planet", so thick no eye could stay open. It comes in
 // as you walk into it and closes round you; the sky and the sun go dark in
-// it.
+// it. The render pipeline draws the same bank along the ledge, including
+// when it lies ahead of you or across the sky.
 
-import { DECK, UNDER, SKY } from '../render/uniforms.js';
+import { Vector3, Vector4 } from 'three';
+import { DECK, UNDER } from '../render/uniforms.js';
+import { wrap } from './land.js';
+import { TERRACES, WAYS, WIDE } from './plan.js';
 
 const EASE = 0.5; // 1/s: how quickly the smoke closes round you, or lifts
 const FAR = 7800; // m: the last thing drawn (the sea, to the horizon)
+const CAMERA_FAR = 50000; // m: keep the horizon clear of the depth buffer's sky cutoff
 const HAZE = 0.16; // how thick the air is, 1 being the forest's: clear sea air, the far shore of the world
 const THIN = 0.012; // per metre of height: how quickly it thins upward from the sea
-const SMOKE = { haze: 260, dark: 0.9, far: 60 }; // in the smoke: how thick, how much of the light it takes, how far anything is drawn
-const SKY_DEPTH = 1.3e-4; // 1/m: how much nearer than the far plane the picture's "sky" begins, as 1/z
+const WRATH = TERRACES[2];
+const SMOKE = {
+  from: 18, to: 45, // m of clear path at the entrance and the next stair
+  feather: 25, // m for the smoke to thicken at either end
+  inward: 4, outward: 18, // m of room along the bank and out over the rim
+  height: 28, // m of room for the billows
+  density: 0.64, // 1/m through the thickest part
+  dark: 0.9, // how much of the sunlight it takes
+};
+const SMOKE_R = WRATH.r - WIDE / 2;
+const SMOKE_FROM = WAYS[2].a1 - SMOKE.from / SMOKE_R;
+const SMOKE_TO = WAYS[3].a0 + SMOKE.to / SMOKE_R;
 
 export class MountAir {
   // sky: the forest's (world/sky.js)
-  constructor(sky) {
+  constructor(sky, land) {
     this.sky = sky;
-    // how thick the smoke is about you just now (0..1), and how thick
-    // where you are says it should be
+    const from = SMOKE_FROM + land.turn;
+    const to = SMOKE_TO + land.turn;
+    this.bank = {
+      center: new Vector3(land.cx, land.top + WRATH.h, land.cz),
+      shape: new Vector4(WRATH.r - WIDE - SMOKE.inward, WRATH.r + SMOKE.outward, SMOKE.height, SMOKE.density),
+      edges: new Vector4(Math.sin(from), -Math.cos(from), -Math.sin(to), Math.cos(to)),
+      feather: SMOKE.feather,
+    };
+    // The smoke at your feet, for the light and the voices (0..1).
     this.smoke = 0;
     this.fresh = true;
     this._kept = {};
   }
 
-  // Ease the smoke toward `want` (0..1).
-  update(dt, want) {
+  // Ease the local light and voices as you cross the ends of the bank.
+  update(dt, onTerrace, r, th) {
+    const along = Math.min(wrap(SMOKE_FROM - th), wrap(th - SMOKE_TO)) * r;
+    const want = onTerrace ? Math.min(1, Math.max(0, along / SMOKE.feather)) : 0;
     const k = this.fresh ? 1 : 1 - Math.exp(-dt * EASE * (want > this.smoke ? 1.5 : 1));
     this.fresh = false;
     this.smoke += (want - this.smoke) * k;
@@ -64,7 +88,7 @@ export class MountAir {
     sky.hemi.intensity *= 1 - (SMOKE.dark - 0.25) * this.smoke;
   }
 
-  // Lend the pipeline's air, and the sky's colours, to the mountain.
+  // Lend the pipeline's air to the mountain.
   // -> what to hand to pipeline.render as the exposure.
   lend(pipeline, camera, sea) {
     const kept = this._kept;
@@ -72,32 +96,20 @@ export class MountAir {
     kept.fogFar = pipeline.fogFar;
     kept.fogFloor = pipeline.fogFloor;
     kept.fogThin = pipeline.fogThin;
+    kept.airBank = pipeline.airBank;
     kept.deck = DECK.uDeckCover.value;
     kept.under = UNDER.uUnder.value;
     kept.far = camera.far;
-    kept.zen = SKY.uZenith.value.clone();
-    kept.hor = SKY.uHorizon.value.clone();
-    kept.col = SKY.uSunColor.value.clone();
-
-    const s = this.smoke;
-    pipeline.haze = HAZE + (SMOKE.haze - HAZE) * s * s;
-    pipeline.fogFar = FAR + (SMOKE.far - FAR) * Math.min(1, s * 1.4);
+    pipeline.haze = HAZE;
+    pipeline.fogFar = FAR;
     pipeline.fogFloor = sea;
-    pipeline.fogThin = THIN * (1 - s) + 1e-5 * s;
+    pipeline.fogThin = THIN;
+    pipeline.airBank = this.bank;
     DECK.uDeckCover.value = 0;
     UNDER.uUnder.value = 0;
-    if (s > 0.001) {
-      // the smoke takes its colour from the sky: so the sky goes the smoke's
-      const dark = 1 - SMOKE.dark * s;
-      SKY.uZenith.value.multiplyScalar(dark);
-      SKY.uHorizon.value.lerp(SKY.uHorizon.value.clone().setRGB(0.035, 0.033, 0.03), s).multiplyScalar(1 - 0.3 * s);
-      SKY.uSunColor.value.multiplyScalar(dark);
-    }
-    // (the picture takes whatever is in the last hundred-thousandth of its
-    // depth for sky: keep the far plane well past the last thing drawn)
-    camera.far = 1 / (1 / pipeline.fogFar - SKY_DEPTH);
+    camera.far = CAMERA_FAR;
     camera.updateProjectionMatrix();
-    return this.sky.exposure * (1 + 0.6 * s);
+    return this.sky.exposure;
   }
 
   // ...and hand them back.
@@ -107,11 +119,9 @@ export class MountAir {
     pipeline.fogFar = kept.fogFar;
     pipeline.fogFloor = kept.fogFloor;
     pipeline.fogThin = kept.fogThin;
+    pipeline.airBank = kept.airBank;
     DECK.uDeckCover.value = kept.deck;
     UNDER.uUnder.value = kept.under;
-    SKY.uZenith.value.copy(kept.zen);
-    SKY.uHorizon.value.copy(kept.hor);
-    SKY.uSunColor.value.copy(kept.col);
     camera.far = kept.far;
     camera.updateProjectionMatrix();
   }

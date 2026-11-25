@@ -172,7 +172,6 @@ export const DAY = {
 };
 
 // The regions, by id: what each is, for the card and the air.
-//   smoke    how thick the air is with something of its own (0..1)
 export const REGIONS = {
   shore: {},
   plain: {},
@@ -183,7 +182,7 @@ export const REGIONS = {
   ledge: {},
   pride: { terrace: 0 },
   envy: { terrace: 1 },
-  wrath: { terrace: 2, smoke: 1 },
+  wrath: { terrace: 2 },
   sloth: { terrace: 3 },
   avarice: { terrace: 4 },
   gluttony: { terrace: 5 },

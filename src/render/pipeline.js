@@ -213,6 +213,10 @@ uniform float uFogFar;
 uniform float uFogTint;
 uniform vec3 uGroundMist; // height of the layer, falloff distance, and density
 uniform vec2 uMistWind;
+uniform vec3 uBankCenter; // centre of the arc, at its floor
+uniform vec4 uBankShape; // inner radius, outer radius, height (m), density (1/m)
+uniform vec4 uBankEdges; // inward normals at the ends of the arc
+uniform float uBankFeather; // m over which either end builds up
 uniform float uDeck;
 uniform float uDeckCover;
 uniform vec2 uDeckMid;
@@ -267,6 +271,81 @@ float groundMist(vec3 rd, float dist) {
     density += exp(-abs(height - billow + 0.5) * 1.6) * smoothstep(0.18, 0.78, billow);
   }
   return density * stride * uGroundMist.z;
+}
+
+// Narrow the part of the ray we sample to one side of a plane.
+bool clipBank(inout vec2 span, float at, float slope) {
+  if (abs(slope) < 1.0e-6) return at >= 0.0;
+  float t = -at / slope;
+  if (slope > 0.0) span.x = max(span.x, t);
+  else span.y = min(span.y, t);
+  return span.x < span.y;
+}
+
+// A bank that follows an arc, with an uneven top and wisps at its edges.
+// Limit the march to its bounds and stop at the surface behind it. A ray
+// into the sky still passes through the bank.
+vec4 airBank(vec3 rd, float dist) {
+  vec3 eye = uCamPos - uBankCenter;
+  float height = uBankShape.z;
+  vec2 span = vec2(0.0, dist);
+  if (!clipBank(span, eye.y + 7.0, rd.y)) return vec4(0.0);
+  if (!clipBank(span, height - eye.y, -rd.y)) return vec4(0.0);
+  if (!clipBank(span, dot(eye.xz, uBankEdges.xy), dot(rd.xz, uBankEdges.xy))) return vec4(0.0);
+  if (!clipBank(span, dot(eye.xz, uBankEdges.zw), dot(rd.xz, uBankEdges.zw))) return vec4(0.0);
+  vec2 hollow = vec2(0.0);
+  float speed = dot(rd.xz, rd.xz);
+  float b = dot(eye.xz, rd.xz);
+  float r2 = dot(eye.xz, eye.xz);
+  float inner2 = uBankShape.x * uBankShape.x;
+  float outer2 = uBankShape.y * uBankShape.y;
+  if (speed < 1.0e-6) {
+    if (r2 < inner2 || r2 > outer2) return vec4(0.0);
+  } else {
+    float disc = b * b - speed * (r2 - outer2);
+    if (disc <= 0.0) return vec4(0.0);
+    float halfWidth = sqrt(disc);
+    span = vec2(max(span.x, (-b - halfWidth) / speed), min(span.y, (-b + halfWidth) / speed));
+    float innerDisc = b * b - speed * (r2 - inner2);
+    if (innerDisc > 0.0) {
+      float innerWidth = sqrt(innerDisc);
+      hollow = vec2(max(span.x, (-b - innerWidth) / speed), min(span.y, (-b + innerWidth) / speed));
+    }
+  }
+  // Leave the empty middle of the arc out of the march. Use the shortest
+  // steps where the ray enters the bank, to resolve the nearest shapes.
+  float gap = max(0.0, hollow.y - hollow.x);
+  float reach = span.y - span.x - gap;
+  if (reach <= 0.0) return vec4(0.0);
+
+  float through = 1.0;
+  vec3 scattered = vec3(0.0);
+  float day = 1.0 - 0.86 * uNight;
+  vec2 wind = uTime * vec2(0.27, -0.13);
+  for (int i = 0; i < 16; i++) {
+    float t0 = float(i) / 16.0;
+    float t1 = float(i + 1) / 16.0;
+    float t = span.x + 0.5 * (t0 * t0 + t1 * t1) * reach;
+    vec3 p = eye + rd * (t + (t >= hollow.x ? gap : 0.0));
+    float stepSize = (t1 * t1 - t0 * t0) * reach;
+    vec2 at = p.xz + p.y * vec2(0.42, -0.26) + wind;
+    float billow = vnoise(at * 0.09) * 0.74 + vnoise(at * 0.25) * 0.26;
+    float r = length(p.xz);
+    float rim = uBankShape.y - mix(7.0, 0.0, billow);
+    float across = smoothstep(uBankShape.x, uBankShape.x + 3.0, r) * (1.0 - smoothstep(rim - 10.0, rim, r));
+    float low = mix(-6.0, -1.2, billow);
+    float high = mix(0.46, 1.0, billow) * height;
+    float edge = min(dot(p.xz, uBankEdges.xy), dot(p.xz, uBankEdges.zw));
+    float along = smoothstep(0.0, uBankFeather, edge * mix(0.42, 1.55, billow));
+    float vertical = smoothstep(low, low + 4.0, p.y) * (1.0 - smoothstep(high - 7.0, high, p.y));
+    float absorb = 1.0 - exp(-stepSize * uBankShape.w * across * along * vertical * mix(0.24, 1.34, billow));
+    float surface = smoothstep(0.04, 0.95, p.y / high) * (0.35 + 0.65 * billow);
+    vec3 soot = mix(vec3(0.021, 0.019, 0.017), vec3(0.20, 0.184, 0.168), surface) * day;
+    scattered += through * absorb * soot;
+    through *= 1.0 - absorb;
+    if (through < 0.005) break;
+  }
+  return vec4(scattered, 1.0 - through);
 }
 
 // How open to the sky this pixel is: the occlusion's 4 × 4 texels round it,
@@ -433,6 +512,11 @@ void main() {
     float here = deckAt(uCamPos.xz - uDeckMid, 0.0, t);
     float inIt = (1.0 - smoothstep(DECK_THICK * 0.35, DECK_THICK, abs(up))) * here;
     col = mix(col, mix(dim, bright, 0.45), inIt * (1.0 - exp(-dist / 16.0)));
+  }
+
+  if (uUnder < 0.5 && uBankShape.w > 0.0) {
+    vec4 smoke = airBank(rd, dist);
+    col = col * (1.0 - smoke.a) + smoke.rgb;
   }
 
   gl_FragColor = vec4(col, 1.0);
@@ -645,6 +729,9 @@ export class Pipeline {
     this.fogThin = FOG_THIN;
     // An optional second layer of fog, concentrated around a world height.
     this.groundMist = null;
+    // A local bank of smoke or fog lying along a curved ledge.
+    /** @type {{ center: THREE.Vector3, shape: THREE.Vector4, edges: THREE.Vector4, feather: number } | null} */
+    this.airBank = null;
 
     // Light given off by things in the world (lights.js): a pool of real
     // lights, given each frame to the sources that matter most in the scene
@@ -699,6 +786,10 @@ export class Pipeline {
         uFogTint: { value: FOG_TINT },
         uGroundMist: { value: new THREE.Vector3(0, 1, 0) },
         uMistWind: { value: new THREE.Vector2() },
+        uBankCenter: { value: new THREE.Vector3() },
+        uBankShape: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uBankEdges: { value: new THREE.Vector4() },
+        uBankFeather: { value: 1 },
         uGlowPos: { value: Array.from({ length: LIGHTS_AIR }, () => new THREE.Vector3()) },
         uGlowCol: { value: Array.from({ length: LIGHTS_AIR }, () => new THREE.Vector3()) },
         uGlowRange: { value: new Array(LIGHTS_AIR).fill(1) },
@@ -973,6 +1064,15 @@ export class Pipeline {
     const mist = this.groundMist;
     u.uGroundMist.value.set(mist?.floor ?? 0, mist?.height ?? 1, mist?.density ?? 0);
     if (mist) u.uMistWind.value.copy(mist.wind);
+    const bank = this.airBank;
+    if (bank) {
+      u.uBankCenter.value.copy(bank.center).add(scene.position);
+      u.uBankShape.value.copy(bank.shape);
+      u.uBankEdges.value.copy(bank.edges);
+      u.uBankFeather.value = bank.feather;
+    } else {
+      u.uBankShape.value.w = 0;
+    }
     // the air round the lights, where they are in the picture's frame (slid
     // as the scene is)
     u.uGlowAir.value = FOG_DENSITY * this.haze * GLOW_AIR;

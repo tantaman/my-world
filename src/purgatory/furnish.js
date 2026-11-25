@@ -29,6 +29,10 @@ const TAU = Math.PI * 2;
 // flowerets").
 const VALLEY_FLOWERS = ['gold', 'silver', 'scarlet', 'pearl', 'indigo', 'emerald'];
 const TOP_FLOWERS = ['vermilion', 'yellow', 'pearl'];
+// m from the water: trunks stand back from Lethe's edge, their crowns
+// overhang it, and Eunoë has a wider opening to the sky.
+const LETHE_GROVE = { from: 2, to: 10 };
+const EUNOE_GLADES = 16;
 const BLOOM = {
   gold: [0.85, 0.55, 0.04],
   silver: [0.75, 0.77, 0.8],
@@ -52,7 +56,7 @@ export function makeKit({ models, materials }) {
   const fire = createFlameMaterial();
   const K = (geo, mat, solid = null) => kind(geo, mat, solid, still);
   // the forest's own: drawn as it draws them, and casting their shadows
-  const plant = (m, solid = null) => ({ geo: m.lod0, mat: materials.vegetation, solid, goes: false, shadow: materials.vegetationShadow || true });
+  const plant = (m, solid = null) => ({ geo: m.lod0, mat: materials.vegetation, solid, goes: false, shadow: materials.vegetationShadow || true, receiveShadow: true });
   const kit = {
     stand: K(soul('stand'), body),
     bowed: K(soul('bowed'), body),
@@ -184,16 +188,24 @@ export function strew(land, ref, x0, z0, seed, put) {
       const st = land.stream(r, th, _st);
       const bank = st.kind ? Math.abs(st.across) - (st.spring ? STREAM.pool : st.sink ? 6 : STREAM.half) : Infinity;
       if (depth > 0 || bank < 1.2) continue;
-      if (bank < 6) {
-        // its banks: flowers and grass, open, for the stream to be seen
-        if (u < 0.25) put(`flowers-${TOP_FLOWERS[Math.floor(v * TOP_FLOWERS.length)]}`, x, y, z, w * TAU, 0.8 + rnd() * 0.5);
-        continue;
+      // Draw the same size roll the surrounding forest used, so moving
+      // plants by the rivers won't move the other plants in the square.
+      const nearBank = bank < 6;
+      const canGrow = r <= TOP.r - 6;
+      const flower = nearBank ? u < 0.25 : canGrow && u >= 0.22 && u < 0.3;
+      const size = flower ? rnd() : v;
+      const clearing = st.kind === LIQUID.eunoe || st.kind === LIQUID.spring;
+      if (st.kind === LIQUID.lethe && !st.sink && bank >= LETHE_GROVE.from && bank < LETHE_GROVE.to && canGrow && u < 0.53) {
+        plant(v < 0.88 ? 'broad' : 'birch', 1.06 + w * 0.62);
+      } else if (nearBank || (clearing && bank < EUNOE_GLADES)) {
+        if (u < (clearing ? 0.34 : 0.25)) put(`flowers-${TOP_FLOWERS[Math.floor(v * TOP_FLOWERS.length)]}`, x, y, z, w * TAU, 0.8 + size * 0.5);
+        else if (u < 0.52 && bank > 3) plant('fern', 0.8 + w * 0.55);
+      } else if (canGrow) {
+        if (u < 0.085) plant(v < 0.75 ? 'broad' : 'birch', 0.85 + w * 0.5);
+        else if (u < 0.15) plant('bush', 0.8 + w * 0.6);
+        else if (u < 0.22) plant('fern', 0.7 + w * 0.6);
+        else if (flower) put(`flowers-${TOP_FLOWERS[Math.floor(v * TOP_FLOWERS.length)]}`, x, y, z, w * TAU, 0.7 + size * 0.6);
       }
-      if (r > TOP.r - 6) continue;
-      if (u < 0.085) plant(v < 0.75 ? 'broad' : 'birch', 0.85 + w * 0.5);
-      else if (u < 0.15) plant('bush', 0.8 + w * 0.6);
-      else if (u < 0.22) plant('fern', 0.7 + w * 0.6);
-      else if (u < 0.3) put(`flowers-${TOP_FLOWERS[Math.floor(v * TOP_FLOWERS.length)]}`, x, y, z, w * TAU, 0.7 + rnd() * 0.6);
     }
   }
 }
