@@ -19,6 +19,7 @@ npm run hike -- photo.heic   # a hike from a photo into the world (fetches eleva
 npm run earth        # the real Earth under the world, into src/world/earth/ (fetches elevation + climate)
 npm run zoo          # the National Zoo on its real ground, into src/zoo/ (fetches OSM + DC's surveyed roofs)
 npm run dc           # Washington, DC round it, into src/washington/ (fetches DC's roofs, streets, street trees)
+npm run metro        # Washington's Metro, into src/metro/ (fetches OSM's lines, DC's Metro entrances)
 ```
 
 Run `npm test` after any change. Run `npm run smoke` after touching anything
