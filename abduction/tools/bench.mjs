@@ -13,9 +13,10 @@ import { startPage, ROOT } from './browser.mjs';
 
 const args = process.argv.slice(2);
 const gpu = args.includes('--gpu');
-const FRAMES = gpu ? 240 : 6;
+const FRAMES = gpu ? 240 : 2;
 const MOMENTS = [['forecourt', 17], ['beam', 55]];
-const SIZES = [[1440, 1080], [2048, 1536]];
+// Headless, only the counts mean anything, and they do not depend on the size.
+const SIZES = gpu ? [[1440, 1080], [2048, 1536]] : [[1440, 1080]];
 
 async function open(width, height) {
   if (!gpu) return startPage({ width, height });
