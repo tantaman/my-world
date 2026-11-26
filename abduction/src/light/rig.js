@@ -25,7 +25,7 @@ export const LIGHTS = {
   lamp: { colour: new Color('#ffdcc0'), cd: 320, angle: 1.31, penumbra: 0.55, real: 3 },
   tube: { colour: new Color('#e4efe6'), nits: 70, w: 1.2, h: 0.15 },
   canopySpot: { colour: new Color('#e4efe6'), cd: 260, angle: 1.2, penumbra: 0.9 },
-  warm: { colour: new Color('#ffc890'), cd: 9, reach: 7 },
+  warm: { colour: new Color('#ffd6a8'), cd: 6, reach: 7 },
   pendant: { colour: new Color('#ffb070'), cd: 22, reach: 6 },
   shopTube: { colour: new Color('#fff2e0'), cd: 26, reach: 7 },
   headlight: { colour: new Color('#fff4e0'), cd: 9000, angle: 0.3, penumbra: 0.5 },
