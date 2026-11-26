@@ -67,7 +67,10 @@ Its map destination faces the west front.
 **The streets** follow the city's aerial survey. Roads, intersections, alleys,
 drives and car parks have asphalt with subtle wear. Regular straight blocks
 have inferred center markings. Sidewalks and traffic islands sit on curbs,
-with some sidewalks laid in brick. Its 330 bridges carry the
+with some sidewalks laid in brick. Where the survey left a sliver of ground
+between one piece of paving and the next, or between a sidewalk and a wall,
+the paving is carried over it, so no line of lawn runs down an avenue; a
+tree box, or a strip of lawn wider than a metre and a half, is left as it is. Its 330 bridges carry the
 road over on a deck from one bank to the other, with a parapet along each
 side and piers under it where there's room, and you walk over on the deck,
 not down in the creek (Calvert Street and Connecticut Avenue over Rock
@@ -77,7 +80,8 @@ steps and bridges stone, so your footsteps sound like a city's and you can
 skate the length of an avenue (see
 [Skateboarding](../skateboarding/README.md)). The **street trees** are the
 199,000 the city planted, each in its tree box, as tall as the city's lidar
-measured its crown.
+measured its crown (one the survey has standing just out in the street is set
+back to the curb's side of it).
 
 Roads around the National Zoo follow the fine terrain grid. Grass clearance
 extends past the surveyed pavement edges so blades stay on the verge.
@@ -144,8 +148,8 @@ capitol.js      the Capitol's dome and East Front portico
 cathedral.js    the National Cathedral's exterior
 facades.js      street-facing doors, stoops, shopfronts and civic detail
 architecture.js boxes and faces for building details, in local coordinates
-paving.js       the roads, sidewalks and curbs, laid on the ground; the bridges' decks, parapets and piers
-trees.js        the street trees, on the forest's own models
+paving.js       the roads, sidewalks and curbs, laid on the ground, and over the slivers between them; the bridges' decks, parapets and piers
+trees.js        the street trees, on the forest's own models, and set back off the street
 batch.js        geometry written straight into arrays, for the building material
 tiles/          (written by tools/dc.mjs; each fetched) the tiles
 ```

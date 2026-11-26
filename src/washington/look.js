@@ -21,7 +21,7 @@ import * as THREE from 'three';
 import { decodeTile, TILE } from './codec.js';
 import { buildBuildings } from './buildings.js';
 import { buildPaving, polygonsOf, LOOKS } from './paving.js';
-import { streetTrees, treesLod } from './trees.js';
+import { streetTrees, treesLod, kerbside } from './trees.js';
 import { createBuildingMaterial } from '../build/surfaces.js';
 
 export { TILE };
@@ -164,7 +164,10 @@ export class CityTile {
     });
     // the street trees
     let t = { meshes: [], solids: [] };
-    if (trees && d.trees.length) t = streetTrees(d.trees, { ...trees, ground: onGrid, detail });
+    if (trees && d.trees.length) {
+      const streets = d.paving.filter((p) => LOOKS[p.kind]?.made === 'tarmac').flatMap((p) => polygonsOf(p.rings));
+      t = streetTrees(kerbside(d.trees, streets), { ...trees, ground: onGrid, detail });
+    }
     yield;
     // what's where, a square metre at a time
     if (detail) {
