@@ -4,7 +4,7 @@
 // electric look as it leaves. Faded by speed, so there are none while it
 // hovers. Where a point has been is the flight evaluated at earlier times,
 // so the trails need no state either.
-import { Mesh, BufferGeometry, Float32BufferAttribute, BufferAttribute, MeshBasicNodeMaterial, AdditiveBlending, Vector3, DynamicDrawUsage } from 'three/webgpu';
+import { Mesh, BufferGeometry, BufferAttribute, MeshBasicNodeMaterial, AdditiveBlending, Vector3, DynamicDrawUsage, DoubleSide } from 'three/webgpu';
 import { attribute, vec3, float, uv, smoothstep, abs } from 'three/tsl';
 import { flightAt, createFlightState } from './flight.js';
 import { UFO } from '../set/layout.js';
@@ -37,7 +37,8 @@ export function createTrails({ camera }) {
   geo.setAttribute('uv', new BufferAttribute(uvs, 2));
   geo.setIndex(index);
 
-  const mat = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending, fog: false });
+  // Both sides: a ribbon that zigzags turns its face over from segment to segment.
+  const mat = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending, fog: false, side: DoubleSide });
   const across = abs(uv().y.sub(0.5)).mul(2);
   mat.colorNode = vec3(0.6, 0.8, 1.0).mul(attribute('fade', 'float')).mul(float(1).sub(across).pow(1.5)).mul(GLOW);
   const mesh = new Mesh(geo, mat);
@@ -66,7 +67,7 @@ export function createTrails({ camera }) {
           local.set(Math.cos(a) * UFO.radius, 1.1, Math.sin(a) * UFO.radius).applyEuler(state.rotation);
           pts[i].copy(state.position).add(local);
           // The electric zigzag, strongest as it leaves.
-          const zig = ti > T.ufoTip ? 0.25 * Math.sin(ti * 90 + p * 2) * Math.min(1, i / 6) : 0.04 * Math.sin(ti * 50 + p);
+          const zig = ti > T.ufoTip ? 0.3 * Math.sin(ti * 28 + p * 2) * Math.min(1, i / 6) : 0.05 * Math.sin(ti * 20 + p);
           pts[i].y += zig;
           speeds[i] = state.visible ? state.speed : 0;
         }
