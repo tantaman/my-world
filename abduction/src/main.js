@@ -12,6 +12,7 @@ import { createPipeline } from './post/pipeline.js';
 import { createHud } from './hud/hud.js';
 import { createScatterLights, fogUniforms } from './weather/fog.js';
 import { buildWorld } from './world.js';
+import { PUBLIC } from './words.js';
 
 const started = performance.now();
 const stage = document.getElementById('stage');
@@ -48,11 +49,15 @@ if (params.ref) {
   img.style.display = 'block';
 }
 
-// Size: the stage's pixels, times ?scale.
+// Size: the stage's pixels, times ?scale (or the title card's "lighter").
+// Shown to others, the picture is capped at the size it is compared at, so
+// a large or dense screen does not ask more of the card than that.
+const MAX_WIDTH = PUBLIC && params.scale === 1 ? 1440 : Infinity;
+let renderScale = params.scale;
 let lastW = 0;
 let lastH = 0;
 function resize() {
-  const w = Math.max(64, Math.round(stage.clientWidth * devicePixelRatio * params.scale));
+  const w = Math.max(64, Math.min(MAX_WIDTH * renderScale, Math.round(stage.clientWidth * devicePixelRatio * renderScale)));
   const h = Math.round((w * 3) / 4);
   if (w === lastW && h === lastH) return;
   renderer.setPixelRatio(1);
@@ -67,15 +72,24 @@ if (params.t != null || params.mute) {
   title.remove();
   if (params.t == null) clock.start(null);
 } else {
-  title.addEventListener('click', async () => {
+  let starting = false;
+  const play = async (scale) => {
+    if (starting) return;
+    starting = true;
+    renderScale = scale;
     title.remove();
     if (!params.mute) {
       const { createMix } = await import('./audio/mix.js');
       audio = await createMix();
       clock.start(audio.ctx, audio.startTime);
     } else clock.start(null);
-  }, { once: true });
+  };
+  document.getElementById('play').addEventListener('click', () => play(params.scale));
+  document.getElementById('play-light').addEventListener('click', () => play(params.scale * 0.6));
 }
+// At the end, a way to watch it again.
+const again = document.getElementById('again');
+document.getElementById('replay').addEventListener('click', () => location.reload());
 
 // The overlay's FOV against what three.js is told: fitted with the lens warp
 // (tools/fit.mjs), they are the same.
@@ -168,6 +182,7 @@ if (params.capture) {
     if (waiting()) return;
     const t = clock.now();
     draw(t);
+    if (params.t == null && t >= LENGTH && again.hidden) again.hidden = false;
     frames++;
     if (frames === 1) console.info(`first frame drawn ${(performance.now() - started).toFixed(0)} ms after start`);
     if (params.stats) stats(t);

@@ -9,13 +9,16 @@ it, and at what cost per frame. [PLAN.md](PLAN.md) is the breakdown and the
 plan; this is what was built from it and what was found.
 
 Credit the original wherever the remake is shown. Its frames, sound and music
-are not in this repository (`reference/` is not committed), and the signs
-still carry its words (PLAN.md section 10, decision 3): change them in
-`src/set/signs.js` before showing this anywhere.
+are not in this repository (`reference/` is not committed). The signs and the
+overlay carry the original's words while this is compared with it in
+private, and our own in anything built to be shown (`npm run
+abduction:publish`; both sets are in `src/words.js`), as PLAN.md section 10,
+decision 3 has it.
 
 ```bash
 npm run abduction                      # the page, http://localhost:5174 (click to play, with sound)
 npm run abduction:build                # a static page in abduction/dist/
+npm run abduction:publish              # the same with our own words, for showing; also dist/page.html
 node abduction/tools/reference.mjs     # fetch the original and cut its stills (needs curl, ffmpeg)
 node abduction/tools/shoot.mjs         # draw our 19 stills headless, into out/stills/
 node abduction/tools/compare.mjs       # ours beside theirs, with numbers, into out/compare/
@@ -161,25 +164,25 @@ Brightness of the middle of the frame, ours against the original's (0 to
 
 | Still | Median, ours (theirs) | 99th percentile, ours (theirs) |
 | --- | --- | --- |
-| 01-establishing | 29 (37) | 116 (164) |
-| 02-lightning-sign | 66 (62) | 121 (190) |
-| 03-light-in-sky | 24 (32) | 67 (76) |
-| 04-station | 29 (40) | 135 (132) |
-| 05-car | 35 (38) | 112 (145) |
-| 06-canopy-pan | 55 (41) | 157 (118) |
-| 07-shopfront | 18 (29) | 158 (148) |
-| 08-interior | 21 (28) | 168 (206) |
-| 09-under-canopy | 53 (47) | 165 (155) |
-| 10-pasture | 41 (34) | 97 (75) |
-| 11-lightning-pasture | 71 (75) | 148 (231) |
-| 12-ufo-arrives | 35 (36) | 74 (78) |
-| 13-ufo-hover | 43 (47) | 184 (99) |
-| 14-beam | 48 (54) | 210 (194) |
-| 15-cow-rising | 48 (57) | 210 (196) |
-| 16-ufo-empty | 42 (54) | 180 (104) |
-| 17-ufo-leaves | 43 (51) | 193 (87) |
-| 18-return | 45 (43) | 145 (137) |
-| 19-glitch | 44 (34) | 146 (106) |
+| 01-establishing | 33 (37) | 123 (164) |
+| 02-lightning-sign | 75 (62) | 128 (190) |
+| 03-light-in-sky | 27 (32) | 73 (76) |
+| 04-station | 33 (40) | 142 (132) |
+| 05-car | 39 (38) | 119 (145) |
+| 06-canopy-pan | 60 (41) | 164 (118) |
+| 07-shopfront | 21 (29) | 164 (148) |
+| 08-interior | 25 (28) | 170 (206) |
+| 09-under-canopy | 59 (47) | 172 (155) |
+| 10-pasture | 46 (34) | 104 (75) |
+| 11-lightning-pasture | 78 (75) | 155 (231) |
+| 12-ufo-arrives | 40 (36) | 80 (78) |
+| 13-ufo-hover | 58 (47) | 160 (99) |
+| 14-beam | 65 (54) | 222 (194) |
+| 15-cow-rising | 70 (57) | 221 (196) |
+| 16-ufo-empty | 57 (54) | 155 (104) |
+| 17-ufo-leaves | 62 (51) | 195 (87) |
+| 18-return | 50 (43) | 153 (137) |
+| 19-glitch | 48 (34) | 152 (106) |
 
 ## Files
 
@@ -189,6 +192,7 @@ Brightness of the middle of the frame, ours against the original's (0 to
 - `src/params.js`: the only reader of the URL.
 - `src/timeline.js`: the clock and every event's time; lightning envelopes; the interference's strength.
 - `src/stills.js`: the 19 stills' names and times, shared with the tools.
+- `src/words.js`: every word in the picture, the original's and our own.
 - `src/world.js`: builds the scene and updates it from t; what the sound needs to know.
 - `src/noise1.js`: smooth noise of time, for things that wobble.
 - `src/camera/`: `path.js` (where, looking where, FOV), `track.js` (monotone curves through keys),
@@ -205,7 +209,8 @@ Brightness of the middle of the frame, ours against the original's (0 to
   `interference.js`, `glitch.js`.
 - `src/hud/`: the overlay.
 - `src/audio/`: `mix.js` (the bus, meters, schedule), `voices.js` (each sound).
-- `tools/`: `reference.mjs`, `browser.mjs`, `shoot.mjs`, `compare.mjs`, `capture.mjs`, `bench.mjs`, `fit.mjs`.
+- `tools/`: `reference.mjs`, `browser.mjs`, `shoot.mjs`, `compare.mjs`, `capture.mjs`, `bench.mjs`, `fit.mjs`,
+  `publish.mjs` (the build for showing).
 
 Nothing here is imported by the game, and nothing in `src/` of the game is
 imported here.

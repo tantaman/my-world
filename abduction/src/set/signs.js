@@ -1,27 +1,14 @@
 // Lettering and signs: drawn to a canvas (2D text and shapes), used as a
 // texture on a thin board, and put through the same weathering as
-// everything else (PLAN.md 5.8). The words are all here.
-//
-// The words are the original's, for a like-for-like picture while this
-// stays a private study (PLAN.md section 10, decision 3). Change them before
-// showing the remake anywhere.
+// everything else (PLAN.md 5.8). The words themselves are in src/words.js.
 import { CanvasTexture, SRGBColorSpace, Mesh, PlaneGeometry, BoxGeometry, Group } from 'three/webgpu';
-
-let EDGE = null;   // the boards' edges and backs, one material for every sign
 import { texture, uv, vec3 } from 'three/tsl';
 import { weathered } from '../materials/weathered.js';
+import { WORDS } from '../words.js';
 
-export const WORDS = {
-  brand: 'SOUTH',
-  brandSub: 'GASOLINE · OIL',
-  oil: ['PREMIUM', 'MOTOR OIL', 'KEEPS', 'ENGINES CLEAN'],
-  tires: ['TIRES', 'BATTERIES'],
-  ice: 'ICE',
-  welcome: ['Welcome to', 'Signal Ridge', 'KEEP AN EYE ON THE SKY'],
-  van: 'NIGHT FREQUENCY',
-  door: 'CLOSE',
-  westDoor: 'STAFF ONLY',
-};
+export { WORDS };
+
+let EDGE = null;   // the boards' edges and backs, one material for every sign
 
 const FONT = '"Arial Black", "Helvetica Neue", Arial, sans-serif';
 const SCRIPT = '"Brush Script MT", "Segoe Script", cursive';

@@ -79,7 +79,8 @@ export function createClock(fixed) {
   let audio = null;
   let audioStart = 0;
   let wallStart = performance.now();
-  let running = fixed == null;
+  // Not running until start() (the title card's Play), unless held at a time.
+  let running = false;
   return {
     fixed,
     get running() { return running; },

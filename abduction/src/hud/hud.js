@@ -4,6 +4,7 @@
 // right loudness of our own sound.
 import './hud.css';
 import { CLOCK_START } from '../timeline.js';
+import { WORDS } from '../words.js';
 
 const BLOCKS = 10;
 
@@ -13,8 +14,8 @@ function meterHtml(label) {
 
 export function createHud(root, stage) {
   root.innerHTML = `
-    <div class="c tl">BODYCAM  V3.2.1\nUNIT 4417</div>
-    <div class="c tr"><span class="rec">REC</span>\n<span class="clock"></span>\nCAM 02 / SIGNAL RIDGE</div>
+    <div class="c tl">${WORDS.hud.device}\n${WORDS.hud.unit}</div>
+    <div class="c tr"><span class="rec">REC</span>\n<span class="clock"></span>\n${WORDS.hud.camera}</div>
     <div class="c bl"><span class="bat"></span>92%\n<span class="res"></span>\n<span class="fov"></span>\nISO 800</div>
     <div class="c br"><div class="meter">${meterHtml('L')}</div><div class="meter">${meterHtml('R')}</div></div>`;
   const clock = root.querySelector('.clock');
@@ -35,7 +36,7 @@ export function createHud(root, stage) {
     update(t, height, fovDeg, levelL, levelR, opacity) {
       stage.style.setProperty('--h', `${stage.clientHeight}px`);
       const total = Math.floor(CLOCK_START.h * 3600 + CLOCK_START.m * 60 + CLOCK_START.s + t);
-      const c = `2026-11-24 ${pad(Math.floor(total / 3600) % 24)}:${pad(Math.floor(total / 60) % 60)}:${pad(total % 60)}`;
+      const c = `${WORDS.hud.date} ${pad(Math.floor(total / 3600) % 24)}:${pad(Math.floor(total / 60) % 60)}:${pad(total % 60)}`;
       if (c !== last.clock) clock.textContent = last.clock = c;
       const r = `${height}P`;
       if (r !== last.res) res.textContent = last.res = r;
