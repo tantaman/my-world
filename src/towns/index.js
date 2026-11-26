@@ -68,8 +68,11 @@ export function installTowns(game) {
     glow: new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }),
     // lit windows and lamps: drawn over their glass, and faded in as it gets dark
     night: new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, depthWrite: false }),
-    // packed earth, fitted to the land however finely it's drawn (build/surfaces.js)
-    street: Object.assign(createBuildingMaterial({ roadGrade: true }), { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }),
+    // packed earth, fitted to the land however finely it's drawn (build/surfaces.js);
+    // its top only: the far side of a bump in the land, seen from low down,
+    // faces away, and the polygon offset would pull it over the crest in a
+    // dark line
+    street: Object.assign(createBuildingMaterial({ side: THREE.FrontSide, roadGrade: true }), { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }),
     weed: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }),
   };
   const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset ? chunks.heightOffset(x, z) : 0);
