@@ -34,5 +34,5 @@ export const interference = Fn(([uv, t, emi]) => {
 // Dotted static for a pixel.
 export const staticDots = Fn(([pix, t, amount]) => {
   const n = hash(pix.x.add(pix.y.mul(1973.0)).add(floor(t.mul(60)).mul(7919.0)));
-  return step(0.985, n).mul(amount).mul(0.3);
+  return step(0.993, n).mul(amount).mul(0.3);
 });
