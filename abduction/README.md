@@ -106,21 +106,80 @@ of the 19 stills can be drawn and set beside the original's:
 
 ## Found so far
 
-Speed is the question this exists to answer, and it can only be measured on a
-real card: open `?stats` at `?t=17` (the forecourt) and `?t=55` (the beam), at
-1440x1080 and 2048x1536, and write the numbers here with the machine's name.
-SwiftShader here draws a frame in seconds, which says nothing.
+**The look is reachable with what three.js has.** Every effect PLAN.md
+names is in, built from stock parts (`WebGPURenderer`, TSL node materials,
+`reflector()`, `bloom()`, `RectAreaLight`, shadow maps, instancing) and a few
+hundred lines of node code of our own; nothing needed a feature three.js
+0.187 does not ship. Set beside the original (`tools/compare.mjs`), the
+stills share their composition, light and mood, and the brightness of the
+middle of the frame is within about ten levels of the original's on most of
+them (table below). They do not yet pass for the original: see "what does not
+match yet".
 
-What the numbers this side can say: see the table below, from `?stats`
-headless at 1440x1080 (drawn 1.3 times larger for the warp).
+**Speed is still to be measured.** It is the question this exists to answer
+and only a real card answers it: `node abduction/tools/bench.mjs --gpu` (or
+`?stats` at `?t=17` and `?t=55`), at 1440x1080 and 2048x1536, and write the
+numbers here with the machine's name. SwiftShader here draws a frame in about
+ten seconds, which says nothing. What it can say is how much is drawn, over
+the whole frame (shadow maps, the mirror, the scene, bloom and the lens):
 
-| At | Draw calls | Triangles |
+| At | Draw calls | Triangles | PLAN.md's budget |
+| --- | --- | --- | --- |
+| 17 s, the forecourt | 331 | 1.00M | 150 draws, 1.5M triangles |
+| 55 s, the beam | 240 | 0.98M | |
+
+From 636 draws and 5.2M triangles before the set was merged, the per-face
+materials split, the trees' shadows dropped, the field's grass thinned and
+the mirror kept to layer 0. Draws are still about twice the budget; what is
+left is mostly one draw per distinct weathered surface in each of the scene,
+mirror and shadow passes. An atlas of the signs and shared materials for
+the props would roughly halve it, if a card says it matters (a few hundred
+draws is little for WebGPU).
+
+**What matched easily:** the wet ground's streaks (real lights on low
+roughness, exactly as PLAN.md 5.3 says), the mirror image in the puddles,
+the fog's cones in closed form, the fisheye from one warp, the overlay, the
+saucer's beam as a solved chord, the glitch, lightning lighting the clouds.
+
+**What took work:** the camera and the layout (PLAN.md's sizes were guesses;
+`tools/fit.mjs` and many side-by-sides moved the lamps, road and field and
+every camera key); exposure and the tone curve (AgX, then darker mids, to get
+both the black-but-not-crushed shadows and the bright streaks); the light
+under the canopy (an upward area light standing in for bounce light);
+software rendering's compile times (one shared weathered program).
+
+**What does not match yet:** the original's surfaces are image textures and
+its models are detailed, and it shows most in the canopy's ceiling, the
+van, the pumps and the cow; ours are boxes and noise. Several camera keys
+are still off by a metre or a few degrees (04, 06, 09, 16 especially). The
+forecourt under the canopy reads brighter and hazier than the original's;
+the sky round the saucer darker. The sound has been checked only as a
+spectrum and a meter, not by ear.
+
+Brightness of the middle of the frame, ours against the original's (0 to
+255), from the last full round of stills at half size:
+
+| Still | Median, ours (theirs) | 99th percentile, ours (theirs) |
 | --- | --- | --- |
-| 17 s, forecourt | (to measure) | |
-| 55 s, beam | | |
-
-What matched easily, what took work, and what did not match yet are in the
-stills: `node abduction/tools/shoot.mjs && node abduction/tools/compare.mjs`.
+| 01-establishing | 29 (37) | 116 (164) |
+| 02-lightning-sign | 66 (62) | 121 (190) |
+| 03-light-in-sky | 24 (32) | 67 (76) |
+| 04-station | 29 (40) | 135 (132) |
+| 05-car | 35 (38) | 112 (145) |
+| 06-canopy-pan | 55 (41) | 157 (118) |
+| 07-shopfront | 18 (29) | 158 (148) |
+| 08-interior | 21 (28) | 168 (206) |
+| 09-under-canopy | 53 (47) | 165 (155) |
+| 10-pasture | 41 (34) | 97 (75) |
+| 11-lightning-pasture | 71 (75) | 148 (231) |
+| 12-ufo-arrives | 35 (36) | 74 (78) |
+| 13-ufo-hover | 43 (47) | 184 (99) |
+| 14-beam | 48 (54) | 210 (194) |
+| 15-cow-rising | 48 (57) | 210 (196) |
+| 16-ufo-empty | 42 (54) | 180 (104) |
+| 17-ufo-leaves | 43 (51) | 193 (87) |
+| 18-return | 45 (43) | 145 (137) |
+| 19-glitch | 44 (34) | 146 (106) |
 
 ## Files
 
