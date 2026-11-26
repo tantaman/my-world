@@ -285,6 +285,7 @@ place in that order, not at the end:
 | `world/grass.js` | somewhere grass doesn't grow | `game.grass.addClearing(fn)` |
 | `world/hikes.js` | a real place, from a photo | `npm run hike -- photo.heic` writes it there |
 | `world/landSpace.js` | a land made in code as somewhere to be: its floor, its walls, its lid | `new LandSpace(land, { id, lid, wade, reach })`, then `game.spaces.add(space)` |
+| `world/paved.ts` | ground paved over by something laid on it, and what it's made of underfoot: a city's streets, drawn on the ground you walk on, with nothing solid there to say it | `game.paved.addSource((x, z) => 'tarmac' \| null)`, read by whatever asks what's underfoot (`paved.at(x, z)`) |
 | `world/sky.js` | how much daylight reaches the eye (dims it, the eye adjusts) | `game.sky.open = 0..1` |
 | `world/solids.js` | something solid to bump into and stand on | `game.solids.set(owner, [capsule])` (`surface: 'boards'` for its footsteps) |
 | `world/spaces.js` | somewhere under the ground to be in: its floor, walls and roof (and how dark it is, if the lamp should come on there, unless it has lamps of its own) | `game.spaces.add(space)`, `spaces.onDemand(fn)` |

@@ -18,19 +18,21 @@ import { Batch } from './batch.js';
 import { SURF } from '../build/surfaces.js';
 import { inside, area, edgeDistance } from '../core/rings.js';
 
-// What each kind of paving looks like: its colour, its surface, and how far
-// over the ground it's laid (m): a road's, a little; a sidewalk's, a curb's
-// height; a curb drops to the road's.
+// What each kind of paving looks like: its colour, its surface, how far over
+// the ground it's laid (m) — a road's, a little; a sidewalk's, a curb's
+// height; a curb drops to the road's — and what it is underfoot (`made`:
+// one of the surfaces footsteps and wheels know, world/paved.ts; the city is
+// asphalt where cars go and concrete, brick or stone where they don't).
 export const LOOKS = {
-  road: { col: 0x494b4d, surf: SURF.asphalt, lift: 0.09 },
-  alley: { col: 0x625f5a, surf: SURF.asphalt, lift: 0.095 },
-  drive: { col: 0x515052, surf: SURF.asphalt, lift: 0.10 },
-  parking: { col: 0x555456, surf: SURF.asphalt, lift: 0.095 },
-  island: { col: 0x8c8880, surf: SURF.concrete, lift: 0.17, curb: true },
-  sidewalk: { col: 0xaba69d, surf: SURF.concrete, lift: 0.17, curb: true },
-  stairs: { col: 0x8e8a82, surf: SURF.stone, lift: 0.16 },
-  bridge: { col: 0x7a7874, surf: SURF.clay, lift: 0.02 },
-  footbridge: { col: 0x7a7874, surf: SURF.clay, lift: 0.02 },
+  road: { col: 0x494b4d, surf: SURF.asphalt, lift: 0.09, made: 'tarmac' },
+  alley: { col: 0x625f5a, surf: SURF.asphalt, lift: 0.095, made: 'tarmac' },
+  drive: { col: 0x515052, surf: SURF.asphalt, lift: 0.10, made: 'tarmac' },
+  parking: { col: 0x555456, surf: SURF.asphalt, lift: 0.095, made: 'tarmac' },
+  island: { col: 0x8c8880, surf: SURF.concrete, lift: 0.17, curb: true, made: 'stone' },
+  sidewalk: { col: 0xaba69d, surf: SURF.concrete, lift: 0.17, curb: true, made: 'stone' },
+  stairs: { col: 0x8e8a82, surf: SURF.stone, lift: 0.16, made: 'stone' },
+  bridge: { col: 0x7a7874, surf: SURF.clay, lift: 0.02, made: 'stone' },
+  footbridge: { col: 0x7a7874, surf: SURF.clay, lift: 0.02, made: 'stone' },
 };
 // …and a sidewalk of brick, as so many of Washington's are, this often (but
 // not a plaza: a polygon of sidewalk bigger than `most` m²)

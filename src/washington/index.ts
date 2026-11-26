@@ -9,9 +9,9 @@
 // tile 500 m square: codec.js), fetched as you come near and taken down as
 // you leave, built a few milliseconds at a time out of the frame's allowance
 // for work that can wait; the forest kept off what's built and paved; what
-// you bump into; its landmarks on the map, to go to; and which of them
-// you've been to. What builds a tile is fetched the first time one is
-// wanted (core/lazy.ts):
+// you bump into, and what its streets are made of underfoot; its landmarks
+// on the map, to go to; and which of them you've been to. What builds a tile
+// is fetched the first time one is wanted (core/lazy.ts):
 //
 //   city.js      (written by the importer) which tiles there are; the landmarks
 //   codec.js     a tile as it's kept, and read back
@@ -91,7 +91,7 @@ const GLYPH = ['...#...', '..###..', '.#####.', '.#####.', '#######', '#.#.#.#',
 
 export const after = ['render', 'ui', 'world', 'player', 'build', 'map', 'save'];
 export function installWashington(game: Game) {
-  const { scene, gen, chunks, grass, solids, landforms, player, builder, map, hud, commands, save, materials } = game;
+  const { scene, gen, chunks, grass, solids, paved, landforms, player, builder, map, hud, commands, save, materials } = game;
   const card = landforms.cards.find((c: { id: string }) => c.id === CITY.place);
   if (!card) return;
   const zooGround = landforms.cards.find((c: { id: string }) => c.id === 'national-zoo');
@@ -295,6 +295,17 @@ export function installWashington(game: Game) {
     const over = [...up.values()].filter((t) => x0 < t.box[2] && x1 > t.box[0] && z0 < t.box[3] && z1 > t.box[1]);
     if (!over.length) return null;
     return (x: number, y: number) => over.some((t) => t.bare(x, y));
+  });
+  // Its streets say what they're paved with (world/paved.ts), for whatever
+  // asks what's underfoot: the paving is laid on the graded ground itself,
+  // so there's nothing solid there to say it, and without this a street
+  // sounds like grass and a skateboard's wheels dig into it.
+  paved.addSource((x: number, z: number) => {
+    for (const t of up.values()) {
+      const made = t.paving(x, z);
+      if (made) return made;
+    }
+    return null;
   });
   // A builder's tools go round its buildings.
   builder.obstacles.addSource((x: number, z: number, R: number, out: unknown[]) => {

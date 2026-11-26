@@ -1,9 +1,9 @@
 // Skateboarding: a board in your pack, and anywhere there's tarmac or boards
 // underfoot (a paved road, a town's gate, a car lot, an airstrip, a pier, a
-// boardwalk) you can step onto it and go. Push along, carve, bomb the hills
-// crouched down, slide it out to stop; ollie, and in the air kickflip,
-// heelflip, shove-it and spin, and come down on it — or don't, and bail.
-// Roll off onto the grass and you step off, or are thrown.
+// boardwalk, a city's streets) you can step onto it and go. Push along,
+// carve, bomb the hills crouched down, slide it out to stop; ollie, and in
+// the air kickflip, heelflip, shove-it and spin, and come down on it — or
+// don't, and bail. Roll off onto the grass and you step off, or are thrown.
 //
 //   skater.js    the physics: rolling, pushing, carving, the air, bailing
 //   tricks.js    what you did in the air: whether you landed it, its name, its points
@@ -16,6 +16,11 @@
 //
 // With the jetpack on your back (jetpack/), holding the push holds the jets
 // on, and they shove you along the board out past anything a hill can do.
+//
+// What's under the wheels is the top of the road (roads.under), or of
+// anything solid laid there that says what it's made of, or the ground
+// where something has paved it over without standing anything there to be
+// stood on (world/paved.ts: a city's streets, drawn on the graded ground).
 //
 // While you skate the board moves you (player.aboard), you stand on it
 // (Character.stance), and the tools are put away (builder.idleWhile). Your
@@ -101,7 +106,7 @@ const fmt = (n: number) => Math.round(n).toLocaleString('en');
 // jetpack because its jets will push the board along, if you have one.
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'save', 'jetpack', 'act', 'roads'];
 export function installSkateboarding(game: Game) {
-  const { scene, chunks, solids, player, input, hud, commands, save, sound, builder, peers, jetpack, act, roads } = game;
+  const { scene, chunks, solids, paved, player, input, hud, commands, save, sound, builder, peers, jetpack, act, roads } = game;
 
   // ── What's under the wheels, and what's in the way ────────────────────────
   // The land, called what it looks like: what you're thrown onto.
@@ -147,9 +152,12 @@ export function installSkateboarding(game: Game) {
         return out;
       }
       out.y = land;
-      out.surface = 'ground';
-      out.what = landWhat(x, z);
       out.water = chunks.waterAt(x, z, _w) && _w.depth > 0 ? _w.depth : 0;
+      // the ground itself, paved over by something built on it (a city's
+      // streets, laid on the graded ground: world/paved.ts)
+      const laid = out.water ? null : paved.at(x, z);
+      out.surface = laid || 'ground';
+      out.what = laid ? `the ${laid}` : landWhat(x, z);
       return out;
     },
     // trunks, boulders, and anything built standing higher than the wheels roll up onto
@@ -246,7 +254,9 @@ export function installSkateboarding(game: Game) {
 
   // On foot, out under the sky, on nothing that moves, and nothing else has you.
   const onFoot = () => player.rides.free && !player.space && !player.swimming && !player.deck && player.wade < 0.05;
-  const underfoot = () => (player.underfoot && player.underfoot.surface) || '';
+  // What you're standing on: something built underfoot says what it's made
+  // of, and where there's nothing, the ground may be paved (a city's street).
+  const underfoot = () => (player.underfoot ? player.underfoot.surface || '' : paved.at(player.pos.x, player.pos.z) || '');
   const canSkate = () => onFoot() && player.grounded && setsOff(underfoot());
 
   function on() {

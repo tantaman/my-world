@@ -2,8 +2,9 @@
 // Capitol, and the city stands up round you, life size: its buildings with
 // their surveyed roofs, its streets and sidewalks, its street trees. A walk
 // along the pavement, on the ground and not through it; the Capitol counted
-// as been to; a wall that stops you; and over a bridge, on its deck and not
-// down in the creek under it.
+// as been to; a street that says it's tarmac, skated along; a wall that
+// stops you; and over a bridge, on its deck and not down in the creek under
+// it.
 //
 // Needs: nothing in particular (the city is on the map from anywhere).
 // Leaves: you on a bridge over Rock Creek, by the zoo.
@@ -59,6 +60,54 @@ export default async function ({ page, step, frames, key, shot }) {
     assert.ok(walked > 3, `on along it (${walked.toFixed(1)} m)`);
     assert.ok(Math.abs(to.y - to.ground) < 1.2, 'on the ground, not through it');
     return { walked: Math.round(walked * 10) / 10 };
+  });
+
+  await step('its streets are tarmac, and you can skate one', async () => {
+    // The paving says what it's made of (world/paved.ts), so what asks what's
+    // underfoot hears a city's street and not the grass it's drawn over: your
+    // footsteps, and a skateboard's wheels.
+    const stood = await page.evaluate(async () => {
+      const p = world.player.pos;
+      for (let r = 0; r <= 200; r += 2) {
+        for (let a = 0; a < 24; a++) {
+          const x = p.x + Math.cos((a / 24) * 2 * Math.PI) * r;
+          const z = p.z + Math.sin((a / 24) * 2 * Math.PI) * r;
+          if (world.paved.at(x, z) !== 'tarmac') continue;
+          // ...facing the way along it that stays on the tarmac longest
+          let [yaw, far] = [0, -1];
+          for (let k = 0; k < 24; k++) {
+            const t = (k / 24) * 2 * Math.PI;
+            let d = 2;
+            while (d < 80 && world.paved.at(x - Math.sin(t) * d, z - Math.cos(t) * d) === 'tarmac') d += 2;
+            if (d > far) [yaw, far] = [t, d];
+          }
+          world.player.spawn(x, z, yaw, yaw);
+          await T.frames(10);
+          return { far, paved: world.paved.at(x, z), underfoot: world.player.underfoot ? world.player.underfoot.surface ?? 'built' : null };
+        }
+      }
+      return null;
+    });
+    assert.ok(stood, 'a street to stand on');
+    assert.equal(stood.paved, 'tarmac', 'the street says it is tarmac');
+    assert.equal(stood.underfoot, null, 'with nothing solid there to say it: it is drawn on the ground');
+    assert.ok(stood.far > 20, `and room to roll along it (${stood.far} m)`);
+    await key('KeyF');
+    await frames(10);
+    const on = await page.evaluate(() => world.skateboarding.state());
+    assert.ok(on.active, 'F, and you are on your board');
+    assert.equal(on.surface, 'tarmac', 'the wheels on the tarmac');
+    await page.keyboard.down('KeyW');
+    await frames(180);
+    await page.keyboard.up('KeyW');
+    const rolled = await page.evaluate(() => world.skateboarding.state());
+    assert.ok(rolled.active, 'still rolling, not thrown off into the grass');
+    assert.ok(rolled.session.distance > 5, `pushed along the street (${rolled.session.distance.toFixed(1)} m)`);
+    await shot('skating a Washington street');
+    await key('KeyF');
+    await frames(10);
+    assert.ok(!(await page.evaluate(() => world.skateboarding.state().active)), 'F again, and it is under your arm');
+    return { distance: Math.round(rolled.session.distance), kmh: Math.round(rolled.session.top * 3.6) };
   });
 
   await step('a wall stops you', async () => {

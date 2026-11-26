@@ -14,12 +14,13 @@
 //   trees       { models, material, shadow }: the forest's (world/chunks.js)
 //
 // What's on each square metre of it (USE: a roof, paving) is kept on a grid,
-// for the forest round about to ask what to keep off.
+// for the forest round about to ask what to keep off, and for whatever asks
+// what the paving underfoot is made of (paving(), world/paved.ts).
 
 import * as THREE from 'three';
 import { decodeTile, TILE } from './codec.js';
 import { buildBuildings } from './buildings.js';
-import { buildPaving, polygonsOf } from './paving.js';
+import { buildPaving, polygonsOf, LOOKS } from './paving.js';
 import { streetTrees, treesLod } from './trees.js';
 import { createBuildingMaterial } from '../build/surfaces.js';
 
@@ -27,6 +28,10 @@ export { TILE };
 export const USE = { building: 1, paved: 2 };
 const STREET = 4;
 const VERGE = 8;
+// Paved with asphalt rather than concrete, brick or stone (LOOKS' `made`):
+// one bit, because the city is laid with the one or the other. Anything laid
+// with a third thing wants a bit of its own.
+const TARMAC = 16;
 const GRASS_CLEARANCE = 1.1; // blade lean and the half-diagonal of a mask cell
 // What the forest keeps off (m): how far a tree keeps from a wall, and from
 // the kerb; a bush or a fern, from a wall.
@@ -137,7 +142,7 @@ export class CityTile {
         const { kind, rings } = d.paving[k];
         for (const { outer, holes } of polygonsOf(rings)) {
           const all = [outer, ...holes];
-          this._fill(all, USE.paved | (kind === 'road' ? STREET : 0));
+          this._fill(all, USE.paved | (kind === 'road' ? STREET : 0) | (LOOKS[kind]?.made === 'tarmac' ? TARMAC : 0));
           for (const ring of all) this._clearEdge(ring);
         }
       }
@@ -185,7 +190,13 @@ export class CityTile {
     if (!detail) return;
     // what you bump into, and what a builder's tools go round: in the world's coordinates
     const W = (s) => ({ ...s, ax: s.ax + cx, az: s.az + cz, bx: s.bx + cx, bz: s.bz + cz });
-    this.solids = [...b.solids.map(W), ...p.solids.map(W), ...t.solids.map(W)];
+    // A bridge's deck is what you stand on where it crosses, so it says what
+    // the road or the footway laid along it is made of.
+    const madeOf = (s) => {
+      const made = this.paving((s.ax + s.bx) / 2, (s.az + s.bz) / 2);
+      return made ? { ...s, surface: made } : s;
+    };
+    this.solids = [...b.solids.map(W), ...p.solids.map(W).map(madeOf), ...t.solids.map(W)];
     this.obstacles = b.obstacles.map((o) => ({ ...o, x: o.x + cx, z: o.z + cz }));
     // its bridges' decks: the line along each, and its height at each end
     this.decks = p.decks.map((q) => ({ a: [q.a[0] + cx, q.a[1] + cz, q.a[2]], b: [q.b[0] + cx, q.b[1] + cz, q.b[2]], half: q.half }));
@@ -252,6 +263,16 @@ export class CityTile {
   // Whether grass grows at (x, z): not on what's paved or built.
   bare(x, z) {
     return this._flags(x, z) !== 0;
+  }
+  // What the paving at (x, z) is made of, for whatever asks what's underfoot
+  // (world/paved.ts): the streets, alleys, drives and car parks are tarmac,
+  // the sidewalks, islands, steps and bridges stone; null where the ground
+  // is bare. (It is laid on the ground itself, so it has no height of its
+  // own: where you walk is where the land is.)
+  paving(x, z) {
+    const flags = this._flags(x, z);
+    if (!(flags & USE.paved)) return null;
+    return flags & TARMAC ? 'tarmac' : 'stone';
   }
 
   // Keep blade roots off the edge as well as the pavement itself. Using

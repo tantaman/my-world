@@ -10,6 +10,7 @@ import type { Solids } from './solids.js';
 import type { Breakers } from './breakers.js';
 import type { Spaces } from './spaces.js';
 import type { Basins } from './basins.js';
+import type { Paved } from './paved.ts';
 import type { Vector3, Material } from 'three';
 import type { growWorld } from './lands.js';
 
@@ -25,6 +26,7 @@ declare module '../game/game.ts' {
     breakers: Breakers;
     spaces: Spaces;
     basins: Basins;
+    paved: Paved;
     focus: Vector3;
     followed: Set<{ x: number; z: number }>;
   }
