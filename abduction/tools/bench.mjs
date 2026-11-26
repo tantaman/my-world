@@ -31,7 +31,7 @@ async function open(width, height) {
 for (const [width, height] of SIZES) {
   const { base, page, close } = await open(width, height);
   for (const [name, t] of MOMENTS) {
-    await page.goto(`${base}?t=${t}&mute&stats${gpu ? '' : '&webgl'}`, { waitUntil: 'commit' });
+    await page.goto(`${base}?t=${t}&mute&stats${gpu ? '' : '&webgl'}`, { waitUntil: 'commit', timeout: 600000 });
     await page.waitForFunction((n) => (window.__frames?.() ?? 0) > n, FRAMES, { timeout: 900000, polling: 500 });
     const r = await page.evaluate(() => window.__bench());
     console.log(`${width}x${height}  ${name.padEnd(10)} ${r.backend.padEnd(7)} ${r.frameMs.toFixed(1)} ms a frame (${(1000 / r.frameMs).toFixed(0)} fps)` +

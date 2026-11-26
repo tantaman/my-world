@@ -2,7 +2,7 @@
 // wall shelves and two wire racks carrying a few hundred instanced bottles,
 // tins and boxes in reds, ambers and greens; two pendant lamps; ceiling
 // tubes. Its lights are in light/rig.js.
-import { Group, Mesh, BoxGeometry, CylinderGeometry, InstancedMesh, Object3D, Color, MeshStandardNodeMaterial, BackSide, SphereGeometry } from 'three/webgpu';
+import { Group, Mesh, BoxGeometry, PlaneGeometry, CylinderGeometry, InstancedMesh, Object3D, Color, MeshStandardNodeMaterial, BackSide, SphereGeometry } from 'three/webgpu';
 import { vec3, instanceIndex, hash, float, mix, color } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SHOP } from './layout.js';
@@ -17,11 +17,16 @@ export function createInterior() {
   const floor = weathered({ colour: '#4a4038', scale: 0.6, streaks: 0, dirt: 0, rough: 0.6, wet: 0, bump: 0 });
   const ceiling = weathered({ colour: '#5a5650', scale: 1, streaks: 0, dirt: 0, rough: 0.9, wet: 0, bump: 0 });
   // The room: a box seen from inside.
-  const room = new Mesh(new BoxGeometry(S.x1 - S.x0 - 2 * T, S.wall - 0.02, S.z1 - S.z0 - 2 * T), [wall, wall, ceiling, floor, wall, wall]);
-  room.material = [wall, wall, ceiling, floor, wall, wall].map((m) => { const c = m.clone(); c.side = BackSide; return c; });
+  wall.side = BackSide;
+  const room = new Mesh(new BoxGeometry(S.x1 - S.x0 - 2 * T, S.wall - 0.02, S.z1 - S.z0 - 2 * T), wall);
   room.position.set((S.x0 + S.x1) / 2, S.wall / 2 + 0.01, (S.z0 + S.z1) / 2);
-  room.receiveShadow = true;
-  g.add(room);
+  const floorMesh = new Mesh(new PlaneGeometry(S.x1 - S.x0 - 2 * T, S.z1 - S.z0 - 2 * T), floor);
+  floorMesh.rotation.x = -Math.PI / 2;
+  floorMesh.position.set((S.x0 + S.x1) / 2, 0.015, (S.z0 + S.z1) / 2);
+  const ceil = new Mesh(new PlaneGeometry(S.x1 - S.x0 - 2 * T, S.z1 - S.z0 - 2 * T), ceiling);
+  ceil.rotation.x = Math.PI / 2;
+  ceil.position.set((S.x0 + S.x1) / 2, S.wall - 0.03, (S.z0 + S.z1) / 2);
+  g.add(room, floorMesh, ceil);
 
   const wood = weathered({ colour: '#9a7a50', scale: 0.4, streaks: 0, dirt: 0.2, rough: 0.5, wet: 0, bump: 0 });
   const metal = weathered({ colour: '#5a5a56', rust: 0.2, metal: 0.5, rough: 0.5, wet: 0, bump: 0 });
@@ -91,6 +96,9 @@ export function createInterior() {
   const tube = new MeshStandardNodeMaterial({ color: new Color(1, 1, 1) });
   tube.emissiveNode = vec3(1.0, 0.96, 0.9).mul(5);
   for (const x of [-5, 1.5]) add(new BoxGeometry(1.2, 0.05, 0.1), tube, x, S.wall - 0.05, -4.5);
+  // Nothing in here casts a shadow (no shadowing light reaches it), and it is
+  // left out of the ground's mirror (layer 1): the glass hides it there anyway.
+  g.traverse((o) => { o.castShadow = false; o.layers.set(1); });
   return { object: g, update() {} };
 }
 

@@ -12,7 +12,7 @@ import { rand } from '../noise1.js';
 function tuftGeometry(blades = 7, seed = 1) {
   const pos = [];
   const nor = [];
-  const SEG = 4;
+  const SEG = 3;
   for (let b = 0; b < blades; b++) {
     const ang = rand(b, seed) * Math.PI * 2;
     const lean = 0.2 + rand(b, seed + 1) * 0.5;
@@ -63,7 +63,8 @@ export function createGrass() {
   mat.positionNode = positionLocal.add(vec3(sin(time.mul(2.3).add(tint.mul(6.28))).mul(0.03).mul(k), 0, 0));
   const geo = tuftGeometry(7, 3);
   const dummy = new Object3D();
-  const make = (spots, shadows) => {
+  // layer 1: drawn, but left out of the ground's mirror (only the verge's tufts are in it).
+  const make = (spots, shadows, layer = 0) => {
     const m = new InstancedMesh(geo, mat, spots.length);
     spots.forEach(([x, z, s, r], i) => {
       dummy.position.set(x, 0, z);
@@ -75,6 +76,7 @@ export function createGrass() {
     m.castShadow = shadows;
     m.receiveShadow = true;
     m.frustumCulled = false;
+    m.layers.set(layer);
     group.add(m);
   };
   // Along the verge (casts shadows), clumped.
@@ -84,17 +86,17 @@ export function createGrass() {
     return Math.sin(x * 0.7) + Math.sin(x * 2.3) + Math.sin(x * 0.23) > 0.6 ? [x, z, 0.8 + rand(i, s + 2) * 0.9, rand(i, s + 3) * 6] : null;
   }), true);
   // The far shoulder, the fence line and the field near the road, thick.
-  make(scatter(9000, 2, (i, s) => {
+  make(scatter(4500, 2, (i, s) => {
     const x = -110 + rand(i, s) * 220;
     const z = SHOULDER.z0 + 0.3 + Math.pow(rand(i, s + 1), 1.6) * 22;
     return [x, z, 0.5 + rand(i, s + 2) * 0.7, rand(i, s + 3) * 6];
-  }), false);
+  }), false, 1);
   // Sparse, in the forecourt's cracks and at the shop's foot.
   make(scatter(500, 3, (i, s) => {
     const x = FORECOURT.x0 + rand(i, s) * (FORECOURT.x1 - FORECOURT.x0);
     const z = rand(i, s + 1) < 0.3 ? SHOP.z1 + 0.15 : rand(i, s + 1) * FORECOURT.z1;
     return rand(i, s + 4) < 0.5 ? [x, z, 0.4 + rand(i, s + 2) * 0.5, rand(i, s + 3) * 6] : null;
-  }), false);
+  }), false, 1);
 
   // Stones along both edges of the road.
   const stoneMat = new MeshStandardNodeMaterial({ roughness: 0.18 });

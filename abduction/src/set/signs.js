@@ -6,6 +6,8 @@
 // stays a private study (PLAN.md section 10, decision 3). Change them before
 // showing the remake anywhere.
 import { CanvasTexture, SRGBColorSpace, Mesh, PlaneGeometry, BoxGeometry, Group } from 'three/webgpu';
+
+let EDGE = null;   // the boards' edges and backs, one material for every sign
 import { texture, uv, vec3 } from 'three/tsl';
 import { weathered } from '../materials/weathered.js';
 
@@ -134,13 +136,17 @@ export function signBoard(name, [w, h], { px = 256, depth = 0.03, ...look } = {}
   const tex = canvasTexture(Math.round(px * (w / h)), px, DRAW[name]);
   const front = weathered({ colour: '#ffffff', scale: 0.6, vary: 0.12, streaks: 0.35, dirt: 0.2, rough: 0.6, wet: 0.2,
     map: texture(tex, uv()), ...look });
-  const edge = weathered({ colour: '#3a3530', rust: 0.4, rough: 0.7 });
-  const g = new BoxGeometry(w, h, depth);
-  // Box faces: +x, -x, +y, -y, +z (front), -z.
-  const mesh = new Mesh(g, [edge, edge, edge, edge, front, edge]);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
+  EDGE ??= weathered({ colour: '#3a3530', rust: 0.4, rough: 0.7 });
+  // The board, and the lettering on a plane just in front of it.
+  const group = new Group();
+  const board = new Mesh(new BoxGeometry(w, h, depth), EDGE);
+  board.castShadow = true;
+  board.receiveShadow = true;
+  const face = new Mesh(new PlaneGeometry(w, h), front);
+  face.position.z = depth / 2 + 0.002;
+  face.receiveShadow = true;
+  group.add(board, face);
+  return group;
 }
 
 // The lettered texture alone, for things that put it on their own faces.

@@ -41,7 +41,17 @@ export function createGround({ farLamps, has }) {
   const time = uniform(0);
   const mirrorOn = has('mirror');
   const mirror = mirrorOn ? reflector({ resolutionScale: 0.5, generateMipmaps: true, bounces: false }) : null;
-  if (mirror) mirror.target.rotateX(-Math.PI / 2);
+  if (mirror) {
+    mirror.target.rotateX(-Math.PI / 2);
+    // Its camera is a copy of the main one, which also sees layer 1 (rain,
+    // trails, most grass): keep those out of the reflection.
+    const base = mirror.reflector.getVirtualCamera.bind(mirror.reflector);
+    mirror.reflector.getVirtualCamera = (camera) => {
+      const virtual = base(camera);
+      virtual.layers.set(0);
+      return virtual;
+    };
+  }
 
   // Zones across the ground, by z (and x for the forecourt's ends).
   const zones = (p) => {

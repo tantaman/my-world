@@ -3,6 +3,7 @@
 // One instanced mesh per part; which few are real lights is light/rig.js.
 import { Group, InstancedMesh, CylinderGeometry, BoxGeometry, TorusGeometry, Object3D, MeshStandardNodeMaterial, Color } from 'three/webgpu';
 import { vec3 } from 'three/tsl';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LAMPS, lampX } from './layout.js';
 import { weathered } from '../materials/weathered.js';
 
@@ -30,7 +31,9 @@ export function createLamps() {
   const lens = new BoxGeometry(0.16, 0.02, 0.42);
   lens.translate(0, LAMPS.pole - 0.095, LAMPS.arm);
 
-  const parts = [[pole, paint], [collar, paint], [arm, paint], [head, paint], [lens, glass]];
+  // Everything painted is one geometry, so a lamp is two draws: paint and glass.
+  const painted = mergeGeometries([pole, collar, arm, head].map((g) => { const n = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(n.attributes)) if (!['position', 'normal', 'uv'].includes(k)) n.deleteAttribute(k); return n; }));
+  const parts = [[painted, paint], [lens, glass]];
   const dummy = new Object3D();
   for (const [g, m] of parts) {
     const inst = new InstancedMesh(g, m, n);

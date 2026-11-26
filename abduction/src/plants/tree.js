@@ -160,9 +160,10 @@ export function createTrees() {
       leaves.setMatrixAt(i, dummy.matrix);
     });
     for (const m of [wood, leaves]) {
-      m.castShadow = true;
+      m.castShadow = false;
       m.receiveShadow = true;
       m.frustumCulled = false;
+      m.layers.set(1);   // not in the ground's mirror: lost in fog there anyway
       group.add(m);
     }
   }

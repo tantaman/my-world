@@ -1,7 +1,7 @@
 // The small things round the station (PLAN.md 5.10): pumps, oil drums, the
 // bench, the ice chest, the bin. Sizes from set/layout.js. Each maker
 // returns an Object3D standing on the ground at the origin, facing +Z.
-import { Group, Mesh, BoxGeometry, CylinderGeometry, LatheGeometry, Vector2, TubeGeometry, CatmullRomCurve3, Vector3 } from 'three/webgpu';
+import { Group, Mesh, BoxGeometry, PlaneGeometry, CylinderGeometry, LatheGeometry, Vector2, TubeGeometry, CatmullRomCurve3, Vector3 } from 'three/webgpu';
 import { texture, uv } from 'three/tsl';
 import { PUMP, ISLANDS, ISLAND, BENCH, DRUM_SHOP, ICE, BIN } from '../set/layout.js';
 import { weathered } from '../materials/weathered.js';
@@ -15,10 +15,10 @@ export function pump() {
   const body = weathered({ colour: '#d9d3c3', under: '#6b5f4b', peel: 0.12, rust: 0.45, streaks: 0.5, dirt: 0.6, rough: 0.55, metal: 0.2, scale: 0.5 });
   const dark = weathered({ colour: '#202220', rust: 0.3, rough: 0.5 });
   const dial = weathered({ colour: '#ffffff', map: texture(signTexture('dial', 128, 160), uv()), streaks: 0.2, dirt: 0, rough: 0.3, scale: 0.4 });
-  const main = shadowed(new Mesh(new BoxGeometry(PUMP.w, PUMP.h, PUMP.d), [body, body, body, body, body, body]));
+  const main = shadowed(new Mesh(new BoxGeometry(PUMP.w, PUMP.h, PUMP.d), body));
   main.position.y = PUMP.h / 2;
-  const face = new Mesh(new BoxGeometry(PUMP.w * 0.7, PUMP.h * 0.3, 0.01), [dark, dark, dark, dark, dial, dark]);
-  face.position.set(0, PUMP.h * 0.72, PUMP.d / 2 + 0.005);
+  const face = new Mesh(new PlaneGeometry(PUMP.w * 0.7, PUMP.h * 0.3), dial);
+  face.position.set(0, PUMP.h * 0.72, PUMP.d / 2 + 0.004);
   const face2 = face.clone();
   face2.position.z = -face.position.z;
   face2.rotation.y = Math.PI;
@@ -79,8 +79,11 @@ export function iceChest() {
   const g = new Group();
   const body = weathered({ colour: '#ddd8cb', rust: 0.25, streaks: 0.5, dirt: 0.7, rough: 0.5, scale: 0.5 });
   const label = weathered({ colour: '#ffffff', map: texture(signTexture('ice', 512, 200), uv()), rust: 0.15, streaks: 0.4, dirt: 0.6, rough: 0.5, scale: 0.5 });
-  const main = shadowed(new Mesh(new BoxGeometry(ICE.w, ICE.h, ICE.d), [body, body, body, body, label, body]));
+  const main = shadowed(new Mesh(new BoxGeometry(ICE.w, ICE.h, ICE.d), body));
   main.position.y = ICE.h / 2;
+  const front = new Mesh(new PlaneGeometry(ICE.w, ICE.h), label);
+  front.position.set(0, ICE.h / 2, ICE.d / 2 + 0.003);
+  g.add(front);
   const lid = shadowed(new Mesh(new BoxGeometry(ICE.w + 0.04, 0.08, ICE.d + 0.04), body));
   lid.position.set(0, ICE.h + 0.08, -0.05);
   lid.rotation.x = -0.12;

@@ -3,7 +3,7 @@
 // hanging crooked), and the two islands with their columns (white paint
 // peeling off, green at the foot, a Y bracket at the top). The pumps and
 // drums on the islands are props/.
-import { Group, Mesh, BoxGeometry, CylinderGeometry, MeshStandardNodeMaterial, Color } from 'three/webgpu';
+import { Group, Mesh, BoxGeometry, PlaneGeometry, CylinderGeometry, MeshStandardNodeMaterial, Color } from 'three/webgpu';
 import { vec3, float, texture, uv, positionWorld, smoothstep, fract, abs, min, mix } from 'three/tsl';
 import { CANOPY, ISLANDS, ISLAND } from './layout.js';
 import { weathered } from '../materials/weathered.js';
@@ -33,16 +33,24 @@ export function createCanopy() {
     map: texture(fasciaTex, uv()) });
   const fasciaPlain = weathered({ colour: '#4a4a44', scale: 1.2, streaks: 0.7, dirt: 0, rough: 0.7, wet: 0.2, rust: 0.15 });
   // The slab: underside material below, the rest above.
-  const slab = new Mesh(new BoxGeometry(C.x1 - C.x0, C.thick, C.z1 - C.z0), [fasciaPlain, fasciaPlain, top, under, fasciaPlain, fasciaPlain]);
+  const slab = new Mesh(new BoxGeometry(C.x1 - C.x0, C.thick, C.z1 - C.z0), fasciaPlain);
   slab.position.set((C.x0 + C.x1) / 2, C.under + C.thick / 2, (C.z0 + C.z1) / 2);
   slab.castShadow = true;
   slab.receiveShadow = true;
-  group.add(slab);
+  const ceiling = new Mesh(new PlaneGeometry(C.x1 - C.x0, C.z1 - C.z0), under);
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.set((C.x0 + C.x1) / 2, C.under - 0.002, (C.z0 + C.z1) / 2);
+  ceiling.receiveShadow = true;
+  const roof = new Mesh(new PlaneGeometry(C.x1 - C.x0, C.z1 - C.z0), top);
+  roof.rotation.x = -Math.PI / 2;
+  roof.position.set((C.x0 + C.x1) / 2, C.under + C.thick + 0.002, (C.z0 + C.z1) / 2);
+  group.add(slab, ceiling, roof);
   // Fascia boards on the west and the front, with the lettering.
-  const west = new Mesh(new BoxGeometry(0.06, C.thick + 0.1, C.z1 - C.z0), [fascia, fascia, fasciaPlain, fasciaPlain, fasciaPlain, fasciaPlain]);
-  west.position.set(C.x0 - 0.03, C.under + C.thick / 2, (C.z0 + C.z1) / 2);
-  const front = new Mesh(new BoxGeometry(C.x1 - C.x0, C.thick + 0.1, 0.06), [fasciaPlain, fasciaPlain, fasciaPlain, fasciaPlain, fascia, fascia]);
-  front.position.set((C.x0 + C.x1) / 2, C.under + C.thick / 2, C.z1 + 0.03);
+  const west = new Mesh(new PlaneGeometry(C.z1 - C.z0, C.thick + 0.1), fascia);
+  west.rotation.y = -Math.PI / 2;
+  west.position.set(C.x0 - 0.004, C.under + C.thick / 2, (C.z0 + C.z1) / 2);
+  const front = new Mesh(new PlaneGeometry(C.x1 - C.x0, C.thick + 0.1), fascia);
+  front.position.set((C.x0 + C.x1) / 2, C.under + C.thick / 2, C.z1 + 0.004);
   group.add(west, front);
 
   // The tubes: a housing and two glowing tubes each.
