@@ -108,7 +108,7 @@ export function createGround({ farLamps, has }) {
   const dash = step(fract(p.x.div(9.0)), 0.45);
   const centreLine = smoothstep(0.08, 0.06, abs(z.sub(L.ROAD.centre))).mul(dash);
   const roadC = mix(mix(asphaltC, vec3(0.55, 0.55, 0.52), edgeLine.mul(wear).mul(0.8)), vec3(0.5, 0.36, 0.06), centreLine.mul(wear));
-  const dirtC = vec3(0.075, 0.06, 0.045).mul(fbm2(p, 0.7, 3).mul(0.35).add(1));
+  const dirtC = vec3(0.05, 0.04, 0.032).mul(fbm2(p, 0.7, 3).mul(0.35).add(1));
   const fieldC = mix(vec3(0.05, 0.065, 0.035), vec3(0.09, 0.075, 0.05), smoothstep(-0.2, 0.3, fbm2(p, 3, 3)));
   const albedo = concreteC.mul(forecourt).add(roadC.mul(road)).add(fieldC.mul(field)).add(dirtC.mul(dirt));
 

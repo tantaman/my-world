@@ -13,7 +13,7 @@ export function createCow() {
   g.add(body);
   const hide = new MeshStandardNodeMaterial({ roughness: 0.8 });
   const n = mx_noise_float(positionLocal.mul(vec3(1.6, 1.8, 1.6)).add(vec3(3.1, 0, 0)));
-  const black = smoothstep(0.05, 0.12, n);
+  const black = smoothstep(-0.06, 0.02, n);
   hide.colorNode = mix(vec3(0.62, 0.6, 0.56), vec3(0.025, 0.022, 0.02), black);
   const dark = new MeshStandardNodeMaterial({ color: new Color(0.03, 0.025, 0.02), roughness: 0.8 });
   const pink = new MeshStandardNodeMaterial({ color: new Color(0.45, 0.3, 0.28), roughness: 0.7 });

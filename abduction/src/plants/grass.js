@@ -16,7 +16,7 @@ function tuftGeometry(blades = 7, seed = 1) {
   for (let b = 0; b < blades; b++) {
     const ang = rand(b, seed) * Math.PI * 2;
     const lean = 0.2 + rand(b, seed + 1) * 0.5;
-    const h = 0.25 + rand(b, seed + 2) * 0.3;
+    const h = 0.14 + rand(b, seed + 2) * 0.22;
     const w = 0.012 + rand(b, seed + 3) * 0.01;
     const dx = Math.cos(ang);
     const dz = Math.sin(ang);
@@ -98,10 +98,10 @@ export function createGrass() {
 
   // Stones along both edges of the road.
   const stoneMat = new MeshStandardNodeMaterial({ roughness: 0.18 });
-  stoneMat.colorNode = mix(vec3(0.07, 0.065, 0.06), vec3(0.16, 0.14, 0.12), hash(float(instanceIndex).mul(5.1)));
+  stoneMat.colorNode = mix(vec3(0.035, 0.032, 0.03), vec3(0.08, 0.07, 0.06), hash(float(instanceIndex).mul(5.1)));
   const stones = scatter(1800, 4, (i, s) => {
     const side = rand(i, s) < 0.6 ? ROAD.z0 - 0.15 - rand(i, s + 1) * 0.9 : ROAD.z1 + 0.1 + rand(i, s + 1) * 1.2;
-    return [-90 + rand(i, s + 2) * 180, side, 0.03 + Math.pow(rand(i, s + 3), 3) * 0.09, rand(i, s + 4) * 6];
+    return [-90 + rand(i, s + 2) * 180, side, 0.015 + Math.pow(rand(i, s + 3), 4) * 0.05, rand(i, s + 4) * 6];
   });
   const sm = new InstancedMesh(new IcosahedronGeometry(1, 0), stoneMat, stones.length);
   stones.forEach(([x, z, s, r], i) => {

@@ -65,7 +65,7 @@ export const ROAD = { z0: 15.2, z1: 22.2, centre: 18.7, half: 400 };
 export const VERGE = { z0: 13.5, z1: 15.2 };
 export const SHOULDER = { z0: 22.2, z1: 25.2 };
 export const FENCE = { z: 25.2, step: 4, post: 1.2, x0: -120, x1: 120 };
-export const COW = { x: 1, z: 26.8, shoulder: 1.45, yaw: -Math.PI / 2 };
+export const COW = { x: 1, z: 26.8, shoulder: 1.45, yaw: 0.25 };
 export const TREES = { z0: 32, z1: 170, x0: -160, x1: 220 };
 export const POWER = { z: 60, x0: 40, step: 45, count: 6 };
 
