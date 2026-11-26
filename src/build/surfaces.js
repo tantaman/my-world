@@ -29,6 +29,10 @@
 //             the foot of the building (a city's walls write their own:
 //             src/washington/), and its wear is which kind of front it is:
 //             FACADE
+//   earth     a town's street of packed earth or gravel: ruts where the wheels
+//             run, stones pressed in, scuffed, darker where the rain stands.
+//             Its grain runs along the street from its end, and across it from
+//             its middle; with wear, it's going back to grass
 //
 // Each sets how the surface stands up and down (bumped into its normal), how
 // rough and how metallic it is, and what it does to the vertex colour. As
@@ -68,6 +72,7 @@ export const SURF = {
   asphalt: 15,
   concrete: 16,
   masonry: 17,
+  earth: 18,
 };
 // The kinds of front a facade is, as its wear (0..1): a row house's, brick,
 // its windows tall and narrow; an older office's or a government building's,
@@ -79,7 +84,18 @@ export const FACADE = { row: 0.1, stone: 0.45, glass: 0.8 };
 export const UPRIGHT = 64;
 
 // m: how far each surface stands proud of itself at the most, for the light
-const RELIEF = { bark: 0.005, wood: 0.0012, paint: 0.0006, stone: 0.012, shingle: 0.004, slate: 0.0015, tin: 0.009, clay: 0.002, end: 0.0015 };
+const RELIEF = { bark: 0.005, wood: 0.0012, paint: 0.0006, stone: 0.012, shingle: 0.004, slate: 0.0015, tin: 0.009, clay: 0.002, end: 0.0015, earth: 0.08 };
+// m: how far apart a street's ruts run either side of the middle of a cart's
+// track (half its wheels' gauge), and the cells it may have a stone in
+const EARTH = { gauge: 0.78, stones: 0.18 };
+// m: the side of a concrete sidewalk's flags, between its joints
+const CONCRETE = { flag: 1.5 };
+// The rooms seen through a facade's windows: how deep they are at the least
+// (m, and up to 2 m more), how much of the storey the floor takes up (m), how
+// many bays an open office floor runs before a wall, how far in behind the
+// glass the blinds hang (m), and how much of the daylight outside comes in at
+// the window and how fast it dies away into the room (per m).
+const ROOM = { deep: 3.5, slab: 0.35, officeBays: 4, blind: 0.08, daylight: 0.32, fall: 0.35 };
 
 const SURF_GLSL = /* glsl */ `
 ${Object.entries(SURF)
@@ -306,6 +322,21 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
           float wearPattern = wnoise(p, 0.38) * 0.7 + wnoise(p, 1.9) * 0.3;
           col *= 0.87 + 0.23 * wearPattern + 0.12 * aggregate;
           rough = 0.94;
+          if (kind == S_CONCRETE) {
+            // Laid in flags, scored a joint every metre and a half each way:
+            // each flag a shade of its own, dirt gathered in the joints, and
+            // dark stains here and there (gum, oil, where it stays wet).
+            vec2 f = uv / ${CONCRETE.flag.toFixed(2)};
+            vec2 cell = floor(f);
+            vec2 e = abs(fract(f) - 0.5) * ${CONCRETE.flag.toFixed(2)};
+            float edgeIn = ${(CONCRETE.flag / 2).toFixed(3)} - max(e.x, e.y); // m in from the flag's edge
+            float joint = (1.0 - smoothstep(0.004, 0.012 + fw, edgeIn)) * shows(0.03, fw);
+            col *= mix(1.0, 0.88 + 0.2 * hash12(cell + 0.5), shows(0.5, fw));
+            col *= 1.0 - 0.4 * joint;
+            float stain = smoothstep(0.6, 0.85, wnoise(p, 0.7) * 0.55 + wnoise(p, 3.1) * 0.45);
+            col *= 1.0 - 0.22 * stain;
+            relief = -joint * 0.004;
+          }
           if (kind == S_ASPHALT && wear > 0.5) {
             // The survey gives the outline. Only straight, regular street blocks carry inferred paint.
             float aa = max(fwidth(uv.y) * 0.5, 0.008);
@@ -365,15 +396,76 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
           float bar = max(sash * (1.0 - step(0.66, style)), mullion);
           vec3 trim = mix(col * 1.18 + 0.025, vec3(0.08, 0.09, 0.095), step(0.66, style));
           col = mix(col, trim * mix(0.55, 1.0, smoothstep(-0.055, 0.04, head)), frame);
-          vec3 glass = vec3(0.033, 0.048, 0.064) * (0.7 + 0.7 * pane) * mix(0.75, 1.15, clamp(bottom / (sill.y - sill.x), 0.0, 1.0));
-          col = mix(col, glass, win);
+          // The glass itself takes almost no light: what you see in it is the
+          // sky it mirrors (below, by the look's slant) and the room behind it.
+          col = mix(col, vec3(0.006, 0.008, 0.01), win);
           col = mix(col, trim, win * bar);
           glazing = win * (1.0 - bar);
           relief += (ledge * 0.014 - win * (1.0 - bar) * 0.023) * detail;
           rough = mix(0.9, 0.14, glazing);
-          // at night, a light on in some of them
-          float lit = step(0.62, hash12(vec2(bayN * 1.7 + 3.0, floorN * 2.3 - 1.0))) * uNight * glazing;
-          totalEmissiveRadiance += vec3(1.0, 0.78, 0.45) * lit * (0.55 + 0.45 * pane);
+          if (glazing > 0.0) {
+            // The room behind: the look followed in through the pane to the
+            // first of the room's walls, floor or ceiling it meets, so the
+            // window has a room in it that shifts as you go by. A newer
+            // office's floor is open, its rooms several bays wide.
+            float roomW = style < 0.66 ? bay : bay * ${ROOM.officeBays.toFixed(1)};
+            float roomN = floor(uv.x / roomW);
+            float roomH = storey - ${ROOM.slab.toFixed(2)};
+            vec3 along = normalize(cross(vec3(0.0, 1.0, 0.0), wn) + vec3(1e-5, 0.0, 0.0));
+            float runs = dot(dFdx(vWPos), along) * dFdx(uv.x) + dot(dFdy(vWPos), along) * dFdy(uv.x);
+            along *= runs < 0.0 ? -1.0 : 1.0;
+            vec3 look = normalize(vWPos - cameraPosition);
+            // across the room, up it, and into it
+            vec3 r = vec3(dot(look, along), look.y, max(-dot(look, wn), 0.02));
+            r.x = abs(r.x) < 1e-4 ? 1e-4 : r.x;
+            r.y = abs(r.y) < 1e-4 ? 1e-4 : r.y;
+            vec3 o = vec3(fract(uv.x / roomW) * roomW - roomW * 0.5, inCell.y, 0.0);
+            float deep = ${ROOM.deep.toFixed(1)} + 2.0 * hash12(vec2(roomN, floorN) + 2.3);
+            vec3 tt = vec3(((r.x > 0.0 ? 0.5 : -0.5) * roomW - o.x) / r.x, ((r.y > 0.0 ? roomH : 0.0) - o.y) / r.y, deep / r.z);
+            float t = max(0.0, min(tt.x, min(tt.y, tt.z)));
+            vec3 hit = o + r * t;
+            float room = hash12(vec2(roomN * 3.1, floorN * 1.7) + 0.4);
+            vec3 wall = mix(vec3(0.62, 0.6, 0.55), vec3(0.5, 0.52, 0.55), room);
+            vec3 seen = wall; // what the look meets in there
+            if (t == tt.y) seen = r.y > 0.0 ? vec3(0.75) : mix(vec3(0.16, 0.15, 0.14), vec3(0.3, 0.2, 0.12), step(0.5, room));
+            else if (t == tt.x) seen = wall * 0.85;
+            // blinds let down part way in some, a slat every few centimetres
+            float blindAt = sill.y - (sill.y - sill.x) * hash12(vec2(roomN, floorN) + 9.7) * step(0.55, pane);
+            vec3 hb = o + r * (${ROOM.blind.toFixed(2)} / r.z);
+            float blind = step(blindAt, hb.y) * step(hb.y, sill.y);
+            // daylight comes in at the window and dies away into the room,
+            // brightest on the ceiling; at night some rooms have a light on
+            float day = dot(uHorizon + uZenith, vec3(0.15, 0.3, 0.05)) * (1.0 - uNight);
+            float lit = step(0.62, hash12(vec2(bayN * 1.7 + 3.0, floorN * 2.3 - 1.0))) * uNight;
+            vec3 lamp = vec3(1.0, 0.78, 0.45) * (0.55 + 0.45 * pane);
+            vec3 light = vec3(day) * ${ROOM.daylight.toFixed(2)} * exp(-hit.z * ${ROOM.fall.toFixed(2)}) + lamp * lit * (0.45 + 0.55 * smoothstep(0.0, roomH, hit.y));
+            vec3 inside = seen * light;
+            vec3 slats = vec3(0.7, 0.68, 0.62) * (0.8 + 0.2 * step(0.3, fract(hb.y / 0.025))) * (vec3(day) * ${ROOM.daylight.toFixed(2)} * 1.6 + lamp * lit * 0.8);
+            totalEmissiveRadiance += mix(inside, slats, blind) * glazing;
+          }
+        } else if (kind == S_EARTH) {
+          // Where the wheels have run: a pair of ruts a cart's width apart,
+          // wandering a little along the street, and a fainter pair beside
+          // them; damp hollows; pocks and scuffs a hand's breadth across;
+          // grit, and a stone pressed in here and there.
+          float wob = (vnoise(vec2(uv.x * 0.045, 1.7)) - 0.5) * 1.4;
+          float rut = exp(-pow((abs(uv.y - wob) - ${EARTH.gauge.toFixed(2)}) / 0.2, 2.0))
+            + 0.55 * exp(-pow((abs(uv.y - 0.6 * wob + 2.6) - ${EARTH.gauge.toFixed(2)}) / 0.24, 2.0));
+          rut *= 0.6 + 0.4 * vnoise(vec2(uv.x * 0.3, uv.y * 2.0 + 5.0));
+          float big = vnoise(uv * 0.11 + 3.0);
+          float mid = vnoise(uv * 0.55 + 9.0);
+          float damp = smoothstep(0.62, 0.85, rut * 0.35 + (1.0 - big) * 0.55 + mid * 0.25);
+          float pock = vnoise(uv * 7.0 + 13.0) * shows(0.08, fw);
+          float grit = hash12(floor(uv * 70.0)) * shows(0.015, fw);
+          vec2 sc = floor(uv / ${EARTH.stones.toFixed(2)});
+          vec2 sf = fract(uv / ${EARTH.stones.toFixed(2)}) - 0.5 - (vec2(hash12(sc + 4.1), hash12(sc + 8.3)) - 0.5) * 0.5;
+          float sr = 0.12 + 0.2 * hash12(sc + 2.2);
+          float pebble = step(0.86, hash12(sc)) * (1.0 - smoothstep(sr - 0.05, sr, length(sf))) * shows(0.06, fw);
+          col *= (0.82 + 0.3 * big) * (0.92 + 0.14 * mid) * (0.94 + 0.1 * pock) * (0.94 + 0.12 * grit);
+          col *= (1.0 - 0.09 * rut) * (1.0 - 0.2 * damp);
+          col = mix(col, col * mix(1.35, 0.7, hash12(sc + 6.6)), pebble * 0.7);
+          relief = (-rut * 0.5 + pock * 0.08 + grit * 0.02 + pebble * 0.12) * ${RELIEF.earth};
+          rough = mix(0.97, 0.7, damp);
         } else if (kind == S_CLOTH) {
           vec2 w = fract(uv * 220.0);
           float weave = (step(0.5, w.x) == step(0.5, w.y) ? 1.0 : 0.6) * shows(0.0045, fw);

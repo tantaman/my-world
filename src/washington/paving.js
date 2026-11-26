@@ -17,6 +17,7 @@ import * as THREE from 'three';
 import { Batch } from './batch.js';
 import { SURF } from '../build/surfaces.js';
 import { inside, area, edgeDistance } from '../core/rings.js';
+import { terrainTriangles } from '../world/terrainGrid.ts';
 
 // What each kind of paving looks like: its colour, its surface, how far over
 // the ground it's laid (m) — a road's, a little; a sidewalk's, a curb's
@@ -527,47 +528,6 @@ function* lay(batch, { outer, holes }, height, lift, r, g, b, surf, fine, down =
     if (flip) batch.tri(ia, ic, ib);
     else batch.tri(ia, ib, ic);
   }
-}
-
-// Cut a paving triangle against the metre squares and diagonals of
-// the full-resolution terrain. Its plane then follows the terrain all the
-// way across each piece, including the steep joins around the zoo.
-function* terrainTriangles(points, [ox, oz]) {
-  const zs = points.map((p) => p[1]);
-  for (let j = Math.floor(Math.min(...zs) - oz); j < Math.ceil(Math.max(...zs) - oz); j++) {
-    const z = j + oz;
-    const row = clip(clip(points, 0, -1, -z), 0, 1, z + 1);
-    if (row.length < 3) continue;
-    const left = Math.floor(Math.min(...row.map((p) => p[0])) - ox);
-    const right = Math.ceil(Math.max(...row.map((p) => p[0])) - ox);
-    for (let i = left; i < right; i++) {
-      const x = i + ox;
-      const cell = clip(clip(row, -1, 0, -x), 1, 0, x + 1);
-      if (cell.length < 3) continue;
-      const diagonal = x + z + 1;
-      for (const part of [clip(cell, 1, 1, diagonal), clip(cell, -1, -1, -diagonal)]) {
-        for (let k = 2; k < part.length; k++) yield [part[0], part[k - 1], part[k]];
-      }
-    }
-  }
-}
-
-function clip(poly, nx, nz, limit) {
-  const out = [];
-  if (!poly.length) return out;
-  let a = poly.at(-1);
-  let da = a[0] * nx + a[1] * nz - limit;
-  for (const b of poly) {
-    const db = b[0] * nx + b[1] * nz - limit;
-    if ((da < 0 && db > 0) || (da > 0 && db < 0)) {
-      const t = da / (da - db);
-      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
-    }
-    if (db <= 0) out.push(b);
-    a = b;
-    da = db;
-  }
-  return out;
 }
 
 function* trianglesOf(outer, holes) {
