@@ -56,7 +56,8 @@ there is what is really there.
 places (see [What a save actually holds](../save/README.md#what-a-save-actually-holds)):
 no ground is levelled and no tree is moved. The buildings stand on
 foundations, taller on the downhill side; the street is laid over the ground
-as it is; the trees, bushes and stones in the way are hidden as the town
+as it is, rutted where the wheels run, cut along the land's own triangles so
+the grass never shows up through it; the trees, bushes and stones in the way are hidden as the town
 comes into view, and grass doesn't grow on the street or through the
 floors. Building goes round a town, and if an old save has something built,
 a fire laid or a stump left where one of its buildings would stand, that

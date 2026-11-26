@@ -337,6 +337,7 @@ landSpace.js          a land made in code (Hell, Purgatory) as a space: its floo
 strewn.js             what such a land is strewn with, square by square near you: drawn many at once, bumped into
 basins.js             water held up in something built (a pool, a tub), to swim in
 paved.ts              ground something has paved over (a city's streets, a zoo's walks), and what it's paved with
+terrainGrid.ts        the land's own triangles close to, for something laid flat on it to be cut along, so the land doesn't poke through
 cuts.js               holes in the ground, where something else stands in for it
 models.js             procedural trees, bushes, ferns, rocks, logs: trunks, branches, and cards on them; Spanish moss
 modelsIsland.js       and other countries': palm, ironwood, tree fern, silversword, bald cypress

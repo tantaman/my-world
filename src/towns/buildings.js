@@ -41,7 +41,8 @@
 import * as THREE from 'three';
 import { Mesher, WOOD, addRoundLog } from '../build/geometry.js';
 import { mulberry32, phash } from '../noise.js';
-import { toWorld } from '../world/frame.js';
+import { toWorld, toLocal } from '../world/frame.js';
+import { terrainTriangles, gridSurface } from '../world/terrainGrid.ts';
 import { Builder, PAL as OLD, BUILD as OLD_PLACES, MADE_OF, madeOf, box, rod, stone, weather, stepsUp, floor, tone } from '../landmarks/models.js';
 import { SURF, UPRIGHT } from '../build/surfaces.js';
 import { bodyOf } from './towns.js';
@@ -109,7 +110,8 @@ export function buildLot(town, lot, ground, materials) {
     return ground(_w.x, _w.z) - y0;
   };
   const b = new Builder(lot, g, mulberry32(lot.seed), y0);
-  b.glow = new Mesher();
+  b.glow = new Mesher(); // what shines day and night (a forge's coals)
+  b.night = new Mesher(); // what shines only after dark, over glass (a lit window, a lamp)
   b.town = town;
   b.lot = lot;
   b.style = town.style;
@@ -127,6 +129,7 @@ export function buildLot(town, lot, ground, materials) {
   // a dark town's houses lean, as if the ground had moved under them
   if (b.lean) lean(b.m, from, b.lean, b.leanFrom);
   if (b.lean) lean(b.glow, 0, b.lean, b.leanFrom);
+  if (b.lean) lean(b.night, 0, b.lean, b.leanFrom);
 
   const object = new THREE.Group();
   object.position.set(lot.x, y0, lot.z);
@@ -145,6 +148,11 @@ export function buildLot(town, lot, ground, materials) {
   }
   if (!b.glow.empty) {
     const glow = new THREE.Mesh(b.glow.build(), materials.glow);
+    glow.castShadow = false;
+    object.add(glow);
+  }
+  if (!b.night.empty) {
+    const glow = new THREE.Mesh(b.night.build(), materials.night);
     glow.castShadow = false;
     object.add(glow);
   }
@@ -346,9 +354,12 @@ function dress(b, F, trim) {
         // a shard or two left in the corner of the frame
         if (b.rnd() < 0.5) b.m.tris([F.at(h.t0, h.y0, -0.03), F.at(h.t0 + w * 0.5, h.y0, -0.03), F.at(h.t0, h.y0 + ht * 0.6, -0.03)], (p, n, out) => out.copy(GLASS), SURF.glass);
       } else {
-        const pane = lit ? b.glow : b.m;
-        const col = lit ? (p, n, out) => out.copy(LIT) : (p, n, out) => out.copy(GLASS).multiplyScalar(0.8 + Math.max(0, p.y - h.y0) / ht * 0.6);
-        quad(pane, F.at(h.t0, h.y0, -0.04), F.at(h.t1, h.y0, -0.04), F.at(h.t1, h.y1, -0.04), F.at(h.t0, h.y1, -0.04), col, SURF.glass);
+        // glass, lit or not: by day a lit room barely shows through it, so
+        // the light is a pane of its own just in front, that only comes up
+        // as the daylight goes (materials.night)
+        const col = (p, n, out) => out.copy(GLASS).multiplyScalar(0.8 + Math.max(0, p.y - h.y0) / ht * 0.6);
+        quad(b.m, F.at(h.t0, h.y0, -0.04), F.at(h.t1, h.y0, -0.04), F.at(h.t1, h.y1, -0.04), F.at(h.t0, h.y1, -0.04), col, SURF.glass);
+        if (lit) quad(b.night, F.at(h.t0, h.y0, -0.035), F.at(h.t1, h.y0, -0.035), F.at(h.t1, h.y1, -0.035), F.at(h.t0, h.y1, -0.035), (p, n, out) => out.copy(LIT), SURF.glass);
         if (!h.plain) {
           // glazing bars
           wbox(b.m, F, tm, (h.y0 + h.y1) / 2, -0.02, 0.05, ht, 0.04, trim);
@@ -737,9 +748,8 @@ function lamp(b, x, z, y = null) {
   rod(b.m, [x, gy - 0.2, z], [x, gy + 2.6, z], 0.05, OLD.iron, 6);
   box(b.m, x, gy + 2.62, z, 0.3, 0.05, 0.3, OLD.iron);
   box(b.m, x, gy + 3.02, z, 0.36, 0.06, 0.36, OLD.iron);
-  const lit = b.alive && !b.dark;
-  const m = lit ? b.glow : b.m;
-  box(m, x, gy + 2.82, z, 0.24, 0.36, 0.24, lit ? (p, n, out) => out.copy(LIT) : GLASS);
+  box(b.m, x, gy + 2.82, z, 0.24, 0.36, 0.24, GLASS);
+  if (b.alive && !b.dark) box(b.night, x, gy + 2.82, z, 0.25, 0.37, 0.25, (p, n, out) => out.copy(LIT));
   b.solid(x, z, x, z, 0.08, gy - 0.2, gy + 2.6);
 }
 
@@ -1695,64 +1705,101 @@ function falseFront(b, h, x0, x1, z) {
 }
 
 // ── The street ───────────────────────────────────────────────────────────────
-// Packed dirt laid over the ground from end to end of the main street, rutted
-// by wheels down the middle; a village's is paler gravel, a dark town's mud,
-// an abandoned one's going back to grass.
-const STREET_STEP = 1.5; // m between the street's vertices along it
-const STREET_LIFT = 0.05; // m it sits over the ground (with a polygon offset)
-const ACROSS = 8; // vertices across it
+// Packed earth laid over the ground from end to end of the main street; a
+// village's is paler gravel, a dark town's mud, an abandoned one's going back
+// to grass. What it looks like close to (ruts where the wheels run, stones
+// pressed into it, damp hollows) is drawn pixel by pixel (SURF.earth,
+// build/surfaces.js); here it only gets its colour, and gives way to the grass
+// at its sides and ends.
+//
+// It is cut along the land's own triangles (world/terrainGrid.ts), so each
+// piece lies in the plane of the one under it and the land never pokes up
+// through it; and it says how much higher the land is drawn where it's drawn
+// coarser, further off (aRoadGrade), as a city's paving does.
+const STREET_LIFT = 0.06; // m it sits over the ground (with a polygon offset): any nearer, and the land's shadow catches it in streaks
+const STREET_EDGE = 0.25; // of its half-width, in from each side, over which it gives way to the grass
+const STREET_END = 4; // m in from each end over which it does
+const STREET_SLOPE = 4; // m either side over which its slope is taken for the light, not each little dip's
+const STREET_GONE = 0.45; // how far an abandoned town's street has gone back to grass (its wear)
 
 export function buildStreet(town, ground, material) {
   const [u0, v0, u1, v1] = town.street;
-  const nu = Math.max(2, Math.round((u1 - u0) / STREET_STEP));
-  const pos = [];
-  const col = [];
-  const idx = [];
   const base = town.style === 'village' ? lin(0x9a8a70) : town.style === 'creepy' ? lin(0x4a3e32) : lin(0x8a7050);
   const grass = lin(0x5a6a34);
   const abandoned = town.kind === 'ghost' || town.kind === 'deserted';
+  // the land as drawn close to, and in the coarser rings further out
+  const [h1, h2, h4] = [1, 2, 4].map((G) => gridSurface(ground, G));
+  // measured from a whole metre near its middle, so the land's grid falls on whole numbers
+  const mid = toWorld(town, (u0 + u1) / 2, (v0 + v1) / 2);
+  const ox = Math.floor(mid.x);
+  const oz = Math.floor(mid.z);
+  const oy = h1(ox, oz);
+  const corners = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(([u, v]) => {
+    const p = toWorld(town, u, v);
+    return [p.x - ox, p.z - oz];
+  });
+  const pos = [];
+  const nor = [];
+  const col = [];
+  const surf = [];
+  const uvs = [];
+  const grade = [];
+  const idx = [];
+  const seen = new Map();
+  const wear = abandoned ? STREET_GONE : 0;
   const c = new THREE.Color();
-  const p = {};
-  const center = new THREE.Vector3();
-  toWorld(town, 0, 0, p);
-  center.set(p.x, ground(p.x, p.z), p.z);
-  for (let i = 0; i <= nu; i++) {
-    const u = u0 + ((u1 - u0) * i) / nu;
-    const fadeEnd = Math.min(1, (u - u0) / 4, (u1 - u) / 4);
-    for (let j = 0; j <= ACROSS; j++) {
-      const f = j / ACROSS;
-      const v = v0 + (v1 - v0) * f;
-      toWorld(town, u, v, p);
-      pos.push(p.x - center.x, ground(p.x, p.z) + STREET_LIFT - center.y, p.z - center.z);
-      const n = phash(Math.round(u * 1.3), Math.round(v * 1.3), town.seed);
-      c.copy(base).multiplyScalar(0.85 + n * 0.25);
-      // ruts where the wheels go, and the edges giving way to grass
-      const off = Math.abs(v) / town.half;
-      if (Math.abs(off - 0.25) < 0.08) c.multiplyScalar(0.82);
-      const edge = Math.max(0, (off - 0.75) / 0.25) * 0.8 + (1 - fadeEnd) * 0.7;
-      const weeds = abandoned ? Math.max(0, phash(Math.round(u * 0.5), Math.round(v * 0.5), town.seed + 1) - 0.35) * 1.2 : 0;
-      c.lerp(grass, Math.min(0.85, edge + weeds));
-      col.push(c.r, c.g, c.b);
-    }
-  }
-  for (let i = 0; i < nu; i++) {
-    for (let j = 0; j < ACROSS; j++) {
-      const a = i * (ACROSS + 1) + j;
-      const d = a + ACROSS + 1;
-      idx.push(a, a + 1, d, a + 1, d + 1, d);
-    }
+  const q = {};
+  const corner = (x, z) => {
+    const key = `${Math.round(x * 1e4)},${Math.round(z * 1e4)}`;
+    let k = seen.get(key);
+    if (k !== undefined) return k;
+    k = pos.length / 3;
+    seen.set(key, k);
+    const wx = x + ox;
+    const wz = z + oz;
+    const y = h1(wx, wz);
+    pos.push(x, y + STREET_LIFT - oy, z);
+    // lit by the lie of the land across it, not by each metre's triangle
+    const dx = ground(wx - STREET_SLOPE, wz) - ground(wx + STREET_SLOPE, wz);
+    const dz = ground(wx, wz - STREET_SLOPE) - ground(wx, wz + STREET_SLOPE);
+    const l = Math.hypot(dx, 2 * STREET_SLOPE, dz);
+    nor.push(dx / l, (2 * STREET_SLOPE) / l, dz / l);
+    toLocal(town, wx, wz, q);
+    const u = Math.min(u1, Math.max(u0, q.x));
+    const v = q.z;
+    // its sides and ends giving way to grass; an abandoned one, in patches
+    const off = Math.abs(v) / town.half;
+    const fadeEnd = Math.min(1, (u - u0) / STREET_END, (u1 - u) / STREET_END);
+    const edge = Math.max(0, (off - (1 - STREET_EDGE)) / STREET_EDGE) * 0.8 + (1 - fadeEnd) * 0.7;
+    const weeds = abandoned ? Math.max(0, phash(Math.round(u * 0.5), Math.round(v * 0.5), town.seed + 1) - 0.35) * 1.2 : 0;
+    c.copy(base).lerp(grass, Math.min(0.85, edge + weeds));
+    col.push(c.r, c.g, c.b);
+    surf.push(SURF.earth + wear);
+    uvs.push(u - u0, v);
+    grade.push(Math.max(0, h2(wx, wz) - y), Math.max(0, h4(wx, wz) - y));
+    return k;
+  };
+  for (const [a, b, d] of terrainTriangles(corners, [0, 0])) {
+    const ia = corner(...a);
+    const ib = corner(...b);
+    const id = corner(...d);
+    // facing up
+    const up = (b[1] - a[1]) * (d[0] - a[0]) - (b[0] - a[0]) * (d[1] - a[1]);
+    if (Math.abs(up) < 1e-9) continue;
+    if (up > 0) idx.push(ia, ib, id);
+    else idx.push(ia, id, ib);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('aSurf', new THREE.Float32BufferAttribute(surf, 1));
+  g.setAttribute('aUV', new THREE.Float32BufferAttribute(uvs, 2));
+  g.setAttribute('aRoadGrade', new THREE.Float32BufferAttribute(grade, 2));
   g.setIndex(idx);
-  g.computeVertexNormals();
-  // facing up whichever way it was wound
-  const nor = g.attributes.normal;
-  if (nor.getY(0) < 0) for (let i = 0; i < nor.count; i++) nor.setXYZ(i, -nor.getX(i), -nor.getY(i), -nor.getZ(i));
   g.computeBoundingSphere();
   const mesh = new THREE.Mesh(g, material);
-  mesh.position.copy(center);
+  mesh.position.set(ox, oy, oz);
   mesh.receiveShadow = true;
   return mesh;
 }

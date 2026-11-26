@@ -142,12 +142,13 @@ picture is drawn.
 What people build is drawn the same way, from what it's made of rather than
 from a texture (`build/surfaces.js`): every piece of a cabin, an old place or
 a town says whether it is bark, a cut end, sawn wood, paint, stone,
-shingles, slate, tin, glass, iron, clay or cloth, and which way its grain
-runs. So a log has plates and furrows of bark along it and rings at its cut
+shingles, slate, tin, glass, iron, clay, cloth or packed earth, and which way
+its grain runs. So a log has plates and furrows of bark along it and rings at its cut
 end, boards have their grain and the odd knot, paint is a little glossy and
 chalks and flakes as it wears, shingles and slates lie in staggered courses,
 tin is corrugated and rusts down from its laps, stone is granular and
-lichened, and glass mirrors the sky over the dark of the room. Old roofs
+lichened, glass mirrors the sky over the dark of the room, and a town's
+street is rutted where the wheels run, with stones pressed into it. Old roofs
 grow moss, and rain streaks the walls. Each pattern fades out as it gets
 finer than a pixel or two.
 

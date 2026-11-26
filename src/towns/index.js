@@ -44,7 +44,7 @@ const KNOWN = 2600; // m round you whose towns the map can list
 const ARRIVE = 4; // m from its street or one of its lots where you've reached a town
 const LIVELY = 220; // m: closer than this, its people go about their business
 const HEARD = 120; // m: ...and its sounds are made
-const GLOW = { day: [0.1, 0.13, 0.17], night: [2.6, 2.3, 2.1] }; // a lit window's brightness, by day and by night
+const GLOW = { day: [0.1, 0.13, 0.17], night: [2.6, 2.3, 2.1] }; // how bright what glows is, by day and by night: coals (materials.glow) all day, a lit window or lamp (materials.night) only as it gets dark
 const TUMBLE = 3; // tumbleweeds in an empty western street
 // How far (m) plants of each kind are kept back from a building: a trunk well
 // clear of the eaves, a fallen log by its length (times its scale, like a
@@ -66,7 +66,10 @@ export function installTowns(game) {
   const materials = {
     body: createBuildingMaterial(), // paint, boards, shingles, stone and glass, as they are (build/surfaces.js)
     glow: new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }),
-    street: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }),
+    // lit windows and lamps: drawn over their glass, and faded in as it gets dark
+    night: new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, depthWrite: false }),
+    // packed earth, fitted to the land however finely it's drawn (build/surfaces.js)
+    street: Object.assign(createBuildingMaterial({ roadGrade: true }), { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }),
     weed: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }),
   };
   const ground = (x, z) => gen.height(x, z) + (chunks.heightOffset ? chunks.heightOffset(x, z) : 0);
@@ -343,6 +346,9 @@ export function installTowns(game) {
       const night = SKY.uNight.value;
       const k = Math.min(1, night * 1.6);
       materials.glow.color.setRGB(...GLOW.day.map((v, i) => v + (GLOW.night[i] - v) * k));
+      materials.night.color.setRGB(...GLOW.night);
+      materials.night.opacity = k;
+      materials.night.visible = k > 0.005;
 
       const p = player.pos;
       _pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);

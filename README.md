@@ -293,6 +293,7 @@ place in that order, not at the end:
 | `world/solids.js` | something solid to bump into and stand on | `game.solids.set(owner, [capsule])` (`surface: 'boards'` for its footsteps) |
 | `world/spaces.js` | somewhere under the ground to be in: its floor, walls and roof (and how dark it is, if the lamp should come on there, unless it has lamps of its own) | `game.spaces.add(space)`, `spaces.onDemand(fn)` |
 | `world/strewn.js` | such a land strewn with what stands and walks on it, square by square near you | `new Strewn({ land, space, group, kit, strew })`, `kind(geo, mat, solid, still)` |
+| `world/terrainGrid.ts` | something laid a few centimetres over the land (a street, paving), cut along the land's own triangles so the land never pokes up through it | `terrainTriangles(polygon, [ox, oz])`, `gridSurface(height, 1)` for the land as drawn (2, 4 for the coarser rings, into `aRoadGrade`) |
 | `world/wind.js` | which way the wind blows | `WIND` |
 
 Each of those files opens with what the thing is and what it is handed.

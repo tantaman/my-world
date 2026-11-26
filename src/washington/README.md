@@ -47,8 +47,10 @@ where a higher roof meets a lower one). The 11,000 the roof survey hasn't
 (built since it flew, such as the National Museum of African American
 History and Culture) are the city's later blocks of them, flat-topped.
 Taller buildings have brick, stone or glass fronts. Window bays fit between
-the corners and have sills, frames and recessed glazing. At night a light
-is on in some of them. Landmarks use the colors of their materials, such as
+the corners and have sills, frames and recessed glazing, and behind the
+glass a room: its walls, floor and ceiling, lit by the daylight coming in
+and darker the further in, shifting as you go by, with the blinds let down
+part way in some. At night a light is on in some of them. Landmarks use the colors of their materials, such as
 the Smithsonian Castle's red sandstone and the Library of Congress dome's
 green copper. The Capitol has a modeled white dome, colonnade and East Front
 portico. The buildings' walls stop you. [Capitol Dome](https://www.aoc.gov/explore-capitol-campus/buildings-grounds/capitol-building/capitol-dome)
