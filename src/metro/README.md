@@ -78,7 +78,11 @@ Mount Vernon Square, as OpenStreetMap has them.
 it runs on, each way, and the map says of every stretch whether it's in a
 tunnel (and how deep, by its layer), on a bridge, or neither, and where each
 station's platforms are. The entrances are the District's own survey of
-them (Open Data DC). How high the rail runs isn't on any map: the importer
+them (Open Data DC), which says where each is but not which way its
+escalators go down: the importer turns each, and moves it a few metres if it
+must, so that its well lies on the sidewalk or a plaza, clear of the
+buildings, the streets and the street trees round it
+(`tools/metro/wells.js`, from the city's own tiles). How high the rail runs isn't on any map: the importer
 works it out from the ground the city stands on (`tools/metro/profile.js`).
 In a tunnel it's as deep as the map's layer says (12 to 25 m), with earth
 over the tube all the way; on a viaduct it's well up over the street, on the
@@ -109,9 +113,11 @@ Over the street: a concrete box girder on piers, with a parapet on its outer
 side, or a bank of ballast with ties; rails and the third rail everywhere.
 Track and stations over the street stand up within about a kilometre of you,
 a piece at a time; the trains within 800 m. The forest's own trees and grass
-keep off the track over the street. An entrance's well is cut into the
-ground and the street's paving (`world/cuts.js`), for the four nearest you,
-and the top of its escalators is under a canopy of glass on steel ribs.
+keep off the track over the street, and out of the entrances' wells. An
+entrance's well is cut into the ground and the street's paving
+(`world/cuts.js`), for the four nearest you, and the top of its escalators
+is under a canopy of glass on steel ribs; where the ground falls away from
+the well, its granite parapets go on down to meet it.
 
 **Heard.** A train's rumble, the whine of its motors, the squeal of its
 brakes in the last few metres, and the chime of its doors; under the street,
@@ -140,6 +146,7 @@ world.metro.stats()                  // what's stood up, and what's waiting to b
 
 ```bash
 npm run metro            # (tools/metro.mjs; add --levels for each station level's depth and platforms)
+npm run metro -- --wells # only turn the entrances' wells clear of the city again, in the metro.js there is: nothing fetched
 ```
 
 It fetches each line's route relations from OpenStreetMap (every service,
@@ -174,5 +181,5 @@ onMap.js        the lines and the trains on the map
 pictures.js     the Metro in your pack
 ```
 
-The importer is `tools/metro.mjs` and `tools/metro/profile.js` (how high
-the rails run).
+The importer is `tools/metro.mjs`, `tools/metro/profile.js` (how high
+the rails run) and `tools/metro/wells.js` (which way each entrance's well runs).

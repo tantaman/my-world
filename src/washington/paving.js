@@ -42,9 +42,10 @@ const ROAD_LIFT = LOOKS.road.lift;
 const FINE = 6;
 // A bridge: how deep its deck (m), how high the parapet over it, how far
 // apart its piers and how wide, and how much room there must be under it
-// (m) for a pier to stand; and its deck cut into pieces this long (m) to
-// stand on, each as high as it is there.
-const DECK = { deep: 1.2, parapet: 0.9, wall: 0.3, pier: 36, pierWide: 1.6, under: 3, piece: 20 };
+// (m) for a pier to stand; its deck cut into pieces this long (m) to stand
+// on, each as high as it is there; and how far in from either end (m) an
+// edge of its outline is across its end, with no parapet.
+const DECK = { deep: 1.2, parapet: 0.9, wall: 0.3, pier: 36, pierWide: 1.6, under: 3, piece: 20, end: 3 };
 const DECK_COL = 0x8c8a84;
 const PER_STEP = 30; // polygons laid between one step and the next
 
@@ -56,12 +57,15 @@ const hash = (n) => {
 };
 
 // Where a deck is at (x, z) (tile metres), of those in `decks`: its height
-// there (game m), or NaN off them all.
+// there (game m), or NaN off them all. (A point on its outline is on it:
+// the sidewalks along a bridge end exactly at its edge, and one of their
+// corners taken to be off it would hang from the deck down to the creek.)
+const ON_EDGE = 0.05; // m
 export function deckAt(decks, x, z) {
   let y = NaN;
   for (const d of decks) {
-    if (x < d.box[0] || x > d.box[2] || z < d.box[1] || z > d.box[3]) continue;
-    if (!inside(d.outline, x, z)) continue;
+    if (x < d.box[0] - ON_EDGE || x > d.box[2] + ON_EDGE || z < d.box[1] - ON_EDGE || z > d.box[3] + ON_EDGE) continue;
+    if (!inside(d.outline, x, z) && edgeDistance(d.outline, x, z) > ON_EDGE) continue;
     const [ax, az, ay] = d.a;
     const [bx, bz, by] = d.b;
     const l2 = (bx - ax) ** 2 + (bz - az) ** 2 || 1;
@@ -139,14 +143,20 @@ export function* buildPaving(tile, { ground, offset, seed = 0, detail = true, ow
     yield* lay(bridges, poly, (x, z) => Math.max(deckY(x, z), ground(x, z)), LOOKS.bridge.lift, dc.r, dc.g, dc.b, SURF.concrete, fine);
     if (!detail) continue;
     yield* lay(bridges, poly, (x, z) => Math.max(deckY(x, z), ground(x, z)) - DECK.deep, 0, dc.r * 0.6, dc.g * 0.6, dc.b * 0.6, SURF.concrete, fine, true);
-    // its sides, and a parapet along those that run with it (not across its ends)
+    // its sides, and a parapet along them: along every edge but those across
+    // its ends (a deck's outline zigzags where it widens, and an edge of it
+    // that runs across the deck in the middle is still its side)
     const O = d.outline;
+    const atEnd = (x, z) => {
+      const t = (x - ax) * ux + (z - az) * uz;
+      return t < DECK.end || t > len - DECK.end;
+    };
     for (let i = 0; i < O.length; i++) {
       const [px, pz] = O[i];
       const [qx, qz] = O[(i + 1) % O.length];
       const el = Math.hypot(qx - px, qz - pz);
       if (el < 0.05) continue;
-      const along = Math.abs(((qx - px) * ux + (qz - pz) * uz) / el) > 0.7;
+      const along = Math.abs(((qx - px) * ux + (qz - pz) * uz) / el) > 0.7 || !(atEnd(px, pz) && atEnd(qx, qz));
       const n = Math.max(1, Math.ceil(el / FINE));
       for (let s = 0; s < n; s++) {
         const [x0, z0] = [px + ((qx - px) * s) / n, pz + ((qz - pz) * s) / n];
