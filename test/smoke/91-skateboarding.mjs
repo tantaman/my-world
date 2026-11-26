@@ -2,7 +2,7 @@
 // board; W pushes you along it, S brakes, space ollies and W in the air
 // kickflips; pointed off the road onto the grass, the wheels dig in and you
 // step off; F steps off. Then a jetpack on your back, and W is the jets,
-// and with them lit D carves you round far harder.
+// and with them lit, crouched, D carves you round far harder, a hand down.
 //
 // Needs: nothing of what came before. Leaves: you on foot, on or beside the
 // paved road nearest the start, the jetpack off your back again.
@@ -185,17 +185,32 @@ export default async function ({ page, step, key, frames, shot }) {
     const fast = await page.evaluate(() => T.until(() => world.skateboarding.session.top > 12 || !world.skateboarding.active, 20000));
     const going = await page.evaluate(() => ({ top: Math.round(world.skateboarding.session.top * 3.6), kmh: world.skateboarding.state().kmh, on: world.skateboarding.active, flying: world.jetpack.state().flying, burn: world.jetpack.state().thrust, swivel: world.jetpack.state().swivel }));
     await shot('jet-skating');
-    // carve with them lit: they push you round as well as along (off the
-    // road, likely, at this speed: that's the next thing it does)
+    // carve with them lit, still crouched: a hand down on the tarmac, and
+    // they push you round as well as along (off the road, likely, at this
+    // speed: that's the next thing it does)
     let carved = null;
-    if (going.on) {
+    if (going.on && (await page.evaluate(() => world.skateboarding.skater.down < 0))) {
       await page.keyboard.down('KeyD');
-      const round = await page.evaluate(() => T.until(() => !world.skateboarding.active || world.skateboarding.skater.down >= 0 || world.skateboarding.skater.round < -0.5, 3000));
-      carved = await page.evaluate(() => ({ round: world.skateboarding.active ? world.skateboarding.skater.round : null, lateral: world.skateboarding.active ? world.skateboarding.skater.lateral : null, kmh: world.skateboarding.state().kmh }));
+      // the hardest it carved, frame by frame, until it's carving its hardest
+      // or has run off the road
+      carved = await page.evaluate(async () => {
+        const sk = world.skateboarding.skater;
+        const most = { round: 0, hand: 0, lateral: 0, kmh: world.skateboarding.state().kmh, frames: 0 };
+        const t0 = performance.now();
+        while (performance.now() - t0 < 3000 && world.skateboarding.active && sk.down < 0) {
+          most.round = Math.min(most.round, sk.round);
+          most.hand = Math.min(most.hand, sk.hand);
+          most.lateral = Math.min(most.lateral, sk.lateral);
+          if (most.round < -0.5 && most.hand < -0.9) break;
+          most.frames++;
+          await new Promise((ok) => requestAnimationFrame(ok));
+        }
+        return most;
+      });
       await shot('jet-carving');
       await page.keyboard.up('KeyD');
-      assert.ok(round, 'carving');
-      if (carved.round !== null && carved.round !== 0) assert.ok(carved.round < -0.5, `the jets push you round to the right (${JSON.stringify(carved)})`);
+      assert.ok(carved.hand < -0.9, `crouched, a hand down on the inside of it (${JSON.stringify(carved)})`);
+      assert.ok(carved.round < -0.2, `and the jets pushing you round to the right (${JSON.stringify(carved)})`);
     }
     await page.keyboard.up('KeyW');
     await page.keyboard.up('ShiftLeft');

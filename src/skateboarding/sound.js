@@ -4,7 +4,7 @@
 //   - the wheels on the tarmac: a low roar that rises with your speed, a
 //     clatter over boards, a rough grinding crunch over gravel
 //   - a powerslide: the wheels squealing sideways over the tarmac
-//   - a foot dragged to brake: a scuff
+//   - a foot dragged to brake, or a glove on the tarmac carving hard: a scuff
 //   - the wind past your ears at speed
 //   - one-offs (sound.sfx): a push, the tail popping an ollie, the wheels
 //     slapping down to land, a bail, the board clattering off on its own,
@@ -17,7 +17,7 @@
 //   source.rolling   the wheels on the ground
 //   source.surface   what they're on ('tarmac', 'boards', 'gravel'...)
 //   source.slide     0..1 how far into a powerslide
-//   source.drag      0..1 a foot dragged
+//   source.drag      0..1 a foot dragged, or a hand down
 
 import { defineSfx } from '../audio/sfx.js';
 import { SILENT } from '../audio/kit.js';

@@ -4,7 +4,8 @@
 //   W       push              in the air: kickflip
 //   S       brake, slide it   in the air: heelflip
 //   A D     carve             in the air: spin, you and the board
-//   shift   crouch            in the air: shove-it, the board turned under you
+//   shift   crouch, and with A D carve hard, a hand down
+//                             in the air: shove-it, the board turned under you
 //   space   ollie
 //
 // On a touch screen the stick does what W A S D do (pushed all the way, it's
@@ -37,5 +38,5 @@ export function cueFor(input, sk, off, jets = false) {
   const go = jets ? 'jets' : 'push';
   if (sk.down >= 0) return 'bailed…';
   if (!sk.grounded) return touch ? 'stick: spin, flip · hold <b>use</b>: shove-it' : '<b>A D</b> spin · <b>W</b> kickflip · <b>S</b> heelflip · <b>shift</b> shove-it';
-  return touch ? `stick: ${go}, carve, brake · hold <b>use</b>: crouch · tap: ollie` : `<b>W</b> ${go} · <b>A D</b> carve · <b>S</b> brake · <b>shift</b> crouch · <b>space</b> ollie · <b>${off}</b> off`;
+  return touch ? `stick: ${go}, carve, brake · hold <b>use</b>: crouch, carve hard · tap: ollie` : `<b>W</b> ${go} · <b>A D</b> carve · <b>S</b> brake · <b>shift</b> crouch, carve hard · <b>space</b> ollie · <b>${off}</b> off`;
 }

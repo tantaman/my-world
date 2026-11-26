@@ -15,7 +15,7 @@ off*) and it's under your arm.
 | **W** | push | kickflip |
 | **S** | brake: drag a foot, or at speed slide the board out sideways | heelflip |
 | **A D** | carve; at a standstill, kick round on the tail | spin, you and the board |
-| **shift** | crouch: faster downhill, out of the wind | shove-it: the board turns under you |
+| **shift** | crouch: faster downhill, out of the wind; with **A D**, carve hard, a hand down on the tarmac | shove-it: the board turns under you |
 | **space** | ollie | |
 
 The camera swings round behind the way you're going. The speed and the
@@ -23,7 +23,10 @@ points are above the coordinates, bottom left.
 
 **How it goes.** The wheels roll along the board and nowhere else, so you
 go where the trucks turn you, as tightly as the wheels' grip allows at the
-speed you're going. Pushing gets you to about a running pace and no
+speed you're going. Crouch into a carve (**shift** with **A** or **D**) and
+you lean right over and put a hand down on the tarmac: a hard carve, near
+twice as tight — at 40 km/h, round a bend of 11 m instead of 20 — though
+the glove scrubs a little speed. Pushing gets you to about a running pace and no
 faster; past that, it's the hills. The country roads climb no more than one
 in ten, and down one of those you'll be doing 40 km/h standing up and more
 than 50 crouched. Roll backwards and you're riding fakie, the other way
@@ -42,7 +45,8 @@ fly you. At that speed the wheels' grip alone would only carve you round
 the widest of sweeps, so carve with the jets lit and they help: you twist
 your shoulders round into the turn and lean right over, the flames swing
 out away from it, and they push you round as well as along — round a bend
-of 40 m at 95 km/h, where the wheels alone would need 115. Let go of **W**
+of 40 m at 95 km/h, where the wheels alone would need 115, and of 30 m
+crouched into it with a hand down as well. Let go of **W**
 in the middle of a bend and it's the wheels' grip alone again, so keep them
 lit through it, and ease off before the tightest bends and a city's street
 corners. They burn on in the air too, so an ollie off a kerb at that speed
@@ -95,13 +99,13 @@ world.skateboarding.state()   // how you're going (`jets`: the push behind you),
 
 ```
 index.ts         plugs it into the game: onto it and off it, what's under the wheels, the camera, the readout, your best saved
-skater.js        the physics: rolling, pushing, carving (harder with the jets), braking, the air, landing, bailing
+skater.js        the physics: rolling, pushing, carving (harder with a hand down, or the jets), braking, the air, landing, bailing
 tricks.js        what you did in the air: whether you landed it, what it's called, what it's worth
 session.js       a session's tally: how far, how fast, points and lines
 controls.js      the keys, read into what the skater is told; what to say they do
-pose.js          how you stand on it, push it and brake, square up for the jets and twist into a carve with them, lean and tumble; the board flipping under your feet
+pose.js          how you stand on it, push it and brake, square up for the jets and twist into a carve with them, lean and put a hand down, tumble; the board flipping under your feet
 board.js         the skateboard: deck, grip, trucks and wheels that turn
-sound.js         the wheels on the tarmac, boards and gravel, the slide, the wind; push, pop, land, bail
+sound.js         the wheels on the tarmac, boards and gravel, the slide, a glove on the tarmac, the wind; push, pop, land, bail
 others.js        what other people here are on
 skateboarding.css  the readout
 pictures.js      what a skateboard looks like in your pack
