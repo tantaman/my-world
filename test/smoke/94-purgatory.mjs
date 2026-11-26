@@ -66,6 +66,23 @@ export default async function ({ page, step, open, shot }) {
     return up;
   });
 
+  await step('the poem read aloud, in Hell’s own voice', async () => {
+    const aloud = await page.evaluate(async () => {
+      const { purgatory, hell } = world;
+      // the one reader reads both books (hell.reader, core/reader.ts)
+      const shared = purgatory.card.reader === hell.reader;
+      purgatory.go(1500, -0.1); // the long hillside of Ante-Purgatory
+      const read = await T.until(() => hell.reader.lines[0] === 'Ante-Purgatory', 30000);
+      return { shared, read, lines: hell.reader.lines, region: purgatory.region, card: purgatory.card.showing };
+    });
+    assert.ok(aloud.shared, 'the mountain is read in the same voice as the Inferno below it');
+    assert.equal(aloud.region, 'slope');
+    assert.ok(aloud.read, 'the slope’s words come up to be read');
+    assert.match(aloud.lines.at(-1), /Singing the Miserere verse by verse/, 'the poem’s own lines last');
+    assert.equal(aloud.card, 'Ante-Purgatory', 'and they are on the screen as they are read');
+    return aloud;
+  });
+
   await step('the law of the mountain, and sleep', async () => {
     const night = await page.evaluate(async () => {
       const { purgatory, player } = world;

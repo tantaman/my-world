@@ -38,6 +38,11 @@ interact, so it fades in after your first click, key press or tap.
 - **Voices** of the people you share a world with: from where they stand
   when they talk aloud, and through your radio when they're on it. See
   [Talking](../voice/README.md).
+- **Something spoken over the game** — the poem read aloud in
+  [Hell](../hell/README.md), the comics at [the Improv](../improv/README.md) —
+  is the browser's own voice and doesn't come through here at all, so it
+  can't be placed in the mix or heard through water. All the rest is turned
+  down while it speaks (`sound.under()`), and comes back up after.
 - **Footsteps** follow the stride of the walk and run animation. They
   change with the ground under you: packed earth and grit on paths and on
   the stony ground above the trees, a swish in grass, crackling leaf litter

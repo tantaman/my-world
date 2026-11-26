@@ -1,6 +1,6 @@
 // What's being said on the stage, on the screen: the speaker's name and
 // their line, at the bottom of it, as subtitles are. They're up whether or
-// not the browser can say the words aloud (voices.js), and whether or not
+// not the browser can say the words aloud (core/speech.ts), and whether or not
 // the sound is on.
 //
 //   const c = new Captions()

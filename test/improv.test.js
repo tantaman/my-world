@@ -17,7 +17,7 @@ import { program, cursor, person, everyone, speakTime, LAUGH } from '../src/impr
 import { COMICS, HOST, TROUPE, GAMES, ANNOUNCER } from '../src/improv/sets.js';
 import { ClubSpace, siteOf, roomAt, ROOMS, DOORWAYS, STAGES, SEATS, TABLES, MARKS, STAIRS, STREET, DOOR, DEPTH, toWorld } from '../src/improv/club.js';
 import { laughter, applause, murmur, shout, RATE, laughing, finish } from '../src/improv/laughs.js';
-import { Voices } from '../src/improv/voices.js';
+import { Voices } from '../src/core/speech.ts';
 import { buildClub } from '../src/improv/room.js';
 import { Templates, Audience } from '../src/improv/crowd.js';
 import { HIKES } from '../src/world/hikes.js';

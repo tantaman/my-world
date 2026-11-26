@@ -106,7 +106,11 @@ export function installPurgatory(game: Game) {
   const under = new THREE.Scene();
   under.userData.heat = true; // (the air shimmers over the fire of the seventh terrace)
   const air = new MountAir(sky, land);
-  const card = new Card({ id: 'purgatory', book: 'Purgatorio' });
+  // The poem read aloud, in the same voice that reads the Inferno below
+  // (hell.reader, core/reader.ts): what the card shows is said as you come
+  // to it, and Hell's own frame work turns the rest of the sound down while
+  // it speaks.
+  const card = new Card({ id: 'purgatory', book: 'Purgatorio', reader: hell.reader });
   const brow = new Brow();
   const heard = { inside: 0, region: '', sea: 0, high: 0, fire: 0, quake: 0, birds: 0, chant: '', chantFor: 0, moments: [] as string[] };
   sound.addLayer(mountSounds(heard));
@@ -190,8 +194,9 @@ export function installPurgatory(game: Game) {
   }
   function tellNow(words: Words, ms = CARD_MS) {
     queue.length = 0;
-    card.show(words, ms);
-    reading = ms / 1000;
+    // (how long they are up for: longer than ms where reading them aloud
+    // takes longer, so the next moment waits for the voice)
+    reading = card.show(words, ms) / 1000;
   }
   // What has been said this time on the mountain, that isn't said twice.
   const said = new Set<string>();
@@ -296,7 +301,7 @@ export function installPurgatory(game: Game) {
     await card.darken(true);
     const dream = dreams < DREAMS.length ? DREAMS[dreams] : SLEEP;
     dreams++;
-    card.show(dream, 9000);
+    reading = card.show(dream, 9000) / 1000;
     await wait(7000);
     if (region === 'valley' && !marked) {
       hours = DAY.lucia;
@@ -435,12 +440,16 @@ export function installPurgatory(game: Game) {
       }
       moments(dt, r, th, h);
 
-      // what is shown and heard
+      // what is shown and heard. The next moment waits out the one before it:
+      // for as long as its words are up, and for as long as the voice is
+      // still reading them, which is the longer of the two where the
+      // browser's voice is slower than the reckoning of it (core/reader.ts).
       if (reading > 0) reading -= dt;
-      else if (queue.length) {
+      else if (hell.reader.saying) {
+        /* still being read: it waits */
+      } else if (queue.length) {
         const next = queue.shift()!;
-        card.show(next.words, next.ms);
-        reading = next.ms / 1000;
+        reading = card.show(next.words, next.ms) / 1000;
       }
       brow.show(marked && !done ? 7 - wiped : 0, false);
       const eye = camera.position;

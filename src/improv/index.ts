@@ -16,7 +16,6 @@
 //   schedule.js     the week of shows, on Washington's clock; who's on the bill
 //   sets.js         the comics and their material, the troupe and its scenes
 //   performance.js  a show from the top: every line, when, who's on the stage
-//   voices.js       the browser's speech, a voice for each of them
 //   captions.js     the words on the screen
 //   laughs.js       laughter, applause, murmur: made from numbers
 //   sound.js        the room: the murmur, the house music, the laughs
@@ -46,7 +45,7 @@ import { DOOR, ADDRESS, STAIRS, STREET, SEATS, ClubSpace, siteOf, roomAt, toWorl
 import { showsAround, washington as inDC, lineupOf, isOpen, ROOMS as HALLS, KINDS, DOORS, seedOf } from './schedule.js';
 import { program, cursor, person } from './performance.js';
 import { TROUPE } from './sets.js';
-import { Voices } from './voices.js';
+import { Voices } from '../core/speech.ts';
 import { Captions } from './captions.js';
 import { clubSounds } from './sound.js';
 import * as pictures from './pictures.js';

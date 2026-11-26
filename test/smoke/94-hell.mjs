@@ -1,4 +1,5 @@
-// Hell: find the gate on the map, walk in through it and down the passage to
+// Hell: find the gate on the map, hear the lines over it read out, walk in
+// through it and down the passage to
 // the door, and through the door into Hell; cross Acheron in Charon's boat;
 // walk down the first way into the second circle; cross Styx in Phlegyas's
 // and go in at the gate of Dis; go down the great cliff on Geryon's back, over
@@ -42,11 +43,17 @@ export default async function ({ page, step, open, shot }) {
       await world.teleport(g.x - g.ux * 9, g.z - g.uz * 9, yaw);
       world.look(yaw + Math.PI, 0.1, 5);
       await T.until(() => !!hell.way.built, 30000);
-      return { place, built: !!hell.way.built, inside: hell.inside, card: hell.card.showing, forest: world.gen.forest(g.x, g.z) };
+      const card = hell.card.showing;
+      // up to the tablet over the gateway, whose lines are read to you there
+      await world.teleport(g.x - g.ux * 5, g.z - g.uz * 5, yaw);
+      await T.frames(3);
+      return { place, built: !!hell.way.built, inside: hell.inside, card, read: hell.reader.lines, forest: world.gen.forest(g.x, g.z) };
     });
     assert.ok(gate.place && gate.place.name === 'The Gate', 'it is on the map');
     assert.ok(gate.built, 'and stands by the time you get there');
     assert.equal(gate.card, 'The Dark Wood', 'the poem begins as you come on it');
+    assert.equal(gate.read.length, 9, 'the nine lines over the gateway are read to you');
+    assert.match(gate.read.at(-1), /All hope abandon/);
     assert.ok(!gate.inside, 'out in the forest still');
     await shot('hell-gate');
     // Hold W: in under the lintel, down the passage, and into the door.
@@ -69,6 +76,37 @@ export default async function ({ page, step, open, shot }) {
     assert.equal(below.card, 'The Vestibule');
     await shot('hell-vestibule');
     return below;
+  });
+
+  await step('the poem read aloud', async () => {
+    const aloud = await page.evaluate(async () => {
+      const { hell, sound } = world;
+      const r = hell.reader;
+      const was = r.lines;
+      // (the play-through runs muted, and this browser ships no voices
+      // anyway: so nothing is said, and the words are only on the card)
+      const quiet = { available: r.available, wanted: r.wanted, saying: r.saying, under: sound.spokenOver };
+      const up = hell.card.show({ title: 'A Place', lines: ['One line.', 'And another.'] }, 6000);
+      // and with it turned off, there is nothing to read at all
+      r.on = false;
+      hell.go(2550, 0.03);
+      await T.frames(4);
+      const off = { lines: r.lines.length, region: hell.region, card: hell.card.showing };
+      r.on = true;
+      hell.go(4100, 0.03);
+      await T.frames(4);
+      return { was, quiet, up, off, on: r.lines, region: hell.region, setting: !!document.getElementById('settings') };
+    });
+    assert.deepEqual(aloud.was.slice(0, 2), ['The Vestibule', 'those who lived without infamy or praise'], 'the place and who is there, read first');
+    assert.match(aloud.was.at(-1), /Resounded through the air without a star/, 'then the poem’s own lines');
+    assert.ok(!aloud.quiet.available && !aloud.quiet.wanted && !aloud.quiet.saying, 'this browser has no voice to read in');
+    assert.equal(aloud.up, 6000, 'so a place’s words are up for just as long as they ever were');
+    assert.equal(aloud.quiet.under, 0, 'and nothing is turned down for a voice');
+    assert.equal(aloud.off.lines, 0, 'turned off, there is nothing to read');
+    assert.match(aloud.off.card, /Sixth Circle/, 'though the words are still shown');
+    assert.equal(aloud.region, 'limbo');
+    assert.deepEqual(aloud.on.slice(0, 1), ['The First Circle · Limbo'], 'turned on again, it reads the place you walk into');
+    return aloud;
   });
 
   await step('over Acheron', async () => {

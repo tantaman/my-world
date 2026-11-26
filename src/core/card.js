@@ -7,11 +7,16 @@
 // named for it (#hell-card, #hell-dark), and says which book its cantos are
 // from.
 //
-//   const card = new Card({ id: 'hell', book: 'Inferno' });
-//   card.show({ title, who, lines: ['…', '…'], canto: 'III' }, ms);
+// Given a reader (core/reader.ts), what it shows is also read aloud, and
+// the words are left up until the reading is done rather than for the while
+// they take to read off the screen.
+//
+//   const card = new Card({ id: 'hell', book: 'Inferno', reader });
+//   card.show({ title, who, lines: ['…', '…'], canto: 'III' }, ms);  // -> ms up
 //   await card.darken(true);  …  await card.darken(false);
 
 const FADE = 0.9; // s: how long the dark takes to come and to go
+const LINGER = 1400; // ms the words stay up after the last of them has been read
 
 const style = (id) => `
 #${id}-dark { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 5; transition: opacity ${FADE}s ease, background-color ${FADE}s ease; }
@@ -28,10 +33,13 @@ const style = (id) => `
 
 export class Card {
   // id: what its elements are named for · book: what a canto is of
-  // ('Inferno') · doc: the document, or nothing where there isn't one (the
-  // rules are checked without a page)
-  constructor({ id, book, doc = typeof document !== 'undefined' ? document : null }) {
+  // ('Inferno') · reader: the voice it is read aloud in, if any
+  // (core/reader.ts) · doc: the document, or nothing where there isn't one
+  // (the rules are checked without a page)
+  /** @param {{ id: string, book?: string, reader?: import('./reader.ts').Reader | null, doc?: Document | null }} where */
+  constructor({ id, book, reader = null, doc = typeof document !== 'undefined' ? document : null }) {
     this.book = book;
+    this.reader = reader;
     this.fade = FADE;
     this._timer = 0;
     if (!doc) return;
@@ -49,15 +57,22 @@ export class Card {
   // Go dark, or come back out of it; in `color` (a CSS colour: black, unless
   // it is light you go into). -> a promise for when it has.
   darken(on, color = '#000') {
+    // (going into the dark is leaving where you were: whatever was being
+    // read there is not read on over the next place)
+    if (on) this.reader?.stop();
     if (!this.dark) return Promise.resolve();
     if (on) this.dark.style.backgroundColor = color;
     this.dark.classList.toggle('on', on);
     return new Promise((done) => setTimeout(done, FADE * 1000));
   }
 
-  // A place's words (title, who, lines, canto), for `ms`.
+  // A place's words (title, who, lines, canto), for `ms` — or for as long as
+  // reading them aloud takes, where that is longer. -> how long they are up.
   show(words, ms = 9000) {
-    if (!this.card || !words) return;
+    if (!words) return 0;
+    const spoken = this.reader ? this.reader.read(words) : 0;
+    const up = Math.max(ms, spoken ? spoken + LINGER : 0);
+    if (!this.card) return up;
     const div = (cls, text) => {
       const el = this.card.ownerDocument.createElement('div');
       el.className = cls;
@@ -75,11 +90,13 @@ export class Card {
     if (words.canto) this.card.appendChild(div('canto', `${words.book || this.book} ${words.canto}`));
     this.card.classList.add('on');
     clearTimeout(this._timer);
-    this._timer = setTimeout(() => this.card.classList.remove('on'), ms);
+    this._timer = setTimeout(() => this.card.classList.remove('on'), up);
+    return up;
   }
 
-  // Take down whatever is shown, now.
+  // Take down whatever is shown, now, and stop reading it.
   hide() {
+    this.reader?.stop();
     if (!this.card) return;
     clearTimeout(this._timer);
     this.card.classList.remove('on');
