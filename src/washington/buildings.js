@@ -71,9 +71,11 @@ const FRONT_FROM = 4.5;
 const ROW_UNDER = { tall: 15, big: 450 };
 const GLASSY = 0.3;
 const SINK = 0.6; // m a wall goes on down below the lowest ground under it
+const FOOT_EVERY = 4; // m between the places along a wall the ground under it is looked at (twice that far off)
 const WALL_R = 0.25; // m, how thick a wall is to bump into
-const STEP = 0.3; // m: a smaller step between two faces of a roof is no wall
-const Q = 4; // corners within 1/Q m are the same corner, for the walls
+const STEP = 0.03; // m: a smaller step between two faces of a roof is no wall (a bigger one left open is a slit to see through)
+const Q = 4; // corners within 1/Q m are the same corner, for the walls…
+const FINE_Q = 1000; // …but for the two ends of an edge shorter than that
 const PER_STEP = 40; // buildings built between one step and the next
 
 const hash = (n) => {
@@ -185,9 +187,14 @@ export function* buildBuildings(buildings, { ground, offset, names = new Map(), 
         for (let e = 0; e < ring.length; e++) {
           const a = ring[e];
           const c = ring[(e + 1) % ring.length];
-          const ka = Math.round(X(a) * Q) * 65536 + Math.round(Z(a) * Q);
-          const kc = Math.round(X(c) * Q) * 65536 + Math.round(Z(c) * Q);
-          if (ka === kc) continue;
+          let ka = Math.round(X(a) * Q) * 65536 + Math.round(Z(a) * Q);
+          let kc = Math.round(X(c) * Q) * 65536 + Math.round(Z(c) * Q);
+          // (an edge shorter than that is still a piece of wall: without
+          // it there's a slit in the corner it turns)
+          if (ka === kc) {
+            [ka, kc] = [`${Math.round(X(a) * FINE_Q)},${Math.round(Z(a) * FINE_Q)}`, `${Math.round(X(c) * FINE_Q)},${Math.round(Z(c) * FINE_Q)}`];
+            if (ka === kc) continue;
+          }
           const key = ka < kc ? `${ka}|${kc}` : `${kc}|${ka}`;
           // (each kept running the same way, so the ends line up)
           const pair = ka < kc ? [a, c, side] : [c, a, -side];
@@ -205,8 +212,11 @@ export function* buildBuildings(buildings, { ground, offset, names = new Map(), 
       let bottoms;
       if (list.length === 1) {
         tops = [roofY(a), roofY(c)];
+        // (down to the lowest ground under it, looked at every few metres
+        // along it: a long wall over a dip would stand clear of the ground)
         let lo = Math.min(ground(ax, az), ground(bx, bz));
-        if (detail) for (let t = 0.25; t < 1; t += 0.25) lo = Math.min(lo, ground(ax + (bx - ax) * t, az + (bz - az) * t));
+        const looks = Math.ceil(len / (detail ? FOOT_EVERY : FOOT_EVERY * 2));
+        for (let s = 1; s < looks; s++) lo = Math.min(lo, ground(ax + ((bx - ax) * s) / looks, az + ((bz - az) * s) / looks));
         bottoms = [lo - SINK, lo - SINK];
         if (detail) solids.push({ ax, az, bx, bz, r: WALL_R, bottom: lo - 1, topA: tops[0], topB: tops[1], wall: true });
       } else {

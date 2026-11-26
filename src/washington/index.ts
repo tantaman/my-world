@@ -273,7 +273,6 @@ export function installWashington(game: Game) {
   // ── The forest round it ────────────────────────────────────────────────────
   // No tree in a building or on a street, none hard against a wall, no grass
   // on the paving. (Chunks grown before a tile is stood up are gone over when it is.)
-  const SMALL = new Set(['bush', 'fern']);
   function clearChunk(ch: { cx: number; cz: number; vegLists?: Record<string, Float32Array | number[]> }, tiles: Iterable<CityTile> = up.values()) {
     if (!ch.vegLists) return;
     const S = chunks.size;
@@ -282,11 +281,10 @@ export function installWashington(game: Game) {
     if (!over.length) return;
     for (const kind in ch.vegLists) {
       const list = ch.vegLists[kind];
-      const small = SMALL.has(kind);
       for (let o = 0, k = 0; o < list.length; o += VEG_STRIDE, k++) {
         if (list[o + 4] <= 0) continue;
         const [x, z] = [list[o], list[o + 2]];
-        if (over.some((t) => x >= t.box[0] && x < t.box[2] && z >= t.box[1] && z < t.box[3] && t.clears(x, z, small))) chunks.hideInstance(ch, kind, k);
+        if (over.some((t) => x >= t.box[0] && x < t.box[2] && z >= t.box[1] && z < t.box[3] && t.clears(x, z, kind))) chunks.hideInstance(ch, kind, k);
       }
     }
   }

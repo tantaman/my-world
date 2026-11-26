@@ -95,18 +95,20 @@ export function* buildPaving(tile, { ground, offset, seed = 0, detail = true, ow
   for (let k = 0; k < tile.paving.length; k++) {
     if (k % PER_STEP === PER_STEP - 1) yield;
     const p = tile.paving[k];
-    let look = LOOKS[p.kind];
-    if (!look) continue;
-    if (p.kind === 'sidewalk' && hash(seed * 31 + k) < BRICK.share && ringArea(p.rings[0]) < BRICK.most) look = { ...look, ...BRICK };
-    const col = _c.set(look.col).clone();
-    const tone = 0.94 + hash(seed + k * 7) * 0.1;
+    const pl = lookOf(p, k, seed);
+    if (!pl) continue;
+    const { look, r, g, b } = pl;
     for (const poly of polygonsOf(p.rings)) {
       const stripe = detail && p.kind === 'road' ? stripeOf(poly) : null;
       const grid = look.surf === SURF.asphalt ? terrainGrid : null;
-      yield* lay(paving, poly, under, look.lift, col.r * tone, col.g * tone, col.b * tone, look.surf, fine, false, stripe, grid, grid ? coarse : []);
-      if (detail && look.curb) for (const ring of [poly.outer, ...poly.holes]) curb(paving, ring, under, look.lift, col.r * tone * 0.85, col.g * tone * 0.85, col.b * tone * 0.85);
+      yield* lay(paving, poly, under, look.lift, r, g, b, look.surf, fine, false, stripe, grid, grid ? coarse : []);
+      if (detail && look.curb) for (const ring of [poly.outer, ...poly.holes]) curb(paving, ring, under, look.lift, r * 0.85, g * 0.85, b * 0.85);
     }
   }
+
+  // ── the seams: where the survey left a sliver of lawn between one piece
+  // of paving and the next, or between paving and a wall
+  if (detail) yield* seams(tile, paving, under, seed);
 
   // ── the bridges: each deck's slab, its parapets and its piers
   const dc = _c.set(DECK_COL).clone();
@@ -175,6 +177,181 @@ export function* buildPaving(tile, { ground, offset, seed = 0, detail = true, ow
     }
   }
   return { paving, bridges, solids, decks };
+}
+
+// What the k-th piece of paving of a tile looks like: { look, r, g, b }
+// (LOOKS', or brick, and its own tone of it), or null if it isn't drawn.
+function lookOf(p, k, seed) {
+  let look = LOOKS[p.kind];
+  if (!look) return null;
+  if (p.kind === 'sidewalk' && hash(seed * 31 + k) < BRICK.share && ringArea(p.rings[0]) < BRICK.most) look = { ...look, ...BRICK };
+  const col = _c.set(look.col);
+  const tone = 0.94 + hash(seed + k * 7) * 0.1;
+  return { look, r: col.r * tone, g: col.g * tone, b: col.b * tone };
+}
+
+// The seams. The survey drew each piece of paving on its own, and where two
+// meet it often left a sliver of ground between them, or between a sidewalk
+// and the wall it runs up to: a line of lawn down the middle of an avenue,
+// along a curb, at the foot of a building. Each piece is carried on over a
+// sliver no wider than SEAM.most to what's on its far side: halfway, to
+// another piece laid at its own height (a street to a street, a sidewalk to
+// a sidewalk); all the way to a wall, or under a raised sidewalk's curb. A
+// tree's box, or a strip of lawn wider than that, is left as it is. What's
+// where is looked at on squares SEAM.cell m across; a step between yields
+// looks across at SEAM.perStep points along the edges.
+const SEAM = { most: 1.6, cell: 0.25, step: 0.5, even: 0.12, over: 0.06, under: 0.004, perStep: 1500 };
+const WALL = 0xffff; // (on the squares: a building)
+function* seams(tile, batch, height, seed) {
+  // the squares: which piece of paving (k + 1) or a building is on each
+  let [x0, z0, x1, z1] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const p of tile.paving) {
+    for (const r of p.rings) {
+      for (let i = 0; i < r.length; i += 2) [x0, z0, x1, z1] = [Math.min(x0, r[i]), Math.min(z0, r[i + 1]), Math.max(x1, r[i]), Math.max(z1, r[i + 1])];
+    }
+  }
+  if (!(x1 > x0)) return;
+  [x0, z0] = [x0 - SEAM.most - 1, z0 - SEAM.most - 1];
+  const C = SEAM.cell;
+  const w = Math.ceil((x1 - x0 + SEAM.most + 1) / C) + 1;
+  const h = Math.ceil((z1 - z0 + SEAM.most + 1) / C) + 1;
+  const on = new Uint16Array(w * h);
+  yield;
+  // (each edge looked at only on the rows it crosses)
+  const fill = (rings, v) => {
+    const rows = new Map();
+    let [j0, j1] = [Infinity, -Infinity];
+    for (const r of rings) {
+      for (let a = 0, b = r.length - 2; a < r.length; b = a, a += 2) {
+        const [za, zb] = [r[b + 1], r[a + 1]];
+        if (za === zb) continue;
+        // the rows whose middles it spans
+        const ja = Math.max(0, Math.ceil((Math.min(za, zb) - z0) / C - 0.5));
+        const jb = Math.min(h - 1, Math.ceil((Math.max(za, zb) - z0) / C - 0.5) - 1);
+        if (jb < ja) continue;
+        const e = { ja, jb, x: r[b], z: za, slope: (r[a] - r[b]) / (zb - za) };
+        if (!rows.has(ja)) rows.set(ja, []);
+        rows.get(ja).push(e);
+        [j0, j1] = [Math.min(j0, ja), Math.max(j1, jb)];
+      }
+    }
+    let active = [];
+    const xs = [];
+    for (let j = j0; j <= j1; j++) {
+      const z = z0 + (j + 0.5) * C;
+      active = active.filter((e) => e.jb >= j);
+      const starting = rows.get(j);
+      if (starting) active.push(...starting);
+      xs.length = 0;
+      for (const e of active) xs.push(e.x + (z - e.z) * e.slope);
+      xs.sort((p, q) => p - q);
+      for (let n = 0; n + 1 < xs.length; n += 2) {
+        const i1 = Math.min(w - 1, Math.floor((xs[n + 1] - x0) / C - 0.5));
+        for (let i = Math.max(0, Math.ceil((xs[n] - x0) / C - 0.5)); i <= i1; i++) on[j * w + i] = v;
+      }
+    }
+  };
+  // (a building's roof, all its faces at once: they lie side by side)
+  let edges = 0;
+  for (const b of tile.buildings) {
+    fill(b.faces.map((f) => f[0].flatMap((q) => [b.pts[q * 3], b.pts[q * 3 + 1]])), WALL);
+    edges += b.pts.length;
+    if (edges > SEAM.perStep * 3) {
+      edges = 0;
+      yield;
+    }
+  }
+  yield;
+  const looks = tile.paving.map((p, k) => lookOf(p, k, seed));
+  for (let k = 0; k < tile.paving.length; k++) {
+    if (looks[k]) fill(tile.paving[k].rings, k + 1);
+    if (k % 4 === 3) yield;
+  }
+  const at = (x, z) => {
+    const i = Math.floor((x - x0) / C);
+    const j = Math.floor((z - z0) / C);
+    return i < 0 || j < 0 || i >= w || j >= h ? 0 : on[j * w + i];
+  };
+  // How far out from (x, z), along (nx, nz), the sliver of ground goes
+  // before what's on its far side (0 if it's no sliver); and what that is.
+  // (paving straight on past the edge is no sliver)
+  const across = (x, z, nx, nz, k) => {
+    let open = false;
+    for (let d = C / 2; d <= SEAM.most; d += C / 2) {
+      const v = at(x + nx * d, z + nz * d);
+      // (its own square, still: a slanting edge cuts across squares)
+      if (v === k + 1 && !open && d < C * 1.5) continue;
+      if (v === k + 1) return [0, 0];
+      if (v) return open ? [d, v] : [0, 0];
+      open = true;
+    }
+    return [0, 0];
+  };
+  let work = 0;
+  for (let k = 0; k < tile.paving.length; k++) {
+    const mine = looks[k];
+    if (!mine) continue;
+    const { look, r, g, b } = mine;
+    for (const ring of tile.paving[k].rings) {
+      const n = ring.length / 2;
+      for (let e = 0; e < n; e++) {
+        const [ax, az] = [ring[e * 2], ring[e * 2 + 1]];
+        const [bx, bz] = [ring[((e + 1) % n) * 2], ring[((e + 1) % n) * 2 + 1]];
+        const len = Math.hypot(bx - ax, bz - az);
+        if (len < 0.05) continue;
+        const [ux, uz] = [(bx - ax) / len, (bz - az) / len];
+        // which side is out: the one this piece isn't on
+        const [mx, mz] = [(ax + bx) / 2, (az + bz) / 2];
+        let [nx, nz] = [-uz, ux];
+        const left = at(mx + nx * C, mz + nz * C) === k + 1;
+        const right = at(mx - nx * C, mz - nz * C) === k + 1;
+        if (left === right) continue;
+        if (left) [nx, nz] = [-nx, -nz];
+        // along the edge, how far over the sliver each point is carried;
+        // a strip laid over it from one point to the next, or on to the
+        // one after while it's as wide (SEAM.even) and not too long to lie
+        // on the ground (FINE)
+        const steps = Math.max(1, Math.ceil(len / SEAM.step));
+        let from = null;
+        let last = null;
+        const lay = (a, z) => {
+          const [px, pz, pr] = a;
+          const [x, zz, reach] = z;
+          const lift = look.lift - SEAM.under;
+          const corner = (cx, cz) => [cx, height(cx, cz) + lift, cz];
+          const q = [corner(px, pz), corner(x, zz), corner(x + nx * reach, zz + nz * reach), corner(px + nx * pr, pz + nz * pr)];
+          const run = Math.hypot(x - px, zz - pz);
+          // (wound to face up)
+          if (ux * nz - uz * nx > 0) batch.quad(q[0], q[3], q[2], q[1], r, g, b, look.surf, [0, 0, 0, pr, run, reach, run, 0]);
+          else batch.quad(q[0], q[1], q[2], q[3], r, g, b, look.surf, [0, 0, run, 0, run, reach, 0, pr]);
+        };
+        for (let s = 0; s <= steps; s++) {
+          if (++work % SEAM.perStep === 0) yield;
+          const t = (len * s) / steps;
+          const [x, z] = [ax + ux * t, az + uz * t];
+          const [d, v] = across(x, z, nx, nz, k);
+          let reach = 0;
+          if (d > 0) {
+            const theirs = v === WALL ? null : looks[v - 1]?.look;
+            // halfway to paving laid at its own height; under a curb, or to a wall, all the way
+            const level = theirs && Math.abs(theirs.lift - look.lift) < 0.03;
+            const below = theirs && theirs.lift > look.lift;
+            if (level) reach = d / 2 + SEAM.over;
+            else if (below || v === WALL) reach = d + SEAM.over;
+          }
+          const here = reach > 0 ? [x, z, reach] : null;
+          if (here && from && Math.abs(here[2] - from[2]) < SEAM.even && Math.hypot(x - from[0], z - from[1]) < FINE && s < steps) {
+            last = here;
+            continue;
+          }
+          if (from && last) lay(from, last);
+          if (from && here) lay(last || from, here);
+          from = here;
+          last = null;
+        }
+      }
+    }
+  }
 }
 
 // The outline alone identifies some straight blocks reliably. Curves,

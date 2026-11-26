@@ -22,7 +22,7 @@ import * as THREE from 'three';
 import { createBuildingMaterial } from '../build/surfaces.js';
 
 export { buildPiece, piecesOf, PIECE } from './track.js';
-export { buildLevel, buildVault, buildEntrance, ENTRANCE } from './stations.js';
+export { buildLevel, buildVault, buildEntrance } from './stations.js';
 export { MetroTrain, TrainKit, SEATS, CAR } from './trains.js';
 
 // how much of its colour each gives off as light of its own, and how much
