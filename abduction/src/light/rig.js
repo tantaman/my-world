@@ -33,7 +33,7 @@ export const LIGHTS = {
   ufo: { colour: new Color('#dfeaff'), cd: 250, reach: 40 },
   beam: { colour: new Color('#e8f2ff'), cd: 2500, angle: 0.16, penumbra: 0.6 },
   sky: { colour: new Color('#3a3842'), ground: new Color('#1a1714'), lux: 0.9 },
-  bounce: { colour: new Color('#d8d6cc'), nits: 0.5 },
+  bounce: { colour: new Color('#d8d6cc'), nits: 0.22 },
 };
 
 // How strongly each light lights the fog, per candela (weather/fog.js).
