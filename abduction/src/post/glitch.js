@@ -15,6 +15,6 @@ export const glitch = Fn(([uv, t, g]) => {
   const pick = hash(by.mul(13.1).add(bx.mul(5.3)).add(frame.mul(1.7)));
   const amount = mix(0.05, 0.15, hash(by.add(frame.mul(3.3)).add(1.1)));
   const dir = step(0.5, hash(by.add(frame).add(7.7))).mul(2).sub(1);
-  const moves = step(0.35, pick).mul(step(0.02, g));
+  const moves = step(0.6, pick).mul(step(0.02, g));
   return vec2(amount.mul(dir).mul(moves).mul(g.mul(1.5).min(1)), g.mul(0.01));
 });
