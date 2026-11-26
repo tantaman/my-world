@@ -68,11 +68,17 @@ export class Batch {
 
   // A flat quad a, b, c, d (each [x, y, z], round in that order), facing
   // the way that winding says, its pattern's grain (u, v) given per corner.
+  // Its normal is across its diagonals, so one that has closed up to a
+  // triangle at a corner (a wall where the roof comes down to the ground)
+  // still faces the right way: a normal of nothing is NaN in the shader, and
+  // one NaN pixel is a white blot across the bloom.
   quad(a, b, c, d, r, g, bl, surf, uvs) {
-    const [ex, ey, ez] = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-    const [fx, fy, fz] = [d[0] - a[0], d[1] - a[1], d[2] - a[2]];
+    const [ex, ey, ez] = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const [fx, fy, fz] = [d[0] - b[0], d[1] - b[1], d[2] - b[2]];
     let [nx, ny, nz] = [ey * fz - ez * fy, ez * fx - ex * fz, ex * fy - ey * fx];
-    const l = Math.hypot(nx, ny, nz) || 1;
+    const l = Math.hypot(nx, ny, nz);
+    // (and one with no area at all isn't drawn)
+    if (l < 1e-9) return;
     [nx, ny, nz] = [nx / l, ny / l, nz / l];
     const k = this.vertex(a[0], a[1], a[2], nx, ny, nz, r, g, bl, surf, uvs[0], uvs[1]);
     this.vertex(b[0], b[1], b[2], nx, ny, nz, r, g, bl, surf, uvs[2], uvs[3]);

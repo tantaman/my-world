@@ -33,9 +33,16 @@ const VERGE = 8;
 // with a third thing wants a bit of its own.
 const TARMAC = 16;
 const GRASS_CLEARANCE = 1.1; // blade lean and the half-diagonal of a mask cell
-// What the forest keeps off (m): how far a tree keeps from a wall, and from
-// the kerb; a bush or a fern, from a wall.
-export const KEEP = { building: 2.5, paved: 0.8, small: 0.6 };
+// What the forest keeps off (m), by what it is: how far from a wall, and
+// from the paving's edge (a bush spreads, and a fallen log lies a long way
+// from where it's rooted: either, too near, is out across the sidewalk).
+export const KEEP = {
+  tree: { building: 2.5, paved: 0.8 },
+  bush: { building: 0.6, paved: 1.0 },
+  fern: { building: 0.6, paved: 0.6 },
+  rock: { building: 1.5, paved: 1.0 },
+  log: { building: 2.5, paved: 2.5 },
+};
 const CELL = 1; // m, the grid's squares
 const PAD = 40; // m of grid round the tile, for what strays over its edge
 const GROUND_CELL = 2; // sample on the same grid and diagonal as the terrain
@@ -253,12 +260,13 @@ export class CityTile {
     }
     return false;
   }
-  // Whether a plant at (x, z) is to go: on a roof or the paving, or a tree
-  // too near a wall. small: a fern or a bush.
-  clears(x, z, small = false) {
+  // Whether a plant at (x, z) is to go: on a roof or the paving, or too
+  // near a wall or the paving's edge for what it is (KEEP's; a tree, if it
+  // isn't there).
+  clears(x, z, kind = 'tree') {
     if (this.use(x, z)) return true;
-    if (small) return this.near(x, z, KEEP.small, USE.building);
-    return this.near(x, z, KEEP.building, USE.building) || this.near(x, z, KEEP.paved, USE.paved);
+    const keep = KEEP[kind] || KEEP.tree;
+    return this.near(x, z, keep.building, USE.building) || this.near(x, z, keep.paved, USE.paved);
   }
   // Whether grass grows at (x, z): not on what's paved or built.
   bare(x, z) {

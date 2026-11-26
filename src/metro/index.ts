@@ -48,7 +48,7 @@ import { inflate } from '../world/earth.js';
 import { setCuts } from '../world/cuts.js';
 import { SEAT_HIPS } from '../player/character.js';
 import { METRO } from './metro.js';
-import { Network, readSystem, pointAt, onLevel, TUNNEL } from './network.js';
+import { Network, readSystem, pointAt, onLevel, TUNNEL, ENTRANCE } from './network.js';
 import { Timetable, arrivals, TRAIN_LEN, CAR_LEN, CARS } from './timetable.js';
 import { MetroSpace } from './space.js';
 import { metroSounds } from './sound.js';
@@ -117,6 +117,7 @@ const BOARDS_NEAR = 220; // m: the boards this near are kept up to date
 const SITTING = { spread: 0.12, hang: 0.48, fwd: 0.38, lean: -0.05, reins: 0 };
 // How far (m) the forest's plants are kept back from track over the street.
 const PLANTS_OFF: Record<string, number> = { pine: 4.5, broad: 5, birch: 4, bush: 3, fern: 2, rock: 2.5, log: 3 };
+const GRASS_OFF_WELL = 0.4; // m the grass is kept back from an entrance's well and parapets
 const ID = 'metro:';
 
 // (after the caves, the far view and the country, whose say each frame about
@@ -145,6 +146,8 @@ export function installMetro(game: Game) {
   let pieces: Piece[] = [];
   // the stretches of track over the street, by the square they're in, to keep the forest off
   const overGrid = new Map<string, Array<[number, number, number, number]>>();
+  // and the entrances under the street, the same way
+  const wellGrid = new Map<string, Entrance[]>();
   const GRID = 64;
   function load(): Promise<Network> {
     if (loading) return loading;
@@ -184,6 +187,20 @@ export function installMetro(game: Game) {
           }
         }
       }
+      // the entrances' wells under the street, by the square they're in
+      for (const st of n.stations) {
+        if (st.kind !== 'underground') continue;
+        for (const e of st.entrances) {
+          const [x, z, r] = [e.x + Math.sin(e.yaw) * ENTRANCE.well.run * 0.5, e.z + Math.cos(e.yaw) * ENTRANCE.well.run * 0.5, ENTRANCE.well.run * 0.5 + PLANTS_OFF.broad + 5];
+          for (let gi = Math.floor((x - r) / GRID); gi <= Math.floor((x + r) / GRID); gi++) {
+            for (let gj = Math.floor((z - r) / GRID); gj <= Math.floor((z + r) / GRID); gj++) {
+              const key = `${gi},${gj}`;
+              if (!wellGrid.has(key)) wellGrid.set(key, []);
+              wellGrid.get(key)!.push(e);
+            }
+          }
+        }
+      }
       net = n;
       // the plants already grown there, and the grass
       for (const ch of chunks.chunks.values()) clearChunk(ch);
@@ -215,6 +232,20 @@ export function installMetro(game: Game) {
     }
     return false;
   }
+  // …and none in an entrance's well, on its parapets, or round its pylon:
+  // whether (x, z) is within `more` m of one
+  function atWell(x: number, z: number, more: number) {
+    const list = wellGrid.get(`${Math.floor(x / GRID)},${Math.floor(z / GRID)}`);
+    if (!list) return false;
+    const { well: W, pylon: P } = ENTRANCE;
+    for (const e of list) {
+      const [dx, dz] = [Math.sin(e.yaw), Math.cos(e.yaw)];
+      const u = (x - e.x) * dx + (z - e.z) * dz;
+      const c = (x - e.x) * -dz + (z - e.z) * dx;
+      if (u > -more && u < W.run + 0.3 + more && c > -W.half - 0.3 - more && c < W.half + 0.9 + P.half + more) return true;
+    }
+    return false;
+  }
   function clearChunk(ch: { cx: number; cz: number; vegLists?: Record<string, Float32Array | number[]> }) {
     if (!net || !ch.vegLists) return;
     const S = chunks.size;
@@ -224,14 +255,14 @@ export function installMetro(game: Game) {
       const keep = PLANTS_OFF[kind] ?? 3;
       for (let o = 0, k = 0; o < list.length; o += VEG_STRIDE, k++) {
         if (list[o + 4] <= 0) continue;
-        if (offTrack(list[o], list[o + 2], keep)) chunks.hideInstance(ch, kind, k);
+        if (offTrack(list[o], list[o + 2], keep) || atWell(list[o], list[o + 2], keep)) chunks.hideInstance(ch, kind, k);
       }
     }
   }
   chunks.on('vegetation', (ch: Parameters<typeof clearChunk>[0]) => clearChunk(ch));
   grass.addClearing((x0: number, z0: number, x1: number, z1: number) => {
     if (!net || !inReach((x0 + x1) / 2, (z0 + z1) / 2, 100)) return null;
-    return (x: number, z: number) => offTrack(x, z, 2.6);
+    return (x: number, z: number) => offTrack(x, z, 2.6) || atWell(x, z, GRASS_OFF_WELL);
   });
   // a builder's tools go round the track over the street, and the entrances
   builder.obstacles.addSource(
@@ -346,7 +377,7 @@ export function installMetro(game: Game) {
     const under = st.kind === 'underground';
     const group = m.buildEntrance(e, st, { ground, mats: mats!, under });
     const key = `entrance:${st.k}:${e.i}`;
-    const W = m.ENTRANCE.well;
+    const W = ENTRANCE.well;
     let dispose: (() => void) | undefined;
     if (under) {
       const [dx, dz] = [Math.sin(e.yaw), Math.cos(e.yaw)];

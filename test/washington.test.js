@@ -335,7 +335,7 @@ test('a tile of the city stands up a little at a time: its buildings, its street
   }
   assert.ok(roofed, 'a spot under a roof');
   assert.ok(t.use(...roofed) & USE.building, 'is a building');
-  assert.ok(t.clears(...roofed) && t.clears(...roofed, true), 'and no plant grows there');
+  assert.ok(t.clears(...roofed) && t.clears(...roofed, 'fern'), 'and no plant grows there');
   assert.ok(t.bare(...roofed), 'nor grass');
   // what's where reaches as far as anything the tile holds (the Capitol's
   // grounds' sidewalks, one polygon, reach well over into the next tile)

@@ -45,7 +45,7 @@ import * as THREE from 'three';
 import { Mesher } from '../build/geometry.js';
 import { SURF } from '../build/surfaces.js';
 import { quad, box } from '../build/faces.js';
-import { fromLevel, TUBE } from './network.js';
+import { fromLevel, TUBE, ENTRANCE } from './network.js';
 import { meshOf } from './track.js';
 import { pylonTop, nameBoard, arrivalBoard } from './signs.js';
 
@@ -64,9 +64,9 @@ const BENCH = { half: 1.1, depth: 0.44, seat: 0.46 };
 const BOARD = { w: 1.9, h: 0.48, low: 2.55, at: [0.32, 0.68] }; // an arrival board: m wide, high, its bottom over the floor; where along
 const TROUGH = { wide: 0.9, high: 0.85, lip: 0.12 }; // the lamps' trough along the vault's foot
 const CANOPY = { up: 3.7, wing: 0.85, thick: 0.32, every: 14 };
-const WELL = { half: 2.2, run: 12, slope: 0.55, wall: 1.05 }; // an entrance's escalator well: half its width, how long, how steep, its parapet
+const WELL = ENTRANCE.well; // an entrance's escalator well (network.js)
 const ENTRY_ROOF = { run: 7.5, up: 3.4, rib: 1.5 }; // the glass canopy over a well's top: how far down it, how high, m between ribs
-const PYLON = { half: 0.3, h: 4.0, top: 1.1 }; // the brown pylon at an entrance: half its width, its height, its M and bands
+const PYLON = ENTRANCE.pylon; // the brown pylon at an entrance
 
 // How the coves light the vault: m it reaches before it's fallen to half,
 // and how steeply it falls past that; how much a face turned a little away
@@ -615,15 +615,34 @@ export function buildEntrance(e, station, { ground, mats, under }) {
     const at = (u, c, y) => [e.x + dx * u + rx * c, y, e.z + dz * u + rz * c];
     const depth = WELL.run * WELL.slope;
     m.surf = SURF.stone;
+    // The ground beside it isn't level: how low and how high it goes along
+    // a side (c across, at the parapet's outside), or across the far end.
+    const groundAt = (u, c) => ground(e.x + dx * u + rx * c, e.z + dz * u + rz * c);
+    const along = (c) => {
+      let [lo, hi] = [g0, g0];
+      for (let u = 0; u <= WELL.run + 0.3; u += 1) {
+        const g = groundAt(u, c);
+        [lo, hi] = [Math.min(lo, g), Math.max(hi, g)];
+      }
+      return [lo, hi];
+    };
+    const outside = WELL.half + 0.3;
     for (const s of [-1, 1]) {
       const c = s * WELL.half;
-      // the wall, inside
-      face(m, at(0, c, g0 + 0.1), at(WELL.run, c, g0 + 0.1), at(WELL.run, c, g0 - depth - 0.5), at(0, c, g0 - 0.5), PAL.granite, [-rx * s, 0, -rz * s]);
+      const [lo, hi] = along(s * outside);
+      // the wall, inside, up to the ground beside it where that's higher
+      const top = Math.max(g0, hi) + 0.1;
+      face(m, at(0, c, top), at(WELL.run, c, top), at(WELL.run, c, g0 - depth - 0.5), at(0, c, g0 - 0.5), PAL.granite, [-rx * s, 0, -rz * s]);
       // the parapet along the top
       box(m, ...at(WELL.run / 2, c + s * 0.15, g0 + WELL.wall / 2 - 0.1), 0.15, WELL.wall / 2 + 0.1, WELL.run / 2 + 0.15, e.yaw, PAL.granite);
+      // and its outside on down, where the ground falls away from it
+      if (lo < g0 - 0.15) face(m, at(0, s * outside, g0 - 0.2), at(WELL.run + 0.3, s * outside, g0 - 0.2), at(WELL.run + 0.3, s * outside, lo - 0.3), at(0, s * outside, lo - 0.3), PAL.granite, [rx * s, 0, rz * s]);
     }
     // and across the far end, and the end wall below it
     box(m, ...at(WELL.run + 0.15, 0, g0 + WELL.wall / 2 - 0.1), WELL.half + 0.3, WELL.wall / 2 + 0.1, 0.15, e.yaw, PAL.granite);
+    let end = g0;
+    for (let c = -outside; c <= outside; c += 1) end = Math.min(end, groundAt(WELL.run + 0.3, c));
+    if (end < g0 - 0.15) face(m, at(WELL.run + 0.3, -outside, g0 - 0.2), at(WELL.run + 0.3, outside, g0 - 0.2), at(WELL.run + 0.3, outside, end - 0.3), at(WELL.run + 0.3, -outside, end - 0.3), PAL.granite, [dx, 0, dz]);
     m.surf = SURF.concrete;
     face(m, at(WELL.run, -WELL.half, g0 + 0.1), at(WELL.run, WELL.half, g0 + 0.1), at(WELL.run, WELL.half, g0 - depth - 3), at(WELL.run, -WELL.half, g0 - depth - 3), PAL.wall, [-dx, 0, -dz]);
     // the roof over the lower end (where it goes in under the street)
@@ -699,5 +718,3 @@ function ribPiece(m, mid, run, pitch, yaw, col) {
   face(m, P(a, -1, 0.06), P(b, -1, 0.06), P(b, 1, 0.06), P(a, 1, 0.06), col, [-Math.sin(pitch) * rx, Math.cos(pitch), -Math.sin(pitch) * rz]);
   face(m, P(a, -1, -0.06), P(b, -1, -0.06), P(b, 1, -0.06), P(a, 1, -0.06), col, [Math.sin(pitch) * rx, -Math.cos(pitch), Math.sin(pitch) * rz]);
 }
-
-export const ENTRANCE = { well: WELL, pylon: PYLON };

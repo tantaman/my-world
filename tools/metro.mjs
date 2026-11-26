@@ -6,6 +6,7 @@
 // District's own survey of their entrances.
 //
 //   npm run metro
+//   npm run metro -- --wells   only turn the entrances' wells clear of the city (metro/wells.js), in the metro.js there is: nothing fetched
 //
 // Writes src/metro/metro.js (the lines and the stations: what the map and
 // your pack know of it from anywhere) and src/metro/system.js (fetched when
@@ -37,6 +38,7 @@ import { HIKES } from '../src/world/hikes.js';
 import { loadHike } from '../src/world/landforms.js';
 import { growWorld } from '../src/world/lands.js';
 import { PLATFORM_HALF, EDGE, TUBE } from '../src/metro/network.js';
+import { cityPlan, placeWell } from './metro/wells.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CACHE = path.join(ROOT, 'node_modules/.cache/metro');
@@ -94,6 +96,45 @@ const toGame = (lat, lon) => {
   return [e * card.scale, -n * card.scale];
 };
 const fromMiddle = (x, z) => Math.hypot(x, z);
+
+// src/metro/metro.js: the lines and the stations, what the map and your pack know of it from anywhere.
+function writeMetro(metro) {
+  fs.writeFileSync(
+    path.join(OUT, 'metro.js'),
+    `// The Washington Metro: its lines, and its stations in life-size Washington, each with its entrances (game m from the middle of its real place, ${PLACE} in src/world/hikes.js), what the map and your pack know of it from anywhere. Written by \`npm run metro\` (tools/metro.mjs).\n// The entrances: Open Data DC (DC GIS), CC BY 4.0. The rest: © OpenStreetMap contributors, ODbL.\n\nexport const METRO = ${JSON.stringify(metro)};\n`,
+  );
+}
+// An entrance as metro.js keeps it: [x, z, yaw, the street it comes up on].
+function entranceOut(e) {
+  return [Math.round(e.x * 10) / 10 + 0, Math.round(e.z * 10) / 10 + 0, Math.round(e.yaw * 1000) / 1000 + 0, e.street];
+}
+// Each entrance of a station under the street turned (and moved, if it must
+// be) so its well lies clear of the city's buildings, streets and trees. In
+// place: { x, z, yaw } each.
+async function turnWells(stations) {
+  const city = await cityPlan(path.join(ROOT, 'src/washington/tiles'));
+  let moved = 0;
+  for (const st of stations) {
+    if (!st.under) continue;
+    const taken = [];
+    for (const e of st.entrances) {
+      const w = placeWell(e, city, taken);
+      taken.push(w);
+      if (Math.hypot(w.x - e.x, w.z - e.z) > 0.05 || Math.abs(w.yaw - e.yaw) > 0.01) moved++;
+      Object.assign(e, { x: w.x, z: w.z, yaw: w.yaw });
+    }
+    process.stdout.write('.');
+  }
+  return moved;
+}
+if (process.argv.includes('--wells')) {
+  const { METRO } = await import('../src/metro/metro.js');
+  const stations = METRO.stations.map((st) => ({ under: st.kind === 'underground', entrances: st.entrances.map(([x, z, yaw, street]) => ({ x, z, yaw, street })) }));
+  const moved = await turnWells(stations);
+  writeMetro({ ...METRO, stations: METRO.stations.map((st, k) => ({ ...st, entrances: stations[k].entrances.map(entranceOut) })) });
+  console.log(`\n${moved} entrances turned clear of the city → src/metro/metro.js`);
+  process.exit(0);
+}
 
 // ── Fetching, kept ───────────────────────────────────────────────────────────
 fs.mkdirSync(CACHE, { recursive: true });
@@ -831,7 +872,7 @@ for (const s of running) {
 
 // ── The entrances ────────────────────────────────────────────────────────────
 // The District's survey of them, each a station's: by its name, or else the
-// nearest. Each faces the way down: towards the nearest of its platforms.
+// nearest. Each faces the way down at first: towards the nearest of its platforms.
 const norm = (s) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
 const stationsByGis = new Map();
 for (const L of levels) {
@@ -867,6 +908,10 @@ for (const st of stations) {
     console.log(`  note: no entrance surveyed for ${st.name}: one where the station is`);
   }
 }
+// …and then turned, under the street, so its well is on the sidewalk and not
+// in the building beside it or out in the road
+for (const st of stations) st.under = st.levels.some((L) => L.kind === 'tunnel');
+console.log(`  ${await turnWells(stations)} entrances turned clear of the city`);
 
 // ── Writing it ───────────────────────────────────────────────────────────────
 const r1 = (v) => Math.round(v * 10) / 10 + 0;
@@ -933,13 +978,10 @@ const metro = {
     name: st.name,
     lines: [...new Set(st.levels.flatMap((L) => L.lines))].sort((a, b) => lineIds.indexOf(a) - lineIds.indexOf(b)),
     kind: st.levels.some((L) => L.kind === 'tunnel') ? 'underground' : st.levels.some((L) => L.kind === 'bridge') ? 'elevated' : 'at grade',
-    entrances: st.entrances.map((e) => [r1(e.x), r1(e.z), Math.round(e.yaw * 1000) / 1000, e.street]),
+    entrances: st.entrances.map(entranceOut),
   })),
 };
-fs.writeFileSync(
-  path.join(OUT, 'metro.js'),
-  `// The Washington Metro: its lines, and its stations in life-size Washington, each with its entrances (game m from the middle of its real place, ${PLACE} in src/world/hikes.js), what the map and your pack know of it from anywhere. Written by \`npm run metro\` (tools/metro.mjs).\n// The entrances: Open Data DC (DC GIS), CC BY 4.0. The rest: © OpenStreetMap contributors, ODbL.\n\nexport const METRO = ${JSON.stringify(metro)};\n`,
-);
+writeMetro(metro);
 console.log(`\nthe Metro → src/metro/system.js (${Math.round(packed.length / 1024)} kB, fetched when you come near) and src/metro/metro.js`);
 console.log(`  ${chains.length} runs of track, ${patterns.length} services each way, ${levels.length} levels at ${stations.length} stations, ${stations.reduce((s, st) => s + st.entrances.length, 0)} entrances`);
 

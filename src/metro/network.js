@@ -24,6 +24,15 @@ export const EDGE = 1.6;
 // station's vault, over the rail at its crown
 export const TUBE = { top: 5.6, half: 2.4, vault: 10 };
 // What a stretch of track runs in or on.
+// An entrance under the street: its escalator well (half its width, how
+// long, how steep, its parapet's height) and the brown pylon beside its top
+// (half its width, its height, its M and bands), all m. What builds them
+// (stations.js), what keeps the forest off them (index.ts) and what turns
+// them clear of the city (tools/metro/wells.js) all go by these.
+export const ENTRANCE = {
+  well: { half: 2.2, run: 12, slope: 0.55, wall: 1.05 },
+  pylon: { half: 0.3, h: 4.0, top: 1.1 },
+};
 export const TUNNEL = 0;
 export const BRIDGE = 1;
 export const GROUND = 2;
