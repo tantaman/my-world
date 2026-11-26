@@ -1,0 +1,4 @@
+# The piece being studied (someone else's work) and what we render to compare.
+reference/
+out/
+dist/
