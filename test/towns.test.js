@@ -14,6 +14,8 @@ import { Sites } from '../src/landmarks/sites.js';
 import { Towns, CELL, bodyOf, OPEN } from '../src/towns/towns.js';
 import { KINDS, KIND_IDS, BUILDINGS } from '../src/towns/kinds.js';
 import { buildLot, buildStreet } from '../src/towns/buildings.js';
+import { gridSurface } from '../src/world/terrainGrid.ts';
+import { SURF } from '../src/build/surfaces.js';
 import { Townsfolk } from '../src/towns/people.js';
 import { lookOf, buildPerson } from '../src/people/body.js';
 import { layoutCave, cellOf } from '../src/caves/sites.js';
@@ -195,7 +197,7 @@ test('the map hears of them a few at a time, and catches up', () => {
 
 // ── What stands there ────────────────────────────────────────────────────────
 const material = new THREE.MeshBasicMaterial();
-const materials = { body: material, glow: material };
+const materials = { body: material, glow: material, night: material };
 const ground = (x, z) => gen.height(x, z);
 // One of each building of each style, from towns across both lands.
 const SAMPLES = (() => {
@@ -257,19 +259,37 @@ test('every building is built, with somewhere to stand and walls to stop at', ()
   }
 });
 
-test('a street is laid over the ground from end to end', () => {
+test('a street is laid over the ground from end to end, on the land as it is drawn', () => {
+  // the land close to, as drawn: a vertex every metre, each square split
+  // from its (x+1, z) corner to its (x, z+1) one (world/chunks.js)
+  const drawn = gridSurface(ground, 1);
   for (const t of all.slice(0, 4)) {
     const mesh = buildStreet(t, ground, material);
-    const p = mesh.geometry.attributes.position;
-    const n = mesh.geometry.attributes.normal;
+    const g = mesh.geometry;
+    const p = g.attributes.position;
+    const n = g.attributes.normal;
+    const at = (i) => [p.getX(i) + mesh.position.x, p.getY(i) + mesh.position.y, p.getZ(i) + mesh.position.z];
     for (let i = 0; i < p.count; i += 7) {
-      const x = p.getX(i) + mesh.position.x;
-      const z = p.getZ(i) + mesh.position.z;
-      const y = p.getY(i) + mesh.position.y;
-      assert.ok(Math.abs(y - ground(x, z) - 0.05) < 1e-3, 'just over the ground');
+      const [x, y, z] = at(i);
+      assert.ok(Math.abs(y - drawn(x, z) - 0.06) < 1e-3, 'just over the ground');
       assert.ok(n.getY(i) > 0, 'facing up');
     }
-    mesh.geometry.dispose();
+    // and the middle of each of its triangles too, so the land doesn't
+    // come up through it anywhere between its corners
+    const idx = g.index.array;
+    let area = 0;
+    for (let k = 0; k < idx.length; k += 3) {
+      const [a, b, c] = [at(idx[k]), at(idx[k + 1]), at(idx[k + 2])];
+      const m = [0, 1, 2].map((j) => (a[j] + b[j] + c[j]) / 3);
+      assert.ok(Math.abs(m[1] - drawn(m[0], m[2]) - 0.06) < 1e-3, `in the plane of the land under it (${(m[1] - drawn(m[0], m[2])).toFixed(3)})`);
+      area += Math.abs((b[0] - a[0]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[0] - a[0])) / 2;
+    }
+    const [u0, v0, u1, v1] = t.street;
+    assert.ok(Math.abs(area - (u1 - u0) * (v1 - v0)) < 0.5, `all of it, end to end (${area.toFixed(1)} m²)`);
+    // what it is, and how much higher the land is drawn further off
+    assert.ok([...g.attributes.aSurf.array].every((s) => Math.floor(s + 1e-3) === SURF.earth), 'packed earth');
+    assert.ok([...g.attributes.aRoadGrade.array].every((d) => d >= 0 && Number.isFinite(d)), 'raised where the land is drawn coarser');
+    g.dispose();
   }
 });
 
