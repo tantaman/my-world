@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { Skater, PUSH, JETS, JETS_CARVE, rolls, setsOff } from '../src/skateboarding/skater.js';
+import { Skater, PUSH, JETS, JETS_CARVE, TURN, rolls, setsOff } from '../src/skateboarding/skater.js';
 import { Pose } from '../src/skateboarding/pose.js';
 import { bail, nameOf, score, counts, LAND } from '../src/skateboarding/tricks.js';
 import { Session, LINE } from '../src/skateboarding/session.js';
@@ -223,6 +223,36 @@ test('steering carves you round; braking drags a foot, or slides the board out a
   still.start(0, 0, 0);
   ride(still, 0.5, () => ({ steer: -1 }));
   assert.ok(still.yaw > 0.5 && still.v === 0, 'at a standstill, kicked round where you are');
+});
+
+test('crouch into a carve and you put a hand down on the tarmac: a hard carve, much tighter, the glove scrubbing a little speed', () => {
+  const pose = new Pose({ object: new THREE.Group(), turn: new THREE.Group() });
+  const carve = (ctl, p = null) => {
+    const sk = new Skater(ground());
+    sk.start(0, 0, 0, 11); // 40 km/h
+    for (let t = 0; t < 1; t += 1 / 60) {
+      sk.step(1 / 60, { ...idle, ...ctl });
+      if (p) p.update(1 / 60, sk);
+    }
+    return { sk, radius: (sk.v * sk.v) / Math.abs(sk.lateral) };
+  };
+  const standing = carve({ steer: 1 });
+  const hard = carve({ steer: 1, crouch: true }, pose);
+  assert.equal(standing.sk.hand, 0, 'standing up, both hands up');
+  assert.ok(hard.sk.hand < -0.9, `crouched, a hand down on the inside of a right turn (${hard.sk.hand.toFixed(2)})`);
+  assert.ok(Math.abs(hard.sk.lateral) > TURN.hard * 0.95, `as hard as the wheels will hold (${hard.sk.lateral.toFixed(1)} m/s², to ${standing.sk.lateral.toFixed(1)} standing)`);
+  assert.ok(hard.radius < standing.radius * 0.6, `a much tighter line (${hard.radius.toFixed(0)} m round, to ${standing.radius.toFixed(0)})`);
+  assert.ok(hard.sk.v < standing.sk.v && hard.sk.v > standing.sk.v - 1.5, `the glove scrubbing a little speed (${hard.sk.v.toFixed(2)} m/s, to ${standing.sk.v.toFixed(2)})`);
+  assert.ok(Math.abs(Math.hypot(hard.sk.vx, hard.sk.vz) - hard.sk.v) < 1e-9 && hard.sk.down < 0, 'and still on the board, going where it points');
+  assert.ok(pose.stance.reach > 0.8, `reaching down to the tarmac (${pose.stance.reach.toFixed(2)})`);
+  assert.ok(pose.lean < -0.7, `leaning right over into it (${pose.lean.toFixed(2)} rad)`);
+  // a gentle carve crouched, or a tuck straight down the road: no hand
+  assert.equal(carve({ steer: 0.3, crouch: true }).sk.hand, 0, 'a gentle carve the wheels hold anyway');
+  assert.equal(carve({ crouch: true }).sk.hand, 0, 'tucked, going straight');
+  // let go of the crouch, and it's the standing carve again
+  ride(hard.sk, 0.5, () => ({ steer: 1 }));
+  assert.equal(hard.sk.hand, 0);
+  assert.ok(Math.abs(hard.sk.lateral) < TURN.carve + 0.5, `up again, the wheels' standing grip (${hard.sk.lateral.toFixed(1)} m/s²)`);
 });
 
 test('an ollie pops you up off the ground and back down on the board', () => {

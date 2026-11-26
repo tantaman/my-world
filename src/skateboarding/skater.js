@@ -9,10 +9,12 @@
 // the ground, kicked back) gets you going on the flat, up to about a running
 // speed and no faster. The trucks turn you as tightly as the wheels' grip
 // allows at the speed you're going, and kick you round on the tail at a
-// standstill. Braking drags a foot along the ground, slowly; at speed it
-// slides the board out sideways (a powerslide) and scrubs it off fast. Roll
-// backwards and you're riding fakie, the other way round on the board, until
-// a push turns you round.
+// standstill. Crouch into a carve and you lean right over with a hand down
+// on the tarmac (a hard carve): the board holds a much tighter line, and
+// the glove scrubs a little speed. Braking drags a foot along the ground,
+// slowly; at speed it slides the board out sideways (a powerslide) and
+// scrubs it off fast. Roll backwards and you're riding fakie, the other way
+// round on the board, until a push turns you round.
 //
 // A push can come from the jets on your back instead (`jets`, the jetpack):
 // they don't care how fast the wheels are already turning, so they take you
@@ -116,15 +118,19 @@ export const PUSH = { top: 7, acc: 6, period: 0.75, kick: [0.25, 0.65] };
 // full thrust. Nothing but the air holds them back, so on the flat that's
 // about 95 km/h standing up and 125 crouched, and more down a hill.
 export const JETS = 4.5;
-// ...and how much harder (m/s², on top of the wheels' TURN.carve) they let
-// you carve at full thrust, swung out to push you round the turn: at 95
-// km/h, round a bend of about 40 m where the wheels alone would need 115.
+// ...and how much harder (m/s², on top of the wheels' grip) they let you
+// carve at full thrust, swung out to push you round the turn: at 95 km/h,
+// round a bend of about 40 m where the wheels alone would need 115 (30 m
+// with a hand down as well, crouched).
 export const JETS_CARVE = 12;
 // Braking: a foot dragged (m/s²); at `from` m/s or faster, a powerslide.
 export const BRAKE = { drag: 2.2, slide: 5.5, from: 3.5 };
-// Turning: rad/s at a standstill (a kick turn), m/s² round a carve (more
-// crouched), and how quickly (1/s) the trucks come round to it.
-const TURN = { still: 2.4, carve: 6, crouch: 1.25, ease: 10 };
+// Turning: rad/s at a standstill (a kick turn); m/s² round a carve standing
+// up, and crouched down with a hand on the tarmac (a hard carve); and how
+// quickly (1/s) the trucks come round to it.
+export const TURN = { still: 2.4, carve: 6, hard: 11, ease: 10 };
+// m/s²: the glove on the tarmac, scrubbing speed, down as hard as it goes.
+const HAND = 1.2;
 const SWITCH = 0.5; // m/s backwards, and you're riding fakie
 export const POP = 3.4; // m/s: an ollie, straight up
 // In the air: how quickly (rad/s) you spin, the board flips and turns under
@@ -192,6 +198,7 @@ export class Skater extends Emitter {
     this.jets = 0; // 0..1 how hard the jets on your back are pushing you along
     this.lateral = 0; // m/s² round the turn you're carving (+ to the left)
     this.round = 0; // -1..1 how hard the jets are pushing you round it, of the most they can (+ to the left)
+    this.hand = 0; // -1..1 a hand down on the tarmac on the inside of it, carving hard (+ to the left)
     this.grade = 0; // rise over run along the way you're going
     this.compress = 0; // 0..1 the knees taking a bump or a landing
     this.surface = 'tarmac'; // what's under the wheels
@@ -247,7 +254,7 @@ export class Skater extends Emitter {
     this.slide = 0;
     this.dragging = false;
     this.jets = 0;
-    this.lateral = this.round = 0;
+    this.lateral = this.round = this.hand = 0;
     this.down = -1;
     this.roll = 0;
     this.compress = 0;
@@ -273,7 +280,7 @@ export class Skater extends Emitter {
       this.compress *= Math.exp(-h * 5);
       if (this.loose) this._loose(h);
     }
-    if (!this.grounded || this.down >= 0) this.lateral = this.round = 0;
+    if (!this.grounded || this.down >= 0) this.lateral = this.round = this.hand = 0;
   }
 
   // ── On the ground ─────────────────────────────────────────────────────────
@@ -288,9 +295,9 @@ export class Skater extends Emitter {
     let v = this.v;
 
     // round the turn: carved at speed, as hard as the wheels' grip allows
-    // (and the jets, lit, swung out to push you round), and kicked round on
-    // the tail at a standstill
-    const grip = TURN.carve * (1 + (TURN.crouch - 1) * this.crouch);
+    // (crouched, harder, a hand down; and the jets, lit, swung out to push
+    // you round), and kicked round on the tail at a standstill
+    const grip = TURN.carve + (TURN.hard - TURN.carve) * this.crouch;
     const rate = Math.min(TURN.still, (grip + JETS_CARVE * this.jets) / Math.max(Math.abs(v), 0.5));
     this.yawRate += (-steer * rate - this.yawRate) * (1 - Math.exp(-h * TURN.ease));
     this.yaw = wrap(this.yaw + this.yawRate * h);
@@ -314,7 +321,7 @@ export class Skater extends Emitter {
     this.slide += ((sliding ? brake : 0) - this.slide) * (1 - Math.exp(-h * 8));
     this.dragging = brake > 0 && !sliding && Math.abs(v) > 0.2;
     const drag = DRAG.up + (DRAG.crouch - DRAG.up) * this.crouch;
-    const slow = surf.roll + drag * v * v + brake * (sliding ? BRAKE.slide : BRAKE.drag);
+    const slow = surf.roll + drag * v * v + brake * (sliding ? BRAKE.slide : BRAKE.drag) + Math.abs(this.hand) * HAND;
     v = sign(v) * Math.max(0, Math.abs(v) - slow * h);
 
     // the jets, which go on pushing whatever the wheels are doing. They're on
@@ -355,8 +362,13 @@ export class Skater extends Emitter {
     this.vx = v * fx;
     this.vz = v * fz;
     this.lateral = this.yawRate * Math.abs(v);
-    // what the wheels can't hold of that, the jets push you round
-    const over = this.jets > 0 ? (Math.abs(this.lateral) - grip) / JETS_CARVE : 0;
+    // past what the wheels hold standing up, a hand goes down on the tarmac
+    // (crouched: you can't reach it otherwise); past what they hold at all,
+    // the jets push you round
+    const turn = Math.abs(this.lateral);
+    const hard = this.crouch > 0.5 ? (turn - TURN.carve) / (TURN.hard - TURN.carve) : 0;
+    this.hand = hard > 0 ? sign(this.lateral) * Math.min(1, hard) : 0;
+    const over = this.jets > 0 ? (turn - grip) / JETS_CARVE : 0;
     this.round = over > 0 ? sign(this.lateral) * Math.min(1, over) : 0;
 
     if (pop) {

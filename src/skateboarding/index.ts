@@ -94,6 +94,8 @@ const ROAD_OVER = 0.5;
 // m round you within which the roads are looked at, each frame
 const AROUND = 30;
 const ROAD_SURFACE = { paved: 'tarmac', gravel: 'gravel' };
+// How loud (0..1, of a foot dragged) the glove is, down on the tarmac in a hard carve.
+const HAND_HEARD = 0.6;
 // How long (ms) a word stays on the screen.
 const SAY = 2600;
 const QUIPS = ['slam!', 'bail!', 'eat it!', 'ouch!', 'gnarly!', 'that’ll leave a mark'];
@@ -389,7 +391,7 @@ export function installSkateboarding(game: Game) {
   });
   commands.add({ id: 'skateboard', group: 'WANDER', label: 'skateboard: onto it, on tarmac or boards · off it', icon: pictures.SKATEBOARD, run: toggle });
   commands.describe({ group: 'WANDER', help: 'F', pad: ['PadY'], label: 'on tarmac or boards: onto your skateboard · on it: step off' });
-  commands.describe({ group: 'WANDER', help: 'skating', label: 'W push · A D carve · S brake, slide · shift crouch · space ollie' });
+  commands.describe({ group: 'WANDER', help: 'skating', label: 'W push · A D carve · S brake, slide · shift crouch; with A D, carve hard, a hand down · space ollie' });
   commands.describe({ group: 'WANDER', help: 'skating, in the air', label: 'W kickflip · S heelflip · shift shove-it · A D spin' });
   commands.describe({ group: 'WANDER', help: 'skating, with a jetpack', label: 'W: the jets instead of your foot: the board does 125 km/h, and A D carve far harder' });
   const cueWords = () => cueFor(input, skater, act.key('step off'), jetpack.have).replace(/<\/?b>/g, '');
@@ -453,7 +455,7 @@ export function installSkateboarding(game: Game) {
       heard.rolling = rolling;
       heard.surface = skater.surface;
       heard.slide = skater.slide;
-      heard.drag = skater.dragging ? 1 : 0;
+      heard.drag = skater.dragging ? 1 : Math.abs(skater.hand) * HAND_HEARD;
       cue();
       show();
     },
@@ -505,6 +507,7 @@ export function installSkateboarding(game: Game) {
       pushing: skater.pushing,
       jets: Math.round(skater.jets * 100) / 100,
       round: Math.round(skater.round * 100) / 100,
+      hand: Math.round(skater.hand * 100) / 100,
       surface: skater.surface,
       controls: { ...c },
       x: Math.round(skater.x * 10) / 10,

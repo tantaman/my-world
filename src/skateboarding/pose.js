@@ -13,7 +13,8 @@
 // the board, for them to point straight back along it (`along`: which way
 // that is); carving hard with them, you twist your shoulders round into the
 // turn, for them to point out of it and push you round (`toward`: which way
-// they push). The body tips with the ground and leans into the turns. In the
+// they push). The body tips with the ground and leans into the turns, and
+// crouched into a hard carve, right over, a hand down on the tarmac. In the
 // air the feet come up, the board drops away from them a little to flip or
 // turn, and comes back up to meet them. Bailed, you tumble over and over
 // without it.
@@ -54,7 +55,7 @@ const DRAG = { a: -0.38, c: -0.14, toe: -0.6 };
 // How quickly (1/s) the body turns to push and back, and the free foot follows.
 const EASE = { push: 7, foot: 30 };
 const LEAN_MOST = 0.5; // radians into a turn
-const LEAN_JETS = 0.8; // ...and with the jets on your back pushing you round it
+const LEAN_HARD = 0.8; // ...and carving hard: a hand down, or the jets on your back pushing you round it
 // radians the shoulders twist round into a carve, and the jets on your back
 // with them, out of the turn, as they push you round it their hardest
 const SWING_OUT = 0.6;
@@ -85,6 +86,7 @@ export class Pose {
     this.toward = { x: 0, y: 0, z: 1 }; // ...and which way the jets on your back push you: along it, or into a carve
     this.squared = 0; // 0..1 the shoulders squared across the board, for the jets on your back
     this.out = 0; // radians they're twisted round into a carve, the jets pushing you round it (+ to the left)
+    this.reach = 0; // 0..1 a hand down on the tarmac, carving hard
     this.lean = 0;
     this.tumble = 0;
     this.pushing = 0; // 0..1 turned to push
@@ -166,7 +168,8 @@ export class Pose {
     this.toward.x = this.along.x * co + sideX * so;
     this.toward.y = this.along.y * co + sideY * so;
     this.toward.z = this.along.z * co + sideZ * so;
-    const most = lerp(LEAN_MOST, LEAN_JETS, this.squared);
+    this.reach += (Math.abs(sk.hand) - this.reach) * k(EASE.push);
+    const most = lerp(LEAN_MOST, LEAN_HARD, Math.max(this.squared, this.reach));
     let lean = clamp(Math.atan2(sk.lateral, GRAVITY), -most, most);
     if (fallen || flying) lean = 0;
     this.lean += (lean - this.lean) * k(8);
@@ -205,6 +208,7 @@ export class Pose {
     this.squared += ((sk.jets > 0 ? 1 : 0) - this.squared) * k(EASE.push);
     S.twist = (sk.fakie ? -0.2 : lerp(RIDE.twist, PUSH.twist, p)) * (1 - this.squared) + this.out;
     S.look = sk.fakie ? -1.0 : lerp(RIDE.look, PUSH.look, p);
+    S.reach = fallen ? 0 : this.reach;
     S.pitch = this.rx;
     S.roll = this.rz;
 
