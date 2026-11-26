@@ -23,6 +23,8 @@
 //                         it's at or heading for is its last here)
 //   tt.due(level, t)      the next train each way to stand at a level:
 //                         [{ train, wait, leaves } | null, ...]
+//   arrivals(tables, level, t)  what a level's boards say: the next few
+//                         trains of every service, soonest first
 //
 // No three.js in here.
 
@@ -31,6 +33,8 @@ export const ACCEL = 1.1; // m/s², pulling away and drawing up
 export const DWELL = 25; // s standing at each station
 export const TURN = 150; // s standing at the end of a line, before going back
 export const AWAY_SPEED = 14; // m/s out past life-size Washington, stops and all
+export const ARRIVING = 45; // s: a train this near is 'ARR' on the boards (and 'BRD' while it stands)
+const BOARD_ROWS = 3;
 export const HEADWAY = 480; // s between trains of a service
 // A train: six cars, each 75 feet long over the couplers.
 export const CARS = 6;
@@ -209,4 +213,25 @@ export class Timetable {
       return best;
     });
   }
+}
+
+// What a level's boards say, as Metro's do: the next trains of every service
+// that stops there, each way, and the one after each, soonest first. Each
+// { line (its id), colour, cars, to, min ('BRD' while it stands, 'ARR' as it
+// draws in, else minutes), wait (s) }.
+/** @returns {Array<{ line: string, colour: string, cars: number, to: string, min: string | number, wait: number }>} */
+export function arrivals(tables, L, t) {
+  const rows = [];
+  for (const tt of tables) {
+    tt.due(L, t).forEach((d, w) => {
+      if (!d) return;
+      const route = tt.pattern.ways[w];
+      const add = (wait) => rows.push({ line: route.line.id, colour: route.line.colour, cars: CARS, to: route.to, min: wait < 1 ? 'BRD' : wait < ARRIVING ? 'ARR' : Math.max(1, Math.round(wait / 60)), wait });
+      add(d.wait);
+      // and the one after it
+      const then = tt.due(L, t + d.leaves + 1)[w];
+      if (then) add(d.leaves + 1 + then.wait);
+    });
+  }
+  return rows.sort((a, b) => a.wait - b.wait).slice(0, BOARD_ROWS);
 }

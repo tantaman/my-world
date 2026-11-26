@@ -1,10 +1,15 @@
 // The Metro's trains: six cars of the newest kind (the 7000 series),
-// stainless steel with a band of dark glass along them, three pairs of doors
-// a side, a cab at each end of the train with its windscreen dark, its
-// headlights (or, at the back, its red tail lights) and over it the sign that
-// says what line it is and where it's going. Inside, rows of blue seats, grab
-// poles, and the light strips down the ceiling; the windows are open, so you
-// can look in from the platform and out from your seat.
+// brushed stainless steel with a band of dark glass along them, three pairs
+// of doors a side, each car's line and destination lit on its sides; a cab
+// at each end of the train, its front a black mask round the windscreen with
+// the sign behind the glass that says what line it is and where it's going,
+// and under it the headlights (or, at the back, the red tail lights).
+// Between the cars, the barriers that keep anyone from stepping into the gap;
+// under them, the trucks on their wheels and the boxes of their equipment.
+// Inside, rows of blue seats, grab poles and the bars along the ceiling, and
+// the light strips down it; the windows are open, so you can look in from
+// the platform and out from your seat. The inside is lit by its own lamps
+// (look.js): how lit each face is, ceiling to floor, is in its colour.
 //
 // Each kind of car (a cab car, a car between) is built once, round itself,
 // and every car of every train is that geometry put where it is: so a train
@@ -36,6 +41,7 @@ const DOORS = [-6.9, 0, 6.9]; // m along a car, the middle of each pair of doors
 const DOOR_HALF = 0.66;
 const WINDOW = { y0: 1.92, y1: 2.72 };
 const CAB = 1.3; // m at the front of a cab car that's its nose
+const SIDE_SIGN = { y: 2.62, z: 3.45, w: 1.3 }; // a car's sign along its side: how high, where along, how wide
 // The seats: rows across, facing along, two either side of the aisle, in the
 // bays between the doors.
 const SEAT = { y: 0.46, depth: 0.46, back: 0.62, w: 0.92, row: 0.86 };
@@ -51,21 +57,31 @@ export const SEATS = (() => {
 })();
 
 const lin = (hex) => new THREE.Color(hex);
+// (inside, each scaled by how lit it is: the ceiling's strips light the
+// ceiling least, the walls more, the floor in the seats' shadow less)
+const lit = (hex, k) => lin(hex).multiplyScalar(k);
 const COL = {
-  steel: lin(0xb9bcbf),
-  steelDark: lin(0x8f9295),
-  band: lin(0x1b1f23),
-  door: lin(0xa9acaf),
-  roof: lin(0x7e8184),
+  steel: lin(0xc6c9cb),
+  steelDark: lin(0x9ea1a4),
+  band: lin(0x121417),
+  door: lin(0xb9bcbf),
+  doorEdge: lin(0x1a1a1a),
+  roof: lin(0x86898c),
   under: lin(0x2a2a2a),
-  truck: lin(0x232323),
-  nose: lin(0x15181b),
-  floor: lin(0x5b5e63),
-  wallIn: lin(0xd6d4cf),
-  ceiling: lin(0xe9e7e1),
-  seat: lin(0x2c4f8a),
-  pole: lin(0xc9cbcc),
-  light: lin(0xfff6e4),
+  kit: lin(0x34363a),
+  truck: lin(0x1e1e1e),
+  wheel: lin(0x3a3633),
+  nose: lin(0x0b0d0f),
+  barrier: lin(0x141414),
+  floor: lit(0x6b6a66, 0.6),
+  wallIn: lit(0xe6e5e0, 0.78),
+  wallLow: lit(0x9fa3a8, 0.7),
+  ceiling: lit(0xf4f3ee, 0.68),
+  endDoor: lit(0x2a2d31, 0.8),
+  seat: lit(0x26478a, 0.75),
+  seatBack: lit(0x2f5297, 0.8),
+  pole: lit(0xd4d6d7, 0.85),
+  light: lin(0xfff8ec),
   head: lin(0xffffff),
   tail: lin(0xff2a1a),
 };
@@ -100,7 +116,9 @@ function sideWall(m, x, out, cab, colours) {
       panel(za, zb, CAR.floor, 1.95, colours.door);
       panel(za, za + 0.12, 1.95, 2.6, colours.door);
       panel(zb - 0.12, zb, 1.95, 2.6, colours.door);
-      panel((za + zb) / 2 - 0.05, (za + zb) / 2 + 0.05, 1.95, 2.6, colours.door);
+      panel((za + zb) / 2 - 0.02, (za + zb) / 2 + 0.02, CAR.floor, 2.6, colours.doorEdge);
+      panel((za + zb) / 2 - 0.07, (za + zb) / 2 - 0.02, 1.95, 2.6, colours.door);
+      panel((za + zb) / 2 + 0.02, (za + zb) / 2 + 0.07, 1.95, 2.6, colours.door);
       panel(za + 0.12, (za + zb) / 2 - 0.05, 1.95, 2.6, colours.band);
       panel((za + zb) / 2 + 0.05, zb - 0.12, 1.95, 2.6, colours.band);
       panel(za, zb, 2.6, CAR.eaves, colours.door);
@@ -114,6 +132,24 @@ function sideWall(m, x, out, cab, colours) {
     for (let j = 0; j <= n; j++) {
       const zc = za + j * w;
       panel(Math.max(za, zc - 0.13), Math.min(zb, zc + 0.13), WINDOW.y0, WINDOW.y1, colours.band);
+    }
+  }
+}
+
+// A wheel at (x, z), standing on the rail: an octagon each face of it.
+function wheel(m, x, z, col) {
+  const r = 0.42;
+  const n = 8;
+  for (const s of [-1, 1]) {
+    const xs = x + s * 0.05;
+    for (let k = 0; k < n; k++) {
+      const t0 = (k / n) * Math.PI * 2;
+      const t1 = ((k + 1) / n) * Math.PI * 2;
+      const a = [xs, r, z];
+      const b = [xs, r + Math.sin(t0) * r, z + Math.cos(t0) * r];
+      const c = [xs, r + Math.sin(t1) * r, z + Math.cos(t1) * r];
+      if (s > 0) quad(m, a, b, c, c, col);
+      else quad(m, a, c, b, b, col);
     }
   }
 }
@@ -132,7 +168,7 @@ function carGeometry(cab) {
   const zf = z1 - (cab ? CAB : 0);
   for (const x of [-H, H]) {
     sideWall(outer, x, 1, cab, COL);
-    sideWall(inner, x * 0.97, -1, cab, { steel: COL.wallIn, band: COL.wallIn, door: COL.wallIn, under: COL.wallIn });
+    sideWall(inner, x * 0.97, -1, cab, { steel: COL.wallLow, band: COL.wallIn, door: COL.wallIn, under: COL.wallLow, doorEdge: COL.wallIn });
   }
   // the roof: rounded at its edges, flat on top
   const roofProf = [[-H, CAR.eaves], [-H * 0.82, CAR.roof - 0.12], [-H * 0.55, CAR.roof], [H * 0.55, CAR.roof], [H * 0.82, CAR.roof - 0.12], [H, CAR.eaves]];
@@ -145,12 +181,22 @@ function carGeometry(cab) {
   quad(inner, [-H * 0.97, 2.62, z0 + 0.2], [-H * 0.97, 2.62, zf - 0.2], [H * 0.97, 2.62, zf - 0.2], [H * 0.97, 2.62, z0 + 0.2], COL.ceiling);
   for (const x of [-0.55, 0.55]) box(glow, x, 2.6, (z0 + zf) / 2, 0.12, 0.02, (zf - z0) / 2 - 0.8, 0, COL.light);
   quad(inner, [-H * 0.97, CAR.floor, z0 + 0.2], [H * 0.97, CAR.floor, z0 + 0.2], [H * 0.97, CAR.floor, zf - 0.2], [-H * 0.97, CAR.floor, zf - 0.2], COL.floor);
-  // under the floor: the frame's skirt, and the trucks
-  box(outer, 0, 0.72, 0, H - 0.08, 0.16, CAR.len / 2 - 0.4, 0, COL.under);
+  // under the floor: the frame's skirt, the boxes of its equipment between
+  // the trucks, and the trucks on their wheels
+  box(outer, 0, 0.78, 0, H - 0.08, 0.1, CAR.len / 2 - 0.4, 0, COL.under);
+  for (const [z, len, w] of [[-3.6, 2.4, 1.15], [-0.4, 1.6, 1.25], [2.9, 2.8, 1.1], [5.6, 1.2, 0.9]]) box(outer, 0, 0.5, z, w, 0.22, len / 2, 0, COL.kit);
   for (const zt of [-TRUCK, TRUCK]) {
-    box(outer, 0, 0.45, zt, 1.2, 0.2, 1.4, 0, COL.truck);
-    for (const za of [-1.05, 1.05]) for (const xs of [-0.72, 0.72]) box(outer, xs, 0.42, zt + za, 0.07, 0.4, 0.4, 0, COL.truck);
+    box(outer, 0, 0.5, zt, 1.12, 0.16, 1.5, 0, COL.truck);
+    for (const xs of [-1.0, 1.0]) box(outer, xs, 0.46, zt, 0.08, 0.2, 1.3, 0, COL.truck);
+    for (const za of [-1.05, 1.05]) {
+      for (const xs of [-0.72, 0.72]) {
+        // a wheel: an octagon, edge on to the rail
+        wheel(outer, xs, zt + za, COL.wheel);
+      }
+    }
   }
+  // the bars along the ceiling, to hold on to
+  for (const x of [-0.62, 0.62]) box(inner, x, 2.22, (z0 + zf) / 2, 0.018, 0.018, (zf - z0) / 2 - 1.0, 0, COL.pole);
   // the ends: a plain end with its gangway door; or the cab
   const end = (z, facing) => {
     const pts = [[-H, 0.85], [H, 0.85], [H, CAR.eaves], [H * 0.82, CAR.roof - 0.12], [H * 0.55, CAR.roof], [-H * 0.55, CAR.roof], [-H * 0.82, CAR.roof - 0.12], [-H, CAR.eaves]];
@@ -165,6 +211,13 @@ function carGeometry(cab) {
       else quad(outer, mid, b, a, a, COL.steel);
     }
   };
+  // the barriers either side of the gap to the next car, and the end door's
+  // window, at each end that meets another car
+  for (const [z, s] of cab ? [[z0, -1]] : [[z0, -1], [z1, 1]]) {
+    for (const x of [-H + 0.1, H - 0.1]) box(outer, x, 1.65, z + s * 0.16, 0.06, 0.72, 0.15, 0, COL.barrier);
+    quad(outer, [-0.36, 1.55, z + s * 0.01], [0.36, 1.55, z + s * 0.01], [0.36, 2.45, z + s * 0.01], [-0.36, 2.45, z + s * 0.01], COL.band);
+    quad(outer, [0.36, 1.55, z + s * 0.01], [-0.36, 1.55, z + s * 0.01], [-0.36, 2.45, z + s * 0.01], [0.36, 2.45, z + s * 0.01], COL.band);
+  }
   end(z0, -1);
   if (!cab) end(z1, 1);
   else {
@@ -180,10 +233,13 @@ function carGeometry(cab) {
       const [xd, yd] = inset[k];
       quad(outer, [xa, ya, n0], [xb, yb, n0], [xc, yc, n1], [xd, yd, n1], COL.steel);
     }
+    // its face: stainless low down, where the lights are; over that the
+    // black mask round the windscreen, the sign behind its glass at the top
     const face = (ya, yb, col) => quad(outer, [-H * 0.9, ya, n1], [H * 0.9, ya, n1], [H * 0.9, yb, n1], [-H * 0.9, yb, n1], col);
-    face(0.85, 1.55, COL.steel);
-    face(1.55, 3.0, COL.nose);
-    face(3.0, CAR.roof * 0.96 + 0.03, COL.steel);
+    face(0.85, 1.05, COL.under);
+    face(1.05, 1.5, COL.steel);
+    face(1.5, 3.12, COL.nose);
+    face(3.12, CAR.roof * 0.96 + 0.03, COL.steel);
     // and inside, the cab's back wall
     quad(inner, [-H * 0.97, CAR.floor, n0 - 0.1], [H * 0.97, CAR.floor, n0 - 0.1], [H * 0.97, CAR.eaves, n0 - 0.1], [-H * 0.97, CAR.eaves, n0 - 0.1], COL.wallIn);
   }
@@ -211,6 +267,8 @@ export class TrainKit {
     this.cab = carGeometry(true);
     this.mid = carGeometry(false);
     this.signPlane = new THREE.PlaneGeometry(1, 1);
+    // (until a train says what it is)
+    this.sideSign = new THREE.MeshBasicMaterial({ color: 0x111111 });
     const lamp = (col) => {
       const m = new Mesher();
       for (const x of [-1.05, 1.05]) box(m, x, 1.25, 0, 0.13, 0.07, 0.02, 0, col);
@@ -234,10 +292,19 @@ export class MetroTrain {
       const group = new THREE.Group();
       group.rotation.order = 'YXZ';
       group.add(new THREE.Mesh(g.outer, mats.solid), new THREE.Mesh(g.inner, mats.carInside), new THREE.Mesh(g.glow, mats.glow));
-      const car = { group, cab, sign: null, head: null, tail: null };
+      const car = { group, cab, sign: null, head: null, tail: null, sides: [] };
+      // its line and where it's going, lit along each side
+      for (const s of [-1, 1]) {
+        const side = new THREE.Mesh(kit.signPlane, kit.sideSign);
+        side.position.set(s * (CAR.half + 0.01), SIDE_SIGN.y, SIDE_SIGN.z);
+        side.rotation.y = (s * Math.PI) / 2;
+        side.scale.set(SIDE_SIGN.w, SIDE_SIGN.w / 8, 1);
+        group.add(side);
+        car.sides.push(side);
+      }
       if (cab) {
         car.sign = new THREE.Mesh(kit.signPlane, new THREE.MeshBasicMaterial({ color: 0x222222, toneMapped: false }));
-        car.sign.position.set(0, 3.12, CAR.len / 2 + 0.02);
+        car.sign.position.set(0, 2.9, CAR.len / 2 + 0.02);
         car.sign.scale.set(1.9, 0.24, 1);
         car.head = new THREE.Mesh(kit.head, mats.glow);
         car.tail = new THREE.Mesh(kit.tail, mats.glow);
@@ -248,6 +315,7 @@ export class MetroTrain {
       this.object.add(group);
     }
     this.key = '';
+    this.sideMat = null;
   }
 
   // What it's running as: its line's colour, its line's name and where it's going.
@@ -256,7 +324,12 @@ export class MetroTrain {
     if (key === this.key) return;
     this.key = key;
     const tex = destination(colour, line, to);
+    if (!this.sideMat) this.sideMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+    this.sideMat.map = tex;
+    this.sideMat.color.set(tex ? 0xd0d0d0 : colour);
+    this.sideMat.needsUpdate = true;
     for (const car of this.cars) {
+      for (const side of car.sides) side.material = this.sideMat;
       if (!car.sign) continue;
       car.sign.material.map = tex;
       car.sign.material.color.set(tex ? 0xffffff : colour);

@@ -56,6 +56,14 @@ export class FarView {
     this.mid = { value: new THREE.Vector2() };
     this.half = { value: 0 };
     this.materials = new Map();
+    this.shown = true;
+  }
+
+  // Drawn, or not (from under the ground there's no seeing it).
+  show(on) {
+    if (on === this.shown) return;
+    this.shown = on;
+    for (const m of this.meshes.values()) m.visible = on;
   }
 
   has(id) {
@@ -71,6 +79,7 @@ export class FarView {
     mesh.userData.grid = { x0: grid.x0, z0: grid.z0, x1: grid.x0 + (grid.n - 1) * grid.step, z1: grid.z0 + (grid.n - 1) * grid.step };
     mesh.userData.clip = clip;
     mesh.position.set(grid.x0, 0, grid.z0);
+    mesh.visible = this.shown;
     this.scene.add(mesh);
     this.meshes.set(id, mesh);
   }

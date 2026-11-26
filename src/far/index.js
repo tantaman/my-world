@@ -32,6 +32,9 @@ import { isNotYet } from '../core/notYet.ts';
 // this rate (1/s), so it opens out as the land comes rather than jumping.
 const FOG_SHORT = 80;
 const FOG_EASE = 1.2;
+// how much daylight reaches the eye (world/sky.js: open) under which it's
+// under the ground, and the far view isn't drawn
+const UNDERGROUND = 0.3;
 
 // ── The forest's own far view ───────────────────────────────────────────────
 // One square round you, re-made once you have walked far enough off its
@@ -61,7 +64,7 @@ const FOREST = {
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'world'];
 export function installFar(game) {
-  const { scene, gen, landforms, camera, pipeline, origin, structures, focus } = game;
+  const { scene, gen, landforms, camera, pipeline, origin, structures, focus, sky } = game;
 
   const far = new FarView(scene);
   origin.place(far.mid);
@@ -203,6 +206,9 @@ export function installFar(game) {
       forestFar();
       sendReady();
       far.update(focus);
+      // Under the ground (in a cave, down in the Metro) the land isn't to be
+      // seen, and what's sunk under the chunks would show through the walls.
+      far.show(sky.open > UNDERGROUND);
       // As far as there is land drawn in every direction, the air is clear.
       const base = (CONFIG.viewRadius - 0.15) * CONFIG.chunkSize;
       const clear = Math.max(base, far.reach(camera.position.x, camera.position.z, FOG_SHORT));

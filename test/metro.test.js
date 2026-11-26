@@ -5,9 +5,11 @@
 // their stations in life-size Washington each with its entrances, and
 // services that stop at the same stations both ways; that every tunnel keeps
 // under the ground and every platform is level and beside its track; that
-// the trains keep to the clock, standing at every station on the way and
-// never jumping along the track; that a platform is a place to stand, with
-// its edges for walls, its vault overhead, and a train's tunnel open air;
+// two tracks side by side leave room for trains to pass; that the trains
+// keep to the clock, standing at every station on the way and never jumping
+// along the track, and the boards say when they come; that a platform is a
+// place to stand, with its edges for walls, its vault overhead, and a
+// train's tunnel open air, and no daylight but its own lamps down there;
 // and that the stations, the track, the entrances and the trains are built,
 // with the vault's faces looking in.
 
@@ -18,7 +20,7 @@ import { fall, rise, solveProfile, GRADE } from '../tools/metro/profile.js';
 import SYSTEM from '../src/metro/system.js';
 import { METRO } from '../src/metro/metro.js';
 import { Network, readSystem, pointAt, onLevel, fromLevel, TUNNEL, TUBE, PLATFORM_UP } from '../src/metro/network.js';
-import { Timetable, DWELL, TRAIN_LEN, HEADWAY } from '../src/metro/timetable.js';
+import { Timetable, arrivals, DWELL, TRAIN_LEN, HEADWAY, ARRIVING } from '../src/metro/timetable.js';
 import { MetroSpace } from '../src/metro/space.js';
 import * as look from '../src/metro/look.js';
 import { inflate } from '../src/world/earth.js';
@@ -159,6 +161,47 @@ test('each platform is beside its track, along the whole of it, and level with t
   }
 });
 
+test('two tracks side by side are far enough apart for trains to pass', () => {
+  // a car is 3.1 m wide: middle to middle, at a station, never less than 4 m
+  for (const L of net.levels) {
+    const t = [...L.tracks].sort((a, b) => a - b);
+    for (let k = 1; k < t.length; k++) assert.ok(t[k] - t[k - 1] >= 4, `${L.station.name}: its tracks ${(t[k] - t[k - 1]).toFixed(1)} m apart`);
+  }
+  // and anywhere along the line, but where two meet at a switch
+  const pts = [];
+  for (const t of net.tracks) {
+    for (let i = 0; i < t.n; i++) {
+      const [a, b] = [Math.max(0, i - 1), Math.min(t.n - 1, i + 1)];
+      const l = Math.hypot(t.x[b] - t.x[a], t.z[b] - t.z[a]) || 1;
+      pts.push({ k: t.k, s: t.s[i], x: t.x[i], y: t.y[i], z: t.z[i], dx: (t.x[b] - t.x[a]) / l, dz: (t.z[b] - t.z[a]) / l });
+    }
+  }
+  const grid = new Map();
+  for (const p of pts) {
+    const key = `${Math.floor(p.x / 8)},${Math.floor(p.z / 8)}`;
+    if (!grid.has(key)) grid.set(key, []);
+    grid.get(key).push(p);
+  }
+  let beside = 0;
+  let close = 0;
+  for (const p of pts) {
+    let best = Infinity;
+    for (let i = -1; i <= 1; i++) {
+      for (let j = -1; j <= 1; j++) {
+        for (const q of grid.get(`${Math.floor(p.x / 8) + i},${Math.floor(p.z / 8) + j}`) || []) {
+          if ((q.k === p.k && Math.abs(q.s - p.s) < 200) || Math.abs(q.y - p.y) > 4 || Math.abs(p.dx * q.dx + p.dz * q.dz) < 0.97) continue;
+          if (Math.abs((q.x - p.x) * p.dx + (q.z - p.z) * p.dz) > 7) continue;
+          best = Math.min(best, Math.abs((q.x - p.x) * -p.dz + (q.z - p.z) * p.dx));
+        }
+      }
+    }
+    if (best < 6) beside++;
+    if (best < 3.5) close++;
+  }
+  assert.ok(beside > 5000, `${beside} points with a track beside them`);
+  assert.ok(close / beside < 0.015, `${close} of them too near it (at switches)`);
+});
+
 // ── The trains ───────────────────────────────────────────────────────────────
 
 test('the trains keep to the clock: on along the track, and standing at every station', () => {
@@ -181,6 +224,27 @@ test('the trains keep to the clock: on along the track, and standing at every st
     assert.equal(p.ways[0].stops[there.at]?.level, L, 'the train due is the one that comes');
     assert.ok(there.leaves <= DWELL, 'standing its while');
   }
+});
+
+test('the boards say when the next trains come, soonest first: boarding, arriving, then minutes', () => {
+  const tables = net.patterns.map((p, k) => new Timetable(p, (k * 0.618034) % 1));
+  const L = net.station('metro-center').levels.find((l) => l.lines.includes('red'));
+  let boarding = false;
+  for (let t = 0; t < 1200; t += 7) {
+    const rows = arrivals(tables, L, t);
+    assert.ok(rows.length >= 2 && rows.length <= 3, 'a few rows');
+    for (let k = 1; k < rows.length; k++) assert.ok(rows[k].wait >= rows[k - 1].wait, 'soonest first');
+    for (const r of rows) {
+      assert.equal(r.line, 'red', 'only the trains that stop at this level');
+      assert.ok(['Glenmont', 'Shady Grove'].includes(r.to), `going to ${r.to}`);
+      if (r.wait < 1) {
+        assert.equal(r.min, 'BRD');
+        boarding = true;
+      } else if (r.wait < ARRIVING) assert.equal(r.min, 'ARR');
+      else assert.equal(r.min, Math.max(1, Math.round(r.wait / 60)));
+    }
+  }
+  assert.ok(boarding, 'and sometimes a train standing there');
 });
 
 // ── Being in it ──────────────────────────────────────────────────────────────
@@ -213,13 +277,15 @@ test('a platform is somewhere to stand, its edges walls; over the track and down
   assert.ok(space.inside(mid.x, mid.z, mid.y + 1.2, out), 'in the tunnel');
   assert.ok(space.air(mid.x, mid.y + 2.5, mid.z, 0.3), 'its air');
   assert.ok(!space.air(mid.x, mid.y + TUBE.top + 1, mid.z, 0), 'and over it, the earth');
-  assert.ok(space.light(on.x, on.z) > space.light(mid.x, mid.z), 'the station lit, the tunnel dim');
+  assert.ok(space.light(on.x, on.z) < 0.1 && space.light(mid.x, mid.z) < 0.1, 'no daylight under the street');
+  assert.ok(space.lamps(on.x, on.z) >= 0.5, 'but lit by its own lamps: no headlamp');
   // an entrance's well, down from the street
   const well = { x: on.x + 400, z: on.z, dx: 1, dz: 0, half: 1.8, run: 12, g0: 20, depth: 6.6, open: 0.45 };
   space.addWell(well);
   assert.ok(space.inside(well.x + 0.2, well.z, 20, out) && Math.abs(out.floor - 20) < 0.2, 'its top is level with the street');
   assert.ok(space.inside(well.x + 6, well.z, 17, out) && Math.abs(out.floor - 16.7) < 0.01, 'half way down');
   assert.ok(!space.inside(well.x + 10, well.z, 20, out), 'over its roofed end is the street');
+  assert.ok(space.light(well.x + 1, well.z) === 1 && space.light(well.x + 11.5, well.z) < 0.5, 'daylight at its top, less under its roof');
   space.removeWell(well);
   assert.ok(!space.inside(well.x + 6, well.z, 17, out), 'gone with its entrance');
 });

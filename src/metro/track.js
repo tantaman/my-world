@@ -3,11 +3,14 @@
 // for each PIECE metres of a track.
 //
 // Under the street, each track is in a tube of its own: a flat floor, walls,
-// a rounded roof, a dim lamp every so often, and the rails on a concrete
-// plinth. The tube's faces look only inwards, so from inside one you see its
-// walls, and where two run side by side (or cross) their walls, seen from
-// behind, aren't drawn at all: the tunnels open into each other rather than
-// showing each other's backs.
+// a rounded roof, and the rails on a concrete plinth. Along its outer wall
+// (the side with no other track) runs the safety walk, at about the cars'
+// floor, with a lamp over it every so often and, every 240 m, a blue light:
+// where a phone and the switch for the third rail are. Along the other wall
+// run the cables, on their brackets. The tube's faces look only inwards, so
+// from inside one you see its walls, and where two run side by side (or
+// cross) their walls, seen from behind, aren't drawn at all: the tunnels
+// open into each other rather than showing each other's backs.
 //
 // Over the street, on a viaduct: a concrete box girder under each track, a
 // parapet along its outer side, and a pier under it every SPAN metres, down
@@ -46,6 +49,10 @@ const PARAPET = { h: 1.05, w: 0.22 };
 const SPAN = 32; // m between piers
 const PIER = { w: 1.3, head: 2.7, cap: 1.1 };
 const LAMP_EVERY = 24; // m between lamps in a tunnel
+const BLUE_EVERY = 240; // m between blue lights
+const WALK = { wide: 0.55, up: 0.95, rail: 1.9 }; // the safety walk: m wide, its top over the rail, its handrail's
+const CABLES = [1.25, 1.42, 1.59, 2.05]; // m over the rail, the cables along the wall
+const BRACKET_EVERY = 1.5; // m between the brackets they're on
 // a tube's cross-section: [m across, m over the rail], round its inside,
 // from the floor at one wall over the roof to the other
 const PROFILE = (() => {
@@ -73,6 +80,10 @@ export const PAL = {
   railTop: lin(0xb4b0aa),
   cover: lin(0xd9c58a),
   lamp: lin(0xffe2b0),
+  blue: lin(0x2f6bff),
+  cable: lin(0x1c1c1c),
+  bracket: lin(0x5a5c5e),
+  walk: lin(0x7c7871),
   pier: lin(0x9a958b),
 };
 
@@ -150,6 +161,12 @@ function strip(m, f0, f1, prof, color, faceTo, away = false) {
   }
 }
 
+// A rod along the track between two frames: c across, y over the rail, r thick.
+function rod(m, f0, f1, c, y, r, color) {
+  strip(m, f0, f1, [[c - r, y - r], [c - r, y + r], [c + r, y + r], [c + r, y - r]], color, [c, y], true);
+}
+const _p = [0, 0, 0];
+
 function rails(m, f0, f1, y0) {
   for (const side of [-1, 1]) {
     const c = (side * GAUGE) / 2;
@@ -193,15 +210,36 @@ export function buildPiece(t, s0, s1, { ground, outside, station = () => false, 
       // the plinth the rails are on
       strip(under, f0, f1, [[-PLINTH.half, -0.35], [-PLINTH.half, -0.35 + PLINTH.h - RAIL.h], [PLINTH.half, -0.35 + PLINTH.h - RAIL.h], [PLINTH.half, -0.35]], PAL.concreteDark, [0, -0.3], true);
       rails(under, f0, f1, 0);
-      // a lamp now and then on the wall
-      const first = Math.ceil(f0.s / LAMP_EVERY) * LAMP_EVERY;
-      for (let s = first; s < f1.s; s += LAMP_EVERY) {
+      // the safety walk along the outer wall, and its handrail
+      const ws = outside(f0.x, f0.z, f0.dx, f0.dz) || 1;
+      const wall = ws * TUBE.half;
+      const edge = ws * (TUBE.half - WALK.wide);
+      strip(under, f0, f1, [[wall, WALK.up], [edge, WALK.up], [edge, -0.35]], PAL.walk, [-ws * 3, 3]);
+      rod(under, f0, f1, wall - ws * 0.07, WALK.rail, 0.025, PAL.bracket);
+      // the cables along the other wall
+      for (const y of CABLES) rod(under, f0, f1, -wall + ws * 0.09, y, 0.03, PAL.cable);
+      const yaw = Math.atan2(f0.dx, f0.dz);
+      const at = (s, c, y, out) => {
         const u = (s - f0.s) / (f1.s - f0.s || 1);
-        const x = f0.x + (f1.x - f0.x) * u;
-        const y = f0.y + (f1.y - f0.y) * u;
-        const z = f0.z + (f1.z - f0.z) * u;
-        const c = -TUBE.half + 0.06;
-        box(glow, x + f0.rx * c, y + 3.1, z + f0.rz * c, 0.05, 0.09, 0.35, Math.atan2(f0.dx, f0.dz), PAL.lamp);
+        out[0] = f0.x + (f1.x - f0.x) * u + f0.rx * c;
+        out[1] = f0.y + (f1.y - f0.y) * u + y;
+        out[2] = f0.z + (f1.z - f0.z) * u + f0.rz * c;
+        return out;
+      };
+      for (let s = Math.ceil(f0.s / BRACKET_EVERY) * BRACKET_EVERY; s < f1.s; s += BRACKET_EVERY) {
+        at(s, -wall + ws * 0.07, (CABLES[0] + CABLES[CABLES.length - 1]) / 2, _p);
+        box(under, _p[0], _p[1], _p[2], 0.07, (CABLES[CABLES.length - 1] - CABLES[0]) / 2 + 0.08, 0.02, yaw, PAL.bracket);
+      }
+      // a lamp now and then over the walk, and a blue light where the phone is
+      for (let s = Math.ceil(f0.s / LAMP_EVERY) * LAMP_EVERY; s < f1.s; s += LAMP_EVERY) {
+        at(s, wall - ws * 0.06, 3.1, _p);
+        box(glow, _p[0], _p[1], _p[2], 0.05, 0.09, 0.35, yaw, PAL.lamp);
+      }
+      for (let s = Math.ceil(f0.s / BLUE_EVERY) * BLUE_EVERY; s < f1.s; s += BLUE_EVERY) {
+        at(s, wall - ws * 0.06, 2.55, _p);
+        box(glow, _p[0], _p[1], _p[2], 0.06, 0.12, 0.12, yaw, PAL.blue);
+        at(s + 0.5, wall - ws * 0.08, 1.55, _p);
+        box(under, _p[0], _p[1], _p[2], 0.08, 0.3, 0.22, yaw, PAL.bracket);
       }
       continue;
     }

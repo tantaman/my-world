@@ -14,7 +14,8 @@ and water that mirrors the sky. Where the real chunks are it sinks out of
 sight beneath them (the further where the land falls away steeply between
 its points, as down the walls of a canyon), so close to you it is the real
 ground and the real trees you see, and the far land only shows past their
-edge. As far as there is land
+edge. Under the ground (deep in a cave, down in the Metro), where no
+daylight reaches your eye, it isn't drawn at all. As far as there is land
 drawn in every direction, the air clears: climb a massif and the haze opens
 out with you.
 

@@ -334,6 +334,98 @@ for (const s of running) {
 }
 console.log(`track: ${points.length} points, ${(([...edges].reduce((s, e) => { const [a, b] = e.split(',').map(Number); return s + Math.hypot(points[a].x - points[b].x, points[a].z - points[b].z); }, 0)) / 1000).toFixed(1)} km`);
 
+// ── Room between the tracks ──────────────────────────────────────────────────
+// The map often draws two tracks side by side nearer than they can be: a car
+// is 3.1 m wide, and from one track's middle to the next is never less than
+// TRACKS_APART, or two trains passing would run into each other. Where
+// they're nearer, each is moved off the other by half of what's wanting,
+// held for a little way along and eased off past that, so that a track
+// bends out to its place as smoothly as the map's own curves. (Two tracks
+// coming together at a switch are each other's near along the track, and
+// are left to meet.)
+const TRACKS_APART = 4.1; // m, middle to middle
+const SAME_TRACK = 90; // m: points this near along the track are on one track, or either side of a switch
+const PUSH_HOLD = 25; // m a push is held for along the track, either way
+const PUSH_EASE = 70; // m it's eased off over, past that
+{
+  // the points within r m along the track of point i: Map(point -> m)
+  const along = (i, r) => {
+    const got = new Map([[i, 0]]);
+    const queue = [i];
+    while (queue.length) {
+      const a = queue.shift();
+      const da = got.get(a);
+      for (const [b, d] of adj[a]) {
+        const db = da + d;
+        if (db > r || (got.has(b) && got.get(b) <= db)) continue;
+        got.set(b, db);
+        queue.push(b);
+      }
+    }
+    return got;
+  };
+  // the way each point's track runs
+  const dir = points.map((p, i) => {
+    const nb = adj[i];
+    if (!nb.length) return null;
+    const a = points[nb[0][0]];
+    const b = nb.length > 1 ? points[nb[1][0]] : p;
+    const [dx, dz] = nb.length > 1 ? [b.x - a.x, b.z - a.z] : [p.x - a.x, p.z - a.z];
+    const l = Math.hypot(dx, dz) || 1;
+    return [dx / l, dz / l];
+  });
+  const CELL = 8;
+  const grid = new Map();
+  points.forEach((p, i) => {
+    const k = `${Math.floor(p.x / CELL)},${Math.floor(p.z / CELL)}`;
+    if (!grid.has(k)) grid.set(k, []);
+    grid.get(k).push(i);
+  });
+  // what each point wants: off the nearest track beside it, by half the shortfall
+  const push = [];
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const d = dir[i];
+    if (!d || !p.kind) continue;
+    const [nx, nz] = [-d[1], d[0]];
+    let same = null;
+    let want = 0;
+    let way = 0;
+    for (let gi = -1; gi <= 1; gi++) {
+      for (let gj = -1; gj <= 1; gj++) {
+        for (const j of grid.get(`${Math.floor(p.x / CELL) + gi},${Math.floor(p.z / CELL) + gj}`) || []) {
+          const q = points[j];
+          const e = dir[j];
+          if (j === i || !e || q.layer !== p.layer || Math.abs(d[0] * e[0] + d[1] * e[1]) < 0.97) continue;
+          const c = (q.x - p.x) * nx + (q.z - p.z) * nz;
+          if (Math.abs(c) >= TRACKS_APART || Math.abs((q.x - p.x) * d[0] + (q.z - p.z) * d[1]) > 8) continue;
+          if (!same) same = along(i, SAME_TRACK);
+          if (same.has(j)) continue;
+          const short = (TRACKS_APART - Math.abs(c)) / 2;
+          if (short > want) [want, way] = [short, c > 0 ? -1 : 1];
+        }
+      }
+    }
+    if (want > 0) push.push({ i, x: nx * way * want, z: nz * way * want, m: want });
+  }
+  // held and eased along the track: each point moved as the strongest push near it says
+  const moved = new Map(); // point -> [x, z, how much]
+  for (const { i, x, z, m } of push) {
+    for (const [j, g] of along(i, PUSH_HOLD + PUSH_EASE)) {
+      const u = Math.max(0, (g - PUSH_HOLD) / PUSH_EASE);
+      const k = 1 - u * u * (3 - 2 * u);
+      const was = moved.get(j);
+      if (!was || m * k > was[2]) moved.set(j, [x * k, z * k, m * k]);
+    }
+  }
+  for (const [j, [x, z]] of moved) {
+    points[j].x += x;
+    points[j].z += z;
+  }
+  for (let a = 0; a < points.length; a++) for (const e of adj[a]) e[1] = Math.hypot(points[a].x - points[e[0]].x, points[a].z - points[e[0]].z);
+  console.log(`tracks set apart: ${push.length} points nearer than ${TRACKS_APART} m to the track beside them, ${moved.size} moved`);
+}
+
 // ── The stations ─────────────────────────────────────────────────────────────
 // Each service's stops, onto its own track, gathered into levels: one
 // station's tracks that run alongside each other (where lines cross, a level

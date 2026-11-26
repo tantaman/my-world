@@ -35,6 +35,7 @@ const GLYPH = ['..###..', '.#####.', '###.###', '##...##', '##...##', '#.....#',
 
 const DARK = [0.4, 0.55]; // the lamp comes on below this much daylight, and goes off above that
 const ADJUST = { brighter: 2.2, darker: 1.3 }; // how fast the eye gets used to it (per second)
+const LIT = 0.5; // where a space's own lamps light it this well, the headlamp stays off (world/spaces.js: lamps)
 const CLEAR = 4; // m round a mouth's cutting kept clear of trees and undergrowth
 
 // The cutting at a cave's mouth, and a little in front: a segment and how
@@ -170,16 +171,20 @@ export function installCaves(game) {
       // How much daylight gets to your eye, and the eye getting used to it:
       // in a cave, or any other space that says how much reaches it (light).
       let light = 1;
+      let lamps = 0; // and how well lit it is by lamps of its own
       for (const sp of spaces.list) {
-        if (sp.light && sp.air(eye.x, eye.y, eye.z, 0)) light = Math.min(light, sp.light(eye.x, eye.z));
+        if (!sp.light || !sp.air(eye.x, eye.y, eye.z, 0)) continue;
+        light = Math.min(light, sp.light(eye.x, eye.z));
+        if (sp.lamps) lamps = Math.max(lamps, sp.lamps(eye.x, eye.z));
       }
       open += (light - open) * (1 - Math.exp(-dt * (light > open ? ADJUST.brighter : ADJUST.darker)));
       sky.open = Math.max(0.02, open);
       ROCK.uSkyFill.value = 1 / sky.open;
       sound.setEnclosed(1 - open);
 
-      // The lamp: on in the dark, unless you say otherwise.
-      const nowDark = dark ? open < DARK[1] : open < DARK[0];
+      // The lamp: on in the dark, unless you say otherwise (or the place
+      // has lamps of its own).
+      const nowDark = (dark ? open < DARK[1] : open < DARK[0]) && lamps < LIT;
       if (nowDark !== dark) {
         dark = nowDark;
         byHand = null;

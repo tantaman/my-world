@@ -287,7 +287,7 @@ place in that order, not at the end:
 | `world/landSpace.js` | a land made in code as somewhere to be: its floor, its walls, its lid | `new LandSpace(land, { id, lid, wade, reach })`, then `game.spaces.add(space)` |
 | `world/sky.js` | how much daylight reaches the eye (dims it, the eye adjusts) | `game.sky.open = 0..1` |
 | `world/solids.js` | something solid to bump into and stand on | `game.solids.set(owner, [capsule])` (`surface: 'boards'` for its footsteps) |
-| `world/spaces.js` | somewhere under the ground to be in: its floor, walls and roof (and how dark it is, if the lamp should come on there) | `game.spaces.add(space)`, `spaces.onDemand(fn)` |
+| `world/spaces.js` | somewhere under the ground to be in: its floor, walls and roof (and how dark it is, if the lamp should come on there, unless it has lamps of its own) | `game.spaces.add(space)`, `spaces.onDemand(fn)` |
 | `world/strewn.js` | such a land strewn with what stands and walks on it, square by square near you | `new Strewn({ land, space, group, kit, strew })`, `kind(geo, mat, solid, still)` |
 | `world/wind.js` | which way the wind blows | `WIND` |
 
