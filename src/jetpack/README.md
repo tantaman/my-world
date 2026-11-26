@@ -20,7 +20,7 @@ in the air. (Step off a ledge and press space, and they catch then too.)
 | **W A S D** | fly where the camera faces, at 12 m/s |
 | **shift** | dive, and go faster: 24 m/s along |
 | neither space nor shift | the jets throttle back, and let you down slowly |
-| the push key, held, on a skateboard | fire the jets · they shove the board along |
+| the push key, held, on a skateboard | fire the jets · they shove the board along, and round a carve |
 | on a pad | **A** held to climb, **B** to dive, the left stick to steer; **Y** is F |
 | on a touch screen | at the rack, the *strap on* (or *hang up*) button · tap jump in the air to climb |
 
@@ -39,9 +39,13 @@ about 125 km/h crouched — half as fast again as they'll fly you. As they
 catch, the jetpack swings round on its mount, flat to your back, until the
 jets point straight back along the board, level with the ground under it,
 and you square your shoulders across the board to keep them there; once
-their flames are out it swings back upright. They don't lift you: the wheels
-stay down, you steer with the trucks, and everything that throws you off a
-board throws you off it just the same.
+their flames are out it swings back upright. Carve with them lit and you
+twist your shoulders round into the turn, the jetpack with them, so the
+jets point out of it and push you round as well as along: far harder than
+the wheels' grip alone would carve you, enough to make a road's bends at
+their speed. They don't lift you: the wheels stay down, you steer with the
+trucks, and everything that throws you off a board throws you off it just
+the same.
 
 In a shared world everyone sees the jetpack on your back, and when you fly,
 how high you are and the jets burning; and you see theirs, and hear them

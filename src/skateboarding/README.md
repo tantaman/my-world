@@ -38,7 +38,14 @@ the flames and the vapour stream straight out behind you, level with the
 road. Nothing holds them
 back but the air, so you wind up doing about 95 km/h standing up and 125
 tucked down under **shift** — half as fast again as the jetpack will ever
-fly you. They burn on in the air too, so an ollie off a kerb at that speed
+fly you. At that speed the wheels' grip alone would only carve you round
+the widest of sweeps, so carve with the jets lit and they help: you twist
+your shoulders round into the turn and lean right over, the flames swing
+out away from it, and they push you round as well as along — round a bend
+of 40 m at 95 km/h, where the wheels alone would need 115. Let go of **W**
+in the middle of a bend and it's the wheels' grip alone again, so keep them
+lit through it, and ease off before the tightest bends and a city's street
+corners. They burn on in the air too, so an ollie off a kerb at that speed
 carries you twenty-odd metres. Let go of **W** and they cut out with a
 sputter, and then **S** will slow you; and
 everything else here still holds at that speed, so the gravel, a tree, a
@@ -88,11 +95,11 @@ world.skateboarding.state()   // how you're going (`jets`: the push behind you),
 
 ```
 index.ts         plugs it into the game: onto it and off it, what's under the wheels, the camera, the readout, your best saved
-skater.js        the physics: rolling, pushing, carving, braking, the air, landing, bailing
+skater.js        the physics: rolling, pushing, carving (harder with the jets), braking, the air, landing, bailing
 tricks.js        what you did in the air: whether you landed it, what it's called, what it's worth
 session.js       a session's tally: how far, how fast, points and lines
 controls.js      the keys, read into what the skater is told; what to say they do
-pose.js          how you stand on it, push it and brake, square up for the jets, lean and tumble; the board flipping under your feet
+pose.js          how you stand on it, push it and brake, square up for the jets and twist into a carve with them, lean and tumble; the board flipping under your feet
 board.js         the skateboard: deck, grip, trucks and wheels that turn
 sound.js         the wheels on the tarmac, boards and gravel, the slide, the wind; push, pop, land, bail
 others.js        what other people here are on

@@ -18,7 +18,10 @@
 // they don't care how fast the wheels are already turning, so they take you
 // on past anything a foot or a hill can do, until the air holds you — much
 // further crouched — and they burn on in the air, carrying you a little
-// further over a gap.
+// further over a gap. Carve with them lit and they swing out across your
+// back, away from the turn, and push you round it as well as along: you can
+// carve far harder than the wheels' grip alone allows, or you'd never make
+// a bend at their speed.
 //
 // What's under the wheels matters. Tarmac rolls best; stone and boards a
 // little worse; gravel badly, and at speed a stone in it stops a wheel and
@@ -113,6 +116,10 @@ export const PUSH = { top: 7, acc: 6, period: 0.75, kick: [0.25, 0.65] };
 // full thrust. Nothing but the air holds them back, so on the flat that's
 // about 95 km/h standing up and 125 crouched, and more down a hill.
 export const JETS = 4.5;
+// ...and how much harder (m/s², on top of the wheels' TURN.carve) they let
+// you carve at full thrust, swung out to push you round the turn: at 95
+// km/h, round a bend of about 40 m where the wheels alone would need 115.
+export const JETS_CARVE = 12;
 // Braking: a foot dragged (m/s²); at `from` m/s or faster, a powerslide.
 export const BRAKE = { drag: 2.2, slide: 5.5, from: 3.5 };
 // Turning: rad/s at a standstill (a kick turn), m/s² round a carve (more
@@ -184,6 +191,7 @@ export class Skater extends Emitter {
     this.crouch = 0; // 0..1
     this.jets = 0; // 0..1 how hard the jets on your back are pushing you along
     this.lateral = 0; // m/s² round the turn you're carving (+ to the left)
+    this.round = 0; // -1..1 how hard the jets are pushing you round it, of the most they can (+ to the left)
     this.grade = 0; // rise over run along the way you're going
     this.compress = 0; // 0..1 the knees taking a bump or a landing
     this.surface = 'tarmac'; // what's under the wheels
@@ -239,6 +247,7 @@ export class Skater extends Emitter {
     this.slide = 0;
     this.dragging = false;
     this.jets = 0;
+    this.lateral = this.round = 0;
     this.down = -1;
     this.roll = 0;
     this.compress = 0;
@@ -264,7 +273,7 @@ export class Skater extends Emitter {
       this.compress *= Math.exp(-h * 5);
       if (this.loose) this._loose(h);
     }
-    if (!this.grounded || this.down >= 0) this.lateral = 0;
+    if (!this.grounded || this.down >= 0) this.lateral = this.round = 0;
   }
 
   // ── On the ground ─────────────────────────────────────────────────────────
@@ -278,8 +287,11 @@ export class Skater extends Emitter {
     this.crouch += ((c.crouch && !this.pushing ? 1 : 0) - this.crouch) * (1 - Math.exp(-h * 10));
     let v = this.v;
 
-    // round the turn: carved at speed, kicked round on the tail at a standstill
-    const rate = Math.min(TURN.still, (TURN.carve * (1 + (TURN.crouch - 1) * this.crouch)) / Math.max(Math.abs(v), 0.5));
+    // round the turn: carved at speed, as hard as the wheels' grip allows
+    // (and the jets, lit, swung out to push you round), and kicked round on
+    // the tail at a standstill
+    const grip = TURN.carve * (1 + (TURN.crouch - 1) * this.crouch);
+    const rate = Math.min(TURN.still, (grip + JETS_CARVE * this.jets) / Math.max(Math.abs(v), 0.5));
     this.yawRate += (-steer * rate - this.yawRate) * (1 - Math.exp(-h * TURN.ease));
     this.yaw = wrap(this.yaw + this.yawRate * h);
     const dx = Math.sin(this.yaw);
@@ -343,6 +355,9 @@ export class Skater extends Emitter {
     this.vx = v * fx;
     this.vz = v * fz;
     this.lateral = this.yawRate * Math.abs(v);
+    // what the wheels can't hold of that, the jets push you round
+    const over = this.jets > 0 ? (Math.abs(this.lateral) - grip) / JETS_CARVE : 0;
+    this.round = over > 0 ? sign(this.lateral) * Math.min(1, over) : 0;
 
     if (pop) {
       this.vy += POP;

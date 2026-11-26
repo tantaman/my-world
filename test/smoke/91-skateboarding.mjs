@@ -1,7 +1,8 @@
 // Skateboarding: onto a paved road, F (the act key), and you're on your
 // board; W pushes you along it, S brakes, space ollies and W in the air
 // kickflips; pointed off the road onto the grass, the wheels dig in and you
-// step off; F steps off. Then a jetpack on your back, and W is the jets.
+// step off; F steps off. Then a jetpack on your back, and W is the jets,
+// and with them lit D carves you round far harder.
 //
 // Needs: nothing of what came before. Leaves: you on foot, on or beside the
 // paved road nearest the start, the jetpack off your back again.
@@ -184,6 +185,18 @@ export default async function ({ page, step, key, frames, shot }) {
     const fast = await page.evaluate(() => T.until(() => world.skateboarding.session.top > 12 || !world.skateboarding.active, 20000));
     const going = await page.evaluate(() => ({ top: Math.round(world.skateboarding.session.top * 3.6), kmh: world.skateboarding.state().kmh, on: world.skateboarding.active, flying: world.jetpack.state().flying, burn: world.jetpack.state().thrust, swivel: world.jetpack.state().swivel }));
     await shot('jet-skating');
+    // carve with them lit: they push you round as well as along (off the
+    // road, likely, at this speed: that's the next thing it does)
+    let carved = null;
+    if (going.on) {
+      await page.keyboard.down('KeyD');
+      const round = await page.evaluate(() => T.until(() => !world.skateboarding.active || world.skateboarding.skater.down >= 0 || world.skateboarding.skater.round < -0.5, 3000));
+      carved = await page.evaluate(() => ({ round: world.skateboarding.active ? world.skateboarding.skater.round : null, lateral: world.skateboarding.active ? world.skateboarding.skater.lateral : null, kmh: world.skateboarding.state().kmh }));
+      await shot('jet-carving');
+      await page.keyboard.up('KeyD');
+      assert.ok(round, 'carving');
+      if (carved.round !== null && carved.round !== 0) assert.ok(carved.round < -0.5, `the jets push you round to the right (${JSON.stringify(carved)})`);
+    }
     await page.keyboard.up('KeyW');
     await page.keyboard.up('ShiftLeft');
     assert.ok(lit, 'holding the push, the jets catch');
@@ -200,6 +213,6 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.deepEqual(after, { pushing: false, jets: 0 }, 'let go, and the jets are out');
     await page.evaluate(() => world.skateboarding.active && world.skateboarding.off());
     assert.equal(await page.evaluate(() => world.jetpack.give(false)), false, 'and the jetpack off your back again');
-    return { top: going.top, downhill: aim.down > 0, burn: going.burn };
+    return { top: going.top, downhill: aim.down > 0, burn: going.burn, carved };
   });
 }

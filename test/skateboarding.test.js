@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { Skater, PUSH, JETS, rolls, setsOff } from '../src/skateboarding/skater.js';
+import { Skater, PUSH, JETS, JETS_CARVE, rolls, setsOff } from '../src/skateboarding/skater.js';
 import { Pose } from '../src/skateboarding/pose.js';
 import { bail, nameOf, score, counts, LAND } from '../src/skateboarding/tricks.js';
 import { Session, LINE } from '../src/skateboarding/session.js';
@@ -89,7 +89,7 @@ test('the jets on your back push you on past any hill, faster crouched, and the 
 test('the jets push the way the board goes: round a carve, and never fakie', () => {
   const sk = new Skater(ground());
   sk.start(0, 0, 0, 2);
-  ride(sk, 3, () => ({ push: true, jets: 1, steer: 1 }));
+  ride(sk, 1, () => ({ push: true, jets: 1, steer: 1 }));
   assert.ok(sk.heading < -0.5, `carving under them turns you round (${sk.heading.toFixed(2)} rad)`);
   assert.ok(Math.abs(Math.hypot(sk.vx, sk.vz) - sk.v) < 1e-9, 'and you go where the board points, as ever');
   // rolling backwards, the jets on your back turn you round first, as a kick does
@@ -99,6 +99,60 @@ test('the jets push the way the board goes: round a carve, and never fakie', () 
   assert.ok(back.fakie, 'riding fakie');
   ride(back, 1, () => ({ push: true, jets: 1 }));
   assert.equal(back.fakie, false, 'the jets turn you round to face the way you are going');
+});
+
+test('with the jets lit you carve far harder, swung out of the turn: round a bend at their speed the wheels alone would never hold', () => {
+  const carve = (ctl) => {
+    const sk = new Skater(ground());
+    sk.start(0, 0, 0, 26); // 95 km/h, what the jets do standing up
+    ride(sk, 1, () => ctl);
+    return { sk, radius: (sk.v * sk.v) / Math.abs(sk.lateral) };
+  };
+  const wheels = carve({ steer: 1 });
+  const jets = carve({ push: true, jets: 1, steer: 1 });
+  assert.ok(wheels.radius > 75, `on the wheels alone, a wide sweep (${wheels.radius.toFixed(0)} m across the turn)`);
+  assert.ok(jets.radius < 45, `with the jets, a road's bend (${jets.radius.toFixed(0)} m)`);
+  assert.ok(Math.abs(jets.sk.lateral) > Math.abs(wheels.sk.lateral) + JETS_CARVE * 0.9, `that much harder (${jets.sk.lateral.toFixed(1)} m/s² round it, to ${wheels.sk.lateral.toFixed(1)})`);
+  assert.ok(jets.sk.round < -0.9, `the jets pushing you round to the right their hardest (${jets.sk.round.toFixed(2)})`);
+  assert.ok(jets.sk.v > 24 && jets.sk.grounded && jets.sk.down < 0, `still going at their speed, on the board (${(jets.sk.v * 3.6).toFixed(0)} km/h)`);
+  assert.ok(Math.abs(Math.hypot(jets.sk.vx, jets.sk.vz) - jets.sk.v) < 1e-9, 'and going where the board points');
+  // a gentle carve the wheels hold on their own: the jets push you only along
+  const gentle = carve({ push: true, jets: 1, steer: 0.15 });
+  assert.equal(gentle.sk.round, 0, 'a gentle carve, the wheels hold');
+  // let go of them in the bend, and it's the wheels' grip alone again
+  const after = jets.sk;
+  ride(after, 0.5, () => ({ steer: 1 }));
+  assert.equal(after.round, 0);
+  assert.ok(Math.abs(after.lateral) < Math.abs(wheels.sk.lateral) + 1, `let go, and you run wide (${after.lateral.toFixed(1)} m/s²)`);
+});
+
+test('carving with the jets, the shoulders twist round into the turn and they push you round it', () => {
+  const sk = new Skater(ground());
+  sk.start(0, 0, 0, 20);
+  const pose = new Pose({ object: new THREE.Group(), turn: new THREE.Group() });
+  const go = (secs, ctl = {}) => {
+    for (let t = 0; t < secs; t += 1 / 60) {
+      sk.step(1 / 60, { ...idle, ...ctl });
+      pose.update(1 / 60, sk);
+    }
+  };
+  // which way round from along the board the jets push you (+ to the left)
+  const swung = () => {
+    const a = pose.along;
+    const t = pose.toward;
+    assert.ok(Math.abs(Math.hypot(t.x, t.y, t.z) - 1) < 1e-6, 'a way, not a speed');
+    return Math.atan2(a.z * t.x - a.x * t.z, a.x * t.x + a.z * t.z);
+  };
+  go(1, { push: true, jets: 1 });
+  assert.ok(Math.abs(swung()) < 0.01, `straight along, the jets point straight back (${swung().toFixed(3)} rad)`);
+  go(1, { push: true, jets: 1, steer: 1 });
+  assert.ok(swung() < -0.4, `carving right, they push you round to the right (${swung().toFixed(2)} rad)`);
+  assert.ok(pose.stance.twist < -0.4 && Math.abs(pose.stance.twist - swung()) < 0.05, `the shoulders twisted round with them, for them to point that way (${pose.stance.twist.toFixed(2)} rad)`);
+  assert.ok(pose.lean < -0.7, `leaning right over into it, further than on the wheels alone (${pose.lean.toFixed(2)} rad)`);
+  go(1, { push: true, jets: 1, steer: -1 });
+  assert.ok(swung() > 0.4 && pose.stance.twist > 0.4, `and the other way, to the left (${swung().toFixed(2)} rad)`);
+  go(1);
+  assert.ok(Math.abs(swung()) < 0.01, 'let go of them, and back along the board');
 });
 
 test('the jets burn on in the air, carrying you a little further over a gap', () => {
