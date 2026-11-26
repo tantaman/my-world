@@ -1,5 +1,5 @@
 // Ground that something built has paved over, and what it is paved with: a
-// city's streets and sidewalks, laid on the ground itself.
+// city's streets and sidewalks, a zoo's walks, laid on the ground itself.
 //
 // Most of what you stand on that isn't the land is solid (world/solids.js),
 // and says what it's made of there. Paving laid over graded ground is not:

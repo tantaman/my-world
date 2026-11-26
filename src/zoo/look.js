@@ -11,7 +11,7 @@ import PLAN from './plan.js';
 import { Site, USE } from './site.js';
 import { kindOf } from './species.js';
 import { buildBuildings } from './buildings.js';
-import { buildGrounds } from './grounds.js';
+import { buildGrounds, madeOf } from './grounds.js';
 import { buildFences, signSpots, buildSigns } from './fences.js';
 import { Residents } from './residents.js';
 import { Mesher } from '../build/geometry.js';
@@ -68,7 +68,7 @@ export class Zoo extends Emitter {
   }
 
   *_build({ card, offset, ground, wet, water }) {
-    this.site = new Site(PLAN, { at: card.at, offset, ground, wet, kindOf });
+    this.site = new Site(PLAN, { at: card.at, offset, ground, wet, kindOf, madeOf });
     this.residents = new Residents(this.site, { ground, water });
     this.residents.on('call', (c) => this.emit('call', c));
     yield;
@@ -136,6 +136,11 @@ export class Zoo extends Emitter {
   // Whether grass grows at (x, z): not on what's paved or built.
   bare(x, z) {
     return (this.site.use(x, z) & (USE.building | USE.path | USE.plaza)) !== 0;
+  }
+  // What the paths and plazas are made of underfoot, for whatever asks
+  // (world/paved.ts): the site's.
+  paving(x, z) {
+    return this.site.paving(x, z);
   }
 
   update(dt, eye) {

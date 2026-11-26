@@ -2,9 +2,10 @@
 // Connecticut Avenue in Washington, a long way from the forest, and the zoo
 // stands up round you: its buildings, its fences and signs, and its animals
 // in their pens. Down Olmsted Walk on foot, on its paving and not down in
-// it; the flamingos by the path, seen and counted; the goats in the yard the
-// map fences, with no second fence inside it; and the cheetahs' fence keeps
-// you out of their yard however hard you walk at it.
+// it; the walk's paving stones underfoot, skated along; the flamingos by the
+// path, seen and counted; the goats in the yard the map fences, with no
+// second fence inside it; and the cheetahs' fence keeps you out of their
+// yard however hard you walk at it.
 //
 // Needs: nothing in particular (the zoo is on the map from anywhere).
 // Leaves: you on the path by the cheetahs, at the Cheetah Conservation Station.
@@ -102,6 +103,43 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.ok(middle < 0.12, `the paving is ${middle.toFixed(2)} m over the ground you stand on`);
     assert.ok(paving[0] > -0.02, `and nowhere under it (${paving[0].toFixed(2)} m)`);
     return { walked: Math.round(walked * 10) / 10, paving: Math.round(middle * 100) / 100 };
+  });
+
+  await step('Olmsted Walk is paving stones underfoot, and skateable', async () => {
+    // What's underfoot on a path is what the map says it's laid with
+    // (world/paved.ts), so your footsteps hear it and the wheels roll on it
+    // — the walk is paving stones, and the loop and the drives asphalt.
+    const here = await page.evaluate(() => {
+      const { x, z } = world.player.pos;
+      let [yaw, far] = [0, -1];
+      for (let k = 0; k < 24; k++) {
+        const t = (k / 24) * 2 * Math.PI;
+        let d = 2;
+        while (d < 60 && world.paved.at(x - Math.sin(t) * d, z - Math.cos(t) * d)) d += 2;
+        if (d > far) [yaw, far] = [t, d];
+      }
+      world.player.spawn(x, z, yaw, yaw);
+      return { made: world.paved.at(x, z), far, underfoot: world.player.underfoot ? world.player.underfoot.surface ?? 'built' : null };
+    });
+    await frames(10);
+    assert.equal(here.made, 'stone', 'the walk says it is laid in stone');
+    assert.equal(here.underfoot, null, 'with nothing solid there to say it: it is laid on the ground');
+    assert.ok(here.far > 10, `with room to roll along it (${here.far} m)`);
+    await key('KeyF');
+    await frames(10);
+    const on = await page.evaluate(() => world.skateboarding.state());
+    assert.ok(on.active, 'F, and you are on your board');
+    assert.equal(on.surface, 'stone', 'the wheels on the paving stones');
+    await page.keyboard.down('KeyW');
+    await frames(150);
+    await page.keyboard.up('KeyW');
+    const rolled = await page.evaluate(() => world.skateboarding.state());
+    assert.ok(rolled.session.distance > 4, `pushed along the walk (${rolled.session.distance.toFixed(1)} m)`);
+    await shot('skating Olmsted Walk');
+    await key('KeyF');
+    await frames(10);
+    assert.ok(!(await page.evaluate(() => world.skateboarding.state().active)), 'F again, and it is under your arm');
+    return { distance: Math.round(rolled.session.distance) };
   });
 
   await step('the flamingos, seen', async () => {

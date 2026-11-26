@@ -4,9 +4,13 @@
 //
 // What's where is a grid a metre square over the whole zoo, each square
 // saying what it has on it (USE): a building, a path, a plaza, an exhibit's
-// pen, a fence. Whether there's water is the land's to say (wet). The forest round about asks it what to keep off (no tree in
+// pen, a fence; and, where it's paved, what it's paved with (MADE, in the
+// top bits of the same square). Whether there's water is the land's to say
+// (wet). The forest round about asks it what to keep off (no tree in
 // the Panda House, no grass on Olmsted Walk), the animals ask it where they
-// may go, and the fences are put up round what it says is a pen.
+// may go, the fences are put up round what it says is a pen, and whatever
+// asks what's underfoot — footsteps, a skateboard's wheels — is told
+// asphalt or concrete and not the grass it's laid on (world/paved.ts).
 //
 // A pen is where an exhibit's animals live: the area the map draws for it,
 // or, where the map has only a point (the Kids' Farm's goats, the zebras at
@@ -26,10 +30,18 @@
 //     ground   (x, z) → the height of the ground
 //     wet      (x, z) → whether there's water there (a moat, a pool)
 //     kindOf   (exhibit) → what lives in it (species.js's kindOf), or null
+//     madeOf   { path(p), plaza(a) } → what each is underfoot, one of MADE
+//              (grounds.js's, out of the table it is drawn from), or null
 
 import { inside, area, centroid, edgeDistance } from '../core/rings.js';
 
 export const USE = { path: 1, plaza: 2, building: 4, pen: 8, fence: 16 };
+// What a square's paving is made of, for whatever asks what's underfoot
+// (world/paved.ts). It isn't a flag but one of these, kept as its index in
+// the three bits above the USE flags, so there is room for a couple more.
+export const MADE = [null, 'tarmac', 'stone', 'boards', 'gravel', 'dirt'];
+const MADE_AT = 5; // the bit the index starts at
+const MADE_MASK = 7 << MADE_AT;
 const CELL = 1; // m, the grid's squares
 const PAD = 30; // m of grid round the zoo's outline
 // A pen grown round a point: how many ways out it's looked for, how far
@@ -45,7 +57,7 @@ const INDOORS = 0.5;
 const SPOT_TRIES = 60; // spots tried in a pen before giving up on one
 
 export class Site {
-  constructor(plan, { at, offset = 0, ground = () => 0, wet = () => false, kindOf = () => null }) {
+  constructor(plan, { at, offset = 0, ground = () => 0, wet = () => false, kindOf = () => null, madeOf = null }) {
     this.plan = plan;
     this.ax = at[0];
     this.az = at[1];
@@ -79,8 +91,12 @@ export class Site {
     this.box = [this.x0, this.z0, this.x0 + this.w * CELL, this.z0 + this.h * CELL];
     this.grid = new Uint8Array(this.w * this.h);
     for (const b of this.buildings) for (const f of b.faces) this._fill(f[0], USE.building, f.slice(1));
-    for (const a of this.areas) for (const r of a.rings) this._fill(r, USE.plaza);
-    for (const p of this.paths) this._stroke(p.pts, p.width / 2, USE.path);
+    // (the plazas first: where a path crosses one the map draws as well, the
+    // plaza is its paving, as the look draws it, so the first to lay a
+    // square keeps it)
+    const made = (kind, thing) => (madeOf ? MADE.indexOf(madeOf[kind](thing)) : 0);
+    for (const a of this.areas) for (const r of a.rings) this._fill(r, USE.plaza, [], made('plaza', a));
+    for (const p of this.paths) this._stroke(p.pts, p.width / 2, USE.path, made('path', p));
     for (const b of this.barriers) this._trace(b.pts, USE.fence);
     // (water is asked about where it matters, not worked out for every square)
     this.wet = wet;
@@ -120,6 +136,14 @@ export class Site {
     const j = Math.floor((z - this.z0) / CELL);
     if (i < 0 || j < 0 || i >= this.w || j >= this.h) return 0;
     return this.grid[j * this.w + i];
+  }
+  // What the paving at (x, z) is made of, for whatever asks what's underfoot
+  // (world/paved.ts): 'tarmac' on the asphalt walks, 'stone' on the concrete
+  // and the paving stones, 'boards' on a wooden bridge, 'gravel', 'dirt';
+  // null where the ground is bare, or is a floor indoors. (The paving is
+  // laid on the ground you walk on, so it has no height of its own.)
+  paving(x, z) {
+    return MADE[(this.use(x, z) & MADE_MASK) >> MADE_AT];
   }
   // Whether anything in `flags` is within r m of (x, z).
   near(x, z, r, flags) {
@@ -188,11 +212,18 @@ export class Site {
       }
     }
   }
-  _fill(ring, flag, holes = []) {
-    this._cells(ring, holes, (k) => (this.grid[k] |= flag));
+  // `made`, where it's given, is what the square is paved with (an index
+  // into MADE): laid only where nothing is laid yet, so the first to cover a
+  // square says what it is. The USE flags go on whatever is there already.
+  _lay(k, flag, made) {
+    this.grid[k] |= flag;
+    if (made > 0 && !(this.grid[k] & MADE_MASK)) this.grid[k] |= made << MADE_AT;
+  }
+  _fill(ring, flag, holes = [], made = 0) {
+    this._cells(ring, holes, (k) => this._lay(k, flag, made));
   }
   // every square within r of a line [x, z, x, z, …]
-  _stroke(pts, r, flag) {
+  _stroke(pts, r, flag, made = 0) {
     const R = r + CELL * 0.5;
     for (let k = 0; k + 3 < pts.length; k += 2) {
       const [ax, az, bx, bz] = [pts[k], pts[k + 1], pts[k + 2], pts[k + 3]];
@@ -208,7 +239,7 @@ export class Site {
           const x = this.x0 + (i + 0.5) * CELL;
           const z = this.z0 + (j + 0.5) * CELL;
           const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
-          if (Math.hypot(x - ax - dx * t, z - az - dz * t) <= r) this.grid[j * this.w + i] |= flag;
+          if (Math.hypot(x - ax - dx * t, z - az - dz * t) <= r) this._lay(j * this.w + i, flag, made);
         }
       }
     }

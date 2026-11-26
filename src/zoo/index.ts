@@ -68,7 +68,7 @@ const GLYPH = ['.......', '.####..', '######.', '######.', '##.##.#', '##.##..',
 
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'map', 'save'];
 export function installZoo(game: Game) {
-  const { scene, camera, gen, chunks, grass, solids, landforms, player, builder, map, hud, commands, save, sound } = game;
+  const { scene, camera, gen, chunks, grass, solids, paved, landforms, player, builder, map, hud, commands, save, sound } = game;
   const card = landforms.cards.find((c: { id: string }) => c.id === ZOO.hike);
   if (!card) return;
   const [cx, cz] = card.at;
@@ -171,6 +171,10 @@ export function installZoo(game: Game) {
     const z = built;
     return (x: number, y: number) => z.bare(x, y);
   });
+  // Its paths and plazas say what they're paved with (world/paved.ts), as
+  // the city's streets do: they're laid on the ground you walk on, with
+  // nothing solid standing there to say it.
+  paved.addSource((x: number, z: number) => (built ? built.paving(x, z) : null));
   // A builder's tools go round its buildings.
   builder.obstacles.addSource((x: number, z: number, R: number, out: unknown[]) => {
     if (!built || Math.hypot(x - cx, z - cz) > HIDE) return;
