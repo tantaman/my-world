@@ -100,8 +100,8 @@ export const PAL = {
   column: lin(0x958f84),
   rail: lin(0x55575a),
   board: lin(0x141414),
-  glass: lin(0x2b3a40),
-  rib: lin(0x5c5f61),
+  glass: lin(0x6f8590),
+  rib: lin(0xb7bbbf),
 };
 // the coves' lamps, warm; what comes back off the concrete, less so
 const WARM = new THREE.Color(1.0, 0.8, 0.55);
