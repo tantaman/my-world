@@ -73,10 +73,10 @@ export function createGround({ farLamps, has }) {
     const blob = float(0).toVar();
     for (const [x, zz, rx, rz] of PUDDLES) {
       const d = length(p.sub(vec2(x, zz)).div(vec2(rx, rz)));
-      blob.assign(max(blob, smoothstep(1.0, 0.55, d.add(fbm2(p.add(x), 1.2, 3).mul(0.35)))));
+      blob.assign(max(blob, smoothstep(1.0, 0.35, d.add(fbm2(p.add(x), 1.2, 3).mul(0.35)))));
     }
     const n = fbm2(p.add(vec2(17, -3)), 4.0, 4);
-    const puddles = smoothstep(0.08, 0.2, n);
+    const puddles = smoothstep(0.02, 0.3, n);
     const forecourtW = max(blob, puddles).mul(forecourt).mul(0.95).add(float(0.32).mul(forecourt));
     // Water along the road's edges and in its ruts.
     const rut = smoothstep(0.9, 0.0, abs(z.sub(L.ROAD.z0 + 0.6))).add(smoothstep(0.9, 0.0, abs(z.sub(L.ROAD.z1 - 0.6))));
@@ -118,15 +118,19 @@ export function createGround({ farLamps, has }) {
   const wet = clamp(w.add(h.mul(-40).max(0)), 0, 1).toVar();
 
   material.colorNode = albedo.mul(mix(0.6, 0.4, wet));
-  const dryRough = mix(float(0.55), float(0.72), road.add(dirt).add(field));
-  material.roughnessNode = mix(dryRough.mul(1.15).min(0.85), float(0.05), smoothstep(0.5, 0.9, wet));
+  // Wet concrete is glossy everywhere, in patches (what breaks the lamps'
+  // streaks up); the road and dirt less so; standing water a mirror.
+  const dampRough = mix(float(0.3), float(0.5), road.add(dirt).add(field).min(1));
+  const patchy = fbm2(p.add(vec2(5, 11)), 0.9, 3).mul(0.22).add(fbm2(p.add(vec2(2, 7)), 0.2, 2).mul(0.08));
+  const roughness = mix(dampRough.add(patchy).clamp(0.12, 0.8), float(0.04), smoothstep(0.5, 0.92, wet)).toVar();
+  material.roughnessNode = roughness;
 
   // Normal: the surface's detail, flattening to a mirror where water stands,
   // plus faint rings where rain falls on it.
   const eps = 0.015;
   const hx = detail(p.add(vec2(eps, 0)), forecourt, road);
   const hz = detail(p.add(vec2(0, eps)), forecourt, road);
-  const flat = smoothstep(0.55, 0.95, wet);
+  const flat = smoothstep(0.4, 1.0, wet);
   const cell = floor(p.mul(1.6));
   const local = fract(p.mul(1.6)).sub(0.5);
   const phase = fract(time.mul(0.9).add(hash(cell.x.add(cell.y.mul(113.0)))));
@@ -144,12 +148,13 @@ export function createGround({ farLamps, has }) {
   let emissive = vec3(0);
   if (mirror) {
     mirror.uvNode = mirror.uvNode.add(vec2(gx, gz).mul(0.06));
-    mirror.levelNode = smoothstep(0.95, 0.4, wet).mul(5);
-    emissive = mirror.rgb.mul(fresnel).mul(smoothstep(0.3, 0.9, wet));
+    // Sharp in puddles, blurred by roughness elsewhere.
+    mirror.levelNode = roughness.mul(14).min(5);
+    emissive = mirror.rgb.mul(fresnel).mul(float(1).sub(roughness).pow(2));
   }
   const painted = Fn(() => {
     const sum = vec3(0).toVar();
-    const rough = mix(float(0.5), float(0.06), smoothstep(0.45, 0.9, wet));
+    const rough = roughness.max(0.05);
     const shin = float(2).div(rough.mul(rough)).sub(2);
     Loop(farLamps.count, ({ i }) => {
       const lp = farLamps.pos.element(i);

@@ -27,7 +27,7 @@ export function createSky({ camera }) {
     flash: uniform(0),
     bolt: uniform(new Vector3(0, 0.3, 1).normalize()),
     speck: uniform(0),                     // the far-off saucer, 0..1
-    speckDir: uniform(new Vector3(-0.35, 0.6, -0.72).normalize()),
+    speckDir: uniform(new Vector3(0.87, 0.47, -0.15).normalize()),
   };
 
   const material = new MeshBasicNodeMaterial({ side: BackSide, depthWrite: false, fog: false });
@@ -55,7 +55,7 @@ export function createSky({ camera }) {
     // Lightning, inside the clouds round the bolt.
     const ang = acos(clamp(dot(dir, u.bolt), -1, 1));
     const glow = u.flash.mul(exp(ang.mul(ang).div(-0.18))).mul(density.mul(1.5).add(0.3));
-    c.addAssign(vec3(0.55, 0.6, 0.8).mul(glow.mul(1.6).add(u.flash.mul(0.08))));
+    c.addAssign(vec3(0.55, 0.6, 0.8).mul(glow.mul(1.1).add(u.flash.mul(0.04))));
     // The far-off saucer: a cyan-white point, twinkling.
     const sp = acos(clamp(dot(dir, u.speckDir), -1, 1));
     c.addAssign(vec3(0.5, 1.0, 1.1).mul(u.speck).mul(exp(sp.mul(sp).div(-0.000012)).mul(18).add(exp(sp.mul(sp).div(-0.0004)).mul(0.25))));

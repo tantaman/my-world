@@ -4,6 +4,7 @@
 // tubes. Its lights are in light/rig.js.
 import { Group, Mesh, BoxGeometry, CylinderGeometry, InstancedMesh, Object3D, Color, MeshStandardNodeMaterial, BackSide, SphereGeometry } from 'three/webgpu';
 import { vec3, instanceIndex, hash, float, mix, color } from 'three/tsl';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SHOP } from './layout.js';
 import { weathered } from '../materials/weathered.js';
 import { rand } from '../noise1.js';
@@ -57,10 +58,24 @@ export function createInterior() {
   const pick = hash(float(instanceIndex).mul(1.7));
   const palette = mix(mix(color('#7a1810'), color('#a8661c'), smoothstepJS(pick, 0.3, 0.55)), color('#2c4a26'), smoothstepJS(pick, 0.75, 0.9));
   goodsMat.colorNode = palette.mul(hash(float(instanceIndex).mul(3.1)).mul(0.6).add(0.6));
-  const inst = new InstancedMesh(new BoxGeometry(1, 1, 0.12), goodsMat, goods.length);
+  // Two shapes: bottles (most of what the original's shelves hold) and boxes.
+  const bottle = new CylinderGeometry(0.35, 0.5, 1, 8);
+  const neck = new CylinderGeometry(0.15, 0.15, 0.35, 6);
+  neck.translate(0, 0.62, 0);
+  const bottleGeo = mergeGeometries([bottle.toNonIndexed(), neck.toNonIndexed()]);
+  const bottles = goods.filter((_, i) => rand(i, 5) < 0.7);
+  const boxes = goods.filter((_, i) => rand(i, 5) >= 0.7);
   const d = new Object3D();
-  goods.forEach(([x, y, z, w, h], i) => { d.position.set(x, y, z); d.scale.set(w, h, 1); d.updateMatrix(); inst.setMatrixAt(i, d.matrix); });
-  g.add(inst);
+  for (const [geo, list, depth] of [[bottleGeo, bottles, null], [new BoxGeometry(1, 1, 0.12), boxes, 1]]) {
+    const inst = new InstancedMesh(geo, goodsMat, list.length);
+    list.forEach(([x, y, z, w, h], i) => {
+      d.position.set(x, y - (depth ? 0 : h * 0.12), z);
+      d.scale.set(depth ? w : 0.07, depth ? h : h * 0.8, depth ?? 0.07);
+      d.updateMatrix();
+      inst.setMatrixAt(i, d.matrix);
+    });
+    g.add(inst);
+  }
 
   // Pendant lamps over the counter, and ceiling tubes.
   const shade = weathered({ colour: '#8a4a22', rough: 0.5, metal: 0.3, wet: 0, bump: 0 });

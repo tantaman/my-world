@@ -8,9 +8,9 @@ import { Fn, vec2, vec3, float, floor, hash, step, mix, fract } from 'three/tsl'
 export const glitch = Fn(([uv, t, g]) => {
   const frame = floor(t.mul(60));
   // Rows of blocks, their height changing every frame.
-  const rows = hash(frame.add(3.1)).mul(14).add(6);
+  const rows = hash(frame.add(3.1)).mul(24).add(18);
   const by = floor(uv.y.mul(rows));
-  const cols = hash(frame.add(by).add(9.7)).mul(3).add(1);
+  const cols = hash(frame.add(by).add(9.7)).mul(14).add(6);
   const bx = floor(uv.x.mul(cols));
   const pick = hash(by.mul(13.1).add(bx.mul(5.3)).add(frame.mul(1.7)));
   const amount = mix(0.05, 0.15, hash(by.add(frame.mul(3.3)).add(1.1)));

@@ -43,7 +43,7 @@ try {
     await page.goto(`${base}?${q.toString().replace(/=(&|$)/g, '$1')}`, { waitUntil: 'commit' });
     await page.waitForFunction(() => window.__ready === true, null, { timeout: 600000, polling: 250 });
     await page.waitForTimeout(150);
-    await page.locator('#stage').screenshot({ path: join(OUT, `${name}.png`) });
+    await page.locator('#stage').screenshot({ path: join(OUT, `${name}.png`), timeout: 300000 });
     console.log(`${name}  ${((Date.now() - started) / 1000).toFixed(1)} s`);
     if (errors.length) {
       for (const e of errors.splice(0)) console.log('   ', e.slice(0, 400));

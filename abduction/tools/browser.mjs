@@ -19,7 +19,8 @@ export async function startPage({ width = 1440, height = 1080 } = {}) {
   const server = await createServer({
     configFile: new URL('../vite.config.js', import.meta.url).pathname,
     root: ROOT,
-    server: { port: 0, host: '127.0.0.1' },
+    // No hot reload: an edit while stills are being drawn must not reload the page under them.
+    server: { port: 0, host: '127.0.0.1', hmr: false, watch: null },
     logLevel: 'error',
   });
   await server.listen();

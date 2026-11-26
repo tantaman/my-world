@@ -102,11 +102,11 @@ export function createShop() {
 
   // Signs on the front's west part.
   const south = signBoard('south', [0.75, 1.05], { px: 256 });
-  south.position.set(-7.6, 1.75, S.z1 + 0.03);
+  south.position.set(-7.9, 1.75, S.z1 + 0.03);
   const oil = signBoard('oil', [0.62, 0.95], { px: 256 });
-  oil.position.set(-5.0, 1.75, S.z1 + 0.03);
+  oil.position.set(-6.7, 1.75, S.z1 + 0.03);
   const tires = signBoard('tires', [0.72, 0.48], { px: 160 });
-  tires.position.set(-4.0, 1.95, S.z1 + 0.03);
+  tires.position.set(-5.5, 1.85, S.z1 + 0.03);
   group.add(south, oil, tires);
 
   // The phone box (grey, conduit running up).

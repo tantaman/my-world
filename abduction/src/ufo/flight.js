@@ -9,7 +9,7 @@ import { T, clamp, smooth } from '../timeline.js';
 import { noise1 } from '../noise1.js';
 
 const ARRIVE_FROM = new Vector3(85, 22, 52);   // metres from the hover point at T.ufoArrive
-const LEAVE_DIR = new Vector3(-0.75, 0.55, 0.35).normalize();
+const LEAVE_DIR = new Vector3(-0.55, 0.22, 0.8).normalize();
 const LEAVE_RATE = 2.1;      // 1/s: the exponent of its flight away
 const TIP = 0.44;            // radians it tips before leaving
 const SPIN = 0.25;           // radians a second about its own axis

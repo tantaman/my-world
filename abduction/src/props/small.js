@@ -101,6 +101,7 @@ export function createSmallProps() {
   for (const is of ISLANDS) {
     const p = pump();
     p.position.set(is.x + ISLAND.pumpDx, ISLAND.h, is.z);
+    p.rotation.y = -Math.PI / 2;
     const d = drum();
     d.position.set(is.x + ISLAND.drumDx, ISLAND.h, is.z + 0.1);
     group.add(p, d);

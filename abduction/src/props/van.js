@@ -10,7 +10,8 @@ import { extrudedBody, wheel, darkGlass, pane } from './vehicle.js';
 export function createVan() {
   const g = new Group();
   const { len: L, wid: W, h: H } = VAN;
-  const paint = weathered({ colour: '#e2dccd', under: '#6e5a44', rust: 0.18, streaks: 0.35, dirt: 0.6, dirtHeight: 0.6, rough: 0.35, metal: 0.1, wet: 0.3, scale: 0.8, bump: 0.3 });
+  const tailMat = new MeshStandardNodeMaterial({ color: new Color(0.35, 0.03, 0.02), roughness: 0.3 });
+  const paint = weathered({ colour: '#c4bba8', under: '#6e5a44', rust: 0.18, streaks: 0.35, dirt: 0.6, dirtHeight: 0.6, rough: 0.35, metal: 0.1, wet: 0.3, scale: 0.8, bump: 0.3 });
   // Side profile, back to front.
   const profile = [
     [0, 0.38], [0, 1.95], [0.08, 2.06], [3.75, 2.08], [3.95, 2.0], [4.45, 1.35], [5.08, 1.18], [L, 1.05], [L, 0.38],
@@ -36,6 +37,19 @@ export function createVan() {
     decal.position.set(-0.35, 1.32, s * (W / 2 + 0.012));
     if (s < 0) decal.rotation.y = Math.PI;
     g.add(decal);
+  }
+  // The back: two doors, their windows, the lights.
+  const seam = weathered({ colour: '#2a2723', rough: 0.6, bump: 0 });
+  const backSeam = new Mesh(new BoxGeometry(0.02, 1.45, 0.02), seam);
+  backSeam.position.set(-L / 2 - 0.075, 1.2, 0);
+  g.add(backSeam);
+  for (const z of [-0.45, 0.45]) {
+    const w = pane(0.62, 0.42, glass);
+    w.rotation.y = Math.PI / 2;
+    w.position.set(-L / 2 - 0.075, 1.6, z);
+    const tl = new Mesh(new BoxGeometry(0.04, 0.32, 0.18), tailMat);
+    tl.position.set(-L / 2 - 0.075, 0.85, z * 2.05);
+    g.add(w, tl);
   }
   // Bumpers and wheels.
   const chrome = weathered({ colour: '#9a978f', rust: 0.4, metal: 0.8, rough: 0.35, bump: 0 });

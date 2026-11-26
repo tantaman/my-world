@@ -49,7 +49,7 @@ function growTree(seed) {
     const spread = 1.5 + next() * 2.2;
     const mid = fork.clone().add(new Vector3(Math.cos(ang) * spread * 0.55, (crownY - forkY) * 0.5, Math.sin(ang) * spread * 0.55));
     limb(fork, mid, 0.15, 0.1);
-    const subs = 2 + Math.floor(next() * 2);
+    const subs = 3 + Math.floor(next() * 2);
     for (let j = 0; j < subs; j++) {
       const a2 = ang + (next() - 0.5) * 1.8;
       const reach = spread * (0.7 + next() * 0.7);
@@ -72,7 +72,9 @@ function growTree(seed) {
     for (let k = 0; k < per; k++) {
       const a = next() * Math.PI * 2;
       const rr = Math.sqrt(next()) * cloudR;
-      const p = new Vector3(t.x + Math.cos(a) * rr, t.y + (next() - 0.3) * 0.7 * (1 - rr / cloudR * 0.6), t.z + Math.sin(a) * rr);
+      // A dome over each tip: thicker in the middle, thin at the edge.
+      const dome = 1 - (rr / cloudR) * (rr / cloudR);
+      const p = new Vector3(t.x + Math.cos(a) * rr, t.y - 0.25 + next() * 1.1 * dome, t.z + Math.sin(a) * rr);
       // A card turned at random, mostly lying flat-ish.
       const n = new Vector3(next() - 0.5, 1.2 + next(), next() - 0.5).normalize();
       right.set(1, 0, 0).cross(n).normalize();

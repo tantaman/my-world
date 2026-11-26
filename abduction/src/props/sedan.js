@@ -12,7 +12,7 @@ import { extrudedBody, wheel, darkGlass, pane } from './vehicle.js';
 export const CAR = {
   speed: 14,                                   // m/s
   lane: (ROAD.z0 + ROAD.centre) / 2,           // the near lane, driving toward -X
-  passX: -8,                                   // where it is at T.carPasses
+  passX: -2.6,                                 // where it is at T.carPasses
   wheel: 0.31,
 };
 const HEADLIGHT_GLOW = 30;

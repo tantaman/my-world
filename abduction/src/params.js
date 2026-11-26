@@ -8,6 +8,7 @@
 //   ?stats               frame time, draw calls, triangles
 //   ?free                fly the camera yourself
 //   ?mute                no sound (also: no title card when stopped at a time)
+//   ?capture             draw only when tools/capture.mjs asks (window.__drawAt)
 //   ?blockout            milestone 0's grey boxes instead of the set
 //   ?webgl               WebGPURenderer's WebGL 2 backend (headless Chromium here
 //                        loses its WebGPU device as soon as it draws to a canvas)
@@ -32,6 +33,7 @@ export const params = {
   mute: q.has('mute'),
   webgl: q.has('webgl'),
   blockout: q.has('blockout'),
+  capture: q.has('capture'),
   // Turn single parts off to see what each costs: ?no=mirror,rain,scatter,bloom,shadows,trees
   no: new Set((q.get('no') ?? '').split(',').filter(Boolean)),
 };

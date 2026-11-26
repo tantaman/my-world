@@ -10,7 +10,6 @@ import {
 } from 'three/webgpu';
 import {
   vec3, float, uniform, positionLocal, atan, length, fract, smoothstep, abs, mix, instanceIndex, sin, step, hash, max,
-  cameraViewMatrix, vec4, normalLocal, transformNormalToView, normalize,
 } from 'three/tsl';
 import { UFO } from '../set/layout.js';
 import { T, ramp } from '../timeline.js';

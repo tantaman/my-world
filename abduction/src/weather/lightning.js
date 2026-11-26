@@ -10,11 +10,11 @@ import { rand } from '../noise1.js';
 
 // Where each bolt comes down, and how tall it is (metres).
 export const BOLTS = [
-  { at: [95, 0, 150], top: 230, seed: 3 },    // strike 1, beyond the road, seen past the sign
-  { at: [55, 0, 210], top: 260, seed: 11 },   // strike 2, over the trees
+  { at: [215, 0, 92], top: 260, seed: 3 },    // strike 1, beyond the road, left of the sign
+  { at: [-25, 0, 230], top: 260, seed: 11 },  // strike 2, over the trees, a little right of north
 ];
 const HALVINGS = 7;
-const WIDTH = 1.6;           // metres, the ribbon's width at the cloud
+const WIDTH = 0.9;           // metres, the ribbon's width at the cloud
 const BRIGHT = 60;           // emissive strength, so bloom makes the glow
 
 // A jagged line from cloud to ground by midpoint displacement, with forks.
@@ -116,7 +116,7 @@ export function createLightning({ rig }) {
       state.boltDir.copy(dir);
       light.position.set(b.at[0], b.top * 0.7, b.at[2]);
       light.target.position.set(0, 0, 10);
-      light.intensity = f.flash * 6;
+      light.intensity = f.flash * 2.2;
     },
   };
 }

@@ -21,6 +21,8 @@ const statsEl = document.getElementById('stats');
 const renderer = new WebGPURenderer({ antialias: false, trackTimestamp: params.stats, forceWebGL: params.webgl });
 await renderer.init();
 renderer.toneMapping = NoToneMapping;
+// Counted over the whole frame (shadow maps, the mirror, the scene, the passes after it).
+renderer.info.autoReset = false;
 renderer.shadowMap.enabled = has('shadows');
 renderer.shadowMap.type = PCFShadowMap;
 stage.prepend(renderer.domElement);
@@ -70,10 +72,14 @@ if (params.t != null || params.mute) {
     if (!params.mute) {
       const { createMix } = await import('./audio/mix.js');
       audio = await createMix();
-      clock.start(audio.ctx);
+      clock.start(audio.ctx, audio.startTime);
     } else clock.start(null);
   }, { once: true });
 }
+
+// The overlay's FOV against what three.js is told: fitted with the lens warp
+// (tools/fit.mjs), they are the same.
+const FOV_SCALE = 1.0;
 
 // The camera: path, then the hand holding it, or flown by hand with ?free.
 const view = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, fov: 95 };
@@ -99,21 +105,22 @@ function placeCamera(t) {
   camera.updateProjectionMatrix();
   camera.updateMatrixWorld();
 }
-// The overlay's FOV against what three.js is told: fitted with the lens warp.
-const FOV_SCALE = 1.0;
 
-// Frames drawn at a fixed time before a still is taken: pipelines compile
-// in the background in the first few.
-const STILL_FRAMES = 3;
-let frames = 0;
-let lastFrameMs = performance.now();
-let frameMs = 16;
+// While the title card is up nothing is drawn; the materials compile behind it.
+const waiting = () => params.t == null && !params.capture && !clock.running;
+if (waiting()) {
+  placeCamera(0);
+  world.update(0);
+  renderer.compileAsync(scene, camera).catch(() => {});
+}
 
-renderer.setAnimationLoop(() => {
+// One frame of the take at time t.
+function draw(t) {
+  renderer.info.reset();
   resize();
-  const t = clock.now();
   placeCamera(t);
   world.update(t);
+  if (audio) audio.update(t, world.listener);
   const g = params.raw ? 0 : clamp((t - T.glitch[0]) / (T.glitch[1] - T.glitch[0]));
   const black = params.raw ? 0 : ramp(t, T.glitch[0] + 0.25, T.black);
   post.update(t, { emi: params.raw ? 0 : emi(t), glitch: t >= T.glitch[0] && t < LENGTH ? Math.max(g, 0.001) : 0, black });
@@ -123,23 +130,58 @@ renderer.setAnimationLoop(() => {
     const hudFade = t > T.black ? 1 - ramp(t, LENGTH - 0.2, LENGTH) : 1;
     hud.update(t, renderer.domElement.height, view.fov, levels[0], levels[1], hudFade);
   }
+}
+
+// ?stats: frame time on the page's clock, and on the card's where it can say.
+let frames = 0;
+let lastFrameMs = performance.now();
+let frameMs = 16;
+let gpuMs = 0;
+function stats(t) {
   const now = performance.now();
   frameMs = frameMs * 0.9 + (now - lastFrameMs) * 0.1;
   lastFrameMs = now;
-  frames++;
-  if (frames === 1) console.info(`first frame drawn ${(performance.now() - started).toFixed(0)} ms after start`);
-  if (params.stats && frames % 15 === 0) {
-    const info = renderer.info;
-    statsEl.style.display = 'block';
-    statsEl.textContent = `t ${t.toFixed(2)}  ${frameMs.toFixed(1)} ms  ${(1000 / frameMs).toFixed(0)} fps\n` +
-      `draws ${info.render.drawCalls}  tris ${(info.render.triangles / 1e6).toFixed(2)}M\n` +
-      `${renderer.domElement.width}x${renderer.domElement.height}`;
+  if (frames % 15 !== 0) return;
+  if (renderer.backend.trackTimestamp) {
+    renderer.resolveTimestampsAsync('render').then(() => { gpuMs = renderer.info.render.timestamp; }).catch(() => {});
   }
-  if (params.still && frames === STILL_FRAMES) {
-    window.__ready = true;
-    renderer.setAnimationLoop(null);
-  }
-});
+  const info = renderer.info;
+  statsEl.style.display = 'block';
+  statsEl.textContent = `t ${t.toFixed(2)}  ${frameMs.toFixed(1)} ms  ${(1000 / frameMs).toFixed(0)} fps` +
+    `${gpuMs ? `  gpu ${gpuMs.toFixed(1)} ms` : ''}\n` +
+    `draws ${info.render.drawCalls}  tris ${(info.render.triangles / 1e6).toFixed(2)}M\n` +
+    `${renderer.domElement.width}x${renderer.domElement.height}  ${renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL 2'}`;
+}
+
+// Frames drawn at a fixed time before a still is taken.
+const STILL_FRAMES = 3;
+
+if (params.capture) {
+  // tools/capture.mjs draws each frame itself, and waits for it to be shown.
+  window.__drawAt = (t) => new Promise((done) => {
+    draw(t);
+    requestAnimationFrame(() => requestAnimationFrame(() => done()));
+  });
+  window.__ready = true;
+} else {
+  renderer.setAnimationLoop(() => {
+    if (waiting()) return;
+    const t = clock.now();
+    draw(t);
+    frames++;
+    if (frames === 1) console.info(`first frame drawn ${(performance.now() - started).toFixed(0)} ms after start`);
+    if (params.stats) stats(t);
+    if (params.still && frames === STILL_FRAMES) {
+      window.__ready = true;
+      renderer.setAnimationLoop(null);
+    }
+  });
+}
 window.__frames = () => frames;
+// What tools/bench.mjs reads.
+window.__bench = () => ({
+  frameMs, gpuMs, drawCalls: renderer.info.render.drawCalls, triangles: renderer.info.render.triangles,
+  size: `${renderer.domElement.width}x${renderer.domElement.height}`, backend: renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL 2',
+});
 // For poking at from the console.
 window.__abduction = { scene, camera, renderer, world, post };

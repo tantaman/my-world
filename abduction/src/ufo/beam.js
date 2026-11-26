@@ -10,10 +10,10 @@ import {
   Fn, vec2, vec3, float, uniform, positionWorld, cameraPosition, normalize, dot, sqrt, max, min, smoothstep, mix,
   mx_noise_float, atan, clamp, length, exp,
 } from 'three/tsl';
-import { T, ramp, clamp as clampJS } from '../timeline.js';
+import { T, ramp } from '../timeline.js';
 
 const TOP_R = 1.25;
-const BOTTOM_R = 1.75;
+const BOTTOM_R = 2.4;
 const DENSITY = 0.3;      // brightness per metre of beam the ray crosses
 const COLOUR = [0.75, 0.88, 1.0];
 
@@ -44,10 +44,10 @@ export function createBeam({ rig, scatterLights }) {
     const streak = mx_noise_float(vec3(ang.mul(3.0), positionWorld.y.mul(0.25).sub(u.time.mul(0.9)), 0.5)).mul(0.45).add(0.75);
     const wisp = mx_noise_float(positionWorld.mul(0.6).add(vec3(0, u.time.mul(-0.6), 0))).mul(0.3).add(0.85);
     // Brighter at the opening and where it meets the ground.
-    const nearTop = exp(h.mul(-4)).mul(0.8);
-    const nearGround = smoothstep(0.75, 1.0, h).mul(0.6);
+    const nearTop = exp(h.mul(-3)).mul(1.3);
+    const nearGround = smoothstep(0.85, 1.0, h).mul(0.2);
     const edge = smoothstep(0.0, 0.25, chord);
-    return vec3(...COLOUR).mul(chord.mul(DENSITY)).mul(streak).mul(wisp).mul(nearTop.add(nearGround).add(0.55)).mul(edge).mul(u.level);
+    return vec3(...COLOUR).mul(chord.mul(DENSITY)).mul(streak).mul(wisp).mul(nearTop.add(nearGround).add(0.3)).mul(edge).mul(u.level);
   })();
   const mesh = new Mesh(geo, mat);
   mesh.frustumCulled = false;
@@ -58,7 +58,6 @@ export function createBeam({ rig, scatterLights }) {
   const ufoLight = rig.lights.ufoLight;
   const colour = new Color(...COLOUR);
   const down = new Vector3(0, -1, 0);
-  const mid = new Vector3();
 
   return {
     object: mesh,
@@ -72,7 +71,6 @@ export function createBeam({ rig, scatterLights }) {
       mesh.visible = on;
       const top = opening.y;
       const reachY = top * (1 - grow);
-      const fromY = top * (1 - lift);  // the bottom draws up
       const bottomY = Math.max(reachY, 0);
       const startY = lift > 0 ? Math.min(top, bottomY + (top - bottomY) * lift) : bottomY;
       u.axis.value.copy(opening);
@@ -90,11 +88,8 @@ export function createBeam({ rig, scatterLights }) {
       ufoLight.intensity = visible ? 250 * (0.4 + 0.6 * (on ? 1 : 0)) : 0;
       ufoLight.position.set(opening.x, opening.y - 0.6, opening.z);
       if (on) {
-        mid.set(opening.x, Math.max(startY, 0) + len * 0.5, opening.z);
         scatterLights.add(opening, colour, 3.2 * (1 - lift), down, 0.17, 0.4);
       }
-      void fromY;
-      void clampJS;
     },
   };
 }

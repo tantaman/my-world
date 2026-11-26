@@ -1,8 +1,10 @@
 # Plan: remaking "The Abduction" to see whether it is what it says
 
-Status: **analysed, not built.** Written 2026-11-26 against `c21410a`. The
-only code here so far is `tools/reference.mjs`, which fetches the piece and
-cuts the pictures this plan points at.
+Status: **built, being tuned.** Written 2026-11-26 against `c21410a`; the
+first build of every milestone followed the same day. README.md says what was
+built, where it departs from this plan, and what has been found. The numbers
+in sections 4 and 5 are the first guesses; `src/set/layout.js` and
+`src/camera/path.js` hold the fitted ones.
 
 The piece: <https://x.com/javpixel_art/status/2125403467942654008>, posted
 2026-11-25 by Jav (@javpixel_art) as "my new fully 3D piece made with

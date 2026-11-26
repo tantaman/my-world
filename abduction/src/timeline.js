@@ -83,9 +83,10 @@ export function createClock(fixed) {
   return {
     fixed,
     get running() { return running; },
-    start(ctx) {
+    // ctx: an AudioContext whose clock to follow from `at` (its time), or null.
+    start(ctx, at) {
       audio = ctx ?? null;
-      audioStart = audio ? audio.currentTime : 0;
+      audioStart = audio ? at ?? audio.currentTime : 0;
       wallStart = performance.now();
       running = true;
     },
@@ -93,7 +94,7 @@ export function createClock(fixed) {
       if (fixed != null) return fixed;
       if (!running) return 0;
       const s = audio ? audio.currentTime - audioStart : (performance.now() - wallStart) / 1000;
-      return Math.min(s, LENGTH);
+      return Math.max(0, Math.min(s, LENGTH));
     },
   };
 }

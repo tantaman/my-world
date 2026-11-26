@@ -22,7 +22,7 @@ RectAreaLightNode.setLTC(RectAreaLightTexturesLib.init());
 // Colours and strengths. Intensities are candela (spot, point), nits (area)
 // and lux (directional, hemisphere); exposure is set in post/grade.js.
 export const LIGHTS = {
-  lamp: { colour: new Color('#ffd6b0'), cd: 420, angle: 1.31, penumbra: 0.55, real: 3 },
+  lamp: { colour: new Color('#ffdcc0'), cd: 380, angle: 1.31, penumbra: 0.55, real: 3 },
   tube: { colour: new Color('#e4efe6'), nits: 70, w: 1.2, h: 0.15 },
   canopySpot: { colour: new Color('#e4efe6'), cd: 260, angle: 1.2, penumbra: 0.9 },
   warm: { colour: new Color('#ffc890'), cd: 9, reach: 7 },
@@ -32,7 +32,7 @@ export const LIGHTS = {
   lightning: { colour: new Color('#cfd8ff'), lux: 6 },
   ufo: { colour: new Color('#dfeaff'), cd: 250, reach: 40 },
   beam: { colour: new Color('#e8f2ff'), cd: 2500, angle: 0.16, penumbra: 0.6 },
-  sky: { colour: new Color('#3a3842'), ground: new Color('#1a1714'), lux: 0.35 },
+  sky: { colour: new Color('#3a3842'), ground: new Color('#1a1714'), lux: 0.9 },
   bounce: { colour: new Color('#d8d6cc'), nits: 0.5 },
 };
 

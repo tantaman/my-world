@@ -1,7 +1,7 @@
 // The welcome sign by the road: an arrow of rusty sheet on two posts,
 // "Welcome to Signal Ridge", "KEEP AN EYE ON THE SKY", a little saucer.
 import { Group, Mesh, BoxGeometry, PlaneGeometry, MeshStandardNodeMaterial } from 'three/webgpu';
-import { texture, uv, float, step } from 'three/tsl';
+import { texture, uv, float, step, vec3 } from 'three/tsl';
 import { SIGN } from './layout.js';
 import { weathered } from '../materials/weathered.js';
 import { canvasTexture, DRAW } from './signs.js';
@@ -10,7 +10,8 @@ export function createSign() {
   const g = new Group();
   const tex = canvasTexture(1024, 384, DRAW.welcome);
   const t = texture(tex, uv());
-  const face = weathered({ colour: '#ffffff', map: t, rust: 0.35, streaks: 0.5, dirt: 0.3, rough: 0.6, wet: 0.3, scale: 0.7 });
+  const face = weathered({ colour: '#ffffff', map: t, rust: 0.35, streaks: 0.5, dirt: 0.3, rough: 0.6, wet: 0.3, scale: 0.7,
+    emissive: t.rgb.mul(vec3(0.16, 0.12, 0.09)) });
   // The arrow's outline is the texture's alpha: black outside the shape.
   face.alphaTest = 0.5;
   face.opacityNode = step(0.05, t.r.add(t.g));

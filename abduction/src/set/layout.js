@@ -40,12 +40,12 @@ export const ISLANDS = [
 export const ISLAND = { len: 4.2, wid: 1.3, h: 0.18, column: 0.45, pumpDx: 0.9, drumDx: -1.4 };
 export const PUMP = { w: 0.75, d: 0.5, h: 1.9 };
 
-export const VAN = { x: 7.8, z: 3.4, heading: 0.35, len: 5.2, wid: 2.0, h: 2.1 };
+export const VAN = { x: 8.6, z: 2.3, heading: 0.04, len: 5.2, wid: 2.0, h: 2.1 };
 export const BENCH = { x: -0.5, z: 0.6, len: 1.8 };
 export const DRUM_SHOP = { x: -2.2, z: 0.6 };
 export const ICE = { x: -6.6, z: 0.75, w: 1.9, d: 1.0, h: 1.05 };
 export const BIN = { x: -8.0, z: 0.5 };
-export const PHONE = { x: -4.2, z: 0.12 };
+export const PHONE = { x: -4.3, z: 0.12 };
 
 export const FORECOURT = { x0: -30, x1: 24, z0: 0, z1: 13.5, slab: 4 };
 
