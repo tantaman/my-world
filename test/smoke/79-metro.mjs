@@ -26,8 +26,14 @@ export default async function ({ page, step, frames, shot }) {
     const on = await page.evaluate(() => T.until(() => world.player.space && world.player.pos.y < world.chunks.heightAt(world.player.pos.x, world.player.pos.z) - 8, 60000));
     assert.ok(on, 'down under the street');
     await frames(30);
+    // no daylight down here, but the station's own lamps: no headlamp
+    const lamp = await page.evaluate(() => T.until(() => !world.headlamp.on, 5000).then(async (off) => (await T.frames(60), off && !world.headlamp.on)));
+    assert.ok(lamp, 'the headlamp stays off in a lit station');
+    // and the boards over the platform say when the next trains come
+    const board = await page.evaluate(() => world.metro.board());
+    assert.ok(board && board.length >= 2 && board.every((r) => r.line === 'red'), 'the boards say when the Red Line trains come');
     await shot('a Metro platform');
-    return { depth: await page.evaluate(() => +(world.chunks.heightAt(world.player.pos.x, world.player.pos.z) - world.player.pos.y).toFixed(1)) };
+    return { depth: await page.evaluate(() => +(world.chunks.heightAt(world.player.pos.x, world.player.pos.z) - world.player.pos.y).toFixed(1)), board };
   });
 
   await step('a train in, and on it', async () => {

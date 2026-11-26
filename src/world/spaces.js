@@ -20,6 +20,11 @@
 //                            1 at its mouth .. 0 deep inside. Where it is dark
 //                            the sky's light is dimmed and the headlamp comes
 //                            on (src/caves/index.js)
+//   lamps(x, z)              optional: how well (x, z) is lit by lamps of the
+//                            space's own, 0..1. Where it's lit, a place the
+//                            daylight doesn't reach is still somewhere you
+//                            can see, and the headlamp stays off (a Metro
+//                            station under the street)
 //
 // There is one of these for the whole world, like Solids. The player, the
 // people you share a world with and the camera read it; whoever makes a

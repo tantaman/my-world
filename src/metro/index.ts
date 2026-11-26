@@ -17,8 +17,8 @@
 //     track.js     tunnels, viaducts, ballast, rails
 //     stations.js  vaults, platforms, canopies, escalators; the entrances
 //     trains.js    the cars
-//     signs.js     the pylons', the platforms' and the trains' signs
-//   sound.js     the trains, the door chime; a platform underfoot
+//     signs.js     the pylons', the platforms' and the trains' signs, the arrival boards
+//   sound.js     the trains, their brakes, the door chime, the fans' hum; a platform underfoot
 //   onMap.js     the lines and the trains on the map
 //   pictures.js  the Metro in your pack
 //
@@ -35,6 +35,7 @@
 //   world.metro.aboard()            the train you're on: its line, where it's going, where it stands, its next stop
 //   world.metro.toTrain()           (to try it out) to the nearest open door of a train standing at your platform
 //   world.metro.exits()             the feet of the escalators up, on the platforms stood up
+//   world.metro.board()             what the boards say on the platform you're on
 //   world.metro.stats()             what's stood up, and what's waiting to be
 
 import type { Game } from '../game/game.ts';
@@ -48,7 +49,7 @@ import { setCuts } from '../world/cuts.js';
 import { SEAT_HIPS } from '../player/character.js';
 import { METRO } from './metro.js';
 import { Network, readSystem, pointAt, onLevel, TUNNEL } from './network.js';
-import { Timetable, TRAIN_LEN, CAR_LEN, CARS } from './timetable.js';
+import { Timetable, arrivals, TRAIN_LEN, CAR_LEN, CARS } from './timetable.js';
 import { MetroSpace } from './space.js';
 import { metroSounds } from './sound.js';
 import { metroLayer, METRO_GLYPH } from './onMap.js';
@@ -75,6 +76,7 @@ interface MetroService {
   trains(): Array<{ key: string; line: string; to: string; x: number; y: number; z: number; standing: boolean; at: string | null }>;
   ready(): Promise<unknown>;
   exits(): Array<{ x: number; y: number; z: number; yaw: number; station: string }>;
+  board(): Array<{ line: string; cars: number; to: string; min: string | number }> | null;
   toTrain(): boolean;
   stats(): { under: number; over: number; queued: number; waiting: string[]; below: boolean; loaded: boolean };
   aboard(): { line: string; to: string; at: string | null; next: string | null } | null;
@@ -103,6 +105,13 @@ const CUT_NEAR = 140; // m
 const STOOD = 0.05; // m/s: a train slower than this is standing
 const SAY = 5200; // ms a sentence stays on the screen
 const ENCLOSED = 0.8; // how shut in the station sounds (audio/soundscape.js)
+// The lamps the pool of real lights is given (render/lights.js), for what
+// moves under the street: along a platform, every `every` m, `up` m over
+// it, those within `near` m of the eye; and in each car of a train.
+const LAMP = { every: 22, up: 4.2, power: 3.5, range: 22, near: 45, color: [1.0, 0.8, 0.56] };
+const CAR_LAMP = { up: 2.2, power: 5, range: 8, decay: 1.4, near: 70, color: [0.86, 0.93, 1.0] };
+const BOARDS_EVERY = 1; // s between paintings of the boards near you
+const BOARDS_NEAR = 220; // m: the boards this near are kept up to date
 // Sitting in a seat: knees together, feet on the floor in front.
 const SITTING = { spread: 0.12, hang: 0.48, fwd: 0.38, lean: -0.05, reins: 0 };
 // How far (m) the forest's plants are kept back from track over the street.
@@ -250,7 +259,8 @@ export function installMetro(game: Game) {
   // Each piece of track, each station's level and each entrance is built
   // a little at a time out of the frame's allowance for work that can wait
   // (game/budget.ts), nearest first, and taken down once you've gone.
-  type Built = { key: string; x: number; z: number; r: number; over: Object3D | null; under: Object3D | null; dispose?: () => void; level?: Level; edges?: Material & { color: Color }; spots?: Spot[] };
+  type Board = { show(rows: Array<{ line: string; colour: string; cars: number; to: string; min: string | number }>): void; dispose(): void };
+  type Built = { key: string; x: number; z: number; r: number; over: Object3D | null; under: Object3D | null; dispose?: () => void; level?: Level; edges?: Material & { color: Color }; board?: Board | null; spots?: Spot[] };
   type Spot = { x: number; y: number; z: number; yaw: number; level: Level };
   type Want = { key: string; x: number; z: number; r: number; d: number; build: (m: Look) => Built };
   let mats: Mats | null = null;
@@ -323,7 +333,13 @@ export function installMetro(game: Game) {
     const under = b.under;
     const key = `level:${L.k}`;
     solids.set(`${ID}${key}`, b.posts);
-    return { key, x: L.x, z: L.z, r: 110, over: under ? null : b.group, under: under ? b.group : null, level: L, edges: b.edges, spots: b.spots, dispose: () => solids.clear(`${ID}${key}`) };
+    const dispose = () => {
+      solids.clear(`${ID}${key}`);
+      b.edges.dispose();
+      b.board?.dispose();
+      b.boardMat?.dispose();
+    };
+    return { key, x: L.x, z: L.z, r: 110, over: under ? null : b.group, under: under ? b.group : null, level: L, edges: b.edges, board: b.board, spots: b.spots, dispose };
   }
   function buildEntrance(m: Look, st: Station, e: Entrance): Built {
     const under = st.kind === 'underground';
@@ -502,6 +518,58 @@ export function installMetro(game: Game) {
     }
   }
   game.addSystem({ name: 'metro-trains', phase: 'input', update: () => placeTrains(clock()) });
+
+  // ── Light ──────────────────────────────────────────────────────────────────
+  // Under the street no daylight gets in (space.js), and the station's vault
+  // and platforms carry the light their lamps put on them (look.js). What
+  // moves through it is lit by lamps the pool of real lights gives to the
+  // nearest (render/lights.js): along each platform, the warm light come
+  // down off the vault; and in each car of a train, its own, which spills
+  // out of its windows onto the walls of the tunnel it's going through and
+  // the edge of a platform as it comes in.
+  type Lamp = { x: number; y: number; z: number; color: number[]; power: number; range: number; decay: number; shadow: boolean };
+  const lampsAt = new Map<Level, Lamp[]>();
+  function lampsOf(L: Level): Lamp[] {
+    let list = lampsAt.get(L);
+    if (list) return list;
+    list = [];
+    for (const p of L.platforms) {
+      const c = (p.c0 + p.c1) / 2;
+      for (let a = p.a0 + LAMP.every / 2; a < p.a1; a += LAMP.every) {
+        const x = L.x + L.dx * a - L.dz * c;
+        const z = L.z + L.dz * a + L.dx * c;
+        list.push({ x, y: L.floor + LAMP.up, z, color: LAMP.color, power: LAMP.power, range: LAMP.range, decay: 1, shadow: false });
+      }
+    }
+    lampsAt.set(L, list);
+    return list;
+  }
+  const carLamps: Lamp[] = [];
+  game.lights.addSource(scene, (eye: { x: number; y: number; z: number }, out: object[]) => {
+    if (!net || !below) return;
+    for (const b of built.values()) {
+      const L = b.level;
+      if (!L || L.what !== 'tunnel' || Math.abs(L.x - eye.x) > LAMP.near + 100 || Math.abs(L.z - eye.z) > LAMP.near + 100) continue;
+      for (const l of lampsOf(L)) if (Math.abs(l.x - eye.x) < LAMP.near && Math.abs(l.z - eye.z) < LAMP.near && Math.abs(l.y - eye.y) < 12) out.push(l);
+    }
+    let k = 0;
+    for (const r of trains.values()) {
+      for (const car of r.train.cars) {
+        const p = car.group.position;
+        if (!car.group.visible || Math.abs(p.x - eye.x) > CAR_LAMP.near || Math.abs(p.z - eye.z) > CAR_LAMP.near) continue;
+        const l = carLamps[k] || (carLamps[k] = { x: 0, y: 0, z: 0, color: CAR_LAMP.color, power: CAR_LAMP.power, range: CAR_LAMP.range, decay: CAR_LAMP.decay, shadow: false });
+        l.x = p.x;
+        l.y = p.y + CAR_LAMP.up;
+        l.z = p.z;
+        out.push(l);
+        k++;
+      }
+    }
+  });
+
+  // ── The boards over the platforms ──────────────────────────────────────────
+  // (repainted every so often, at the levels near you, with timetable.js's arrivals)
+  let boardsIn = 0;
 
   // ── Riding ─────────────────────────────────────────────────────────────────
   let aboard: { k: number; j: number; car: number; seat: number } | null = null;
@@ -809,7 +877,7 @@ export function installMetro(game: Game) {
   });
 
   // ── Sound ──────────────────────────────────────────────────────────────────
-  const heard = { heard: [] as Array<{ id: string; x: number; y: number; z: number; v: number; a: number }>, chimes: [] as Array<{ id: string }> };
+  const heard = { heard: [] as Array<{ id: string; x: number; y: number; z: number; v: number; a: number }>, chimes: [] as Array<{ id: string }>, below: false };
   sound.addLayer(metroSounds(heard));
 
   // ── Saving: which train you're on ─────────────────────────────────────────
@@ -879,7 +947,8 @@ export function installMetro(game: Game) {
         for (const b of built.values()) if (b.under) b.under.visible = below;
         lookIn = 0;
       }
-      if (below) sound.setEnclosed(Math.max(sound.enclosed || 0, ENCLOSED));
+      // (how shut in it sounds is the station's to say, not the dark's)
+      if (below) sound.setEnclosed(ENCLOSED);
       // underground, no daylight haze in the air, and nothing lost in the
       // distance (back up, the country eases its own haze back in)
       if (below) {
@@ -939,8 +1008,20 @@ export function installMetro(game: Game) {
         cutsShown = false;
       }
 
+      // the boards: when the next trains come, at the levels near you
+      boardsIn -= dt;
+      if (boardsIn <= 0) {
+        boardsIn = BOARDS_EVERY;
+        const t = clock();
+        for (const b of built.values()) {
+          if (!b.board || !b.level || Math.hypot(b.level.x - f.x, b.level.z - f.z) > BOARDS_NEAR) continue;
+          b.board.show(arrivals(tables, b.level, t));
+        }
+      }
+
       // the trains: their sounds, the chime as their doors close, the lights along the platform's edge flashing as one comes in
       heard.heard.length = 0;
+      heard.below = below;
       const list = [...trains.values()].map((r) => ({ r, d: Math.hypot(r.train.cars[2].group.position.x - p.x, r.train.cars[2].group.position.z - p.z) })).sort((a, b) => a.d - b.d);
       for (const { r } of list.slice(0, HEARD)) {
         const g = r.train.cars[2].group.position;
@@ -1042,6 +1123,11 @@ export function installMetro(game: Game) {
       }),
     ready,
     exits: () => spots.map((s) => ({ x: s.x, y: s.y, z: s.z, yaw: s.yaw, station: s.level.station.id })),
+    board() {
+      const p = player.pos;
+      const L = levelAt(p.x, p.z, p.y + 0.05);
+      return L ? arrivals(tables, L, clock()).map(({ line, cars, to, min }) => ({ line, cars, to, min })) : null;
+    },
     stats() {
       let under = 0;
       let over = 0;

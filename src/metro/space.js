@@ -14,9 +14,12 @@
 // under the street): that's walked down into, while the entrance is stood up
 // (addWell).
 //
-// Under the street, a station's vault is lit (light 0.85: your eyes keep the
-// daylight they had) and a tunnel only dimly (0.5: whatever your headlamp
-// was doing, it goes on doing).
+// Under the street no daylight gets in (light: next to none), but all of it
+// is lit by its own lamps (lamps): the station by the light washed up its
+// vault, a tunnel by the train you're riding through it. So the eye gets
+// used to the dark, the stations glow as they really do, and no headlamp
+// comes on. Down an entrance's well, the daylight goes as its roof comes
+// over.
 //
 // No three.js in here.
 
@@ -28,7 +31,7 @@ const SPRING = 0.5; // m over a platform's floor where its vault springs from
 const WIDER = 1.6; // m a vault reaches out past its outermost platform or track
 const ABOVE = 1.2; // m under a platform's floor that feet still count as on it
 const OPEN_UP = 6; // m over an open platform's floor that still counts as on it
-const LIGHT = { station: 0.85, tunnel: 0.5 };
+const UNDER = 0.02; // the daylight under the street
 
 const _o = { a: 0, c: 0 };
 const _w = { along: 0, c: 0 };
@@ -310,14 +313,24 @@ export class MetroSpace {
   }
 
   light(x, z) {
-    if (this.wells.size && this._well(x, z, _w)) return 1;
+    const w = this.wells.size ? this._well(x, z, _w) : null;
+    if (w) {
+      // open to the sky at its top, and less of it the further in under its roof
+      const u = (_w.along / w.run - w.open) / (1 - w.open);
+      return u <= 0 ? 1 : Math.max(UNDER, 1 - u * 1.6);
+    }
     const cell = this._cell(x, z);
     if (!cell) return 1;
     for (const room of cell.rooms) {
       onLevel(room.L, x, z, _o);
-      if (_o.a >= room.a0 && _o.a <= room.a1 && _o.c >= room.c0 && _o.c <= room.c1) return room.under ? LIGHT.station : 1;
+      if (_o.a >= room.a0 && _o.a <= room.a1 && _o.c >= room.c0 && _o.c <= room.c1) return room.under ? UNDER : 1;
     }
-    return cell.tubes.length ? LIGHT.tunnel : 1;
+    return cell.tubes.length ? UNDER : 1;
+  }
+
+  // Lit by its own lamps, wherever it is (world/spaces.js).
+  lamps() {
+    return 1;
   }
 
   // The vault under the street that (x, z) is in, for a rail at about y, if any.
