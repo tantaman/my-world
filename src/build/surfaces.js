@@ -93,9 +93,10 @@ const CONCRETE = { flag: 1.5 };
 // The rooms seen through a facade's windows: how deep they are at the least
 // (m, and up to 2 m more), how much of the storey the floor takes up (m), how
 // many bays an open office floor runs before a wall, how far in behind the
-// glass the blinds hang (m), and how much of the daylight outside comes in at
-// the window and how fast it dies away into the room (per m).
-const ROOM = { deep: 3.5, slab: 0.35, officeBays: 4, blind: 0.08, daylight: 0.32, fall: 0.35 };
+// glass the blinds hang (m), how much of the daylight outside comes in at
+// the window and how fast it dies away into the room (per m), and the share
+// of an office's rooms with the ceiling lights on all day.
+const ROOM = { deep: 3.5, slab: 0.35, officeBays: 4, blind: 0.08, daylight: 0.6, fall: 0.26, officeLit: 0.55 };
 
 const SURF_GLSL = /* glsl */ `
 ${Object.entries(SURF)
@@ -438,6 +439,10 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
             float day = dot(uHorizon + uZenith, vec3(0.15, 0.3, 0.05)) * (1.0 - uNight);
             float lit = step(0.62, hash12(vec2(bayN * 1.7 + 3.0, floorN * 2.3 - 1.0))) * uNight;
             vec3 lamp = vec3(1.0, 0.78, 0.45) * (0.55 + 0.45 * pane);
+            // an office's ceiling lights, on all day in some of its rooms
+            float office = step(0.66, style) * step(hash12(vec2(roomN, floorN) + 5.5), ${ROOM.officeLit.toFixed(2)});
+            lamp = mix(lamp, vec3(0.85, 0.92, 1.0) * 0.45, office * (1.0 - uNight));
+            lit = max(lit, office);
             vec3 light = vec3(day) * ${ROOM.daylight.toFixed(2)} * exp(-hit.z * ${ROOM.fall.toFixed(2)}) + lamp * lit * (0.45 + 0.55 * smoothstep(0.0, roomH, hit.y));
             vec3 inside = seen * light;
             vec3 slats = vec3(0.7, 0.68, 0.62) * (0.8 + 0.2 * step(0.3, fract(hb.y / 0.025))) * (vec3(day) * ${ROOM.daylight.toFixed(2)} * 1.6 + lamp * lit * 0.8);
