@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The Abduction, remade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=block" rel="stylesheet">
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+    /* A 4:3 stage, letterboxed in the window. */
+    #stage { position: absolute; left: 50%; top: 50%; aspect-ratio: 4 / 3;
+      width: min(100vw, calc(100vh * 4 / 3)); transform: translate(-50%, -50%); overflow: hidden; background: #000; }
+    #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #ref { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.5; pointer-events: none; display: none; }
+    #title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 1.2em; color: #ddd; font: 20px/1.4 VT323, ui-monospace, monospace; background: #000; cursor: pointer; text-align: center; }
+    #title h1 { font-weight: normal; font-size: 44px; margin: 0; letter-spacing: 0.08em; }
+    #title p { margin: 0; opacity: 0.7; max-width: 32em; padding: 0 1em; }
+    #title .go { border: 1px solid #888; padding: 0.3em 1.2em; }
+    #stats { position: fixed; left: 8px; top: 8px; font: 12px ui-monospace, monospace; color: #8f8; background: rgba(0,0,0,0.6);
+      padding: 4px 6px; white-space: pre; display: none; z-index: 10; }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <img id="ref" alt="">
+    <div id="hud"></div>
+    <div id="title">
+      <h1>THE ABDUCTION</h1>
+      <p>A study: a remake, in three.js, of "The Abduction" by Jav (@javpixel_art), to see how its look is reached and what it costs.</p>
+      <div class="go">PLAY (sound on)</div>
+    </div>
+  </div>
+  <div id="stats"></div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

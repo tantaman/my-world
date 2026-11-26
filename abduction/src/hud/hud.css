@@ -1,0 +1,20 @@
+/* The bodycam overlay: HTML over the canvas, so it is never warped or
+   glitched (it is not, in the original). Sizes are fractions of the stage. */
+#hud { position: absolute; inset: 0; pointer-events: none; color: rgba(255, 255, 255, 0.9);
+  font-family: VT323, ui-monospace, monospace; font-size: calc(var(--h) * 0.0195); line-height: calc(var(--h) * 0.0165);
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.6); letter-spacing: 0.04em; }
+#hud .c { position: absolute; white-space: pre; }
+#hud .tl { left: 6.2%; top: 4.3%; }
+#hud .tr { right: 5.8%; top: 4.3%; text-align: right; }
+#hud .bl { left: 5.7%; bottom: 5.4%; }
+#hud .br { right: 5.8%; bottom: 5.7%; }
+#hud .rec::before { content: ''; display: inline-block; width: 0.42em; height: 0.42em; border-radius: 50%;
+  background: #e0202a; margin-right: 0.35em; vertical-align: 0.12em; }
+#hud .bat { display: inline-block; width: 1.05em; height: 0.48em; border: 0.08em solid currentColor; margin-right: 0.35em;
+  vertical-align: 0.05em; position: relative; }
+#hud .bat::before { content: ''; position: absolute; inset: 0.07em; right: 0.12em; background: currentColor; }
+#hud .bat::after { content: ''; position: absolute; right: -0.18em; top: 0.12em; width: 0.08em; height: 0.2em; background: currentColor; }
+#hud .meter { display: flex; align-items: center; gap: 0.25em; }
+#hud .meter i { display: inline-block; width: 0.26em; height: 0.42em; background: currentColor; opacity: 0.25; margin-right: 0.07em; }
+#hud .meter i.on { opacity: 1; }
+#hud .meter i.half { opacity: 0.55; }
