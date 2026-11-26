@@ -46,7 +46,7 @@ export function createBeam({ rig, scatterLights }) {
     // Brighter at the opening and where it meets the ground.
     const nearTop = exp(h.mul(-3)).mul(1.3);
     const nearGround = smoothstep(0.85, 1.0, h).mul(0.2);
-    const edge = smoothstep(0.0, 0.25, chord);
+    const edge = smoothstep(0.0, 0.25, chord).mul(float(1).sub(smoothstep(0.86, 1.0, h).mul(0.75)));
     return vec3(...COLOUR).mul(chord.mul(DENSITY)).mul(streak).mul(wisp).mul(nearTop.add(nearGround).add(0.3)).mul(edge).mul(u.level);
   })();
   const mesh = new Mesh(geo, mat);

@@ -82,7 +82,7 @@ export function createSaucer() {
   group.add(ring);
   // The opening: a disc that glows with the beam.
   const holeMat = new MeshStandardNodeMaterial({ color: new Color(0, 0, 0) });
-  holeMat.emissiveNode = vec3(0.8, 0.9, 1.0).mul(u.ring.mul(5).add(0.2));
+  holeMat.emissiveNode = vec3(0.8, 0.9, 1.0).mul(u.ring.mul(2).add(0.15));
   const hole = new Mesh(new SphereGeometry(1.3, 24, 6, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5), holeMat);
   hole.scale.y = 0.12;
   hole.position.y = 0.05;
