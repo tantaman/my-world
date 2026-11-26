@@ -1,0 +1,78 @@
+/* The treasure map: a sheet of old paper over the middle of the screen, and
+   what it says to do under it. Uses the colour tokens defined on :root in
+   index.html. Sized to the HUD's box (#hud is a size container: on a split
+   screen, the part of it that is yours), the map as big as it fits with the
+   words under it. */
+
+#treasure-map {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(560px, calc(100% - 24px - var(--inset-l) - var(--inset-r)));
+  max-height: calc(100% - 24px - var(--inset-t) - var(--inset-b));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 11px 14px 12px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  background: rgba(10, 16, 11, 0.94);
+  border: 1px solid var(--line);
+  opacity: 0;
+  transform: translate(-50%, calc(-50% + 6px));
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  z-index: 5;
+}
+#treasure-map.open {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+#treasure-map .tm-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+#treasure-map h2 {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  color: var(--accent);
+  font-weight: 600;
+}
+#treasure-map .tm-head button {
+  background: none;
+  border: 0;
+  color: var(--ink-dim);
+  font: inherit;
+  cursor: pointer;
+}
+/* (not the game's own canvas, which fills the window: index.html) */
+#treasure-map canvas {
+  position: static;
+  inset: auto;
+  flex: none;
+  display: block;
+  width: min(100%, calc(100cqh - 230px - var(--inset-t) - var(--inset-b)));
+  min-width: 180px;
+  height: auto;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  cursor: default;
+  touch-action: auto;
+}
+#treasure-map .tm-words {
+  margin: 10px 0 4px;
+  padding-left: 18px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--ink);
+}
+#treasure-map .tm-note {
+  margin: 4px 0 0;
+  color: var(--ink-dim);
+  font-size: 10.5px;
+}
