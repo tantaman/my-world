@@ -297,6 +297,9 @@ test('people are dressed for their town, and are one mesh each', () => {
 
 test('people go about their town, stop for you, and say hello', () => {
   const folk = new Townsfolk(lived, { scene, ground });
+  assert.ok(folk.people.every((q) => !q.body), 'stood up a little at a time, not all at once');
+  folk.pump(Infinity);
+  assert.ok(folk.people.every((q) => q.body && q.body.mesh), 'until everyone is');
   const said = [];
   folk.on('hello', (h) => said.push(h));
   assert.equal(folk.people.length, lived.people);
@@ -333,6 +336,7 @@ test('people go about their town, stop for you, and say hello', () => {
 test("a dark town's people only move while you aren't looking", () => {
   assert.ok(haunted, 'a dark town with someone in it');
   const folk = new Townsfolk(haunted, { scene, ground });
+  folk.pump(Infinity);
   const gone = [];
   folk.on('vanish', (v) => gone.push(v));
   const p = folk.people[0];

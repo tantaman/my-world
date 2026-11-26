@@ -235,6 +235,7 @@ place in that order, not at the end:
 | `pack/picture.js` | what something looks like in your pack: a thing to do, something yours, a material, what is at hand | pixel art in a `pictures.js` of its own, handed over as its `icon` |
 | `pack/things.js` | something you have, listed in your pack with what else is yours | `game.pack.have(() => [{ label, note, icon }])` |
 | `people/body.js` | someone who isn't a hiker: a clerk, a steward, a guard | `new Body(lookOf(style, rnd), seed)`, `body.pose(…)` |
+| `people/folk.js` | someone who isn't a hiker, made as a hiker is: their own face, eyes that look at you, clothes cut on the hikers' body | `new Folk(lookOf(style, rnd), seed, { ground })`, or `yield* growFolk(…)` from a `Searches`; `folk.pose(dt, speed, lookAt)`, `folk.waving` |
 | `player/character.js` | something the hiker holds up to the face | `character.addRaised(name, object, { stowed })`, `raise(name)` |
 | `player/character.js` | sitting astride what carries you, or in it with your arms over the sides | `character.seat({ spread, hang, lean, rest, stroke })` |
 | `player/character.js` | standing on something that slides (skis, a board) | `character.stance({ feet, crouch, lean, arms, shod, board, … })` |
@@ -493,6 +494,7 @@ src/
     reader.ts             the voice a book is read aloud in: its lines said as you come to each place
   people/
     body.js               someone who isn't a hiker: what they're made of, how they walk and wave
+    folk.js               someone who isn't a hiker, made as the hikers are: a face of their own, eyes, clothes for their town
   game/
     game.ts               the Game: what features share, and the frame's phases
     budget.ts             work that can wait, a little each frame, out of one allowance

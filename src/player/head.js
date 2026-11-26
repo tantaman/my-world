@@ -75,11 +75,27 @@ const TAU = Math.PI * 2;
 //            teeth, mouth }
 //   hair     where it grows, how long, how it lies and what colour, as
 //            { beard, scalp, brows, deepest } (see hairAt)
+//   eyes     (only for a face seen without dark glasses: the hikers wear
+//            theirs, and have none) { y, set, r, open: [upper, lower],
+//            wide, tilt, lid, iris: { r, colour }, sclera }: the eyeballs'
+//            middles, `y` above eye level and `set` m back from where the
+//            skull's front would be; their radius; how far the lids open
+//            above and below the middle; half the width of the opening, and
+//            how far its outer corner is lifted (radians); how thick the
+//            lids are at their edge; the iris's radius and colour; the
+//            whites' colour. The lids are the skin, wrapped round the ball
+//            and parted over it (eyelids), so their edge is wherever the
+//            skin goes under the ball; the iris is drawn on the ball,
+//            turned to look wherever `eyes.userData.gaze` says
+//   detail   (if not 1) how finely the skin and the hair are cut, as a
+//            share of the hikers': for someone you pass in the street
 
 // How finely the skin is cut: columns round, rows top to bottom, and how
 // much closer together they are over the face than elsewhere.
 const SKIN_GRID = { cols: 160, rows: 112, front: 3, band: 2.6 };
 const HAIR_GRID = { cols: 104, rows: 76, front: 2.4, band: 2.2 };
+// ...cut more coarsely for a look with less `detail`
+const coarser = (grid, detail = 1) => (detail === 1 ? grid : { ...grid, cols: Math.round(grid.cols * detail), rows: Math.round(grid.rows * detail) });
 
 // ── Hair ────────────────────────────────────────────────────────────────────
 const SHELLS = 12; // layers of hair
@@ -152,6 +168,70 @@ function nose(N, x, y) {
 // The line between the lips at x: up at the corners in a smile.
 const mouthY = (m, x) => m.y + m.smile * Math.min(1, (x / m.w) ** 2);
 
+// ── Eyes ────────────────────────────────────────────────────────────────────
+// Where each eyeball is and how the lids open over it, worked out once for a
+// look: { cx, cy, cz, r, A, up, down, lift, lid }, the ball's middle (x
+// either side), its radius, half the opening's width, how far the lids open
+// above and below the middle, how far the outer corner is lifted, and how
+// thick the lids are at their edge.
+const eyeFrames = new WeakMap();
+const _eyeDir = new THREE.Vector3();
+function eyeFrame(L) {
+  let F = eyeFrames.get(L);
+  if (F) return F;
+  const E = L.eyes;
+  const cy = E.y ?? 0;
+  // the skull's front there, before the face's relief: the ball sits that
+  // far back of it, under the brow
+  const n = _eyeDir.set(L.eyeX, cy, 0.08).normalize();
+  let r = 0;
+  for (const egg of L.skull) {
+    let e = rayToEgg(n, egg);
+    for (const cut of egg[3] ?? []) e = smin(e, rayToEgg(n, cut), L.cutRound);
+    r = smax(r, e, L.round);
+  }
+  const front = n.z * r;
+  F = { cx: L.eyeX, cy, cz: front - E.set - E.r, r: E.r, A: E.wide, up: E.open[0], down: E.open[1], lift: Math.tan(E.tilt ?? 0) * E.wide, lid: E.lid ?? 0.0016 };
+  eyeFrames.set(L, F);
+  return F;
+}
+
+// The opening between the lids at (u, v) from the ball's middle (u out from
+// the nose): how far outside it a point is (m; less than 0 inside). The
+// upper lid is highest a little in from the middle, the lower lowest a
+// little out, and the outer corner is lifted.
+function lidGap(F, u, v) {
+  const t = clamp(u / F.A, -1.5, 1.5);
+  const span = Math.max(0, 1 - t * t);
+  const mid = F.lift * t * 0.5;
+  const upper = mid + F.up * Math.pow(span, 0.6) * (1 - 0.18 * t);
+  const lower = mid - F.down * Math.pow(span, 0.8) * (1 + 0.12 * t);
+  return Math.max(v - upper, lower - v, (Math.abs(t) - 1) * F.A);
+}
+
+// How far forward the eyeball's surface comes at (u, v), grown by `grow`
+// (or nowhere, past its edge)
+function ballFront(F, u, v, grow = 0) {
+  const q = (F.r + grow) ** 2 - u * u - v * v;
+  return q > 0 ? F.cz + Math.sqrt(q) : -1;
+}
+
+// The face over an eye at (x, y), its z before: the lids, a ball's
+// thickness proud of the socket, then parted over the ball, the skin
+// tucked in behind it where they open.
+function lids(L, x, y, z) {
+  const F = eyeFrame(L);
+  const u = Math.abs(x) - F.cx;
+  const v = y - F.cy;
+  if (u * u + v * v > (F.r * 2.2) ** 2) return z;
+  const covered = smax(z, ballFront(F, u, v, F.lid), 0.0025);
+  const open = smoothstep(-0.0004, -0.0022, lidGap(F, u, v));
+  if (open <= 0) return covered;
+  // (the corners of the opening are round the side of the ball: there the
+  // skin goes in behind where its edge would be)
+  return lerp(covered, Math.max(ballFront(F, u, v), F.cz) - 0.0035, open);
+}
+
 // The face's relief over the skull's front z0 at (x, y): its new z.
 function relief(L, x, y, z0) {
   const R = L.relief;
@@ -173,7 +253,8 @@ function relief(L, x, y, z0) {
   z += R.chin[0] * gauss(ax / 0.016, (y - R.chin[1]) / 0.01); // point of the chin
   z += A.lift * gauss((ax - A.x) / A.rx, (y - A.y) / A.ry); // the wings of the nose
   z -= 0.0008 * gauss((ax - A.x - A.rx * 1.2) / 0.0028, (y - A.y) / 0.007); // the crease round them
-  return smax(z, nose(L.nose, x, y), 0.005);
+  z = smax(z, nose(L.nose, x, y), 0.005);
+  return L.eyes ? lids(L, x, y, z) : z;
 }
 
 // The skin in unit direction n: out = its point.
@@ -207,10 +288,16 @@ function spaced(n, lo, hi, density) {
   return out;
 }
 
+// How many points of skin or hair are worked out between one place to stop
+// and the next, when a head is shaped a little at a time (shapeHead): about
+// a millisecond's work.
+const STEP_POINTS = 500;
+
 // The skin as a closed grid of rays: rows from the crown to under the chin,
 // columns round from the back, with a single point at each pole. -> a
-// geometry with the positions on the skin and smooth normals.
-function skinGrid(L, { cols, rows, front, band }) {
+// geometry with the positions on the skin and smooth normals (a generator:
+// see shapeHead).
+function* skinGrid(L, { cols, rows, front, band }) {
   const az = spaced(cols, -Math.PI, Math.PI, (a) => 1 + (front - 1) * gauss(a / 0.75));
   const po = spaced(rows, 0, Math.PI, (t) => 1 + (band - 1) * gauss((t - 1.95) / 0.55));
   const dirs = [];
@@ -236,7 +323,10 @@ function skinGrid(L, { cols, rows, front, band }) {
   }
   for (let i = 0; i < cols; i++) index.push(bottom, at(rows - 1, i + 1), at(rows - 1, i));
   const pos = new Float32Array(dirs.length * 3);
-  dirs.forEach((n, i) => skinPoint(L, n, _p).toArray(pos, i * 3));
+  for (let i = 0; i < dirs.length; i++) {
+    skinPoint(L, dirs[i], _p).toArray(pos, i * 3);
+    if (i % STEP_POINTS === STEP_POINTS - 1) yield;
+  }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geometry.setIndex(index);
@@ -263,10 +353,15 @@ function skinGrid(L, { cols, rows, front, band }) {
 //           drawn back smooth to `toward`, a glossy layer `len` deep rather
 //           than a pile of strands
 //   brows   { inner, span, arch, tail, drop, half: [inner, tail], len,
-//           colour }: an arch over each eye from `inner` across the middle
-//           for `span`, rising `arch` and falling `tail` at its end, set
-//           `drop` under the brow ridge; half as thick as `half`, from the
-//           inner end to the tail
+//           colour, drawn }: an arch over each eye from `inner` across the
+//           middle for `span`, rising `arch` and falling `tail` at its end,
+//           set `drop` under the brow ridge; half as thick as `half`, from
+//           the inner end to the tail; `drawn` on the skin in their colour,
+//           its hairs streaked along it, rather than standing out from it
+//           (where the hair is cut too coarse to have a clean edge)
+//   stubble (or none) { colour, amount }: a day or two's growth, too short
+//           to draw as hair: where a beard would grow, the skin darkened
+//           that much towards that colour
 //   deepest the longest it grows (m): how many layers it needs from afar
 // (and for long hair drawn back smooth, `edge`: how far inside its edges
 // the point is, in metres, negative outside them)
@@ -275,6 +370,34 @@ const _hair = { len: 0, flow: new THREE.Vector3(), color: new THREE.Color(), sle
 // Height of the beard's upper edge at angle a round from the front (0) to
 // the ear (pi/2): under the nose, across the cheek and up the sideburn.
 const cheekLine = (L, a) => lerp(lerp(L.nose.base - 0.0015, -0.031, smoothstep(0.24, 0.62, a)), 0.016, smoothstep(0.62, 1.32, a));
+
+// Where an eyebrow is, 0..1, at p (ax: how far from the middle).
+function browArea(L, p, ax) {
+  const W = L.hair.brows;
+  const t = (ax - W.inner) / W.span; // 0 at the inner end, 1 at the tail
+  if (t <= -0.2 || t >= 1.2 || p.z <= 0.03) return 0;
+  const mid = L.brow - W.drop + W.arch * Math.sin(Math.PI * clamp(t * 0.9 + 0.05, 0, 1)) - W.tail * smoothstep(0.7, 1.1, t);
+  const half = lerp(W.half[0], W.half[1], clamp(t, 0, 1));
+  return smoothstep(half + 0.0015, half - 0.0015, Math.abs(p.y - mid)) * smoothstep(-0.15, 0.05, t) * smoothstep(1.15, 0.95, t);
+}
+
+// Where a beard grows, 0..1, at p (a round from the front, as in hairAt):
+// below the cheek line; not behind the ear except under the jaw, nor round
+// to the nape; not on the lips.
+function beardArea(L, p, a) {
+  const m = L.mouth;
+  const below = cheekLine(L, Math.min(a, 1.45)) - p.y;
+  const behind = smoothstep(1.5, 1.62, a); // past the front of the ear
+  const underJaw = smoothstep(-0.062, -0.085, p.y + 0.025 * (a - 1.5));
+  let beard = smoothstep(0, HAIR_EDGE, below) * lerp(1, underJaw, behind);
+  beard *= smoothstep(2.25, 2.0, a);
+  // the lips are bare: the lower lip and the corners of the mouth
+  const lip = (p.x / (m.w - 0.002)) ** 2 + ((p.y - mouthY(m, p.x) + m.parted + 0.003) / 0.0068) ** 2;
+  beard *= Math.min(1, smoothstep(0.75, 1.25, lip) + smoothstep(0.35, 0.55, a));
+  // nor is the very edge of the upper lip, where the moustache hangs over it
+  beard *= 1 - 0.7 * gauss(p.x / 0.02, (p.y - mouthY(m, p.x) - 0.0025) / 0.003) * smoothstep(0.02, 0.07, p.z);
+  return beard;
+}
 
 function hairAt(L, p, normal) {
   const H = L.hair;
@@ -293,16 +416,7 @@ function hairAt(L, p, normal) {
   // Beard: below the cheek line; not behind the ear except under the jaw.
   const B = H.beard;
   if (B) {
-    const below = cheekLine(L, Math.min(a, 1.45)) - p.y;
-    const behind = smoothstep(1.5, 1.62, a); // past the front of the ear
-    const underJaw = smoothstep(-0.062, -0.085, p.y + 0.025 * (a - 1.5));
-    let beard = smoothstep(0, HAIR_EDGE, below) * lerp(1, underJaw, behind);
-    beard *= smoothstep(2.25, 2.0, a); // not round to the nape
-    // the lips are bare: the lower lip and the corners of the mouth
-    const lip = (p.x / (m.w - 0.002)) ** 2 + ((p.y - mouthY(m, p.x) + m.parted + 0.003) / 0.0068) ** 2;
-    beard *= Math.min(1, smoothstep(0.75, 1.25, lip) + smoothstep(0.35, 0.55, a));
-    // nor is the very edge of the upper lip, where the moustache hangs over it
-    beard *= 1 - 0.7 * gauss(p.x / 0.02, (p.y - mouthY(m, p.x) - 0.0025) / 0.003) * smoothstep(0.02, 0.07, p.z);
+    const beard = beardArea(L, p, a);
     if (beard > 0.001) {
       const chin = gauss(p.x / 0.04, (p.y + 0.105) / 0.022);
       let len = lerp(B.cheek, B.jaw, smoothstep(-0.03, -0.085, p.y)) + (B.chin - B.jaw) * chin;
@@ -338,13 +452,12 @@ function hairAt(L, p, normal) {
     out.edge = Math.min(p.y - hairline, (a - (S.from[0] + S.from[1]) / 2) * r, band - p.y, (Math.sqrt(ear) - 0.85) * E.h);
   }
 
-  // Eyebrows: an arch over each eye, thick at the inner end, thin at the tail.
+  // Eyebrows: an arch over each eye, thick at the inner end, thin at the tail
+  // (unless they're drawn on the skin: skinColor).
   const W = H.brows;
   const t = (ax - W.inner) / W.span; // 0 at the inner end, 1 at the tail
-  if (t > -0.2 && t < 1.2 && p.z > 0.03) {
-    const mid = L.brow - W.drop + W.arch * Math.sin(Math.PI * clamp(t * 0.9 + 0.05, 0, 1)) - W.tail * smoothstep(0.7, 1.1, t);
-    const half = lerp(W.half[0], W.half[1], clamp(t, 0, 1));
-    const brow = smoothstep(half + 0.0015, half - 0.0015, Math.abs(p.y - mid)) * smoothstep(-0.15, 0.05, t) * smoothstep(1.15, 0.95, t);
+  if (!W.drawn && t > -0.2 && t < 1.2 && p.z > 0.03) {
+    const brow = browArea(L, p, ax);
     if (brow * W.len > out.len) {
       out.len = W.len * brow;
       out.flow.set(Math.sign(p.x), 0.25 - 0.6 * t, 0);
@@ -388,11 +501,44 @@ function skinColor(L, p, nrm, hair, base, out) {
   // nostrils, under the tip either side
   const nostril = gauss((ax - L.nose.nostril) / 0.0028, (p.y - L.nose.base - 0.0032) / 0.0022) * smoothstep(-0.3, -0.7, nrm.y);
   out.lerp(C.nostril, 0.75 * nostril);
+  if (L.eyes) eyeSkin(L, p, out);
+  const W = L.hair.brows;
+  if (W.drawn) {
+    const brow = browArea(L, p, ax);
+    if (brow > 0) {
+      // hairs running out along the arch, the way they grow
+      const t = (ax - W.inner) / W.span;
+      const streak = phash(Math.floor(t * 60), Math.floor((p.y - L.brow) * 2400), 7.1);
+      out.lerp(W.colour, brow * (0.55 + 0.4 * streak));
+    }
+  }
+  const S = L.hair.stubble;
+  if (S) out.lerp(S.colour, S.amount * beardArea(L, p, Math.atan2(ax, p.z)) * (0.8 + 0.4 * phash(p.x * 2600, p.y * 2600, p.z * 2600)));
   // faintly blotchy, as skin is
   out.multiplyScalar(0.97 + 0.06 * phash(p.x * 900, p.y * 900, p.z * 900));
   // dark under hair, so the gaps between strands don't show bare skin
   out.lerp(C.root, smoothstep(0, 0.6, hair.len / 0.004));
   return out;
+}
+
+// Round an eye: the lashes a dark line along the edge of the upper lid and a
+// fainter one along the lower; the wet pink of the inner corner; and where
+// the lids tuck in behind the ball, the dark red of the inside of them.
+const LASH_LINE = 0.0013; // m up from the upper lid's edge the lashes darken it
+const _lash = new THREE.Color(0x1a120e);
+const _inner = new THREE.Color(0x4a1a16);
+const _corner = new THREE.Color(0xb86a62);
+function eyeSkin(L, p, out) {
+  const F = eyeFrame(L);
+  const u = Math.abs(p.x) - F.cx;
+  const v = p.y - F.cy;
+  if (u * u + v * v > (F.r * 1.6) ** 2) return;
+  const gap = lidGap(F, u, v);
+  const upper = v > F.lift * clamp(u / F.A, -1, 1) * 0.5;
+  const lash = smoothstep(LASH_LINE, 0, gap) * smoothstep(-0.0012, 0, gap) * smoothstep(1.08, 0.7, Math.abs(u / F.A));
+  out.lerp(_lash, lash * (upper ? 0.85 : 0.35));
+  out.lerp(_inner, smoothstep(-0.0003, -0.0012, gap));
+  out.lerp(_corner, 0.8 * smoothstep(-0.7, -1.0, u / F.A) * smoothstep(0.0008, -0.0004, gap));
 }
 
 // ── Shaders ─────────────────────────────────────────────────────────────────
@@ -574,6 +720,90 @@ export function lensMaterial({ color = LENS.color, tint = LENS.tint, mirror = LE
   return mat;
 }
 
+// The eyeballs: the whites, the iris and the pupil drawn round wherever
+// they're looking (uGaze, in the head's frame: the balls themselves never
+// turn, so the lids stay where they are), the iris's fibres running out
+// from the pupil and darker at its rim. The upper lid shades the top of the
+// ball; and the eye is wet, so the cornea is glossy and the sky is in it.
+const EYE = {
+  pupil: 0.0019, // m, the pupil's radius, in daylight
+  shade: 0.38, // how dark the top of the ball is under the upper lid
+  wet: 0.55, // how much of the sky it mirrors, looked at square on
+};
+const EYE_GLSL = /* glsl */ `
+vec3 eyeColour(vec3 d, vec3 gaze, out float iris) {
+  float c = clamp(dot(d, gaze), -1.0, 1.0);
+  float th = acos(c);
+  float fw = max(fwidth(th), 1e-4);
+  iris = 1.0 - smoothstep(uIris - fw, uIris + fw, th);
+  float pupil = 1.0 - smoothstep(uPupil - fw, uPupil + fw, th);
+  vec3 e1 = normalize(cross(gaze, vec3(0.0, 1.0, 0.0)));
+  vec3 e2 = cross(e1, gaze);
+  float round = atan(dot(d, e2), dot(d, e1));
+  float r = th / uIris; // 0 at the pupil's middle, 1 at the rim
+  float fibre = vnoise(vec2(round * 22.0, r * 2.5)) * 0.6 + vnoise(vec2(round * 61.0, r * 6.0)) * 0.4;
+  vec3 col = uIrisColour * (0.55 + 0.8 * fibre);
+  col *= 1.0 + 0.35 * exp(-pow((r - 0.42) / 0.1, 2.0)); // the lighter ring round the pupil
+  col *= mix(1.0, 0.35, smoothstep(0.78, 1.0, r)); // the dark rim
+  // the whites: a little pink and grey out towards the corners
+  vec3 white = mix(uSclera, uSclera * vec3(0.92, 0.72, 0.68), smoothstep(0.5, 1.2, th));
+  vec3 eye = mix(white, col, iris);
+  return mix(eye, vec3(0.008), pupil);
+}
+`;
+function eyeMaterial(F, iris, sclera) {
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.2, metalness: 0 });
+  const uniforms = {
+    uGaze: { value: new THREE.Vector3(0, 0, 1) },
+    uEye: { value: new THREE.Vector3(F.cx, F.cy, F.cz) },
+    uIris: { value: Math.asin(Math.min(0.95, iris.r / F.r)) },
+    uPupil: { value: Math.asin(EYE.pupil / F.r) },
+    uIrisColour: { value: new THREE.Color(iris.colour) },
+    uSclera: { value: new THREE.Color(sclera) },
+    uLidTop: { value: F.up },
+  };
+  mat.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, SKY, uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+        uniform vec3 uEye;
+        varying vec3 vBall;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vBall = position - vec3(sign(position.x) * uEye.x, uEye.y, uEye.z);`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform vec3 uGaze;
+        uniform float uIris;
+        uniform float uPupil;
+        uniform vec3 uIrisColour;
+        uniform vec3 uSclera;
+        uniform float uLidTop;
+        varying vec3 vBall;
+        ${NOISE_GLSL}
+        ${SKY_UNIFORMS_GLSL}
+        ${SKY_GLSL}
+        ${EYE_GLSL}`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        float iris;
+        diffuseColor.rgb = eyeColour(normalize(vBall), normalize(uGaze), iris);
+        float lidShade = mix(${EYE.shade.toFixed(2)}, 1.0, smoothstep(uLidTop + 0.0004, uLidTop - 0.0032, vBall.y));
+        diffuseColor.rgb *= lidShade;`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        roughnessFactor = mix(0.22, 0.06, iris);`)
+      .replace('#include <opaque_fragment>', `{
+          vec3 v = normalize(vViewPosition);
+          vec3 r = transformNormalByInverseViewMatrix(reflect(-v, normal), viewMatrix);
+          float f = ${EYE.wet.toFixed(2)} * (0.25 + 0.75 * pow(1.0 - clamp(dot(normal, v), 0.0, 1.0), 2.0));
+          vec3 seen = r.y > 0.0 ? skyGradient(r) : uHorizon * 0.25;
+          outgoingLight += seen * f * lidShade * 0.35;
+        }
+        #include <opaque_fragment>`);
+  };
+  mat.customProgramCacheKey = () => 'hiker-eye-v1';
+  mat.userData.gaze = uniforms.uGaze.value;
+  return mat;
+}
+
 // Skin for the rest of someone (arms, neck, shoulders): the face's light
 // through it, in one colour.
 export function bareSkin(hex, rough = 0.55) {
@@ -589,12 +819,24 @@ export function bareSkin(hex, rough = 0.55) {
 // once.
 const shapesOf = new WeakMap();
 function headShapes(L, skinHex) {
+  const steps = shapeHead(L, skinHex);
+  for (;;) {
+    const s = steps.next();
+    if (s.done) return s.value;
+  }
+}
+
+// A look's skin and hair (for a skin of this colour), worked out a little at
+// a time: a generator that yields every millisecond or so of work (for a
+// Searches, core/searches.ts), and returns them. buildHead() then has them
+// already, for whoever builds a head to this look.
+export function* shapeHead(L, skinHex) {
   const known = shapesOf.get(L);
   if (known && known.skinHex === skinHex) return known;
   const base = new THREE.Color(skinHex);
 
   // The skin, coloured.
-  const skin = skinGrid(L, SKIN_GRID);
+  const skin = yield* skinGrid(L, coarser(SKIN_GRID, L.detail));
   {
     const p = skin.attributes.position;
     const nrm = skin.attributes.normal;
@@ -603,6 +845,7 @@ function headShapes(L, skinHex) {
       _p.fromBufferAttribute(p, i);
       _n.fromBufferAttribute(nrm, i);
       skinColor(L, _p, _n, hairAt(L, _p, _n), base, _c).toArray(col, i * 3);
+      if (i % STEP_POINTS === STEP_POINTS - 1) yield;
     }
     skin.setAttribute('color', new THREE.BufferAttribute(col, 3));
   }
@@ -625,6 +868,7 @@ function headShapes(L, skinHex) {
       S.colour.toArray(col, i * 3);
       const depth = lerp(SLEEK_LIFT, S.len, smoothstep(0, SLEEK_THIN, h.edge));
       _p.addScaledVector(_n, depth).toArray(pos, i * 3);
+      if (i % STEP_POINTS === STEP_POINTS - 1) yield;
     }
     const si = skin.index.array;
     const index = [];
@@ -638,7 +882,7 @@ function headShapes(L, skinHex) {
   // layers go in an order where every first few spread through the whole
   // depth (Van der Corput's), so drawing only the first few, from far off,
   // still fills it.
-  const grid = skinGrid(L, HAIR_GRID);
+  const grid = yield* skinGrid(L, coarser(HAIR_GRID, L.detail));
   const gp = grid.attributes.position;
   const gn = grid.attributes.normal;
   const len = new Float32Array(gp.count);
@@ -651,6 +895,7 @@ function headShapes(L, skinHex) {
     len[i] = h.sleek ? 0 : h.len;
     h.flow.toArray(flow, i * 3);
     h.color.toArray(col, i * 3);
+    if (i % STEP_POINTS === STEP_POINTS - 1) yield;
   }
   const gi = grid.index.array;
   const keep = [];
@@ -687,6 +932,7 @@ function headShapes(L, skinHex) {
       hs[o] = h;
     });
     keep.forEach((v, t) => (hi[s * keep.length + t] = s * nv + remap.get(v)));
+    yield;
   }
   const shapes = { skinHex, skin, hair: { hp, hn, hf, hc, hl, hs, hi, perShell: keep.length }, sleek };
   shapesOf.set(L, shapes);
@@ -819,6 +1065,21 @@ export function buildHead(head, skin, L) {
     g.setIndex(sleek.index);
     g.computeVertexNormals();
     head.add(cast(new THREE.Mesh(g, sleekMaterial(SLEEK_CENTRE, L.hair.scalp.toward))));
+  }
+
+  // ── Eyes ──
+  // Both balls are one mesh, named so it's left whole when the body is
+  // dressed (bake.js): its material draws the iris where `gaze` says.
+  if (L.eyes) {
+    const F = eyeFrame(L);
+    const balls = [-1, 1].map((sx) => new THREE.SphereGeometry(F.r, 28, 20).translate(sx * F.cx, F.cy, F.cz));
+    const mat = eyeMaterial(F, L.eyes.iris, L.eyes.sclera ?? 0xd8d0c4);
+    const eyes = new THREE.Mesh(mergeGeometries(balls), mat);
+    balls.forEach((g) => g.dispose());
+    eyes.name = 'eyes';
+    eyes.castShadow = false;
+    eyes.userData.gaze = mat.userData.gaze;
+    head.add(eyes);
   }
 
   // ── Ears ──

@@ -20,8 +20,14 @@ paler.
 
 **People.** Some towns have people and some don't. In a western town or a
 village they stroll from door to door, stand about, turn to look at you as
-you pass, and when you walk up to one they wave and say something (*"Howdy,
-stranger."* *"Lovely day for a walk."*) in a few syllables of voice. After
+you pass (their eyes first, then their heads), and when you walk up to one
+they wave and say something (*"Howdy, stranger."* *"Lovely day for a
+walk."*) in a few syllables of voice. Each has a face of their own, and is
+dressed for their town: a waistcoat and a watch chain or braces and a belt,
+a felt hat, a bowler, a straw hat; a long dress with an apron over it and
+a bonnet, the hair drawn back into a bun; a frock coat and a top hat in the
+eerie town. They walk the way the hikers do, and come into view a few at a
+time as a town is stood up. After
 dark most go indoors and the windows light up; in a western town a couple
 stay out, and the piano in the saloon plays on into the small hours. A
 village's church strikes the hours, and somebody's dog barks now and then. A
@@ -86,7 +92,7 @@ index.js              plugs it into the game: towns stood up as you come near, t
 towns.js              where they are, grown from the seed, and how each is laid out along its street
 kinds.js              the kinds of town and the buildings in them, in tables: names, habitat, people
 buildings.js          what each building looks like: false fronts, a saloon, cottages, a church...
-people.js             the townsfolk: one skinned mesh each, strolling, waving, watching
+people.js             the townsfolk (../people/folk.js), stood up a few at a time: strolling, waving, watching
 look.js               those two, fetched when the first town is about to be stood up
 sound.js              a church bell, a saloon piano, a creaking sign, a dog, a hello, a whisper
 ```
