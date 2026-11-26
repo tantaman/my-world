@@ -81,7 +81,7 @@ export function createInterior() {
   const shade = weathered({ colour: '#8a4a22', rough: 0.5, metal: 0.3, wet: 0, bump: 0 });
   const bulb = new MeshStandardNodeMaterial({ color: new Color(1, 0.8, 0.6) });
   bulb.emissiveNode = vec3(1.0, 0.62, 0.32).mul(9);
-  for (const [x, z] of [[-0.5, -2.2], [3.4, -2.4]]) {
+  for (const [x, z] of [[-0.5, -1.5], [3.4, -2.0]]) {
     add(new CylinderGeometry(0.005, 0.005, 0.7, 3), metal, x, S.wall - 0.35, z);
     const sh = add(new CylinderGeometry(0.08, 0.26, 0.2, 14, 1, true), shade, x, S.wall - 0.8, z);
     sh.material = shade.clone();

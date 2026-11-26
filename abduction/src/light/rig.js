@@ -26,7 +26,7 @@ export const LIGHTS = {
   tube: { colour: new Color('#e4efe6'), nits: 70, w: 1.2, h: 0.15 },
   canopySpot: { colour: new Color('#e4efe6'), cd: 260, angle: 1.2, penumbra: 0.9 },
   warm: { colour: new Color('#ffd6a8'), cd: 6, reach: 7 },
-  pendant: { colour: new Color('#ffb070'), cd: 22, reach: 6 },
+  pendant: { colour: new Color('#ffb070'), cd: 38, reach: 6 },
   shopTube: { colour: new Color('#fff2e0'), cd: 26, reach: 7 },
   headlight: { colour: new Color('#fff4e0'), cd: 9000, angle: 0.3, penumbra: 0.5 },
   lightning: { colour: new Color('#cfd8ff'), lux: 6 },
@@ -92,7 +92,7 @@ export function createRig({ scene, camera, scatterLights, has }) {
   const wallLamp = point(LIGHTS.warm, L.SHOP.wallLamp.x, L.SHOP.wallLamp.y - 0.15, L.SHOP.wallLamp.z + 0.45);
 
   // The shop's own lights, inside.
-  const pendants = [point(LIGHTS.pendant, -0.5, 2.3, -2.2), point(LIGHTS.pendant, 3.4, 2.3, -2.4)];
+  const pendants = [point(LIGHTS.pendant, -0.5, 2.3, -1.5), point(LIGHTS.pendant, 3.4, 2.3, -2.0)];
   const shopTube = point(LIGHTS.shopTube, 1.5, 2.9, -4.5);
 
   // The car's headlights (one light for the pair), moved by props/sedan.js.
