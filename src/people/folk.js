@@ -44,13 +44,28 @@ const range = (rnd, a, b) => a + (b - a) * rnd();
 // ── Their faces ─────────────────────────────────────────────────────────────
 // A man's and a woman's face, as player/head.js takes a look; each person's
 // is one of these with every part of it moved a little.
+//
+// A skull is made as Lauren's is (hikers/lauren.js): the cranium, and the
+// eggs of the face (the cheekbones and upper jaw, the jaw, the cheeks, and
+// the chin, the end of an egg tilted forward down through the mouth) cut
+// back along a jawline, so the side of the face turns under at an edge and
+// the chin is where the face ends, not a ball stuck on under it.
+//   cranium, eggs   [centre, half-sizes, tilt] (as player/head.js takes them)
+//   jaw    the jawline, x either side: from where the chin's underside turns
+//          up at the side (chin) back to the angle of the jaw (angle), and
+//          up from there towards the ear lobe (back); and under the chin
+//          (under: [y, z] in the middle), where it's cut flat, rising back
 const HIS = {
-  skull: [
-    [[0, 0.024, -0.008], [0.0755, 0.097, 0.099]],
-    [[0, -0.02, 0.013], [0.066, 0.056, 0.077]],
-    [[0, -0.058, 0.004], [0.0555, 0.062, 0.083]],
-    [[0, -0.097, 0.054], [0.029, 0.026, 0.032]],
-  ],
+  skull: {
+    cranium: [[0, 0.022, -0.009], [0.0755, 0.095, 0.098]],
+    eggs: [
+      [[0, -0.022, 0.013], [0.072, 0.056, 0.078]],
+      [[0, -0.05, 0.01], [0.063, 0.062, 0.079]],
+      [[0, -0.038, 0.017], [0.068, 0.044, 0.075]],
+      [[0, -0.054, 0.04], [0.056, 0.074, 0.045], 0.62],
+    ],
+    jaw: { chin: [0.03, -0.115, 0.064], angle: [0.054, -0.088, -0.012], back: [0.057, -0.038, -0.02], under: [-0.117, 0.064] },
+  },
   round: 0.016,
   eyeX: 0.032,
   brow: 0.024,
@@ -61,21 +76,25 @@ const HIS = {
     ala: { x: 0.0115, y: -0.041, rx: 0.0062, ry: 0.0056, lift: 0.0082 },
     nostril: 0.0066, base: -0.0495,
   },
-  mouth: { y: -0.0695, w: 0.0235, smile: 0.0008, parted: 0.0004, teeth: [0.75, 0.35] },
+  mouth: { y: -0.068, w: 0.0235, smile: 0.0008, parted: 0.0004, teeth: [0.75, 0.35] },
   relief: {
     socket: 0.0062, browRidge: 0.0035, cheekbones: [0.0042, 0.047, -0.021], cheeks: [0.0025, 0.035, -0.026],
-    teeth: 0.0045, lips: [0.002, 0.0026], lipW: [0.02, 0.018], chin: [0.0028, -0.1],
+    teeth: 0.0045, lips: [0.002, 0.0026], lipW: [0.02, 0.018], chin: [0.0022, -0.102],
   },
   ear: { x: 0.0735, y: -0.006, z: -0.012, h: 0.031, w: 0.0168, flare: 0.36, lean: 0.2 },
   brows: { inner: 0.009, span: 0.044, drop: 0.002, arch: 0.005, tail: 0.004, half: [0.005, 0.002], len: 0.0032 },
 };
 const HERS = {
-  skull: [
-    [[0, 0.02, -0.01], [0.073, 0.092, 0.095]],
-    [[0, -0.02, 0.012], [0.067, 0.052, 0.075]],
-    [[0, -0.05, 0.006], [0.052, 0.056, 0.078]],
-    [[0, -0.088, 0.047], [0.026, 0.024, 0.03]],
-  ],
+  skull: {
+    cranium: [[0, 0.018, -0.01], [0.074, 0.09, 0.095]],
+    eggs: [
+      [[0, -0.02, 0.012], [0.07, 0.052, 0.076]],
+      [[0, -0.044, 0.01], [0.058, 0.054, 0.076]],
+      [[0, -0.034, 0.016], [0.064, 0.04, 0.072]],
+      [[0, -0.046, 0.037], [0.05, 0.066, 0.042], 0.66],
+    ],
+    jaw: { chin: [0.026, -0.101, 0.06], angle: [0.047, -0.079, -0.01], back: [0.052, -0.036, -0.018], under: [-0.103, 0.06] },
+  },
   round: 0.016,
   eyeX: 0.031,
   brow: 0.026,
@@ -107,17 +126,61 @@ const DETAIL = 0.85;
 // tipped back at the front (radians); the hair stops just under it.
 const HAT_BAND = { y: 0.058, tilt: -0.05 };
 
+// The jawline's cuts (as lauren.js makes hers): a ball big enough to be all
+// but flat along the jaw either side, from the chin back to its angle facing
+// down and out, and up from the angle facing back and out; and a bigger one
+// under the chin.
+const JAWLINE = { ball: 0.3, turn: 0.5, backTurn: 0.5, under: 0.6, rise: 0.15 };
+function ballThrough(from, to, face, r, side) {
+  const along = V(to[0] - from[0], to[1] - from[1], to[2] - from[2]).normalize();
+  const n = V(...face);
+  n.addScaledVector(along, -n.dot(along)).normalize();
+  return [[side * (from[0] - n.x * r), from[1] - n.y * r, from[2] - n.z * r], [r, r, r]];
+}
+function jawline({ chin, angle, back, under }) {
+  const J = JAWLINE;
+  const down = [Math.sin(J.turn), -Math.cos(J.turn), 0];
+  const rear = [Math.sin(J.backTurn), 0, -Math.cos(J.backTurn)];
+  return [
+    ...[1, -1].map((side) => ballThrough(chin, angle, down, J.ball, side)),
+    ...[1, -1].map((side) => ballThrough(angle, back, rear, J.ball, side)),
+    [[0, under[0] + J.under * Math.cos(J.rise), under[1] + J.under * Math.sin(J.rise)], [J.under, J.under, J.under]],
+  ];
+}
+
+// A skull with its face moved a little: wider or narrower, longer or
+// shorter in the lower face, a broader or narrower jaw, deeper, the chin
+// further forward or back. -> as player/head.js takes it
+function skullOf(S, { wide, long, jaw, deep, chin }) {
+  const [c0, r0] = S.cranium;
+  const cut = jawline({
+    chin: [S.jaw.chin[0] * wide * jaw, S.jaw.chin[1] * long, S.jaw.chin[2] * deep + chin],
+    angle: [S.jaw.angle[0] * wide * jaw, S.jaw.angle[1] * long, S.jaw.angle[2] * deep],
+    back: [S.jaw.back[0] * wide, S.jaw.back[1] * long, S.jaw.back[2] * deep],
+    under: [S.jaw.under[0] * long, S.jaw.under[1] * deep + chin],
+  });
+  const last = S.eggs.length - 1;
+  return [
+    [c0, [r0[0] * wide, r0[1], r0[2] * deep]],
+    ...S.eggs.map(([c, r, tilt = 0], i) => [
+      [c[0], c[1] * long, c[2] * deep + (i === last ? chin : 0)],
+      [r[0] * wide * (i ? jaw : 1), r[1] * long, r[2] * deep],
+      tilt,
+      cut,
+    ]),
+  ];
+}
+
 // Every number in a face moved a little, the same way for a whole skull.
 function faceOf(her, rnd, colours) {
   const T = her ? HERS : HIS;
-  const wide = range(rnd, 0.95, 1.05);
-  const long = range(rnd, 0.96, 1.05);
-  const jaw = range(rnd, 0.9, 1.1);
-  const deep = range(rnd, 0.97, 1.03);
-  const skull = T.skull.map(([c, r], i) => {
-    const jw = i >= 2 ? jaw : 1;
-    const ly = i === 0 ? 1 : long;
-    return [[c[0], c[1] * ly, c[2] * deep], [r[0] * wide * jw, r[1] * ly, r[2] * deep]];
+  const long = range(rnd, 0.97, 1.03);
+  const skull = skullOf(T.skull, {
+    wide: range(rnd, 0.96, 1.04),
+    long,
+    jaw: range(rnd, her ? 0.94 : 0.95, her ? 1.04 : 1.08),
+    deep: range(rnd, 0.98, 1.02),
+    chin: range(rnd, -0.003, 0.003),
   });
   const N = T.nose;
   const nose = {
@@ -138,13 +201,13 @@ function faceOf(her, rnd, colours) {
     cheekbones: [R.cheekbones[0] * range(rnd, 0.75, 1.25), R.cheekbones[1], R.cheekbones[2]],
     cheeks: [R.cheeks[0] * range(rnd, 0.7, 1.3), R.cheeks[1], R.cheeks[2]],
     lips: R.lips.map((v) => v * range(rnd, 0.8, 1.2)),
-    chin: [R.chin[0] * range(rnd, 0.6, 1.4), R.chin[1] * long],
+    chin: [R.chin[0] * range(rnd, 0.7, 1.3), R.chin[1] * long],
   };
   const ear = { ...T.ear, h: T.ear.h * range(rnd, 0.92, 1.1), flare: T.ear.flare * range(rnd, 0.75, 1.3) };
   const skin = colours.skin;
   const tint = (hex, k) => skin.clone().lerp(C(hex), k);
   return {
-    skull, round: T.round, eyeX: T.eyeX * range(rnd, 0.97, 1.04), brow: T.brow * range(rnd, 0.92, 1.1),
+    skull, round: T.round, cutRound: 0.012, eyeX: T.eyeX * range(rnd, 0.97, 1.04), brow: T.brow * range(rnd, 0.92, 1.1),
     nose, mouth, relief, ear,
     colour: {
       rosy: tint(0xb8564a, her ? 0.3 : 0.22),
@@ -199,7 +262,7 @@ function hairOf(L, her, rnd, { hair, beard, hat }) {
   return L;
 }
 // Where a woman's hair is gathered at the back of her head (from eye level).
-const BUN = V(0, 0.045, -0.098);
+const BUN = V(0, 0.035, -0.104);
 // The heights (from eye level) a bonnet is cut at, from the nape to the top.
 const BONNET = [-0.085, -0.06, -0.03, 0.0, 0.03, 0.06, 0.085, 0.105, 0.122, 0.134, 0.14];
 
@@ -569,7 +632,7 @@ function dressGrownUp(body, look, rnd, colours, { her, build, face: L }) {
     }
     const coil = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(turns), 80, 0.0105, 8);
     const bun = piece(headFrame, coil, M(colours.hair, 0.55));
-    bun.position.copy(BUN).add(V(0, 0, -0.004));
+    bun.position.copy(BUN).add(V(0, 0, -0.01)); // sat on the hair, not sunk in it
     bun.lookAt(V(0, 0.1, -1).add(bun.position));
   }
   const worn = hat(look.hat, headFrame, look.hatColor, rnd);
