@@ -454,8 +454,10 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
           // them; damp hollows; pocks and scuffs a hand's breadth across;
           // grit, and a stone pressed in here and there.
           float wob = (vnoise(vec2(uv.x * 0.045, 1.7)) - 0.5) * 1.4;
-          float rut = exp(-pow((abs(uv.y - wob) - ${EARTH.gauge.toFixed(2)}) / 0.2, 2.0))
-            + 0.55 * exp(-pow((abs(uv.y - 0.6 * wob + 2.6) - ${EARTH.gauge.toFixed(2)}) / 0.24, 2.0));
+          // (squared by hand: pow() of a negative number is no number at all)
+          float ra = (abs(uv.y - wob) - ${EARTH.gauge.toFixed(2)}) / 0.2;
+          float rb = (abs(uv.y - 0.6 * wob + 2.6) - ${EARTH.gauge.toFixed(2)}) / 0.24;
+          float rut = exp(-ra * ra) + 0.55 * exp(-rb * rb);
           rut *= 0.6 + 0.4 * vnoise(vec2(uv.x * 0.3, uv.y * 2.0 + 5.0));
           float big = vnoise(uv * 0.11 + 3.0);
           float mid = vnoise(uv * 0.55 + 9.0);
