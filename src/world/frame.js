@@ -12,6 +12,14 @@
 //
 // No three.js in here: the tests read it, and so does the map.
 
+/**
+ * @typedef {{ x: number, z: number, yaw: number }} Frame
+ * @param {Frame} s
+ * @param {number} lx
+ * @param {number} lz
+ * @param {{ x?: number, z?: number }} [out]
+ * @returns {{ x: number, z: number }}
+ */
 export function toWorld(s, lx, lz, out = {}) {
   const c = Math.cos(s.yaw);
   const n = Math.sin(s.yaw);
@@ -20,6 +28,13 @@ export function toWorld(s, lx, lz, out = {}) {
   return out;
 }
 
+/**
+ * @param {Frame} s
+ * @param {number} x
+ * @param {number} z
+ * @param {{ x?: number, z?: number }} [out]
+ * @returns {{ x: number, z: number }}
+ */
 export function toLocal(s, x, z, out = {}) {
   const c = Math.cos(s.yaw);
   const n = Math.sin(s.yaw);
