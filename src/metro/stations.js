@@ -49,7 +49,7 @@ import { fromLevel, TUBE } from './network.js';
 import { meshOf } from './track.js';
 import { pylonTop, nameBoard, arrivalBoard } from './signs.js';
 
-const COFFER = { size: 1.7, inset: 0.16, depth: 0.4 }; // m: a coffer's width; how far its sides come in; how deep
+const COFFER = { size: 1.7, inset: 0.16, depth: 0.34 }; // m: a coffer's width; how far its sides come in; how deep
 const MEZZ = { from: 6, deep: 12, up: 5.4, slab: 0.7 }; // m in from the vault's end; how far it spans; its floor over the platform's
 const ESCALATOR = { run: 9.4, half: 0.62, every: 1.5 }; // m it takes to climb to the mezzanine; half its width; between them
 const EDGE_GRANITE = 0.6; // m of granite along a platform's edge
@@ -75,7 +75,7 @@ const PYLON = { half: 0.3, h: 4.0, top: 1.1 }; // the brown pylon at an entrance
 // (Under the street the eye has got used to the dark, and the picture is
 // made about three and a half times as bright as by day: world/sky.js,
 // render/pipeline.js. These are for that.)
-const LIGHT = { reach: 3.4, fall: 2.8, wrap: 0.3, aim: 0.45, bounce: 0.012, most: 1.2 };
+const LIGHT = { reach: 3.4, fall: 2.8, wrap: 0.45, aim: 0.45, bounce: 0.018, most: 1.2 };
 // what lights what stands on the platform, and the floor: the vault's light, come back down
 const UNDER_LIT = { solid: 0.2, floor: 0.22, trackbed: 0.06 };
 
