@@ -13,7 +13,7 @@ const BANK_HIDES = 1.5;
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui', 'world', 'player'];
 export function installAudio(game) {
-  const { chunks, gen, sky, player, camera, hud, settings } = game;
+  const { chunks, gen, sky, paved, player, camera, hud, settings } = game;
 
   const sound = new Soundscape();
   const remembered = settings.get('sound', 'boolean');
@@ -38,6 +38,9 @@ export function installAudio(game) {
     if (player.underfoot && player.underfoot.surface) return player.underfoot.surface;
     if (player.wade > 0.04) return 'water';
     if (player.space && player.space.surface) return player.space.surface; // a cave's floor
+    // ground something has paved over (a city's streets): world/paved.ts
+    const laid = paved.at(player.pos.x, player.pos.z);
+    if (laid) return laid;
     const g = groundHere();
     if (g.snow > 0.5) return 'snow';
     // a trail, the stony ground up above the trees, or a real place's bare

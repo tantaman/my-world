@@ -11,6 +11,7 @@ import { Sky } from './sky.js';
 import { Solids } from './solids.js';
 import { Spaces } from './spaces.js';
 import { Basins } from './basins.js';
+import { Paved } from './paved.ts';
 import { CUTS } from './cuts.js';
 import { createParticles } from './particles.js';
 import { createTerrainMaterial, createTerrainDepthMaterial, createVegetationMaterial, createVegetationDepthMaterial, createGrassMaterial } from './materials.js';
@@ -120,6 +121,10 @@ export function installWorld(game) {
   game.provide('spaces', new Spaces());
   // Water held up in something built (a pool, a tub). Whoever builds one, adds it.
   game.provide('basins', new Basins());
+  // Ground paved over by something laid on it (a city's streets), which says
+  // what it's made of for whatever asks what's underfoot. Whoever paves,
+  // adds a source.
+  game.provide('paved', new Paved());
   // What the world streams in around: a point that whoever is being followed
   // keeps up to date (the player feature copies the hiker's position into it).
   game.provide('focus', new THREE.Vector3());

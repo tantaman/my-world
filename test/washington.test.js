@@ -7,8 +7,10 @@
 // bank to bank at the banks' heights; that a tile stands up a little at a
 // time, every building with its roof and walls, its streets laid without
 // ever covering more than they are, and the forest kept off what's built;
-// that every landmark is on a tile and arrived at out from under any roof;
-// and that solids are taken out of the world as quickly as they're put in.
+// that the paving says what it's made of underfoot, and a bridge's deck what
+// is laid along it; that every landmark is on a tile and arrived at out from
+// under any roof; and that solids are taken out of the world as quickly as
+// they're put in.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -226,6 +228,36 @@ test('a road on fine terrain clears an entire metre-grid ridge and keeps grass o
   assert.equal(t.use(15, 2.55), 0);
   assert.ok(t.bare(15, 2.55), 'blades rooted next to the asphalt are kept clear');
   assert.equal(t.bare(15, 0.6), false, 'grass stays beyond the road edge');
+  t.dispose();
+});
+
+test("the paving says what it's made of underfoot, and a bridge's deck what's laid along it", () => {
+  // a street with a sidewalk beside it, and further on the same street
+  // carried over a bridge: nothing is solid on a street (it is drawn on the
+  // graded ground you walk on), so the paving has to say so itself
+  const street = (z0, z1) => [[10, z0], [90, z0], [90, z1], [10, z1]];
+  const tile = {
+    at: [0, 0],
+    buildings: [],
+    paving: [
+      { kind: 'road', rings: [street(20, 28)] },
+      { kind: 'sidewalk', rings: [street(29, 34)] },
+      { kind: 'bridge', rings: [street(58, 70)] },
+      { kind: 'road', rings: [street(60, 68)] },
+    ],
+    bridges: [{ a: [10, 64, 4], b: [90, 64, 4], half: 6, ring: street(58, 70) }],
+    trees: [],
+    names: [],
+  };
+  const t = new CityTile({ key: '0_0', corner: [0, 0], bytes: encodeTile(tile), ground: () => 0, offset: 0, materials: makeMaterials() });
+  t.pump(Infinity);
+  assert.equal(t.paving(50, 24), 'tarmac', 'the street is tarmac');
+  assert.equal(t.paving(50, 31), 'stone', 'the sidewalk beside it is stone');
+  assert.equal(t.paving(50, 45), null, 'and the ground between them is paved with nothing');
+  assert.ok(!t.solids.some((s) => Math.abs((s.az + s.bz) / 2 - 24) < 5), 'nothing stands on the street to be stood on');
+  const deck = t.solids.filter((s) => Math.abs((s.az + s.bz) / 2 - 64) < 1);
+  assert.ok(deck.length > 1, "the bridge's deck is solid in pieces: you walk over on it");
+  assert.ok(deck.every((s) => s.surface === 'tarmac'), 'and says the street laid along it is tarmac');
   t.dispose();
 });
 

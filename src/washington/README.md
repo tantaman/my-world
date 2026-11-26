@@ -71,9 +71,13 @@ with some sidewalks laid in brick. Its 330 bridges carry the
 road over on a deck from one bank to the other, with a parapet along each
 side and piers under it where there's room, and you walk over on the deck,
 not down in the creek (Calvert Street and Connecticut Avenue over Rock
-Creek, 30 m and more over it). The **street trees** are the 199,000 the
-city planted, each in its tree box, as tall as the city's lidar measured
-its crown.
+Creek, 30 m and more over it). The paving says what it's made of: the
+streets, alleys, drives and car parks are tarmac and the sidewalks, islands,
+steps and bridges stone, so your footsteps sound like a city's and you can
+skate the length of an avenue (see
+[Skateboarding](../skateboarding/README.md)). The **street trees** are the
+199,000 the city planted, each in its tree box, as tall as the city's lidar
+measured its crown.
 
 Roads around the National Zoo follow the fine terrain grid. Grass clearance
 extends past the surveyed pavement edges so blades stay on the verge.
