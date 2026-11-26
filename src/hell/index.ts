@@ -51,6 +51,7 @@ import { makeCreature, meltSome, CREATURE_NAMES } from './creatures.js';
 import { findGate } from './site.js';
 import { Gate, doorFrame, DOORWAY } from './gate.js';
 import { Card } from '../core/card.js';
+import { Reader } from '../core/reader.ts';
 import { R, TAU, STEPS, regionAt, bolgiaAt, zoneAt } from './plan.js';
 import { WORDS, INSCRIPTION, SAID, DITCHES, ZONE_WORDS } from './words.js';
 import { VEG_KINDS } from '../world/chunkGen.js';
@@ -77,6 +78,8 @@ export interface Hell {
   land: HellLand;
   space: HellSpace;
   card: Card;
+  // the voice the poem is read aloud in, which Purgatory above it shares
+  reader: Reader;
   scene: THREE.Scene;
   readonly inside: boolean;
   readonly region: string | null;
@@ -104,6 +107,7 @@ const CLEAR = 5; // m round the way in kept clear of trees and undergrowth
 const WOOD = 70; // m from the gate: the dark wood, where the poem begins
 const REARM = 3.5; // m you must be from a door you came out of before it takes you again
 const FALL = 14; // m/s: land harder than this and the poem has a word for it
+const READS = 9; // m from the gateway: near enough for the lines over it to be read to you
 const CENTRE = 30; // m from the axis: Lucifer's flank, where the way out begins
 const FALLS_HEARD = 260; // m: how far off the brook's fall is heard
 const MELT_MS = 4; // ms a frame spent melting the creatures' flesh (creatures.js), while you're down there
@@ -120,7 +124,7 @@ const _seg = { d: 0, t: 0, nx: 0, nz: 0 };
 // are, which down here is this feature's to say.)
 export const after = ['render', 'ui', 'world', 'player', 'audio', 'build', 'caves', 'map'];
 export function installHell(game: Game) {
-  const { scene, camera, gen, landforms, chunks, spaces, player, pipeline, origin, sound, save, map, builder, hud } = game;
+  const { scene, camera, gen, landforms, chunks, spaces, player, pipeline, origin, sound, save, settings, map, builder, hud } = game;
 
   const site = findGate(gen, (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1));
   // (a world with no hillside that will take the gate has no way down)
@@ -146,7 +150,25 @@ export function installHell(game: Game) {
   const air = new HellAir(under, land.top);
   origin.keep(air.hemi);
   const weather = new HellWeather(under);
-  const card = new Card({ id: 'hell', book: 'Inferno' });
+  // The poem read aloud: the voice that says what the card shows, as you
+  // come to each place (core/reader.ts). It is the browser's own speech, so
+  // it waits on the sound being on and running, as everything heard does.
+  const reader = new Reader({ can: () => sound.enabled && sound.running });
+  reader.on = settings.get('poem-aloud', 'boolean') ?? true;
+  const card = new Card({ id: 'hell', book: 'Inferno', reader });
+  // (off the panel where the browser has no voice to read in)
+  hud.setting({
+    id: 'poem-aloud',
+    group: 'SOUND',
+    label: 'the poem read aloud',
+    can: () => reader.available,
+    get: () => reader.on,
+    set(on: boolean) {
+      reader.on = on;
+      if (!on) reader.stop();
+      settings.set('poem-aloud', on);
+    },
+  });
   // the keepers and monsters, and whatever carries you
   const flesh = createSkinMaterial({ hot: true, baked: true });
   const make = (name: string) => makeCreature(CREATURE_NAMES.includes(name) ? name : 'figure', flesh);
@@ -245,6 +267,8 @@ export function installHell(game: Game) {
   let ditch = -1; // which ditch of Malebolge you're over, and which zone of the ice
   let zone = -1;
   let fell = 0; // how fast you were falling, last frame
+  let dipped = false; // the rest of the sound turned down for the voice
+  let inscribed = false; // the lines over the gateway being read to you, on this walk up to it
   const brought = () => [player.character.root, ...(game.headlamp ? [game.headlamp.beam, game.headlamp.beam.target, game.headlamp.glow] : [])];
   const isIn = (p: THREE.Vector3) => p.y < space.lid && Math.hypot(p.x - land.cx, p.z - land.cz) < land.reach;
   let ready = false; // every creature's shape asked for, to be melted in the background
@@ -261,6 +285,7 @@ export function installHell(game: Game) {
       region = null;
       heard.inside = 0;
       hud.cue(null, 'hell');
+      reader.stop();
     }
   }
   game.coverWhen(() => inside);
@@ -308,6 +333,11 @@ export function installHell(game: Game) {
       const p = player.pos;
       const now = isIn(p);
       if (now !== inside) cross(now);
+      // Everything else turned down while the poem is read, wherever it is
+      // being read: the voice is the browser's and doesn't come through the
+      // game's sound, so nothing else can make room for it. (Purgatory above
+      // shares this reader, so this says it for the mountain too.)
+      if (reader.saying !== dipped) sound.under((dipped = reader.saying) ? 1 : 0);
       if (!inside) {
         way.update(p);
         const far = Math.hypot(p.x - gate.x, p.z - gate.z);
@@ -316,6 +346,19 @@ export function installHell(game: Game) {
           found = true;
           card.show(WORDS.darkwood);
           save.touch();
+        }
+        // The nine lines over the gateway, read to you as you come up to it
+        // (they are cut in the stone to be read: gate.js). Walk in and they
+        // go on being read down the passage, until the door; turn away from
+        // the tablet and they stop there, to begin again next time.
+        if (far < READS) {
+          if (!inscribed) {
+            inscribed = true;
+            reader.read({ lines: INSCRIPTION });
+          }
+        } else if (inscribed && far > READS + 5 && player.space !== way.space) {
+          inscribed = false;
+          reader.stop();
         }
         // the door at the end of the passage
         const d = way.doorAt;
@@ -361,8 +404,12 @@ export function installHell(game: Game) {
         zone = z;
         if (z > 0) card.show({ title: `Cocytus · ${ZONE_WORDS[z].title}`, who: ZONE_WORDS[z].who }, 6000);
       }
-      // a long fall, and you are still here
-      if (player.grounded && fell > FALL && player.rides.free) hud.flash(SAID.fall, 4500);
+      // a long fall, and you are still here (the line for it is an aside: it
+      // waits rather than cut off the words of wherever you have landed)
+      if (player.grounded && fell > FALL && player.rides.free) {
+        hud.flash(SAID.fall, 4500);
+        if (!reader.saying) reader.say(SAID.fall);
+      }
       fell = player.grounded ? 0 : -player.vel.y;
       // at the bottom of everything, the way out
       if (_p.r < CENTRE && !passing) pass('stars');
@@ -479,6 +526,7 @@ export function installHell(game: Game) {
     weather,
     air,
     card,
+    reader,
     scene: under,
     get inside() {
       return inside;

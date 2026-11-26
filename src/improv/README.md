@@ -52,7 +52,8 @@ F at the door reads you the schedule. A show runs eight to ten minutes.
 - **Open mic.** The host and five comics, a couple of bits each.
 
 You hear it: each comic says their lines aloud in a voice of their own (the
-browser's own speech: as many voices as it has, picked to suit them), and
+browser's own speech, `core/speech.ts`: as many voices as it has, picked to
+suit them), and
 the room laughs when they've said them, a chuckle or a roar, with applause
 when somebody walks on or kills. The words are on the screen as they're
 said, whether or not the browser can say them aloud, and whether or not
@@ -97,7 +98,6 @@ club.js          where it is (its door on Connecticut Avenue), the rooms, the st
 schedule.js      the week of shows, on Washington's clock; who's on each bill
 sets.js          the comics and their material, the host, the troupe and its scenes
 performance.js   a show from the top: every line, when, who says it, how the room takes it, who's on the stage
-voices.js        the browser's speech, a voice for each person
 captions.js      the words on the screen
 laughs.js        laughter, applause, a crowd's murmur, shouting: made from numbers
 sound.js         the room: the murmur, the house music, the laughs and the applause

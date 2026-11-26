@@ -58,6 +58,15 @@ to the ice at the bottom of Hell. **R** takes you back to the start of the
 path from anywhere. Leave while you're on the mountain and you come back
 where you were, at the hour you left it.
 
+**The poem is read to you** here as it is in Hell, and in the same voice
+(`hell.reader`, `core/reader.ts`): the name of each place as you come to it,
+who is there, and the poem's own lines, a line of verse at a time, with the
+rest of the sound turned down while the voice speaks. So are the moments —
+the angel at the gate, the dreams, the drinking at the top. A moment that
+comes up while something is being read waits its turn. It comes with the
+sound, and is turned off with Hell's own line in the settings (**O**), *the
+poem read aloud*.
+
 ## How it's grown
 
 Purgatory changes nothing the seed grows. It is found from Hell (`site.js`):
@@ -115,6 +124,7 @@ world.purgatory.hours = 19       // the mountain's hour
 world.purgatory.mark()           // as the angel at the gate does
 world.purgatory.quake()          // the mountain trembles
 world.purgatory.region           // 'shore', 'valley', 'wrath', 'eden'…
+world.hell.reader.lines          // what was last read aloud, line by line
 ```
 
 ## Files

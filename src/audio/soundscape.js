@@ -51,6 +51,10 @@ import { water, pondLife } from './layers/water.js';
 const MUFFLE_HZ = 380;
 const MUFFLE_QUIET = 0.4;
 
+// How far down everything goes while something is spoken over it (under()),
+// so that the words can be heard over the place they are said in.
+const UNDER_QUIET = 0.62;
+
 // What plays unless told otherwise, in the order it is built and updated.
 const LAYERS = [weather, crickets, birds, water, pondLife];
 // The buses that are the open air, and are muffled when you're shut in.
@@ -74,6 +78,7 @@ export class Soundscape {
     this.listener = null;
     this.enclosed = 0;
     this.muffled = 0;
+    this.spokenOver = 0;
     this._unlock = () => this.unlock();
     this._events = ['pointerdown', 'keydown', 'touchend', 'click'];
     if (typeof window !== 'undefined') {
@@ -151,8 +156,11 @@ export class Soundscape {
     this.dull.type = 'lowpass';
     this.dull.Q.value = 0.5;
     this.dullLevel = ctx.createGain();
-    this.master.connect(this.dull).connect(this.dullLevel).connect(this.comp);
+    // (see under(): turned down while something is spoken over it)
+    this.dip = ctx.createGain();
+    this.master.connect(this.dip).connect(this.dull).connect(this.dullLevel).connect(this.comp);
     this.muffle(this.muffled, 0);
+    this.under(this.spokenOver, 0);
 
     // The open air, through a filter that closes when you're shut in.
     this.outside = ctx.createBiquadFilter();
@@ -231,6 +239,18 @@ export class Soundscape {
     this.outside.frequency.setTargetAtTime(20000 * Math.pow(ENCLOSED.muffle / 20000, e), t, 0.15);
     this.outsideGain.gain.setTargetAtTime(1 - (1 - ENCLOSED.quiet) * e, t, 0.15);
     this.roomSend.gain.setTargetAtTime(ENCLOSED.echo * e, t, 0.15);
+  }
+
+  // Everything turned down while something is spoken over the game: 0 for
+  // the full sound, 1 while a voice is talking over it. The browser's own
+  // speech (core/speech.ts) doesn't come through here at all, so this is the
+  // only way to make room for it. Remembered if there's no sound yet.
+  under(amount, glide = 0.12) {
+    this.spokenOver = clamp(amount, 0, 1);
+    if (!this.ctx) return;
+    const v = 1 - UNDER_QUIET * this.spokenOver;
+    if (glide > 0) this.dip.gain.setTargetAtTime(v, this.ctx.currentTime, glide);
+    else this.dip.gain.value = v;
   }
 
   // Everything heard as if through something: 0 not at all .. 1 as if from

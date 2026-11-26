@@ -196,6 +196,7 @@ place in that order, not at the end:
 | `audio/soundscape.js` | a sound that plays all the time | `game.sound.addLayer({ build, update })` |
 | `audio/soundscape.js` | being shut in: the open air muffled, the rest echoing | `game.sound.setEnclosed(0..1)` |
 | `audio/soundscape.js` | everything heard as if through something | `game.sound.muffle(amount)` |
+| `audio/soundscape.js` | everything turned down while something is spoken over the game | `game.sound.under(0..1)` |
 | `build/builder.js` | a tool, in a slot of its own or a kit it shares | `game.builder.register(tool)`, with `tool.kit` |
 | `build/builder.js` | hands too full for tools | `builder.idleWhile(fn)` |
 | `build/faces.js` | geometry written a face at a time into a mesher (ties, planks, panels) | `quad(m, a, b, c, d, color)`, `beam(m, from, to, w, h, color)`, `box(m, …)` |
@@ -208,9 +209,10 @@ place in that order, not at the end:
 | `build/obstacles.js` | whether something has been built on what you grew | `game.builder.obstacles.built(x, z, R)` |
 | `build/surfaces.js` | what something built is made of: bark, grain, paint, stone, shingles, tin, glass, steel; a city's walls, windows and all | `mesher.surf = SURF.paint` (and `mesher.wear`; for `SURF.facade`, which kind of front: `FACADE`), drawn with `createBuildingMaterial()` |
 | `caves/sites.js` | the mouths of caves, as something grown later keeps clear of | `caveMouths(caves, clear)`, with `keepClear` |
-| `core/card.js` | a place out of a book: its name and lines over the picture as you come into it, and the dark on the way | `new Card({ id, book })`, `card.show({ title, who, lines, canto })`, `await card.darken(on)` |
+| `core/card.js` | a place out of a book: its name and lines over the picture as you come into it, read aloud where it's given a reader, and the dark on the way | `new Card({ id, book, reader })`, `card.show({ title, who, lines, canto })` → ms up, `await card.darken(on)` |
 | `core/lazy.ts` | code that isn't needed until you get there (what a place looks like), fetched then and once | `const look = lazy(() => import('./look.js'))`, `look.want()` → the module or null, `await look.ready()` |
 | `core/notYet.ts` | asking about something sent for that hasn't come yet (the real Earth under a place): no fault, asked again | `throw new NotYet(what)`; `isNotYet(err)` where a search of your own is stepped by hand, to start it over |
+| `core/reader.ts` | a book read aloud, a line of verse at a time, in the browser's own voice (`core/speech.ts`) | `new Reader({ can })`, `reader.read(words)` → ms, `reader.say(line)`, `reader.stop()`, `reader.saying` |
 | `core/searches.ts` | answers that take a while to work out (where a thing grown from the seed is), each worked out once: outright, or a little at a time | `new Searches({ *grow(key) { …; yield; … } })`, `get`, `peek`, `pump(ms)` |
 | `country/index.js` | a layer of cloud of your own over everything, for a while (a flight's) | `game.country.cloud(() => ({ at, cover, x, z }))` |
 | `far/index.js` | land drawn past where the forest is streamed in, to be seen from high ground | `game.far.want(id, x0, z0, x1, z1, step)`, `far.drop(id)` |
@@ -222,6 +224,7 @@ place in that order, not at the end:
 | `game/game.ts` | something that must be here before the hiker is set down where they were left | `game.beforeArrival(look.ready())` |
 | `game/game.ts` | something the features after this one look about on as they install (the real Earth round the start and the hikes), fetched first | return its promise from the install function |
 | `game/settings.js` | a remembered preference | `game.settings.get / set` |
+| `hell/index.ts` | the voice the poem is read aloud in, for somewhere else out of the same book | `game.hell.reader` (`core/reader.ts`) |
 | `hell/index.ts` | where the road out of the bottom of Hell comes up, instead of the hillside by the gate | `game.hell.leadOut({ arrive() })` |
 | `hunting/shot.js` | something else the rifle can hit (a man, a wall that stops a shot) | `game.hunting.targets.add({ aimed, struck?, heard? })` |
 | `map/mapView.js` | something drawn on the map | `map.addLayer((pen) => …)` |
@@ -485,6 +488,8 @@ src/
     nearest.js            places listed nearest first, without end
     searches.ts           answers that take a while to work out, each worked out once
     card.js               a place out of a book, over the picture: its name and lines as you come in, the dark on the way
+    speech.ts             the browser's own speech: words said aloud over the game, in a voice for whoever says them
+    reader.ts             the voice a book is read aloud in: its lines said as you come to each place
   people/
     body.js               someone who isn't a hiker: what they're made of, how they walk and wave
   game/

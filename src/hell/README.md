@@ -58,6 +58,21 @@ doesn't come on by itself. **R** takes you back to the start of the path from
 anywhere. Leave while you're down there and you come back where you were, on
 the turn you were on.
 
+**The poem is read to you.** Everything a place puts on the screen is also
+said aloud, a line of verse at a time, in one slow voice: the name of the
+place, who is punished there, and the poem's own lines for it. Walk up to
+the gate in the woods and the nine lines cut over it are read to you, down
+to *All hope abandon, ye who enter in!* — they go on being read as you walk
+down the passage, and stop at the door, or when you turn away from the
+tablet. The rest of the sound is turned down while the voice speaks, and the
+words stay on the screen until they have been read out. It is the browser's
+own voice (`core/reader.ts`), so there is nothing recorded and nothing to
+fetch, and which voice it is depends on what the browser has; where it has
+none, nothing is heard and the words are only on the screen as they always
+were. It comes with the sound (settings, **O**), and has a line of its own
+there, *the poem read aloud*, to turn off. The mountain of Purgatory above
+is read in the same voice.
+
 ## How it's grown
 
 Hell changes nothing the seed grows. The gate is found from the seed and read
@@ -143,6 +158,9 @@ world.hell.here                  // { r, th, turn }
 world.hell.region                // 'limbo', 'styx', 'malebolge'…
 world.hell.stage('geryon', 20)   // stand one of its creatures in front of you
 world.hell.melt()                // melt every creature now, not a little each frame
+world.hell.reader.lines          // what was last read aloud, line by line
+world.hell.reader.available      // whether this browser has a voice to read in
+world.hell.reader.on = false     // stop reading the poem aloud
 ```
 
 ## Files
