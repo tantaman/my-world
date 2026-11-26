@@ -64,7 +64,12 @@ of the fences and of any wall across it. Each kind you see is counted (it's
 yours, saved), and the zoo's place on the map says how many.
 
 **The paths** lie on the ground as it's drawn, a few centimetres over it,
-so you walk on them rather than in them.
+so you walk on them rather than in them. Each says what the map says it's
+paved with: Olmsted Walk's paving stones and the Klingle Ford footbridge's
+boards sound like themselves underfoot, and the asphalt loop and the
+drives are tarmac — so you can take your skateboard the length of the zoo
+(see [Skateboarding](../skateboarding/README.md)), off the lawns and off
+the gravel.
 
 | | |
 |---|---|

@@ -336,7 +336,7 @@ spaces.js             places under the ground you can be in (caves): floor, wall
 landSpace.js          a land made in code (Hell, Purgatory) as a space: its floor, its walls, its lid
 strewn.js             what such a land is strewn with, square by square near you: drawn many at once, bumped into
 basins.js             water held up in something built (a pool, a tub), to swim in
-paved.ts              ground something has paved over (a city's streets), and what it's paved with
+paved.ts              ground something has paved over (a city's streets, a zoo's walks), and what it's paved with
 cuts.js               holes in the ground, where something else stands in for it
 models.js             procedural trees, bushes, ferns, rocks, logs: trunks, branches, and cards on them; Spanish moss
 modelsIsland.js       and other countries': palm, ironwood, tree fern, silversword, bald cypress

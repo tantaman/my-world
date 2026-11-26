@@ -24,23 +24,40 @@ import { SURF, UPRIGHT } from '../build/surfaces.js';
 import { USE } from './site.js';
 import { area } from '../core/rings.js';
 
-// What a path is paved with, by what the map says: [colour, surface].
+// What a path is paved with, by what the map says: [colour, surface, and
+// what it is underfoot — the word footsteps and wheels know, world/paved.ts,
+// which the site keeps for every square of the zoo (site.js MADE)].
 const PAVING = {
-  asphalt: [0x45433f, SURF.clay],
-  paved: [0x55534e, SURF.clay],
-  concrete: [0xa6a196, SURF.clay],
-  'concrete:plates': [0xa09a8e, SURF.clay],
-  paving_stones: [0x9c8874, SURF.stone],
-  brick: [0x6e3e32, SURF.clay],
-  sett: [0x7a746c, SURF.stone],
-  wood: [0x7c5c3c, SURF.wood],
-  gravel: [0x9a9080, SURF.stone],
-  fine_gravel: [0xa89c88, SURF.stone],
-  compacted: [0x9a8c74, SURF.stone],
-  dirt: [0x7a6448, SURF.clay],
-  ground: [0x7a6448, SURF.clay],
+  asphalt: [0x45433f, SURF.clay, 'tarmac'],
+  paved: [0x55534e, SURF.clay, 'tarmac'],
+  concrete: [0xa6a196, SURF.clay, 'stone'],
+  'concrete:plates': [0xa09a8e, SURF.clay, 'stone'],
+  paving_stones: [0x9c8874, SURF.stone, 'stone'],
+  brick: [0x6e3e32, SURF.clay, 'stone'],
+  sett: [0x7a746c, SURF.stone, 'stone'],
+  wood: [0x7c5c3c, SURF.wood, 'boards'],
+  gravel: [0x9a9080, SURF.stone, 'gravel'],
+  fine_gravel: [0xa89c88, SURF.stone, 'gravel'],
+  compacted: [0x9a8c74, SURF.stone, 'dirt'],
+  dirt: [0x7a6448, SURF.clay, 'dirt'],
+  ground: [0x7a6448, SURF.clay, 'dirt'],
 };
-const STEPS = [0xb0aca2, SURF.stone];
+const STEPS = [0xb0aca2, SURF.stone, 'stone'];
+// A path the map lays with one of these is a floor indoors, not ground: it
+// isn't drawn, and nothing is paved where it runs.
+const FLOORS = new Set(['linoleum', 'carpet']);
+// What a path or a plaza looks like, and is underfoot. The look and the
+// ground underfoot come out of the one table, so they can't drift apart.
+const lookOf = {
+  path: (p) => (p.kind === 'steps' ? STEPS : PAVING[p.surface] || PAVING.asphalt),
+  plaza: (a) => PAVING[a.surface] || PAVING.paved,
+};
+// What the ground a path or a plaza is laid on is made of (world/paved.ts),
+// for the site to keep: null where it's a floor indoors.
+export const madeOf = {
+  path: (p) => (FLOORS.has(p.surface) ? null : lookOf.path(p)[2]),
+  plaza: (a) => lookOf.plaza(a)[2],
+};
 const LIFT = { path: 0.05, plaza: 0.04 }; // m over the ground as it's drawn (paths over plazas)
 const KEEP_OVER = 0.02; // m the paving stays over the drawn ground, at the least, between its points
 const LOOK_IN = 3; // a paving triangle's sides are cut in this many to look for the ground coming up through it
@@ -67,7 +84,7 @@ export function* buildGrounds(site, ground, out = {}) {
   };
   // ── plazas
   for (const a of site.areas) {
-    const [col, surf] = PAVING[a.surface] || PAVING.paved;
+    const [col, surf] = lookOf.plaza(a);
     for (const ring of a.rings) plaza(paving, ring, drawn, new THREE.Color(col), surf);
     room();
     yield;
@@ -81,9 +98,9 @@ export function* buildGrounds(site, ground, out = {}) {
     const P = p.pts;
     const mid = Math.floor(P.length / 4) * 2;
     if (site.use(P[mid], P[mid + 1]) & USE.building && site.use(P[0], P[1]) & USE.building) continue;
-    if (p.surface === 'linoleum' || p.surface === 'carpet') continue;
-    const [col, surf] = p.kind === 'steps' ? STEPS : PAVING[p.surface] || PAVING.asphalt;
-    if (p.bridge) bridge(paving, things, solids, P, p.width / 2, drawn, new THREE.Color(col), surf);
+    if (FLOORS.has(p.surface)) continue;
+    const [col, surf] = lookOf.path(p);
+    if (p.bridge) bridge(paving, things, solids, P, p.width / 2, drawn, new THREE.Color(col), surf, madeOf.path(p));
     // (where a path crosses a plaza the map draws as well, the plaza is its
     // paving: Olmsted Walk is drawn both ways)
     else strip(paving, P, p.width / 2, (x, z) => drawn(x, z) + LIFT.path, new THREE.Color(col), surf, p.kind === 'steps', (x, z) => (site.use(x, z) & USE.plaza) !== 0, drawn);
@@ -231,7 +248,7 @@ function strip(m, P, half, height, col, surf, steps = false, skip = null, over =
 // A footbridge: a deck along the path, level from one end to the other (or
 // as high over the ground as it must be), with a rail each side, solid to
 // walk on.
-function bridge(m, things, solids, P, half, ground, col, surf) {
+function bridge(m, things, solids, P, half, ground, col, surf, made) {
   const pts = along(P);
   if (pts.length < 2) return;
   const n = pts.length - 1;
@@ -254,7 +271,8 @@ function bridge(m, things, solids, P, half, ground, col, surf) {
   for (let i = 0; i < n; i++) {
     const [ax, az, dx, dz] = pts[i];
     const [bx, bz] = pts[i + 1];
-    solids.push({ ax, az, bx, bz, r: half, bottom: Math.min(deck[i], deck[i + 1]) - DECK.thick, topA: deck[i], topB: deck[i + 1], surface: surf === SURF.wood ? 'boards' : undefined });
+    // (its deck is what you stand on out over the water: it says what it's laid with)
+    solids.push({ ax, az, bx, bz, r: half, bottom: Math.min(deck[i], deck[i + 1]) - DECK.thick, topA: deck[i], topB: deck[i + 1], surface: made ?? undefined });
     for (const s of [1, -1]) {
       const [nx, nz] = [-dz * s * half, dx * s * half];
       const a0 = V(ax + nx, deck[i] + DECK.rail, az + nz);

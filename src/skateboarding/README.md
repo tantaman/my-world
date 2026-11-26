@@ -4,7 +4,8 @@ There's a skateboard in your pack. Wherever there's tarmac or boards
 underfoot — the paved roads between the towns (see [Roads](../roads/README.md)),
 the round where they meet at a town's gate, a car dealer's lot, an airstrip,
 the cruise ship's pier, a boardwalk, a dock, the streets and sidewalks of
-[Washington](../washington/README.md) — press **F** (the key that gets
+[Washington](../washington/README.md) and the walks of
+[its zoo](../zoo/README.md) — press **F** (the key that gets
 you onto anything: see [Acting](../act/README.md); *skate* is at hand in the
 pack, and a button on a touch screen) and you're on it. **F** again (*step
 off*) and it's under your arm.
@@ -106,5 +107,5 @@ says it's made of `tarmac`, `asphalt`, `marble`, `stone` or `boards`
 too, so a new place laid with one of those is skateable without telling
 this. So is ground that something has paved over without anything standing
 there to be stood on — [Washington's](../washington/README.md) streets and
-sidewalks, drawn on the graded ground you walk on — where whoever laid it
-says so (`world/paved.ts`).
+sidewalks, and [the zoo's](../zoo/README.md) walks, drawn on the ground you
+walk on — where whoever laid it says so (`world/paved.ts`).

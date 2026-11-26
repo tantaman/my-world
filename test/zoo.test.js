@@ -8,7 +8,8 @@
 // buildings, and a yard the map fences in has that one fence and no other;
 // that every body is whole; that the animals stay in their pens, whatever
 // they get up to, none of them with its nose or tail in a wall; and that
-// the paths lie just over the ground you stand on, never under it.
+// the paths lie just over the ground you stand on, never under it; and that
+// they say what they're paved with, for whatever asks what's underfoot.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,13 +19,13 @@ import { decodePatches, roofFaces, roofWalls, buildPlan, PART } from '../tools/z
 import { area, inside, edgeDistance } from '../src/core/rings.js';
 import PLAN from '../src/zoo/plan.js';
 import { ZOO } from '../src/zoo/exhibits.js';
-import { Site, USE } from '../src/zoo/site.js';
+import { Site, USE, MADE } from '../src/zoo/site.js';
 import { KINDS, kindOf } from '../src/zoo/species.js';
 import { makeBody } from '../src/zoo/bodies.js';
 import { Residents } from '../src/zoo/residents.js';
 import { Zoo } from '../src/zoo/look.js';
 import { buildFences } from '../src/zoo/fences.js';
-import { buildGrounds } from '../src/zoo/grounds.js';
+import { buildGrounds, madeOf } from '../src/zoo/grounds.js';
 import * as THREE from 'three';
 import { HIKES } from '../src/world/hikes.js';
 import { project } from '../src/core/geo.js';
@@ -344,6 +345,36 @@ test('the paths lie just over the ground you stand on, and never under it, howev
   assert.ok(over[0] > 0, `never under the ground (${over[0].toFixed(3)} m)`);
   const half = over[over.length >> 1];
   assert.ok(half < 0.09, `about a boot's sole over it (${half.toFixed(3)} m), not up round your ankles`);
+});
+
+test("the paths say what they're paved with, so what asks what's underfoot isn't told grass", () => {
+  const zoo = new Zoo({ card: { at: [0, 0] }, offset: 0, ground: flat, wet: () => false, water: () => NaN });
+  zoo.pump(Infinity);
+  const at = (p, k = Math.floor(p.pts.length / 4) * 2) => [p.pts[k], p.pts[k + 1]];
+  // Olmsted Walk, the zoo's spine, is laid in paving stones: stone underfoot
+  const walk = PLAN.paths.find((p) => p.name === 'Olmsted Walk');
+  assert.equal(walk.surface, 'paving_stones');
+  assert.equal(zoo.paving(...at(walk)), 'stone', 'Olmsted Walk is stone underfoot: skateable');
+  // ...and the asphalt drives and trails are tarmac
+  const asphalt = PLAN.paths.find((p) => p.name === 'Zoo Loop Trail');
+  assert.equal(zoo.paving(...at(asphalt)), 'tarmac');
+  // a wooden footbridge: boards, and its deck, which is what you stand on
+  // out over the water, says so too
+  const wood = PLAN.paths.find((p) => p.surface === 'wood' && p.bridge);
+  assert.equal(zoo.paving(...at(wood)), 'boards');
+  const [bx, bz] = at(wood);
+  const deck = zoo.solids.grounds.filter((d) => Math.hypot((d.ax + d.bx) / 2 - bx, (d.az + d.bz) / 2 - bz) < wood.width);
+  assert.ok(deck.length && deck.every((d) => d.surface === 'boards'), 'its deck is boards underfoot');
+  // the lawns and the woods are paved with nothing
+  assert.equal(zoo.paving(zoo.site.box[0] + 1, zoo.site.box[1] + 1), null);
+  // every word the look lays the zoo with is one the site can keep, and so
+  // one footsteps and wheels know: a new surface in the plan can't go unsaid
+  for (const p of PLAN.paths) assert.ok(MADE.includes(madeOf.path(p)), `a path of ${p.surface} is ${madeOf.path(p)} underfoot`);
+  for (const a of PLAN.areas) assert.ok(MADE.includes(madeOf.plaza(a)), `a plaza of ${a.surface} is ${madeOf.plaza(a)} underfoot`);
+  // ...and a corridor the map draws inside a building is a floor, not ground
+  const indoors = PLAN.paths.find((p) => p.surface === 'linoleum');
+  assert.equal(zoo.paving(...at(indoors)), null);
+  zoo.dispose();
 });
 
 test('the zoo is built a little at a time, and the forest keeps off what is built', () => {
