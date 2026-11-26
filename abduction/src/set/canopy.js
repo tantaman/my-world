@@ -24,7 +24,7 @@ export function createCanopy() {
   };
 
   // The underside in 2 m panels with dark joints and water stains.
-  const under = weathered({ colour: '#6e6a60', scale: 1.6, vary: 0.4, streaks: 0, dirt: 0, rough: 0.9, wet: 0, bump: 0.6 });
+  const under = weathered({ colour: '#5e5a52', scale: 1.1, vary: 0.85, streaks: 0, dirt: 0, rough: 0.9, wet: 0, bump: 0.6 });
   const joint = smoothstep(0.47, 0.5, abs(fract(positionWorld.x.div(2)).sub(0.5))).max(smoothstep(0.47, 0.5, abs(fract(positionWorld.z.div(2)).sub(0.5))));
   under.colorNode = under.colorNode.mul(float(1).sub(joint.mul(0.5)));
   const top = weathered({ colour: '#4a4842', scale: 2, rough: 0.85, wet: 0.6 });

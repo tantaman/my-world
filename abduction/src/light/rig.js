@@ -158,7 +158,7 @@ export function createRig({ scene, camera, scatterLights, has }) {
         _aim.copy(lampAim);
         scatterLights.add(lampHead(order[i]), LIGHTS.lamp.colour, LIGHTS.lamp.cd * SCATTER, _aim, LIGHTS.lamp.angle * 0.7, 0.9);
       }
-      scatterLights.add(canopySpot.position, LIGHTS.tube.colour, 60 * SCATTER, _down, 1.3, 0.8);
+      scatterLights.add(canopySpot.position, LIGHTS.tube.colour, 15 * SCATTER, _down, 1.3, 0.8);
       scatterLights.add(doorLamp.position, LIGHTS.warm.colour, LIGHTS.warm.cd * SCATTER * 2.5);
       scatterLights.add(wallLamp.position, LIGHTS.warm.colour, LIGHTS.warm.cd * SCATTER * 2.5);
     },
