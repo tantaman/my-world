@@ -97,6 +97,7 @@ const CHANGE = 9; // m from a level's middle that F takes you to another level
 const ARRIVE = 7; // m along the platform from the foot of its escalators that you arrive
 const ASIDE = 1.1; // ...and across from its middle
 const DOWN_AT = 0.62; // how far down an entrance's escalators you're taken down to the platform
+const UP_AT = 0.6; // m down from the top of an entrance's escalators that you come up to
 const VAULT_PARTS = 4; // a station's vault is built in this many steps
 const STATIONS_FIRST = 250; // m nearer than they are that stations are taken to be, to build, under the street
 const PIECE = 120; // m of track built and shown together
@@ -712,12 +713,15 @@ export function installMetro(game: Game) {
     const p = player.pos;
     let e = st.entrances[0];
     for (const o of st.entrances) if (Math.hypot(o.x - p.x, o.z - p.z) < Math.hypot(e.x - p.x, e.z - p.z)) e = o;
+    // (at the top of its escalators, at the street's height, facing out: an
+    // entrance is often under a building's front, and set down from on high
+    // you'd stand on its roof)
     const [dx, dz] = [Math.sin(e.yaw), Math.cos(e.yaw)];
-    const x = e.x - dx * 1.6;
-    const z = e.z - dz * 1.6;
+    const x = e.x + dx * UP_AT;
+    const z = e.z + dz * UP_AT;
     below = false;
     player.camPitch = 0.1;
-    player.spawn(x, z, e.yaw + Math.PI, e.yaw, Infinity);
+    player.spawn(x, z, e.yaw + Math.PI, e.yaw, ground(e.x, e.z));
     hud.flash(`${st.name}${e.street ? ` · ${e.street}` : ''}`, 3500);
   }
   // when the next trains are due at a level, each way
