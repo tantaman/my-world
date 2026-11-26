@@ -9,17 +9,24 @@
 // shared. What each looks like is grown from the town's seed, so everyone
 // meets the same people there; where they wander is their own business.
 //
-// What a person is made of, and how one walks and waves, is people/body.js.
+// What each looks like is people/body.js's lookOf; what they're made of, and
+// how they walk and wave, is people/folk.js: the hikers' own body, dressed
+// for their town. Each is stood up a little at a time (a Searches): until
+// they are, they go about their business unseen, and say nothing; and
+// anyone you come near is stood up there and then.
 //
 //   new Townsfolk(town, { scene, ground })
 //   .update(dt, { player, night, hours, inView })
+//   .pump(ms)       stand up those not yet stood up -> how many are left
 //   .dispose()
 //
 // Emits:
 //   'hello'   ({ x, y, z, line, voice })  someone has something to say to you
 //   'vanish'  ({ x, z })                  a watcher was there a moment ago
 
-import { Body, lookOf, OUTFITS } from '../people/body.js';
+import { lookOf, OUTFITS } from '../people/body.js';
+import { growFolk } from '../people/folk.js';
+import { Searches } from '../core/searches.ts';
 import { mulberry32 } from '../noise.js';
 import { wrapAngle } from '../core/geom.js';
 import { Emitter } from '../core/events.js';
@@ -36,6 +43,7 @@ const CHATTER = 7; // s at least between one greeting and the next, from anyone
 const WAIT = 1.4; // m: someone walking stops if you're this close in front
 const INDOORS = 0.55; // how dark (SKY.uNight) before most go in
 const OUT_AGAIN = 0.4; // ...and how light before they come out again
+const STAND_NOW = 40; // m: anyone closer than this not yet stood up is stood up there and then
 const WATCH = { near: 6.5, step: 1.6, every: [3.5, 7], back: [14, 35] }; // a watcher: how close it comes, how far each move, how often, how long gone
 
 const _l = { x: 0, z: 0 };
@@ -66,15 +74,22 @@ export class Townsfolk extends Emitter {
     this.style = town.style;
     this.watchers = town.style === 'creepy';
     this.people = [];
+    // each person, dressed a millisecond or so at a time
+    this.standing = new Searches({
+      grow: (key, p) => growFolk(p.look, p.seed, { ground }),
+      found: (key, folk) => this._stood(this.people[Number(key)], folk),
+    });
     const rnd = mulberry32(town.seed ^ 0x5eed);
     const O = OUTFITS[town.style];
     this.lines = O.lines;
     for (let i = 0; i < town.people && this.spots.length; i++) {
       const look = lookOf(town.style, rnd);
-      const body = new Body(look, Math.floor(rnd() * 1e9));
+      const seed = Math.floor(rnd() * 1e9);
       const home = this.spots[Math.floor(rnd() * this.spots.length)];
       const p = {
-        body,
+        body: null, // until they're stood up
+        look,
+        seed,
         home,
         x: home.x + (rnd() - 0.5) * 2,
         z: home.z + (rnd() - 0.5) * 2,
@@ -90,21 +105,40 @@ export class Townsfolk extends Emitter {
         gone: 0, // a watcher, gone from where it was: s until it's back
         moveIn: 0,
       };
-      body.mesh.position.set(p.x, ground(p.x, p.z), p.z);
-      body.mesh.rotation.y = p.yaw;
-      scene.add(body.mesh);
       this.people.push(p);
+      this.standing.peek(String(i), p);
     }
     this.clock = 0;
     this.said = -CHATTER; // when anyone last said hello
   }
 
+  // Stand up those not yet stood up, for up to `ms`. -> how many are left
+  pump(ms) {
+    return this.standing.pump(ms);
+  }
+
+  // How many are still to be stood up.
+  get waiting() {
+    return this.standing.size;
+  }
+
+  _stood(p, body) {
+    p.body = body;
+    body.mesh.position.set(p.x, this.ground(p.x, p.z), p.z);
+    body.mesh.rotation.y = p.yaw;
+    this.scene.add(body.mesh);
+  }
+
   // ctx: { player: { x, z }, night: 0..1, hours, inView(x, y, z, r) }
   update(dt, ctx) {
     this.clock += dt;
+    this.people.forEach((p, i) => {
+      if (!p.body && Math.hypot(ctx.player.x - p.x, ctx.player.z - p.z) < STAND_NOW) this.standing.get(String(i), p);
+    });
     for (const p of this.people) {
       if (this.watchers) this._watch(p, dt, ctx);
       else this._live(p, dt, ctx);
+      if (!p.body) continue;
       const m = p.body.mesh;
       m.visible = !p.indoors && p.gone <= 0;
       if (!m.visible) continue;
@@ -167,10 +201,10 @@ export class Townsfolk extends Emitter {
       }
     }
     // saying hello
-    if (d < GREET && this.clock - p.greeted > AGAIN && this.clock - this.said > CHATTER && this.lines) {
+    if (p.body && d < GREET && this.clock - p.greeted > AGAIN && this.clock - this.said > CHATTER && this.lines) {
       p.greeted = this.said = this.clock;
       p.body.waving = 1.8;
-      this.emit('hello', { x: p.x, y: this.ground(p.x, p.z) + 1.6 * p.body.look.height, z: p.z, line: this._line(ctx.hours), voice: p.voice });
+      this.emit('hello', { x: p.x, y: this.ground(p.x, p.z) + 1.6 * p.look.height, z: p.z, line: this._line(ctx.hours), voice: p.voice });
     }
   }
 
@@ -239,6 +273,7 @@ export class Townsfolk extends Emitter {
 
   dispose() {
     for (const p of this.people) {
+      if (!p.body) continue;
       this.scene.remove(p.body.mesh);
       p.body.dispose();
     }

@@ -188,7 +188,7 @@ hikers/oliver.js      Oliver: his look, henley, joggers and trainers
 hikers/elliott.js     Elliott: his look, puffer jacket, henley at the neck, joggers and trainers
 hikers/child.js       what the children share: a head built to a look, patterns taken in, trainers
 clothing.js           garment sections, cloth folds, boots and generated weave, and putting them on the bones
-head.js               a grown-up's head to a look: face, ears, hair and beard (strands in layers, or long hair drawn back smooth); sunglasses and caps
+head.js               a grown-up's head to a look: face, ears, hair and beard (strands in layers, or long hair drawn back smooth), stubble; eyes under parted lids that turn to look, for a face without dark glasses; sunglasses and caps; shaped all at once, or a little at a time (shapeHead)
 input.js              keyboard, mouse, touch, and a pad's buttons as keys
 gamepad.js            game controllers: reading them, what their buttons are called, typing into panels
 peers.js              everyone else, drawn as whoever they are and eased between messages

@@ -321,6 +321,27 @@ export function installTowns(game) {
   // Where the towns are further off is looked for a little at a time, out of
   // what the frame can spare (game/budget.ts).
   game.budget.add({ name: 'towns', work: (ms) => towns.pump(ms) });
+  // ...and the people of the towns stood up, the nearest town's first: the
+  // rest wait for them while you're in among them
+  const waiting = () => {
+    const at = game.focus;
+    let first = null;
+    let left = 0;
+    for (const e of shown.values()) {
+      if (!e.people || !e.people.waiting) continue;
+      left += e.people.waiting;
+      if (!first || boxDist(e.town.box, at.x, at.z) < boxDist(first.town.box, at.x, at.z)) first = e;
+    }
+    return { first, left, near: !!first && boxDist(first.town.box, at.x, at.z) < LIVELY };
+  };
+  game.budget.add({
+    name: 'townsfolk',
+    work(ms) {
+      const { first, left } = waiting();
+      return first ? left - first.people.waiting + first.people.pump(ms) : 0;
+    },
+    pressing: () => waiting().near,
+  });
   game.addSystem({
     name: 'towns',
     phase: 'world',
