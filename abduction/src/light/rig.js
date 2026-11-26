@@ -156,7 +156,7 @@ export function createRig({ scene, camera, scatterLights, has }) {
       // The fog's light list: the lamps nearest first, then the rest of what glows.
       for (let i = 0; i < 11 && i < order.length; i++) {
         _aim.copy(lampAim);
-        scatterLights.add(lampHead(order[i]), LIGHTS.lamp.colour, LIGHTS.lamp.cd * SCATTER, _aim, LIGHTS.lamp.angle * 0.7, 0.9);
+        scatterLights.add(lampHead(order[i]), LIGHTS.lamp.colour, LIGHTS.lamp.cd * SCATTER * 1.6, _aim, LIGHTS.lamp.angle * 0.5, 0.75);
       }
       scatterLights.add(canopySpot.position, LIGHTS.tube.colour, 15 * SCATTER, _down, 1.3, 0.8);
       scatterLights.add(doorLamp.position, LIGHTS.warm.colour, LIGHTS.warm.cd * SCATTER * 2.5);
