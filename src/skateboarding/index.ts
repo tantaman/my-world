@@ -15,7 +15,8 @@
 //   others.js    other people here on theirs
 //
 // With the jetpack on your back (jetpack/), holding the push holds the jets
-// on, and they shove you along the board out past anything a hill can do.
+// on, and they shove you along the board out past anything a hill can do,
+// and push you round a carve, swung out of the turn, so you make the bends.
 //
 // What's under the wheels is the top of the road (roads.under), or of
 // anything solid laid there that says what it's made of, or the ground
@@ -217,9 +218,10 @@ export function installSkateboarding(game: Game) {
   // the jetpack's — it lights them, draws the flames and the vapour, makes
   // the roar and tells everyone else — so each frame we say we want them, and
   // push the board with however hard they're going (skater.js `jets`). We
-  // say which way the board goes, along the ground, and the jetpack swings
-  // round on your back to point them back along it.
-  const jetting = () => (jetpack.have && active && skater.down < 0 && c.push ? jetpack.want(pose.along) : 0);
+  // say which way they push you, along the ground — along the board, or
+  // swung into a carve as they push you round it (pose.toward) — and the
+  // jetpack swings round on your back to point them back from it.
+  const jetting = () => (jetpack.have && active && skater.down < 0 && c.push ? jetpack.want(pose.toward) : 0);
   let jetted = false; // the jets were pushing you, as everyone else was last told
 
   const mover = {
@@ -389,7 +391,7 @@ export function installSkateboarding(game: Game) {
   commands.describe({ group: 'WANDER', help: 'F', pad: ['PadY'], label: 'on tarmac or boards: onto your skateboard · on it: step off' });
   commands.describe({ group: 'WANDER', help: 'skating', label: 'W push · A D carve · S brake, slide · shift crouch · space ollie' });
   commands.describe({ group: 'WANDER', help: 'skating, in the air', label: 'W kickflip · S heelflip · shift shove-it · A D spin' });
-  commands.describe({ group: 'WANDER', help: 'skating, with a jetpack', label: 'W: the jets instead of your foot, and the board does 125 km/h' });
+  commands.describe({ group: 'WANDER', help: 'skating, with a jetpack', label: 'W: the jets instead of your foot: the board does 125 km/h, and A D carve far harder' });
   const cueWords = () => cueFor(input, skater, act.key('step off'), jetpack.have).replace(/<\/?b>/g, '');
 
   // ── The readout: how fast, and the points ─────────────────────────────────
@@ -502,6 +504,7 @@ export function installSkateboarding(game: Game) {
       fakie: skater.fakie,
       pushing: skater.pushing,
       jets: Math.round(skater.jets * 100) / 100,
+      round: Math.round(skater.round * 100) / 100,
       surface: skater.surface,
       controls: { ...c },
       x: Math.round(skater.x * 10) / 10,

@@ -21,8 +21,9 @@
 // wants one each frame (want()), and once they've caught, `along` is how hard
 // they're going for it. They fly you nowhere while they do it, so none of the
 // above applies: the pushing is the carrier's own to do. It can say which way
-// it's going, and the jetpack swings round on your back as they catch, flat
-// to it, to point them back that way (swing()).
+// it wants pushing (along, or into a turn it's carving), and the jetpack
+// swings round on your back as they catch, flat to it, to point them back
+// from that way (swing()).
 
 import { CONFIG } from '../config.js';
 import { SWIM_DEPTH } from '../player/player.js';
@@ -159,8 +160,8 @@ export class Jets {
   // want one: held for HOLD they catch, and they're out as soon as you stop
   // asking. What comes back is how hard they're going for you, which is
   // nothing until they catch; the push itself is yours to give.
-  // toward: which way it goes, if you'd say ({ x, y, z }, a unit vector in the
-  // world: along the ground, say), for the jets to point back along
+  // toward: which way it wants pushing, if you'd say ({ x, y, z }, a unit
+  // vector in the world: along the ground, say), for the jets to point back along
   // -> 0..1
   want(toward = null) {
     this.asked = true;

@@ -11,7 +11,9 @@
 // you turn the board out sideways under you and lean back against it. With
 // the jets on your back pushing you along, you square your shoulders across
 // the board, for them to point straight back along it (`along`: which way
-// that is). The body tips with the ground and leans into the turns. In the
+// that is); carving hard with them, you twist your shoulders round into the
+// turn, for them to point out of it and push you round (`toward`: which way
+// they push). The body tips with the ground and leans into the turns. In the
 // air the feet come up, the board drops away from them a little to flip or
 // turn, and comes back up to meet them. Bailed, you tumble over and over
 // without it.
@@ -52,6 +54,10 @@ const DRAG = { a: -0.38, c: -0.14, toe: -0.6 };
 // How quickly (1/s) the body turns to push and back, and the free foot follows.
 const EASE = { push: 7, foot: 30 };
 const LEAN_MOST = 0.5; // radians into a turn
+const LEAN_JETS = 0.8; // ...and with the jets on your back pushing you round it
+// radians the shoulders twist round into a carve, and the jets on your back
+// with them, out of the turn, as they push you round it their hardest
+const SWING_OUT = 0.6;
 const SLIDE_TURN = 1.15; // radians the board turns out under you in a powerslide
 // How quickly (1/s) the body comes round to the ground under it: on it, and in the air.
 const SETTLE = [9, 2.5];
@@ -76,7 +82,9 @@ export class Pose {
     this.rz = 0;
     this.up = { x: 0, y: 1, z: 0 };
     this.along = { x: 0, y: 0, z: 1 }; // which way the board goes, along the ground under it (a unit vector)
+    this.toward = { x: 0, y: 0, z: 1 }; // ...and which way the jets on your back push you: along it, or into a carve
     this.squared = 0; // 0..1 the shoulders squared across the board, for the jets on your back
+    this.out = 0; // radians they're twisted round into a carve, the jets pushing you round it (+ to the left)
     this.lean = 0;
     this.tumble = 0;
     this.pushing = 0; // 0..1 turned to push
@@ -146,7 +154,20 @@ export class Pose {
     this.along.x = ax / al;
     this.along.y = ay / al;
     this.along.z = az / al;
-    let lean = clamp(Math.atan2(sk.lateral, GRAVITY), -LEAN_MOST, LEAN_MOST);
+    // carving with the jets, swung round into the turn as hard as they push
+    // you round it: along, turned about the up the body's tipped to
+    this.out += (SWING_OUT * sk.round - this.out) * k(EASE.push);
+    const sideX = this.up.y * this.along.z - this.up.z * this.along.y;
+    const sideY = this.up.z * this.along.x - this.up.x * this.along.z;
+    const sideZ = this.up.x * this.along.y - this.up.y * this.along.x;
+    const sl = Math.hypot(sideX, sideY, sideZ) || 1;
+    const co = Math.cos(this.out);
+    const so = Math.sin(this.out) / sl;
+    this.toward.x = this.along.x * co + sideX * so;
+    this.toward.y = this.along.y * co + sideY * so;
+    this.toward.z = this.along.z * co + sideZ * so;
+    const most = lerp(LEAN_MOST, LEAN_JETS, this.squared);
+    let lean = clamp(Math.atan2(sk.lateral, GRAVITY), -most, most);
     if (fallen || flying) lean = 0;
     this.lean += (lean - this.lean) * k(8);
     const lx = Math.cos(h);
@@ -182,7 +203,7 @@ export class Pose {
     S.lean = lerp(RIDE.lean, PUSH.lean, p) + sk.crouch * 0.2 - sk.slide * 0.3;
     // squared up across the board while the jets push it, so they point back along it
     this.squared += ((sk.jets > 0 ? 1 : 0) - this.squared) * k(EASE.push);
-    S.twist = (sk.fakie ? -0.2 : lerp(RIDE.twist, PUSH.twist, p)) * (1 - this.squared);
+    S.twist = (sk.fakie ? -0.2 : lerp(RIDE.twist, PUSH.twist, p)) * (1 - this.squared) + this.out;
     S.look = sk.fakie ? -1.0 : lerp(RIDE.look, PUSH.look, p);
     S.pitch = this.rx;
     S.roll = this.rz;
