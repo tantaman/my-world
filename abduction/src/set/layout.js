@@ -50,7 +50,7 @@ export const PHONE = { x: -4.3, z: 0.12 };
 export const FORECOURT = { x0: -30, x1: 24, z0: 0, z1: 13.5, slab: 4 };
 
 // The welcome sign: an arrow of rusty sheet on two posts, facing south-west.
-export const SIGN = { x: -10.5, z: 12.8, yaw: -2.3, w: 3.2, h: 1.2, y: 1.6 };
+export const SIGN = { x: -12.2, z: 11.4, yaw: -2.3, w: 3.2, h: 1.2, y: 1.15 };
 
 // Fitted (tools/fit.mjs) to 01, 13 and 18: closer together than PLAN.md's
 // first guess, on the verge, one just ahead and left of where the camera

@@ -10,11 +10,11 @@ import { rand } from '../noise1.js';
 
 // Where each bolt comes down, and how tall it is (metres).
 export const BOLTS = [
-  { at: [215, 0, 92], top: 260, seed: 3 },    // strike 1, beyond the road, left of the sign
-  { at: [-25, 0, 230], top: 260, seed: 11 },  // strike 2, over the trees, a little right of north
+  { at: [215, 0, 92], top: 260, seed: 3, seen: [-17, 1.5, 7.6] },   // strike 1, beyond the road, left of the sign
+  { at: [-25, 0, 230], top: 260, seed: 11, seen: [1, 1.5, 9.6] },   // strike 2, over the trees, a little right of north
 ];
 const HALVINGS = 7;
-const WIDTH = 0.9;           // metres, the ribbon's width at the cloud
+const WIDTH = 1.4;           // metres, the ribbon's width at the cloud
 const BRIGHT = 60;           // emissive strength, so bloom makes the glow
 
 // A jagged line from cloud to ground by midpoint displacement, with forks.
@@ -54,9 +54,11 @@ function boltPoints(base, top, seed) {
   return lines;
 }
 
-// A ribbon through the points, flat in the plane facing roughly south (the
-// camera is always south of the bolts), narrowing toward the ground.
-function ribbon(lines) {
+// A ribbon through the points, turned to face `toward` (where the camera
+// is when the bolt strikes), narrowing toward the ground.
+function ribbon(lines, toward) {
+  const seg = new Vector3();
+  const side = new Vector3();
   const pos = [];
   const uvs = [];
   for (const [li, pts] of lines.entries()) {
@@ -66,14 +68,13 @@ function ribbon(lines) {
       const b = pts[i + 1];
       const wa = w0 * (1 - (i / pts.length) * 0.6);
       const wb = w0 * (1 - ((i + 1) / pts.length) * 0.6);
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const nx = -dy / len;
-      const ny = dx / len;
+      seg.subVectors(b, a);
+      side.subVectors(toward, a).cross(seg).normalize();
       const quad = [
-        [a.x - nx * wa, a.y - ny * wa, a.z, 0], [a.x + nx * wa, a.y + ny * wa, a.z, 1], [b.x + nx * wb, b.y + ny * wb, b.z, 1],
-        [a.x - nx * wa, a.y - ny * wa, a.z, 0], [b.x + nx * wb, b.y + ny * wb, b.z, 1], [b.x - nx * wb, b.y - ny * wb, b.z, 0],
+        [a.x - side.x * wa, a.y - side.y * wa, a.z - side.z * wa, 0], [a.x + side.x * wa, a.y + side.y * wa, a.z + side.z * wa, 1],
+        [b.x + side.x * wb, b.y + side.y * wb, b.z + side.z * wb, 1],
+        [a.x - side.x * wa, a.y - side.y * wa, a.z - side.z * wa, 0], [b.x + side.x * wb, b.y + side.y * wb, b.z + side.z * wb, 1],
+        [b.x - side.x * wb, b.y - side.y * wb, b.z - side.z * wb, 0],
       ];
       for (const [x, y, z, u] of quad) { pos.push(x, y, z); uvs.push(u, 0); }
     }
@@ -91,7 +92,7 @@ export function createLightning({ rig }) {
   const core = smoothstep(0.5, 0.0, abs(uv().x.sub(0.5)));
   material.colorNode = vec3(0.85, 0.9, 1.0).mul(core.mul(core).mul(BRIGHT)).mul(level);
   const meshes = BOLTS.map((b) => {
-    const m = new Mesh(ribbon(boltPoints(b.at, b.top, b.seed)), material);
+    const m = new Mesh(ribbon(boltPoints(b.at, b.top, b.seed), new Vector3(...b.seen)), material);
     m.frustumCulled = false;
     m.visible = false;
     group.add(m);
@@ -116,7 +117,7 @@ export function createLightning({ rig }) {
       state.boltDir.copy(dir);
       light.position.set(b.at[0], b.top * 0.7, b.at[2]);
       light.target.position.set(0, 0, 10);
-      light.intensity = f.flash * 2.2;
+      light.intensity = f.flash * 1.3;
     },
   };
 }
