@@ -29,7 +29,8 @@
       padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
     .card h1 { font-weight: normal; font-size: 2.1em; margin: 0; letter-spacing: 0.12em; text-wrap: balance; }
     .card p { margin: 0; color: var(--dim); max-width: 34em; }
-    .card a { color: var(--ink); }
+    .card a { color: var(--ink); overflow-wrap: anywhere; }
+    .card .code { font-size: 0.85em; }
     .card .row { display: flex; gap: 0.8em; flex-wrap: wrap; justify-content: center; }
     .card button { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--rule);
       padding: 0.3em 1.2em; letter-spacing: 0.06em; cursor: pointer; }
@@ -57,9 +58,13 @@
         <button id="play" type="button"><span class="rec"></span>PLAY, SOUND ON</button>
         <button id="play-light" type="button">LIGHTER (SLOWER MACHINES)</button>
       </div>
+      <p class="code">The code, and how it was made:
+        <a href="https://github.com/tantaman/my-world/pull/105" target="_blank" rel="noopener">github.com/tantaman/my-world/pull/105</a></p>
     </div>
     <div id="again" class="card" hidden>
       <button id="replay" type="button">PLAY AGAIN</button>
+      <p class="code">The code:
+        <a href="https://github.com/tantaman/my-world/pull/105" target="_blank" rel="noopener">github.com/tantaman/my-world/pull/105</a></p>
     </div>
   </div>
   <div id="stats"></div>
