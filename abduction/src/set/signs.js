@@ -49,7 +49,7 @@ export const DRAW = {
   south(ctx, w, h) {
     ctx.fillStyle = '#efe9dc'; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = '#b4231c'; ctx.fillRect(w * 0.06, h * 0.08, w * 0.88, h * 0.62);
-    centred(ctx, WORDS.brand, w / 2, h * 0.39, h * 0.42, FONT, '#f4efe4');
+    centred(ctx, WORDS.brand, w / 2, h * 0.39, Math.min(h * 0.2, w * 0.21), FONT, '#f4efe4');
     centred(ctx, WORDS.brandSub, w / 2, h * 0.84, h * 0.13, FONT, '#7a1712');
   },
   oil(ctx, w, h) {
