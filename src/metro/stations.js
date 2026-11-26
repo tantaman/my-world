@@ -77,12 +77,12 @@ const PYLON = { half: 0.3, h: 4.0, top: 1.1 }; // the brown pylon at an entrance
 // render/pipeline.js. These are for that.)
 const LIGHT = { reach: 3.4, fall: 2.8, wrap: 0.45, aim: 0.45, bounce: 0.018, most: 1.2 };
 // what lights what stands on the platform, and the floor: the vault's light, come back down
-const UNDER_LIT = { solid: 0.2, floor: 0.22, trackbed: 0.06 };
+const UNDER_LIT = { solid: 0.2, floor: 0.3, trackbed: 0.06 };
 
 const lin = (hex) => new THREE.Color(hex);
 export const PAL = {
   vault: lin(0xb6a68e),
-  tile: lin(0x8a4634),
+  tile: lin(0x9c5844),
   granite: lin(0xc9c5bc),
   trackbed: lin(0x3a3835),
   wall: lin(0x9a8f7f),
