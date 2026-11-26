@@ -110,7 +110,7 @@ const ENCLOSED = 0.8; // how shut in the station sounds (audio/soundscape.js)
 // moves under the street: along a platform, every `every` m, `up` m over
 // it, those within `near` m of the eye; and in each car of a train.
 const LAMP = { every: 22, up: 4.2, power: 3.5, range: 22, near: 45, color: [1.0, 0.8, 0.56] };
-const CAR_LAMP = { up: 2.2, power: 5, range: 8, decay: 1.4, near: 70, color: [0.86, 0.93, 1.0] };
+const CAR_LAMP = { up: 2.2, power: 8, range: 11, decay: 1.3, near: 70, color: [0.86, 0.93, 1.0] };
 const BOARDS_EVERY = 1; // s between paintings of the boards near you
 const BOARDS_NEAR = 220; // m: the boards this near are kept up to date
 // Sitting in a seat: knees together, feet on the floor in front.
