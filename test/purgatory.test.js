@@ -60,9 +60,10 @@ for (const n of LANDS)
 test('the road comes up on the side of the island the sun rises on', async () => {
   // (EAST is the sky's sunrise, written down so where the island is doesn't
   // hang on how the sky is drawn: if the sky's sun moves, this says so)
-  const { Sky } = await import('../src/world/sky.js').catch(() => ({}));
-  if (!Sky) return; // (the sky needs a browser's three; its sun path is plain maths)
-  const v = Sky.prototype.computeSunDir.call(null, DAY.rise, {
+  // (the mountain's sun is the made-up one, the poem's: world/sky.js)
+  const { storySunDir } = await import('../src/world/sky.js').catch(() => ({}));
+  if (!storySunDir) return; // (the sky needs a browser's three; its sun path is plain maths)
+  const v = storySunDir(DAY.rise, {
     set(x, y, z) {
       this.x = x;
       this.y = y;

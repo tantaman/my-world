@@ -75,12 +75,15 @@ export class MountAir {
     sky.hours = hours;
     sky.overcast = 0;
     sky.open = 1;
+    // (the mountain's sun is the poem's, from where its island says it rises)
+    sky.storySun = true;
     try {
       sky.update(focus, eye);
     } finally {
       sky.hours = keep.hours;
       sky.overcast = keep.overcast;
       sky.open = keep.open;
+      sky.storySun = false;
     }
     // in the smoke, the sun and the sky go dark
     const lit = 1 - SMOKE.dark * this.smoke;

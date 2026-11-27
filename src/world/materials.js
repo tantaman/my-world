@@ -55,6 +55,10 @@ export function createTerrainMaterial() {
         tMoss: { value: moss.map },
         tMossArm: { value: moss.arm },
         tMossNormal: { value: moss.normal },
+        uLitterMean: litter.mean,
+        uLitterAo: litter.aoMean,
+        uMossMean: moss.mean,
+        uMossAo: moss.aoMean,
       });
       shader.defines = { ...shader.defines, FLOOR_PHOTOS: '' };
     }
@@ -118,6 +122,10 @@ export function createTerrainMaterial() {
         uniform sampler2D tMoss;
         uniform sampler2D tMossArm;
         uniform sampler2D tMossNormal;
+        uniform vec3 uLitterMean;
+        uniform float uLitterAo;
+        uniform vec3 uMossMean;
+        uniform float uMossAo;
         #endif
         // Above the trees: thin, tawny turf among stones. Snow on top of that
         // where it lies, in drifts, but not on the cliffs. (gHigh: how much
@@ -308,10 +316,16 @@ export function createTerrainMaterial() {
         vec2 uvM = vec2(wp.x, -wp.y) / ${moss ? moss.metres.toFixed(6) : '1.0'};
         vec2 dxL = dFdx(uvL), dyL = dFdy(uvL), dxM = dFdx(uvM), dyM = dFdy(uvM);
         if (floorW > 0.002) {
-          vec3 shade = mix(photoShade(tLitter, tLitterArm, uvL, dxL, dyL, ${FLOOR_SAT.toFixed(2)}), photoShade(tMoss, tMossArm, uvM, dxM, dyM, ${FLOOR_SAT.toFixed(2)}), gMoss);
+          // (the moss's photo only where there's moss)
+          vec3 shade = photoShade(tLitter, tLitterArm, uvL, dxL, dyL, ${FLOOR_SAT.toFixed(2)}, uLitterMean, uLitterAo);
+          photoTip = photoTilt(tLitterNormal, uvL, dxL, dyL);
+          if (gMoss > 0.01) {
+            shade = mix(shade, photoShade(tMoss, tMossArm, uvM, dxM, dyM, ${FLOOR_SAT.toFixed(2)}, uMossMean, uMossAo), gMoss);
+            photoTip = mix(photoTip, photoTilt(tMossNormal, uvM, dxM, dyM), gMoss);
+          }
           shade = pow(shade, vec3(${FLOOR_CONTRAST.toFixed(2)}));
           diffuseColor.rgb *= mix(vec3(1.0), shade, floorW);
-          photoTip = mix(photoTilt(tLitterNormal, uvL, dxL, dyL), photoTilt(tMossNormal, uvM, dxM, dyM), gMoss) * floorW * ${FLOOR_BUMP.toFixed(2)};
+          photoTip *= floorW * ${FLOOR_BUMP.toFixed(2)};
         }
         #endif`,
       )
@@ -332,7 +346,7 @@ export function createTerrainMaterial() {
         }`,
       );
   };
-  mat.customProgramCacheKey = () => `terrain-v11${photos ? '-photos' : ''}`;
+  mat.customProgramCacheKey = () => `terrain-v12${photos ? '-photos' : ''}`;
   return mat;
 }
 

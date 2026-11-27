@@ -227,7 +227,10 @@ export function installWorld(game) {
       chunks.update(at.x, at.z, 5, at.x + vel.x * reach, at.z + vel.z * reach, others);
       grass.update(at.x, at.z, 3, dt, others);
       sky.update(at, camera.position);
-      skyLight?.update();
+      // (not while the forest isn't drawn: Hell and Purgatory lend the sky
+      // their own hours and colours each frame, which would have it worked
+      // out again every frame for nothing)
+      if (!game.covered) skyLight?.update();
       particles.update(at, at.y, sky.open);
     },
   });

@@ -11,12 +11,12 @@
 //   npm run look -- mount-storm-king --pair photos     ours with and without a part (config.js, ?no=)
 //   npm run look -- mount-storm-king --no skylight     ours without it
 //
-// Options: --time h (the hour; a hike's photo's own by default), --sun deg
-// (how high the sun stood in the photo: the game's hour with its sun that
-// high, on the same side of noon. The game's sun keeps no season or
-// latitude, so the photo's own hour can put it far lower or higher than it
-// was: at 16:21 on a summer afternoon on the Olympic Peninsula the sun is
-// about 43° up, the game's about 23°), --clouds 0..1 (how much of the sky
+// Options: --time h (the hour by the sun, noon its highest; a hike's photo's
+// own by default, which was a clock's, an hour or two off the sun's), --day
+// n (the time of year, days from 1 January: world/sky.js), --sun deg (how
+// high the sun stood in the photo: the hour, on the same side of noon, with
+// the sun that high where you stand, on that day: at 09:30 on the clock at
+// Zion in late April, 30°), --clouds 0..1 (how much of the sky
 // the day's clouds covered: world.sky.cloudCover), --fov deg
 // (how wide it sees, top to bottom; the photo's, from its lens, by default),
 // --at dx,dz (m from where the hike says its photo was taken, east and south:
@@ -48,14 +48,14 @@
 
 import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { readPhoto } from './hike/exif.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const { chromium } = createRequire(import.meta.url)('playwright');
 
 // ── What was asked ──────────────────────────────────────────────────────────
-const FLAGS = ['at', 'time', 'sun', 'clouds', 'fov', 'lens', 'bearing', 'pitch', 'size', 'ref', 'out', 'no', 'pair', 'settle'];
+const FLAGS = ['at', 'time', 'day', 'sun', 'clouds', 'fov', 'lens', 'bearing', 'pitch', 'size', 'ref', 'out', 'no', 'pair', 'settle'];
 const arg = (name) => {
   const i = process.argv.indexOf(`--${name}`);
   return i < 0 ? null : process.argv[i + 1];
@@ -65,7 +65,7 @@ if (!where) {
   console.error('npm run look -- <hike>[:photo-<k>] | <x,z,yaw,pitch>   (see the top of tools/look.mjs)');
   process.exit(2);
 }
-const OUT = join(ROOT, arg('out') || 'out/look');
+const OUT = resolve(ROOT, arg('out') || 'out/look'); // (from the repository, unless it's a whole path)
 mkdirSync(OUT, { recursive: true });
 const SEED = 20261119;
 const HEIGHT_PX = 1080; // when it has no photo to take its shape from
@@ -147,7 +147,7 @@ async function shoot(no) {
   await page.goto(`${server.url}?${query}`);
   await page.waitForFunction(() => document.getElementById('loader')?.classList.contains('gone') && window.world, null, { timeout: 300000 });
   const view = await page.evaluate(
-    async ({ hike, at, coords, time, pitch, fov, bearing, sun, clouds, shift }) => {
+    async ({ hike, at, coords, time, pitch, fov, bearing, sun, clouds, shift, day }) => {
       const w = window.world;
       const frame = () => new Promise((r) => requestAnimationFrame(r));
       if (hike) await w.hikes.go(hike, at);
@@ -165,6 +165,7 @@ async function shoot(no) {
       }
       // from the hiker's own eyes, as a photo is taken
       w.player.firstPerson = true;
+      if (day !== null) w.sky.day = Number(day);
       if (time !== null) w.sky.hours = Number(time);
       if (clouds !== null) w.sky.cloudCover = Number(clouds);
       if (sun !== null) {
@@ -174,7 +175,7 @@ async function shoot(no) {
         const dir = w.sky.sunDir.clone();
         let best = w.sky.hours;
         let miss = Infinity;
-        for (let h = pm ? 12 : 6; h <= (pm ? 18 : 12); h += 0.01) {
+        for (let h = pm ? 12 : 3; h <= (pm ? 21 : 12); h += 0.01) {
           const m = Math.abs(Math.asin(w.sky.computeSunDir(h, dir).y) - want);
           if (m < miss) [best, miss] = [h, m];
         }
@@ -196,7 +197,7 @@ async function shoot(no) {
       while (!w.game.chunks.isFullyLoaded()) await frame();
       return { x: w.player.pos.x, y: w.player.pos.y, z: w.player.pos.z, yaw: w.player.camYaw, pitch: w.player.camPitch, hours: w.sky.hours };
     },
-    { hike, at, coords, time: arg('time'), pitch: arg('pitch'), fov: FOV, bearing: arg('bearing'), sun: arg('sun'), clouds: arg('clouds'), shift: arg('at') },
+    { hike, at, coords, time: arg('time'), pitch: arg('pitch'), fov: FOV, bearing: arg('bearing'), sun: arg('sun'), clouds: arg('clouds'), shift: arg('at'), day: arg('day') },
   );
   // everything fetched (the photographs of surfaces among it), then the eye
   // let straight to where it would settle, and a few frames drawn

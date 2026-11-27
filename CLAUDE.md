@@ -244,6 +244,9 @@ was wrong, and the numbers said so.
   photo (`reference/hikes/`) with numbers: how bright the middle of the
   picture is, and the colour of its thirds. A change to light, exposure,
   colour or haze says in its commit what those numbers did, on which hikes.
+  The sun is the real one (`world/sky.js`), so `--day` and `--sun` (how
+  high it stood) put it where it was; `--at` and `--bearing` stand where a
+  phone's GPS and compass only said roughly.
 - `?no=skylight,photos` (config.js) leaves a part of the look out;
   `npm run look -- <where> --pair <part>` shoots with and without it. A new
   part of the look gets a name there, so it can be seen and costed alone.

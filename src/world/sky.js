@@ -14,6 +14,8 @@ import { CONFIG } from '../config.js';
 import { NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL } from '../render/glsl.js';
 import { SKY } from '../render/uniforms.js';
 import { smoothstep, lerp } from '../noise.js';
+import { unproject } from '../core/geo.js';
+import { EARTH } from './earth.js';
 
 // Palette keyframes by sun elevation (degrees). Linear HDR colours.
 const KEYS = [
@@ -58,6 +60,44 @@ const SHADOW_SOFT = 2;
 // How bright the picture is made deep in a cave, whatever the hour outside.
 const DARK_EXPOSURE = 2.1;
 
+// The sun is where it really is, over the real Earth the world stands on:
+// by how far north you are, the time of year and the hour, which is the
+// sun's own (noon is when it stands highest), so it rises in the east-north-
+// east in summer and is in the south at noon north of the tropics, and a
+// photo's light falls the way it did (tools/look.mjs). The time of year is
+// late August unless something says otherwise (sky.day): the forest's
+// afternoon sun stands about as high then as the made-up arc it had before
+// put it, so its colours, set by eye against that, still hold; and every
+// hike's photo is of green leaves. (Days of the year, from 1 January.)
+const SUN_DAY = 235;
+const D2R = Math.PI / 180;
+// The sun's declination on day `day` (radians), as near as a game needs.
+const declination = (day) => -23.44 * D2R * Math.cos(((2 * Math.PI) / 365) * (day + 10));
+
+// The made-up sun of a land made in code, the same wherever it is: up at 6,
+// down at 18, from the same quarter of the sky every day (Purgatory keeps
+// it: its island is laid out by where it rises, purgatory/plan.js EAST).
+// A gentle tilt keeps shadows angled even at noon.
+export function storySunDir(hours, out) {
+  const t = ((hours - 6) / 12) * Math.PI; // 6h = sunrise, 18h = sunset
+  const elev = Math.sin(t) * 1.05 - 0.05;
+  const az = t * 0.9 + 0.5;
+  out.set(Math.cos(az) * Math.cos(elev), Math.sin(elev), Math.sin(az) * Math.cos(elev) * 0.85 + 0.3);
+  return out.normalize();
+}
+
+// The real sun's direction (x east, y up, z south) at `lat` (degrees) on day
+// `day` of the year, `hours` of the sun's own time.
+export function realSunDir(hours, lat, day, out) {
+  const p = lat * D2R;
+  const d = declination(day);
+  const h = (hours - 12) * 15 * D2R;
+  const east = -Math.cos(d) * Math.sin(h);
+  const north = Math.sin(d) * Math.cos(p) - Math.cos(d) * Math.sin(p) * Math.cos(h);
+  const up = Math.sin(p) * Math.sin(d) + Math.cos(p) * Math.cos(d) * Math.cos(h);
+  return out.set(east, up, -north).normalize();
+}
+
 // The clouds: fair-weather cumulus on a layer overhead. How much of the sky
 // they cover, 0..1, as the weather has it (cloudCover; overcast covers it
 // more). How bright they are was set against a photograph (tools/look.mjs:
@@ -73,6 +113,7 @@ const CLOUD = {
   edge: [0.62, 0.36], // where the billows' noise becomes cloud, with none of the sky covered and all of it
 };
 
+const _latLon = [0, 0];
 const _right = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _center = new THREE.Vector3();
@@ -81,6 +122,13 @@ export class Sky {
   constructor(scene) {
     this.scene = scene;
     this.hours = CONFIG.timeOfDay;
+    // the time of year (day, from 1 January), and how far north the sun is
+    // seen from (degrees: where the focus is, on the Earth; set each update)
+    this.day = SUN_DAY;
+    this.latitude = 47.85;
+    // a land made in code (Purgatory) lights itself by the made-up sun
+    // while it borrows the sky
+    this.storySun = false;
     this.exposure = 1;
     this.open = 1;
     // The hemisphere light's intensity as the sky gives it, before the open
@@ -197,16 +245,14 @@ export class Sky {
     scene.add(this.hemi);
   }
 
-  // Sun position from the hour of day. A gentle tilt keeps shadows angled even at noon.
+  // The sun's direction at an hour: the real sun where the focus is, today
+  // (see SUN_DAY), or the made-up one while a land made in code has the sky.
   computeSunDir(hours, out) {
-    const t = ((hours - 6) / 12) * Math.PI; // 6h = sunrise, 18h = sunset
-    const elev = Math.sin(t) * 1.05 - 0.05;
-    const az = t * 0.9 + 0.5;
-    out.set(Math.cos(az) * Math.cos(elev), Math.sin(elev), Math.sin(az) * Math.cos(elev) * 0.85 + 0.3);
-    return out.normalize();
+    return this.storySun ? storySunDir(hours, out) : realSunDir(hours, this.latitude, this.day, out);
   }
 
   update(focus, cameraPos) {
+    this.latitude = unproject(focus.x, focus.z, EARTH.scale, _latLon)[0];
     const sd = this.computeSunDir(this.hours, this.sunDir);
     const elevDeg = THREE.MathUtils.radToDeg(Math.asin(sd.y));
     const k = sampleKeys(elevDeg);

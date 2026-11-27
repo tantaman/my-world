@@ -48,6 +48,9 @@ export const CONFIG = {
   // How many steps a reflection in the water is followed across the picture
   // to find what it mirrors (0 = it mirrors only the sky and the treeline).
   mirror: num('mirror', low ? 14 : 28),
+  // How finely a photograph of a surface is filtered where it's seen at a
+  // glancing angle (render/photos.ts): reads a pixel, up to this many.
+  photoFilter: num('aniso', low ? 1 : 8),
 
   // Pixel art: ?pixel turns it on (it's on the settings panel too).
   pixelArt: params.has('pixel') && params.get('pixel') !== '0',

@@ -307,6 +307,14 @@ On the settings panel (**O**), under *time*:
 | time of day | slide it to any hour |
 | let time flow | a full day takes 24 minutes |
 
+The hour is the sun's own: noon is when it stands highest. The sun is where
+it really is over the real Earth the world stands on (`world/sky.js`): by
+how far north you are and the time of year (late August, unless something
+sets `sky.day`), so in Zion it climbs the sky from the east-south-east of a
+spring morning, and in the Olympics on a summer evening it sets in the
+north-west. A land made in code (Purgatory) keeps a made-up sun of its own,
+up at six and down at six.
+
 ## Files
 
 ```
@@ -344,7 +352,8 @@ foliage.js            what a plant's surfaces are: needles and leaves cut from c
 grass.js              grass blades, wildflowers, reeds and lilies near the player (and near the others on a split screen)
 materials.js          terrain / vegetation / grass shader hooks; plants' shadows, with their gaps;
                       the forest floor photographed (render/photos.ts)
-sky.js                sky dome, its cumulus (cloudCover), stars, sun/moon, time-of-day palettes; how much
+sky.js                sky dome, its cumulus (cloudCover), stars, the sun where it really is (by latitude
+                      and day) and the moon, time-of-day palettes; how much
                       daylight reaches the eye (open); the light all round as set by eye
                       (hemi, ambient), which the sky as light takes (render/skyLight.ts)
 particles.js          pollen motes and fireflies

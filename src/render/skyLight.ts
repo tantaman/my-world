@@ -62,8 +62,13 @@ const OVERCAST_FLAT = 1;
 // into a PMREM at least 256 a side whatever this is.)
 const CUBE_SIZE = 128;
 // How much the sky must have changed to be worked out again: the sun's
-// direction (radians) and any colour (as a share of what it was).
+// direction (radians) and any colour (as a share of what it was). And how
+// often, at the most, while it goes on changing (ms): the light all round
+// (a few milliseconds of sums), and the cube it mirrors (drawn six times
+// over and blurred: a wildfire's smoke thickens the cloud a little every
+// frame, and redrawing the cube every frame cost more than the fire).
 const CHANGED = { turn: 0.006, colour: 0.02, overcast: 0.01 };
+const AT_MOST = { probe: 250, cube: 2000 };
 // Points the sphere is read at to work out the light (elevation × azimuth).
 const ROWS = 48;
 const COLUMNS = 96;
@@ -257,9 +262,13 @@ function patchCubeLight() {
   let chunk = THREE.ShaderChunk.lights_fragment_maps;
   const diffuse = 'iblIrradiance += getIBLIrradiance( geometryNormal );';
   const mirrored = 'radiance += iblRadiance;';
-  if (!chunk.includes(diffuse) || !chunk.includes(mirrored)) throw new Error('skyLight: three.js has changed lights_fragment_maps; see CUBE_PATCH');
+  const read = 'vec3 iblRadiance = getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );';
+  if (!chunk.includes(diffuse) || !chunk.includes(mirrored) || !chunk.includes(read)) throw new Error('skyLight: three.js has changed lights_fragment_maps; see CUBE_PATCH');
   chunk = chunk.replace(diffuse, '/* (render/skyLight.ts: the light probe is this light) */');
   const [from, to] = MIRROR_ROUGHNESS.map((r) => r.toFixed(3));
+  // (and the cube not read at all for what's too rough to mirror it: the
+  // ground, leaves and bark are most of the picture)
+  chunk = chunk.replace(read, `vec3 iblRadiance = material.roughness < ${to} ? getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) : vec3( 0.0 );`);
   chunk = chunk.replace(mirrored, `radiance += iblRadiance * (1.0 - smoothstep(${from}, ${to}, material.roughness)); // (render/skyLight.ts: only what is glossy)`);
   THREE.ShaderChunk.lights_fragment_maps = chunk;
 }
@@ -288,6 +297,8 @@ export class SkyLight {
   private mirrored: ReturnType<THREE.PMREMGenerator["fromCubemap"]> | null = null;
   private uniforms: { uMean: { value: THREE.Color }; uFlat: { value: number }; uGround: { value: THREE.Color } };
   private last: { sunDir: THREE.Vector3; colours: number[]; overcast: number } | null = null;
+  private probeAt = -Infinity;
+  private cubeAt = -Infinity;
 
   constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene, sky: SkySource) {
     this.renderer = renderer;
@@ -342,7 +353,16 @@ export class SkyLight {
       const clouded = Math.abs(this.sky.overcast - last.overcast) > CHANGED.overcast;
       if (!turned && !recoloured && !clouded) return;
     }
-    this.last = { sunDir: sunDir.clone(), colours, overcast: this.sky.overcast };
+    // (while it goes on changing: the light all round now and then, and the
+    // cube less often; once it's settled, both are worked out as it is)
+    const now = performance.now();
+    if (now - this.probeAt < AT_MOST.probe) return;
+    this.probeAt = now;
+    const cube = now - this.cubeAt >= AT_MOST.cube;
+    if (cube) {
+      this.cubeAt = now;
+      this.last = { sunDir: sunDir.clone(), colours, overcast: this.sky.overcast };
+    }
 
     // the light all round: the hemisphere light's up and down, as the sky has it
     const rgb = (c: THREE.Color): RGB => [c.r, c.g, c.b];
@@ -356,6 +376,7 @@ export class SkyLight {
     this.uniforms.uMean.value.setRGB(...mean);
     this.uniforms.uFlat.value = flat;
     this.uniforms.uGround.value.copy(hemi.groundColor).multiplyScalar(this.sky.ambient / Math.PI);
+    if (!cube) return;
     this.cubeCamera.update(this.renderer, this.own);
     this.mirrored = this.pmrem.fromCubemap(this.cube.texture, this.mirrored);
     this.scene.environment = this.mirrored.texture;
