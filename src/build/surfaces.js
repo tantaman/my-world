@@ -111,15 +111,22 @@ const CONCRETE = { flag: 1.5 };
 const PAVER = { long: 0.2, wide: 0.1 };
 // How each photograph lies over its surface (the `photos` a material is
 // given): how much of the photo's own hue comes through (0..1, the rest the
-// code's colour), how much its light and dark are deepened (over 1), and how
-// far its lumps tip the normal.
+// code's colour), how much its light and dark are deepened (over 1), how far
+// its lumps tip the normal, and whether it's laid twice (`twice`, below).
 const PHOTO_LOOK = {
   brick: { sat: 0.55, contrast: 1.1, bump: 0.7 },
   stone: { sat: 0.25, contrast: 1.2, bump: 0.45 },
   pavers: { sat: 0.3, contrast: 1.1, bump: 0.7 },
-  asphalt: { sat: 0.15, contrast: 1.15, bump: 0.55 },
-  concrete: { sat: 0.2, contrast: 1.1, bump: 0.45 },
+  asphalt: { sat: 0.15, contrast: 1.15, bump: 0.55, twice: true },
+  concrete: { sat: 0.2, contrast: 1.1, bump: 0.45, twice: true },
 };
+// A photo with something in it the eye can follow (a crack across a street)
+// shows it coming round again every few metres, a stripe of them down the
+// street. One laid twice is laid again turned (rad) and smaller, and the
+// second shows through the first in patches of the world `patch` m across:
+// no crack comes round in step. (Not for a photo with courses in it, which
+// mustn't turn.)
+const TWICE = { turn: 1.13, smaller: 0.79, patch: 5 };
 // The rooms seen through a facade's windows: how deep they are at the least
 // (m, and up to 2 m more), how much of the storey the floor takes up (m), how
 // many bays an open office floor runs before a wall, how far in behind the
@@ -162,6 +169,18 @@ function photoGlsl(photos) {
   const one = (n) => {
     const l = PHOTO_LOOK[n];
     const m = photos[n].metres.toFixed(6);
+    const [c, sn, k] = [Math.cos(TWICE.turn), Math.sin(TWICE.turn), 1 / TWICE.smaller];
+    // (the second lay, its (u, v) turned from the first's, and its lumps
+    // turned back into the first's frame)
+    const again = l.twice
+      ? `
+  mat2 R = mat2(${c.toFixed(6)}, ${sn.toFixed(6)}, ${(-sn).toFixed(6)}, ${c.toFixed(6)});
+  vec2 uv2 = R * uv * ${k.toFixed(6)} + vec2(0.37, 0.61);
+  vec2 dx2 = R * dx * ${k.toFixed(6)}, dy2 = R * dy * ${k.toFixed(6)};
+  float w = smoothstep(0.3, 0.7, wnoise(at, ${(1 / TWICE.patch).toFixed(4)}, vec2(${n.length}.3)));
+  shade = mix(shade, photoShade(tPhoto_${n}, tPhoto_${n}Arm, uv2, dx2, dy2, ${l.sat.toFixed(3)}), w);
+  tip = mix(tip, photoTilt(tPhoto_${n}Nor, uv2, dx2, dy2) * R, w);`
+      : '';
     return `#define PHOTO_${n.toUpperCase()}
 uniform sampler2D tPhoto_${n};
 uniform sampler2D tPhoto_${n}Arm;
@@ -170,8 +189,10 @@ vec3 photo_${n}(vec2 at, vec2 dx, vec2 dy, out vec2 tip) {
   vec2 uv = at / ${m};
   dx /= ${m};
   dy /= ${m};
-  tip = photoTilt(tPhoto_${n}Nor, uv, dx, dy) * ${l.bump.toFixed(3)};
-  return pow(photoShade(tPhoto_${n}, tPhoto_${n}Arm, uv, dx, dy, ${l.sat.toFixed(3)}), vec3(${l.contrast.toFixed(3)}));
+  tip = photoTilt(tPhoto_${n}Nor, uv, dx, dy);
+  vec3 shade = photoShade(tPhoto_${n}, tPhoto_${n}Arm, uv, dx, dy, ${l.sat.toFixed(3)});${again}
+  tip *= ${l.bump.toFixed(3)};
+  return pow(shade, vec3(${l.contrast.toFixed(3)}));
 }`;
   };
   return `#define PHOTOS\n${PHOTO_GLSL}\n${names.map(one).join('\n')}\n`;

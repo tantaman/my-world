@@ -7,7 +7,7 @@ This list is written by the same tool.
 
 | id | name | by | covers | |
 |---|---|---|---|---|
-| `asphalt_07` | Asphalt 07 | Charlotte Baglioni | 2.5 × 2.5 m | https://polyhaven.com/a/asphalt_07 |
+| `asphalt_02` | Asphalt 02 | Rob Tuytel | 3 × 3 m | https://polyhaven.com/a/asphalt_02 |
 | `brick_pavement_04` | Brick Pavement 04 | Charlotte Baglioni | 2 × 2 m | https://polyhaven.com/a/brick_pavement_04 |
 | `brick_wall_006` | Brick Wall 006 | Jan Burghardt | 3 × 3 m | https://polyhaven.com/a/brick_wall_006 |
 | `brushed_concrete` | Brushed Concrete  | Dario Barresi, Dimitrios Savva | 2.5 × 2.5 m | https://polyhaven.com/a/brushed_concrete |
