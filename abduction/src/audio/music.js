@@ -1,24 +1,27 @@
 // The instruments that play our cue (score.js): a low thump, a bass of one
-// round wave twice over, pads of saws that scoop into each note and glide
+// round wave twice over, pads of saws struck bright that lean into each note and glide
 // between chords, a lead, and swishes of noise. All scheduled at the start
 // for the whole take; the pads, lead and swishes go to `space` (the reverb)
 // as well as `out`.
 import { PULSE, BASS, SUB, CHORDS, LEAD, SWISH, beat } from './score.js';
 import { random, dB, hz, white, biquad, toBuffer, gain, once } from './dsp.js';
 
-const SCOOP = -1.6;                // semitones each pad voice starts under its note
+const SCOOP = -0.3;                // semitones each pad voice starts under its note (the original's barely bend in)
 const SCOOP_TIME = 0.28;           // s to reach it
 const GLIDE_TIME = 0.35;           // s for a pad voice to slide to its next note
-const PAD_ATTACK = 0.09;           // s
+const PAD_ATTACK = 0.012;          // s: a struck start, as the original's chords have
 const PAD_DECAY = 1.6;             // s, the time constant of a chord's fade while held
 const PAD_SUSTAIN = 0.3;           // where it fades toward, of its peak
 const PAD_RELEASE = 0.3;           // s, the time constant it dies away with once let go
-const PAD_GAIN = 4;                // dB on every voice's level in the score
+const PAD_GAIN = 2;                // dB on every voice's level in the score
 const PAD_SPREAD = 0.7;            // how wide the voices are spread across the stereo field
 const VIBRATO_HZ = 4.6;            // about this, each voice its own
 const VIBRATO_CENTS = 6;           // how deep
 const PAD_BRIGHT = 0.85;           // all the score's brightnesses, scaled
-const PAD_OPEN = 1.3;              // how much brighter each chord starts, closing to its own in a second
+const PAD_OPEN = 3.5;              // how much brighter each chord starts (the original's reach 4 kHz as struck) ...
+const PAD_CLOSE = 0.3;             // s, ... closing to its own with this time constant, dark within a second
+const PAD_TOP = 9000;              // Hz, the most it opens to
+const PAD_KEEP = 1.8;              // held, it closes to no more than this many times its note: a partial or two
 const BASS_PARTIALS = [0, -2, -6, -14, -20, -24, -28, -32];   // dB, the bass wave's partials against its first
 // Its two copies: [pan, detune cents, level]. Unequal, so that as they
 // drift in and out of phase the bass moves across the middle and never
@@ -36,7 +39,7 @@ const TICK_FALL = 0.006;           // s, the tick's time constant
 const LEAD_PARTIALS = [0.3, 1, 0.75, 0.45, 0.25, 0.15, 0.1, 0.06];   // its partials' amplitudes, first upward
 const LEAD_ATTACK = 0.12;          // s
 const LEAD_SAG = -4;               // dB the lead sinks by while held
-const LEAD_DETUNE = 5;             // cents either side, its two copies
+const LEAD_DETUNE = 1;             // cents either side, its two copies (more, and they beat: the original's is steady)
 const LEAD_BEND = -1.5;            // semitones it falls by as it is let go
 
 // The pulse: a sine thump falling to its pitch, held a moment, then let go;
@@ -111,18 +114,25 @@ function bass(ctx, out, start, end) {
   g.connect(out);
 }
 
-// One pad voice: a saw through a low-pass that opens and settles, scooping
-// into its first note, gliding to the next ones, with a slow vibrato of its
-// own. (Detuned pairs beat, and their partials flicker; one saw a voice
-// keeps them as steady as the original's.)
+// One pad voice: a saw through a steep low-pass that is struck open and
+// closes (bright for a moment, then only its notes and a little above, as
+// the original's chords are), leaning into its first note, gliding to the
+// next ones, with a slow vibrato of its own. (Detuned pairs beat, and their
+// partials flicker; one saw a voice keeps them as steady as the original's.)
 function padVoice(ctx, out, space, start, at, length, notes, level, bright, pan, rnd) {
   const t0 = start + at;
   const t1 = t0 + length;
-  const low = ctx.createBiquadFilter();
-  low.type = 'lowpass';
-  low.Q.value = 0.7;
-  low.frequency.setValueAtTime(bright * PAD_BRIGHT * PAD_OPEN, t0);
-  low.frequency.setTargetAtTime(bright * PAD_BRIGHT, t0, 0.6);
+  // Two low-passes, 24 dB an octave, so that once closed little is left above.
+  const lows = [0, 1].map(() => {
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.Q.value = 0.6;
+    f.frequency.setValueAtTime(Math.min(PAD_TOP, bright * PAD_BRIGHT * PAD_OPEN), t0);
+    f.frequency.setTargetAtTime(Math.min(bright * PAD_BRIGHT, hz(notes[0][1]) * PAD_KEEP), t0 + PAD_ATTACK, PAD_CLOSE);
+    return f;
+  });
+  const low = lows[0];
+  lows[0].connect(lows[1]);
   const g = gain(ctx);
   const peak = dB(level + PAD_GAIN);
   g.gain.setValueAtTime(0, t0);
@@ -143,7 +153,8 @@ function padVoice(ctx, out, space, start, at, length, notes, level, bright, pan,
   vibrato.connect(gain(ctx, VIBRATO_CENTS)).connect(o.detune);
   const p = ctx.createStereoPanner();
   p.pan.value = pan;
-  o.connect(low).connect(g).connect(p);
+  o.connect(low);
+  lows[1].connect(g).connect(p);
   p.connect(out);
   p.connect(space);
   const end = t1 + PAD_RELEASE * 6;

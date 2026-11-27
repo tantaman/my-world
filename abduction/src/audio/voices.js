@@ -12,25 +12,30 @@
 //   above 4 kHz), falling about 5 dB an octave from 1 kHz to 8 kHz and
 //   faster above (-72, -75, -80, -85, -91 dB per bin at 1, 2, 4, 8, 12
 //   kHz), its level drifting 3 dB over the take: quietest at the start and
-//   at the shop window, loudest out in the open. Over it, drops: bursts of
-//   noise 3-5 ms long, flat from 300 Hz to 12 kHz, 10-20 dB over the bed,
-//   a few a second, often splashing again 10-30 ms later.
+//   at the shop window, loudest out in the open; from 300 Hz to 1 kHz it is
+//   quieter than its drops make the whole sound. Over it, drops: dull
+//   plops, not ticks, a sharp knock over a low body (see PLOPS), a few a
+//   second standing 10 dB over the bed in 300 Hz - 6 kHz, some splashing
+//   again 10-30 ms later.
 // - Thunder is barely there: nothing over the music after strike 1, at most
 //   a low swell after strike 2. Ours is a distant rumble, kept under it.
 // - The car is tyre noise on a wet road, broadband, peaking at 21.2 s +19
 //   dB over the bed below 1.5 kHz and +12 dB above 8 kHz, heard from the
 //   right (left 8-12 dB under right at its peak), its highs over in 1.2 s,
-//   its body in 2.8; its level falls as the square of its distance. It is
-//   loudest 0.9 s after it passes nearest in the picture, so its level
-//   follows the car's distance that long before.
+//   its body in 2.8; its level rises as the square of its distance, then,
+//   going away, falls 12 dB in the second after its peak. It is loudest 0.9
+//   s after it passes nearest in the picture, so its level follows the
+//   car's distance that long before. Little of it is under 150 Hz or in a
+//   comb: a hum round 260 Hz and a haze to 3 kHz.
 // - The saucer: a falling whistle as it comes in and slows (1.4 kHz at 49.2
 //   s to 350 Hz at 52.2, echoing, a faint whine at four times it); a bright
 //   glitter diving through 1.5-4 kHz and a rising whoop (255 to 380 Hz,
 //   partials to 4 kHz) as the cow goes up, 56.2-57.4 s, then a close
 //   shimmer at 350-480 Hz; a rising whistle as it leaves (180 to 520 Hz,
-//   61.1-63.6 s, fading). Under the beam, a deep drone. Ours adds what the
-//   original's music covers: a hum of beating partials while it is near,
-//   swaying with its bob, and the beam's high singing.
+//   61.1-63.6 s, fading). Under the beam, a hollow drone on D3 and A3 (odd
+//   partials only: A4, F#5, C6 over the D) with something deep under it.
+//   Ours adds what the original's music covers: a hum of beating partials
+//   while it is near, swaying with its bob, and the beam's high singing.
 import { T } from '../timeline.js';
 import { BOLTS } from '../weather/lightning.js';
 import { EYE } from '../set/layout.js';
@@ -47,6 +52,8 @@ const RAIN_LOOP = 2 ** 19;               // samples in the bed's loop (10.9 s at
 const RAIN_BED = -50;                    // dB rms of the bed in the open
 const RAIN_WIDTH = 0.12;                 // the bed's decorrelated part, to its mono part
 const RAIN_LOW_HZ = 480;                 // Hz, the middle of the bed's lower body
+const RAIN_LOW = -10;                    // dB, that body against where it was first set: between its drops
+                                         // the original's rain has little from 300 Hz to 1 kHz
 // The bed's level against t (dB from RAIN_BED), as measured: quieter at the
 // start, at the shop window and while the beam is on, going ahead of the
 // rest at the end.
@@ -55,42 +62,86 @@ const RAIN_LEVEL = [
   [52.5, 0], [53.5, -2], [58.5, -2], [60, -1], [69.8, -1], [70.5, -3], [71, -5],
 ];
 const DROPS_LOOP = 13.7;                 // s, the drops' loop (not a multiple of the bed's)
-// Drops, as the original's measure: a burst of noise a few milliseconds
-// long, flat from 300 Hz to 12 kHz, often splashing again 10-30 ms later.
-// [a second, loudest peak dB, range of peaks dB, decay s (shortest, longest),
-//  brightest and dullest low-pass Hz]
-const PATTER = [70, -50, 18, [0.0003, 0.001], [14000, 5000]];      // fine, far, the bed's grain
-const NEAR = [5.5, -31, 14, [0.0012, 0.003], [14000, 2500]];       // near drops, ticks
-const DULL = [1.2, -36, 8, [0.002, 0.005], [2200, 900]];           // onto something soft
-const SPLASH = [0.6, [0.008, 0.03], [-4, -11]];                    // chance of a second burst, after s, dB
-const DRIPS = [1.4, -38, 8, [0.002, 0.006], [5000, 1500]];         // off the canopy's edge, under it
+// Drops, as the original's are: dull plops, not ticks. Close up each is a
+// sharp knock of 2 to 5 ms (in 300 Hz - 6 kHz it falls 10 dB in 3 ms) over a
+// low body that lasts 10 to 30 ms, from 100 to 700 Hz, little above 3 kHz
+// (its 40 loudest stand 5 to 6 dB over the bed below 700 Hz, 3 dB at 1 kHz,
+// 1 dB above 3 kHz); some ring down in pitch as the water closes, some
+// splash again 10-30 ms later. Their peaks fall off evenly in dB: in the 300
+// Hz - 6 kHz band, 14 a second stand 6 dB over the bed, 2.2 a second 10 dB,
+// 0.5 a second 14 dB, one in ten seconds 18 dB.
+// [a second, loudest peak dB, mean dB under it (peaks fall off exponentially),
+//  the body's decay s (shortest, longest), its centre Hz (lowest, highest), chance of a ring]
+const PATTER = [70, -48, 5, [0.0004, 0.0012], [600, 4000], 0];     // fine, far, the bed's grain
+const PLOPS = [3.5, -23, 3.3, [0.015, 0.035], [80, 280], 0.1];     // near drops, onto water and the coat
+const DRIPS = [1.4, -40, 3, [0.006, 0.016], [200, 800], 0.25];     // off the canopy's edge, under it
+const DROP_Q = 1.1;                      // the body's band-pass
+const DROP_TOP = 2.5;                    // its low-pass, at this many times its centre, so little is left above
+// The knock on the body's front: [times the body's centre (fewest, most), decay s,
+// dB against the body, its band-pass's Q (broad: from the body up to a few kHz)].
+const KNOCK = [[4, 20], 0.0008, 0, 0.5];
+const SPLASH = [0.4, [0.008, 0.03], [-4, -11]];                    // chance of a second burst, after s, dB
+// The ring: a sine falling from RING_FROM to RING_TO times the knock's
+// pitch over its length, dying away with RING_TAU, RING_LEVEL under the drop.
+const RING_FROM = [0.9, 1.4];
+const RING_TO = 0.45;
+const RING_LENGTH = [0.02, 0.045];       // s
+const RING_TAU = 0.012;                  // s
+const RING_LEVEL = -20;                  // dB
 
-// One drop into d at `at`: noise under an exponential decay, through a
-// one-pole low-pass (its brightness), maybe with a splash after it.
-function drop(d, at, amp, tau, corner, sr, rnd, splash = true) {
-  const n = Math.min(d.length - at, Math.floor(tau * 7 * sr));
-  const a = 1 - Math.exp((-2 * Math.PI * corner) / sr);
-  let y = 0;
-  for (let i = 0; i < n; i++) {
-    y += a * ((rnd() * 2 - 1) - y);
-    d[at + i] += y * amp * Math.exp(-i / (tau * sr)) * Math.min(1, i / 3);
+// Noise under an exponential decay with time constant tau, through a band-pass at f, into a new array of n, its peak 1.
+function burst(n, tau, f, q, sr, rnd) {
+  const d = new Float32Array(n);
+  const m = Math.min(n, Math.floor(tau * 7 * sr));
+  for (let i = 0; i < m; i++) d[i] = (rnd() * 2 - 1) * Math.exp(-i / (tau * sr)) * Math.min(1, i / 24);
+  const top = 0.45 * sr;
+  biquad(d, sr, 'band', Math.min(top, f), q);
+  biquad(d, sr, 'low', Math.min(top, f * DROP_TOP), 0.7);
+  let peak = 1e-9;
+  for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(d[i]));
+  for (let i = 0; i < n; i++) d[i] /= peak;
+  return d;
+}
+
+// One drop into d at `at`, peaking near amp: a knock over a low body (tau
+// its decay, centre its pitch), maybe ringing down after, maybe with a
+// splash after it.
+function drop(d, at, amp, tau, centre, ring, sr, rnd, splash = true) {
+  const n = Math.min(d.length - at, Math.floor(Math.max(tau * 7, RING_LENGTH[1]) * sr));
+  if (n <= 0) return;
+  const body = burst(n, tau, centre, DROP_Q, sr, rnd);
+  const lift = KNOCK[0][0] * Math.pow(KNOCK[0][1] / KNOCK[0][0], rnd());
+  const knock = burst(n, KNOCK[1], centre * lift, KNOCK[3], sr, rnd);
+  const k = dB(KNOCK[2]);
+  for (let i = 0; i < n; i++) body[i] = (body[i] + k * knock[i]) / (1 + k);
+  if (rnd() < ring) {
+    const len = Math.min(n, Math.floor((RING_LENGTH[0] + rnd() * (RING_LENGTH[1] - RING_LENGTH[0])) * sr));
+    const f0 = centre * lift * (RING_FROM[0] + rnd() * (RING_FROM[1] - RING_FROM[0]));
+    const f1 = f0 * RING_TO;
+    const a = dB(RING_LEVEL);
+    let phase = 0;
+    for (let i = 0; i < len; i++) {
+      phase += (2 * Math.PI * f0 * Math.pow(f1 / f0, i / len)) / sr;
+      body[i] += a * Math.sin(phase) * Math.exp(-i / (RING_TAU * sr)) * Math.min(1, i / 48);
+    }
   }
+  for (let i = 0; i < n; i++) d[at + i] += body[i] * amp;
   if (splash && rnd() < SPLASH[0]) {
     const after = Math.floor((SPLASH[1][0] + rnd() * (SPLASH[1][1] - SPLASH[1][0])) * sr);
-    if (at + after < d.length) drop(d, at + after, amp * dB(SPLASH[2][0] + rnd() * (SPLASH[2][1] - SPLASH[2][0])), tau * 0.7, corner, sr, rnd, false);
+    if (at + after < d.length) drop(d, at + after, amp * dB(SPLASH[2][0] + rnd() * (SPLASH[2][1] - SPLASH[2][0])), tau * 0.7, centre * 1.3, 0, sr, rnd, false);
   }
 }
 
 // `rate` drops a second of one kind over a loop of n samples, their tails wrapped to the head.
-function scatter(n, sr, [rate, top, range, [tau0, tau1], [bright, dull]], rnd) {
+function scatter(n, sr, [rate, top, fall, [tau0, tau1], [low, high], ring], rnd) {
   const pad = Math.floor(0.25 * sr);
   const d = new Float32Array(n + pad);
   const count = Math.round((rate * n) / sr);
   for (let k = 0; k < count; k++) {
-    // Louder drops are rarer: peaks spread evenly in dB, so most are quiet.
-    const amp = dB(top - range * Math.sqrt(rnd())) * 2.5;
+    // Louder drops are rarer: peaks fall off exponentially in dB, so most are quiet.
+    const amp = dB(top + fall * Math.log(1 - rnd()));
     const tau = tau0 + (tau1 - tau0) * rnd();
-    drop(d, Math.floor(rnd() * n), amp, tau, dull + (bright - dull) * rnd(), sr, rnd);
+    drop(d, Math.floor(rnd() * n), amp, tau, low * Math.pow(high / low, rnd()), ring, sr, rnd);
   }
   for (let i = 0; i < pad; i++) d[i] += d[n + i];
   return d.subarray(0, n);
@@ -109,11 +160,16 @@ function rainSounds(sr) {
     return seamless(d, fade);
   };
   const mono = shape(pink(RAIN_LOOP + fade, rnd));
-  // Water running and splashing near the feet: as much again from 250 Hz to 1 kHz.
+  // Water running and splashing near the feet: a body from 250 Hz to 1 kHz.
+  // The bed's level is set with that body at 0 dB, so that taking it down
+  // leaves the rest where it was measured.
   const splash = biquad(pink(RAIN_LOOP + fade, rnd), sr, 'band', RAIN_LOW_HZ, 0.6);
-  for (let i = 0; i < mono.length; i++) mono[i] += splash[i];
+  const whole = new Float32Array(mono.length);
+  for (let i = 0; i < mono.length; i++) whole[i] = mono[i] + splash[i];
+  const norm = 1 / rms(whole);
+  const low = dB(RAIN_LOW);
+  for (let i = 0; i < mono.length; i++) mono[i] += low * splash[i];
   const sides = [shape(pink(RAIN_LOOP + fade, rnd)), shape(pink(RAIN_LOOP + fade, rnd))];
-  const norm = 1 / rms(mono);
   const bed = toBuffer(sr, sides.map((s) => {
     const c = new Float32Array(RAIN_LOOP);
     for (let i = 0; i < RAIN_LOOP; i++) c[i] = (mono[i] + RAIN_WIDTH * s[i]) * norm;
@@ -121,17 +177,16 @@ function rainSounds(sr) {
   }));
 
   // The drops: the fine patter a little apart in the two ears, the near
-  // ones in the middle, all clear of rumble.
+  // plops in the middle, all clear of rumble.
   const n = Math.floor(DROPS_LOOP * sr);
   const patter = [scatter(n, sr, PATTER, rnd), scatter(n, sr, PATTER, rnd)];
-  const near = scatter(n, sr, NEAR, rnd);
-  const dull = scatter(n, sr, DULL, rnd);
+  const near = scatter(n, sr, PLOPS, rnd);
   const drops = toBuffer(sr, patter.map((p) => {
     const c = new Float32Array(n);
-    for (let i = 0; i < n; i++) c[i] = p[i] + near[i] + dull[i];
-    return onePoleHigh(c, sr, 300);
+    for (let i = 0; i < n; i++) c[i] = p[i] + near[i];
+    return onePoleHigh(c, sr, 120);
   }));
-  const drips = toBuffer(sr, [onePoleHigh(scatter(Math.floor(9.3 * sr), sr, DRIPS, rnd), sr, 300)]);
+  const drips = toBuffer(sr, [onePoleHigh(scatter(Math.floor(9.3 * sr), sr, DRIPS, rnd), sr, 120)]);
   return { bed, drops, drips };
 }
 
@@ -195,11 +250,11 @@ export function thunder(ctx, out, start) {
 const CAR_LAG = 0.9;                     // s its level trails the picture's pass (see the top)
 const CAR_SPAN = [16.5, 25.5];           // s it is heard
 const CAR_NEAR = 10.5;                   // m, nearest it comes
-const CAR_ROAD = -31;                    // dB, its road noise at CAR_NEAR
+const CAR_ROAD = -30;                    // dB, its road noise at CAR_NEAR
 const CAR_AIR = 5000;                    // Hz, the road noise's low-pass at CAR_NEAR, closing with distance
 const ROAD_FALL = 2;                     // its level falls as distance to this power (as the original's does)
-const CAR_SPRAY = -48;                   // dB, the hiss of spray at CAR_NEAR
-const CAR_ENGINE = -44;                  // dB, the engine at CAR_NEAR
+const CAR_SPRAY = -54;                   // dB, the hiss of spray at CAR_NEAR
+const CAR_ENGINE = -54;                  // dB, the engine at CAR_NEAR (the original's shows none over its pulse)
 const ENGINE_FALL = 1.3;                 // its level falls as distance to this power
 const ENGINE_LOW = 260;                  // Hz, the low-pass over its saws
 const AIR_FALL = 1.2;                    // the road noise's low-pass closes as distance to this power
@@ -208,18 +263,27 @@ const CAR_FIRING = 47;                   // Hz, the engine's firing (a four at 1
 const SPRAY_FALL = 3.5;                  // the spray's level falls as distance to this power (it is close and directional)
 const CAR_PAN_LAG = 0.45;                // s its bearing trails the picture's (half its level's lag)
 const CAR_PAN = 0.72;                    // how far left or right a mono body-worn microphone hears it
-const WET_ROAD = 0.65;                   // the wet road's reflection, its comb in the highs
+const WET_ROAD = 0.25;                   // the wet road's reflection, its comb in the highs (faint in the original's)
 const TYRE_HEIGHT = 0.4;                 // m, where the road noise comes from
+// Going away it falls faster than its distance says: the original's is 12
+// dB down a second after its peak at 21 s. [t, dB] on all of it.
+const CAR_AWAY = [[21.1, 0], [21.6, -4], [22.1, -10], [22.6, -13], [24, -14]];
+const ROAD_BODY = [260, 1.0, 2];         // Hz, Q, and how much (to the rest): the tyres' hum, which carries most of it
 
 // The car's two noises, as loops: tyres on the wet road (most of it from
-// 160 Hz to a few kHz), and the hiss of its spray (above 5 kHz).
+// 160 Hz to a few kHz, a hum round 260 Hz carrying most), and the hiss of
+// its spray (above 5 kHz).
 function carSounds(sr) {
   const rnd = random(303);
   const len = 6;
   const fade = Math.floor(0.2 * sr);
   const road = seamless(pink(Math.floor(len * sr) + fade, rnd), fade);
-  onePoleLow(road, sr, 1300);
+  onePoleLow(road, sr, 2600);
   onePoleLow(road, sr, 4000);
+  const hum = biquad(seamless(pink(Math.floor(len * sr) + fade, rnd), fade), sr, 'band', ROAD_BODY[0], ROAD_BODY[1]);
+  const k = ROAD_BODY[2] * rms(road) / rms(hum);
+  for (let i = 0; i < road.length; i++) road[i] += k * hum[i];
+  biquad(road, sr, 'high', 160, 0.7);
   biquad(road, sr, 'high', 160, 0.7);
   const spray = seamless(white(Math.floor(len * sr) + fade, rnd), fade);
   biquad(spray, sr, 'high', 5000, 0.6);
@@ -280,7 +344,9 @@ export function car(ctx, out, start) {
   follow(pan.pan, start, a, b, (t) => CAR_PAN * Math.sin(carFrom(t - CAR_PAN_LAG, _a).azimuth));
   body.connect(pan);
   reflection.connect(pan);
-  pan.connect(out);
+  const away = gain(ctx, 1);
+  follow(away.gain, start, a, b, (t) => dB(lookup(t, CAR_AWAY)));
+  pan.connect(away).connect(out);
 }
 
 // ---------------------------------------------------------------- saucer
@@ -300,11 +366,16 @@ const HUM = -52;                         // dB at HUM_NEAR or nearer
 const HUM_NEAR = 15;                     // m
 const HUM_LOW = 420;                     // Hz, the low-pass over its partials
 // The hum's partials, each a pair this far apart: [Hz, beat Hz]. A tritone
-// off the score's E, so it never settles into the music.
-const HUM_PARTIALS = [[57.6, 0.65], [115.6, 1.45], [174.1, 2.3], [233.5, 3.1]];
+// off the score's D, so it never settles into the music.
+const HUM_PARTIALS = [[51.3, 0.65], [103.0, 1.45], [155.1, 2.3], [208.0, 3.1]];
 const BOB = 0.45;                        // Hz, the hover's bob (ufo/flight.js)
-const DRONE = [-34, -41];                // dB, the beam's drone and its octave
-const DRONE_HZ = 41.2;                   // its pitch (the score's E1)
+// The beam's drone, as the original's: hollow tones (odd partials only, as a
+// square's, to about 3 kHz) on the score's D3 and the A over it, over a
+// deep D. [Hz, dB of the first partial]
+const DRONE = [[146.8, -43], [220.0, -46]];
+const DEEP = [36.7, -37];                // Hz, dB: the deep D under them, a sine
+const DRONE_PARTIALS = 11;               // odd partials up to this one
+const DRONE_LOW = 3000;                  // Hz, the low-pass over them
 const DRONE_OUT = [56.0, 56.9];          // s it fades over, as the whoop comes
 const LIFT = [56.55, 57.38];             // s, the whoop as the cow goes up
 const LIFT_HZ = [255, 378];              // where it rises from and to, eased, over LIFT_RISE
@@ -319,8 +390,9 @@ const GLITTER = [55.95, 57.0];           // s, the falling glitter before the wh
 const GLITTER_HZ = [118, 88];            // its dive
 const GLITTER_LEVEL = -27;               // dB, through its band
 const GLITTER_BAND = [2300, 1.4];        // Hz, Q: the band its upper partials are heard through
-const SHIMMER = [57.36, 58.9];           // s, the shimmer after it
+const SHIMMER = [57.36, 59.8];           // s, the shimmer after it: a thick, smooth band at 350-480 Hz, held to 59.7 s
 const SHIMMER_LEVEL = -40;               // dB a partial
+const SHIMMER_TREMBLE = 0.12;            // how deep each partial trembles (the original's barely does)
 // The rising whistle as it goes: [t, Hz, dB], fast at first, fading as it rises.
 const LEAVE = [
   [60.9, 172, -70], [61.1, 176, -45], [61.2, 182, -42], [61.5, 268, -42], [61.9, 316, -45],
@@ -395,8 +467,8 @@ export function saucer(ctx, out, space, start) {
     hum.connect(out);
   }
 
-  // The beam's drone: a deep tone and its octave, from the ring lighting to
-  // the cow halfway up.
+  // The beam's drone: hollow tones on D and A over a deep D, from the ring
+  // lighting to the cow halfway up.
   {
     const g = gain(ctx);
     const t0 = start + T.ringOn;
@@ -404,16 +476,26 @@ export function saucer(ctx, out, space, start) {
     g.gain.linearRampToValueAtTime(1, T.beamGround + start);
     g.gain.setValueAtTime(1, start + DRONE_OUT[0]);
     g.gain.linearRampToValueAtTime(0, start + DRONE_OUT[1]);
-    DRONE.forEach((level, k) => {
+    const low = ctx.createBiquadFilter();
+    low.type = 'lowpass';
+    low.frequency.value = DRONE_LOW;
+    low.connect(g);
+    const amps = new Float32Array(DRONE_PARTIALS + 1);
+    for (let h = 1; h <= DRONE_PARTIALS; h += 2) amps[h] = 1 / h;
+    const wave = ctx.createPeriodicWave(new Float32Array(amps.length), amps, { disableNormalization: true });
+    for (const [f, level] of DRONE) {
       const o = ctx.createOscillator();
-      o.type = k === 0 ? 'sine' : 'triangle';
-      o.frequency.value = DRONE_HZ * (k + 1);
-      const og = gain(ctx);
-      og.gain.value = dB(level);
-      o.connect(og).connect(g);
+      o.setPeriodicWave(wave);
+      o.frequency.value = f;
+      o.connect(gain(ctx, dB(level))).connect(low);
       o.start(t0 - 0.2);
       o.stop(start + DRONE_OUT[1] + 0.1);
-    });
+    }
+    const deep = ctx.createOscillator();
+    deep.frequency.value = DEEP[0];
+    deep.connect(gain(ctx, dB(DEEP[1]))).connect(g);
+    deep.start(t0 - 0.2);
+    deep.stop(start + DRONE_OUT[1] + 0.1);
     g.connect(out);
   }
 
@@ -499,23 +581,23 @@ export function saucer(ctx, out, space, start) {
     g.connect(space);
   }
 
-  // The shimmer after it: a close cluster that trembles and dies.
+  // The shimmer after it: a close cluster, barely trembling, that dies away.
   {
     const [a, b] = SHIMMER;
     const rnd = random(404);
     const g = gain(ctx);
     g.gain.setValueAtTime(0, start + a);
     g.gain.linearRampToValueAtTime(dB(SHIMMER_LEVEL), start + a + 0.08);
-    g.gain.setTargetAtTime(0, start + a + 0.3, (b - a) / 3.5);
+    g.gain.setTargetAtTime(0, start + a + 0.8, (b - a) / 2.5);
     for (let k = 0; k < 7; k++) {
       const o = ctx.createOscillator();
       o.frequency.value = 345 + k * 21 + rnd() * 8;
       const trem = ctx.createOscillator();
       trem.frequency.value = 5 + rnd() * 6;
       const depth = ctx.createGain();
-      depth.gain.value = 0.5;
+      depth.gain.value = SHIMMER_TREMBLE;
       const vg = gain(ctx);
-      vg.gain.value = 0.5;
+      vg.gain.value = 1 - SHIMMER_TREMBLE;
       trem.connect(depth).connect(vg.gain);
       const p = ctx.createStereoPanner();
       p.pan.value = (k / 6) * 1.2 - 0.6;

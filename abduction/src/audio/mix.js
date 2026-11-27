@@ -30,7 +30,10 @@ const DRIVE_IN = 12;           // dB into the saturation (and back out after it)
 // beat lands at 71.3, then it all closes down through a falling low-pass and
 // is silent by 72.25. [t, dB] for the level, [t, Hz] for the low-pass.
 const END_LEVEL = [[70.4, 0], [71.1, -9], [71.5, -13], [71.8, -24], [72.0, -34], [72.15, -55], [72.25, -100]];
+// The start, as the original's: silent for 35 ms, then in over 55 ms. [s, s]
+const START = [0.035, 0.09];
 const END_CLOSE = [[71.2, 18000], [71.8, 2500], [72.15, 300]];
+const CODEC_TOP = 15500;       // Hz, where the original's compression cut its highs off (two low-passes: 24 dB an octave)
 
 const roomOf = (sr) => once('room', sr, () => impulse(sr, { seconds: ROOM_SECONDS, rt60: ROOM_RT60 }));
 
@@ -45,7 +48,9 @@ function prepare(sampleRate) {
 // Builds the whole take into ctx, t = 0 at `start` (its time), ending in `destination`.
 function build(ctx, start, destination) {
   const end = start + LENGTH;
-  const master = gain(ctx, 1);
+  const master = gain(ctx, 0);
+  master.gain.setValueAtTime(0, start + START[0]);
+  master.gain.linearRampToValueAtTime(1, start + START[1]);
   master.gain.setValueAtTime(1, start + END_LEVEL[0][0]);
   for (const [t, level] of END_LEVEL.slice(1)) master.gain.linearRampToValueAtTime(level <= -100 ? 0 : dB(level), start + t);
   const close = ctx.createBiquadFilter();
@@ -60,7 +65,15 @@ function build(ctx, start, destination) {
   limit.ratio.value = 12;
   limit.attack.value = 0.002;
   limit.release.value = 0.12;
-  master.connect(close).connect(limit).connect(destination);
+  // The original's sound is compressed with nothing kept over 15.5 kHz: ours too.
+  const codec = [0, 1].map(() => {
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = CODEC_TOP;
+    f.Q.value = 0.7;
+    return f;
+  });
+  master.connect(close).connect(codec[0]).connect(codec[1]).connect(limit).connect(destination);
 
   // The room both buses send to.
   const room = ctx.createConvolver();

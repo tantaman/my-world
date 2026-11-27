@@ -10,8 +10,8 @@
 //
 // Needs python3 with numpy and matplotlib for the comparison, and
 // reference/audio.wav (node abduction/tools/reference.mjs).
-import { writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { startPage, ROOT } from './browser.mjs';
 
@@ -33,6 +33,7 @@ try {
     }),
   ]).finally(() => clearInterval(watch));
   const { wav, ms, peak } = await page.evaluate(() => window.__render());
+  mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, Buffer.from(wav, 'base64'));
   console.log(`${out}: rendered in ${(ms / 1000).toFixed(1)} s, peak ${(20 * Math.log10(peak + 1e-9)).toFixed(1)} dBFS`);
   for (const e of errors) console.log('   ', e.slice(0, 400));

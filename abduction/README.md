@@ -95,9 +95,10 @@ camera matches:
 - **Sound (`src/audio/`).** Measured against the original's, layer by layer,
   and remade: a pulse, a drone and chords of our own on the original's beats;
   rain; the car; the saucer's whistles and drones; the fade at the end. By ear
-  it was not close enough, so the private page plays the original's own
-  instead, on the same clock (above); ours is for the page built to be
-  shown.
+  the first version was not close enough, so it was remade a second time
+  against finer measures (below), and the private page plays the
+  original's own where it can, on the same clock (above); ours is for the
+  page built to be shown.
 
 ## Measured from the original
 
@@ -132,8 +133,30 @@ camera matches:
   saucer's whistles (1.4 kHz falling to 350 Hz arriving, 176 rising to 516 Hz
   leaving), no thunder to speak of, and a fade through a falling low-pass
   from 70.4 s. Ours is within 3 dB of it in five bands over each of 14
-  stretches. Our music is our own (E minor, our own progression) on the
-  original's beats and register.
+  stretches. Band levels matching was not enough to sound like it; the
+  second pass matched, beyond them:
+  - **The key.** The original's bass sits on D2 most of the take; ours was
+    in E. Ours is now centred on D too (D minor), with our own progression
+    and voicings: the original's notes are not used. Frame by frame, the
+    two takes' pitch classes (chroma) now have a mean cosine of 0.77, up
+    from 0.47.
+  - **The rain's texture.** The original's drops are dull plops, a sharp
+    knock over a low body (100 to 700 Hz, 10 to 30 ms), not the bright 3 ms
+    ticks ours were; between them its bed has little from 300 Hz to 1 kHz.
+    Ours now has as many drops a second at each height over the bed (2.2 over
+    10 dB, 0.5 over 14), with the same spectrum to within about 1 dB.
+  - **The chords' colour.** Struck bright (partials to about 4 kHz) and dark
+    within a second, holding only their notes and a partial or two, barely
+    bending into pitch; ours had swept every partial of a saw into place.
+  - **The car** falls 12 dB in the second after its peak, with little under
+    150 Hz and no comb in the highs.
+  - **The beam's drone** is a hollow tone (odd partials) on D3 and A3, not
+    a deep sine.
+  - **The start**: 35 ms of silence, as the original's file has, and
+    nothing kept above 15.5 kHz, where its compression cut off.
+  Over the whole take the log-mel distance between ours and the original's
+  went from 3.84 to 3.46 dB a frame. What is left is mostly the music's
+  notes, which stay our own.
 
 ## Where it departs from the plan
 
@@ -194,9 +217,9 @@ original's wispy ones, and the far rows a little more visible; the van's and
 sedan's painted wear is less varied than image textures, and the sedan's body
 reads darker; the cow has no fur; the shopfront close-ups (27 and 30 s) are
 framed 20 to 60 px off; the saucer's arrival path; the return at 71 s is about
-9 levels too bright; and our sound, within 3 dB of the original's in every
-band but not close enough by ear (the private page plays the original's
-own).
+9 levels too bright; and the sound has been heard only as the first
+version: the second (above) has been measured, not yet listened to, and
+its music is our own notes, not the original's.
 
 Brightness of the middle of the frame, ours against the original's (0 to
 255), from all 19 stills at 1440×1080 after the final exposure pass:
