@@ -16,7 +16,8 @@
 // high, on the same side of noon. The game's sun keeps no season or
 // latitude, so the photo's own hour can put it far lower or higher than it
 // was: at 16:21 on a summer afternoon on the Olympic Peninsula the sun is
-// about 43° up, the game's about 23°), --fov deg
+// about 43° up, the game's about 23°), --clouds 0..1 (how much of the sky
+// the day's clouds covered: world.sky.cloudCover), --fov deg
 // (how wide it sees, top to bottom; the photo's, from its lens, by default),
 // --lens mm (the lens as if on 35 mm film, for a photo whose EXIF is gone:
 // a phone's main camera is 26 to 28), --bearing deg (which way, clockwise
@@ -51,7 +52,7 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const { chromium } = createRequire(import.meta.url)('playwright');
 
 // ── What was asked ──────────────────────────────────────────────────────────
-const FLAGS = ['time', 'sun', 'fov', 'lens', 'bearing', 'pitch', 'size', 'ref', 'out', 'no', 'pair', 'settle'];
+const FLAGS = ['time', 'sun', 'clouds', 'fov', 'lens', 'bearing', 'pitch', 'size', 'ref', 'out', 'no', 'pair', 'settle'];
 const arg = (name) => {
   const i = process.argv.indexOf(`--${name}`);
   return i < 0 ? null : process.argv[i + 1];
@@ -143,7 +144,7 @@ async function shoot(no) {
   await page.goto(`${server.url}?${query}`);
   await page.waitForFunction(() => document.getElementById('loader')?.classList.contains('gone') && window.world, null, { timeout: 300000 });
   const view = await page.evaluate(
-    async ({ hike, at, coords, time, pitch, fov, bearing, sun }) => {
+    async ({ hike, at, coords, time, pitch, fov, bearing, sun, clouds }) => {
       const w = window.world;
       const frame = () => new Promise((r) => requestAnimationFrame(r));
       if (hike) await w.hikes.go(hike, at);
@@ -156,6 +157,7 @@ async function shoot(no) {
       // from the hiker's own eyes, as a photo is taken
       w.player.firstPerson = true;
       if (time !== null) w.sky.hours = Number(time);
+      if (clouds !== null) w.sky.cloudCover = Number(clouds);
       if (sun !== null) {
         // the hour, on the photo's side of noon, whose sun stands that high
         const want = (Number(sun) * Math.PI) / 180;
@@ -185,7 +187,7 @@ async function shoot(no) {
       while (!w.game.chunks.isFullyLoaded()) await frame();
       return { x: w.player.pos.x, y: w.player.pos.y, z: w.player.pos.z, yaw: w.player.camYaw, pitch: w.player.camPitch, hours: w.sky.hours };
     },
-    { hike, at, coords, time: arg('time'), pitch: arg('pitch'), fov: FOV, bearing: arg('bearing'), sun: arg('sun') },
+    { hike, at, coords, time: arg('time'), pitch: arg('pitch'), fov: FOV, bearing: arg('bearing'), sun: arg('sun'), clouds: arg('clouds') },
   );
   // everything fetched (the photographs of surfaces among it), then the eye
   // let straight to where it would settle, and a few frames drawn
