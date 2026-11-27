@@ -855,7 +855,9 @@ None of these block starting. Each has the default the plan assumes.
    freely licensed ones (CC0) for the van, sedan and surfaces would be the
    closer test of its pipeline and the faster road to the same look. It adds
    the first binary assets to the repository. Decide after milestone 2, when
-   it is clear how far code alone gets.
+   it is clear how far code alone gets. **Decided (2026-11-26):** CC0
+   photo textures and a CC0 sky panorama from Poly Haven, fetched by
+   `tools/assets.mjs` and not committed; models stay in code.
 2. **Renderer:** WebGPU with nodes (default), or WebGL as the game uses. See
    the first risk.
 3. **The words on the signs:** the original's, for a like-for-like picture

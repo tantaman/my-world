@@ -3,8 +3,10 @@
 // and 2048x1536, and reports frame time, time on the card where WebGPU can
 // say, draw calls and triangles.
 //
-//   node abduction/tools/bench.mjs --gpu      on this machine's card, in a visible browser (the real answer)
-//   node abduction/tools/bench.mjs            headless, through SwiftShader: counts only, the times mean nothing
+//   node abduction/tools/bench.mjs --gpu      on this machine's card, in a visible browser, through WebGPU (the real answer)
+//   node abduction/tools/bench.mjs            headless: on a Mac, WebGL 2 on the machine's own card (ANGLE
+//                                             Metal), so the times mean something; elsewhere SwiftShader,
+//                                             counts only
 //
 // Name the machine beside the numbers when writing them into README.md.
 import { join } from 'node:path';
@@ -13,10 +15,11 @@ import { startPage, ROOT } from './browser.mjs';
 
 const args = process.argv.slice(2);
 const gpu = args.includes('--gpu');
-const FRAMES = gpu ? 240 : 2;
+const real = gpu || process.platform === 'darwin';
+const FRAMES = real ? 240 : 2;
 const MOMENTS = [['forecourt', 17], ['beam', 55]];
 // Headless, only the counts mean anything, and they do not depend on the size.
-const SIZES = gpu ? [[1440, 1080], [2048, 1536]] : [[1440, 1080]];
+const SIZES = real ? [[1440, 1080], [2048, 1536]] : [[1440, 1080]];
 
 async function open(width, height) {
   if (!gpu) return startPage({ width, height });
