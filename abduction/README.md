@@ -110,6 +110,9 @@ camera matches:
   parked nose 21° toward the road). The scale rests on the camera's height,
   which nothing in the frames fixes: at 1.5 m the drums, ice chest and cow
   come out their real sizes, the canopy, lamps and van a little small.
+- **The strikes**: the rise in the frame's mean brightness, frame by frame:
+  the first flickers twice from 5.70 s and is gone by 6.7; the second peaks
+  at 42.27 s and flickers three times, gone by 43.4.
 - **Times**, at 10 frames a second: the beam lands at 54.4 s, the cow rises
   55.3 to 57.9 s, the saucer tips at 60.8 s and leaves from about 61.3 s; the
   car is where the original's is at 18.5, 19.5, 20.5 and 21.5 s at 9 m/s.
@@ -178,36 +181,38 @@ stills at the end); the lightning (the bolts never drew on Metal: a one-sided
 ribbon, culled); the car's headlights (5000 cd at a few metres bloomed into a
 glare); the sound (ours had been up to 29 dB too loud in places).
 
-**What does not match yet:** the trees' crowns (ours merge into a wall where
-the original's read one by one, green in the light); the van's and sedan's
-painted wear, less varied than image textures; fur on the cow; the shopfront
-close-ups (27 and 30 s) are framed 20 to 60 px off; the saucer's arrival path;
-the sound by ear: nobody has listened to it yet.
+**What does not match yet:** the trees' crowns are blobbier than the
+original's wispy ones, and the far rows a little more visible; the van's and
+sedan's painted wear is less varied than image textures, and the sedan's body
+reads darker; the cow has no fur; the shopfront close-ups (27 and 30 s) are
+framed 20 to 60 px off; the saucer's arrival path; the return at 71 s is about
+9 levels too bright; and the sound has not been heard: nobody has listened to
+it yet.
 
 Brightness of the middle of the frame, ours against the original's (0 to
 255), from all 19 stills at 1440×1080 after the final exposure pass:
 
 | Still | Median, ours (theirs) | 99th percentile, ours (theirs) |
 | --- | --- | --- |
-| 01-establishing | 40 (38) | 149 (167) |
-| 02-lightning-sign | 72 (64) | 173 (192) |
-| 03-light-in-sky | 36 (33) | 138 (77) |
-| 04-station | 45 (41) | 177 (134) |
-| 05-car | 44 (39) | 108 (146) |
-| 06-canopy-pan | 48 (42) | 133 (119) |
-| 07-shopfront | 25 (30) | 168 (149) |
+| 01-establishing | 40 (38) | 148 (167) |
+| 02-lightning-sign | 65 (64) | 153 (192) |
+| 03-light-in-sky | 36 (33) | 136 (77) |
+| 04-station | 44 (41) | 176 (134) |
+| 05-car | 45 (39) | 105 (146) |
+| 06-canopy-pan | 48 (42) | 129 (119) |
+| 07-shopfront | 26 (30) | 168 (149) |
 | 08-interior | 25 (29) | 191 (208) |
-| 09-under-canopy | 50 (48) | 167 (157) |
+| 09-under-canopy | 50 (48) | 166 (157) |
 | 10-pasture | 37 (35) | 68 (77) |
-| 11-lightning-pasture | 71 (77) | 197 (233) |
+| 11-lightning-pasture | 84 (77) | 219 (233) |
 | 12-ufo-arrives | 40 (37) | 67 (79) |
-| 13-ufo-hover | 54 (48) | 110 (100) |
-| 14-beam | 65 (55) | 178 (195) |
-| 15-cow-rising | 65 (59) | 188 (196) |
-| 16-ufo-empty | 50 (55) | 119 (105) |
-| 17-ufo-leaves | 51 (52) | 83 (89) |
-| 18-return | 54 (45) | 158 (139) |
-| 19-glitch | 40 (35) | 135 (107) |
+| 13-ufo-hover | 54 (48) | 106 (100) |
+| 14-beam | 63 (55) | 172 (195) |
+| 15-cow-rising | 63 (59) | 182 (196) |
+| 16-ufo-empty | 49 (55) | 116 (105) |
+| 17-ufo-leaves | 52 (52) | 83 (89) |
+| 18-return | 54 (45) | 156 (139) |
+| 19-glitch | 39 (35) | 134 (107) |
 
 ## Files
 

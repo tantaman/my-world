@@ -17,7 +17,7 @@ import {
 export const FOG = {
   colour: new Color(0.085, 0.080, 0.090),   // linear; meets the sky at the horizon (the original's horizon mist is #464348)
   density: 0.019,       // per metre at y = 0: the original's trees are half fogged at 40 m, mostly gone by 80
-  falloff: 0.075,       // per metre of height
+  falloff: 0.035,       // per metre of height: thin enough higher up that the far crowns, 6 to 8 m up, fade as the original's do
   start: 6,             // metres of clear air before the fog begins: near things stay dark, as the original's do
 };
 

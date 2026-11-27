@@ -15,7 +15,7 @@ export const T = {
   carSeen: 16.5,
   carPasses: 20.0,       // nearest the camera (where the original's car is at 18.5, 19.5 and 20.5 s)
   carGone: 24.0,
-  strike2: 42.20,
+  strike2: 42.24,
   ufoArrive: 46.5,       // comes in from +X along the road
   ufoStop: 50.5,         // above the cow
   ringOn: 53.3,          // the ring under the hull brightens
@@ -54,8 +54,14 @@ export function env(t, keys) {
 }
 
 // Brightness of a lightning strike against seconds after it (PLAN 5.6).
-const STRIKE_1 = [[-0.01, 0], [0, 1], [0.08, 0.5], [0.15, 0.9], [0.3, 0.35], [0.6, 0.1], [0.9, 0]];
-const STRIKE_2 = [[-0.01, 0], [0, 1], [0.08, 0.5], [0.15, 0.85], [0.22, 0.4], [0.3, 0.9], [0.45, 0.9], [0.6, 0.3], [0.8, 0.08], [1.0, 0]];
+// Measured: the rise in the original's mean brightness, frame by frame at
+// 60 fps, as a share of its peak. The first strike flickers twice; the
+// second three times, its peak 0.03 s in.
+const STRIKE_1 = [[-0.01, 0], [0, 1], [0.05, 0.65], [0.1, 0.41], [0.15, 0.76], [0.2, 0.49], [0.25, 0.41], [0.3, 0.31],
+  [0.4, 0.22], [0.5, 0.13], [0.6, 0.1], [0.7, 0.08], [0.9, 0.04], [1.0, 0]];
+const STRIKE_2 = [[-0.01, 0], [0, 0.7], [0.03, 1], [0.06, 0.9], [0.11, 0.66], [0.16, 0.51], [0.21, 0.4], [0.26, 0.86],
+  [0.31, 0.63], [0.36, 0.49], [0.41, 0.72], [0.46, 0.55], [0.51, 0.43], [0.56, 0.36], [0.61, 0.28], [0.66, 0.24],
+  [0.71, 0.19], [0.76, 0.16], [0.86, 0.1], [0.96, 0.06], [1.11, 0.03], [1.2, 0]];
 
 // Which strike is lighting the world at t, and how brightly: { flash, which }.
 export function flash(t) {

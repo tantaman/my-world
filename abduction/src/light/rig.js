@@ -38,7 +38,7 @@ export const LIGHTS = {
   // The saucer's lamps on the field while it hovers: the original's tree
   // crowns turn green from about 50 s, before the beam, well away from it.
   // Falling off as 1/d, not 1/d^2 (it stands for many lamps round the rim), so it reaches the far crowns.
-  ufoField: { colour: new Color('#e6efff'), cd: 85, angle: 1.5, penumbra: 0.35, below: 1.5, decay: 1 },
+  ufoField: { colour: new Color('#e6efff'), cd: 55, angle: 1.5, penumbra: 0.35, below: 1.5, decay: 1 },
   beam: { colour: new Color('#e8f2ff'), cd: 2500, angle: 0.16, penumbra: 0.6 },
   sky: { colour: new Color('#3a3842'), ground: new Color('#1a1714'), lux: 0.9 },
   bounce: { colour: new Color('#d8d6cc'), nits: 0.22 },
