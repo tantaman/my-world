@@ -65,6 +65,19 @@ export const HEAT = 2;
 
 const FOG_DENSITY = 0.0021; // per metre at the height of the eye, in the forest's air
 const FOG_THIN = 0.03; // per metre of height: how quickly the forest's haze thins upward
+// The air where the view is open (openAir, set by the far view: far/), as a
+// photograph of a real view measured it (tools/look.mjs: Mount Storm King,
+// across Lake Crescent on a clear afternoon). The forest's haze is thick at
+// its floor and gone a few tens of metres up, and closes in before the land
+// drawn round you runs out. Seen from a summit, real air is far clearer down
+// in the valley and thins far more slowly upward: the photo's ridges 15 to
+// 20 km off (3 to 4 km here, at the hikes' 1:5) are 0.4 of the way into the
+// sky's colour, slopes 5 km off barely 0.1. So, as the view opens: the haze
+// this share of the forest's at the floor, thinning upward this fast (1/m),
+// and the last of the land fading into the sky only from this share of the
+// way to where it ends (the forest's: FOG_FADE).
+const OPEN_AIR = { density: 0.1, thin: 0.002, fade: 0.8 };
+const FOG_FADE = 0.55; // share of the way to where the land drawn ends that it starts fading into the sky
 const FOG_TINT = 0.82; // the fog's colour: the sky's behind it, a little dimmed
 const FAR_Z = 6.0e4; // m: how far off the sky is said to be in the copy (as far as half a float holds)
 const GLOW_AIR = 1.6; // how much more the air near a light scatters than the haze shows: the smoke and heat over a fire
@@ -210,6 +223,7 @@ uniform float uFogDensity;
 uniform float uFogHeight;
 uniform float uFogFloor;
 uniform float uFogFar;
+uniform float uFogFade;
 uniform float uFogTint;
 uniform vec3 uGroundMist; // height of the layer, falloff distance, and density
 uniform vec2 uMistWind;
@@ -478,7 +492,7 @@ void main() {
     float fogAmt = uFogDensity * exp(-(uCamPos.y - uFogFloor) * b) * (1.0 - exp(-dist * ry * b)) / (ry * b);
     if (uGroundMist.z > 0.0) fogAmt += groundMist(rd, dist);
     float fog = 1.0 - exp(-max(fogAmt, 0.0));
-    fog = max(fog, smoothstep(uFogFar * 0.55, uFogFar, dist));
+    fog = max(fog, smoothstep(uFogFar * uFogFade, uFogFar, dist));
     vec3 frd = normalize(vec3(rd.x, clamp(rd.y, 0.0, 0.08), rd.z));
     col = mix(col, skyGradient(frd) * uFogTint, clamp(fog, 0.0, 1.0));
   }
@@ -688,7 +702,7 @@ const hdrTarget = (w, h, filter = THREE.LinearFilter) =>
 
 // What another pipeline takes on of the game's own, drawing another part of
 // a split screen (render/views.ts, lookLike below): how it looks, and the air.
-const LOOK = ['enabled', 'pixelSize', 'softness', 'outline', 'levels', 'dither', 'ao', 'bloom', 'fogFar', 'haze', 'fogFloor', 'fogThin'];
+const LOOK = ['enabled', 'pixelSize', 'softness', 'outline', 'levels', 'dither', 'ao', 'bloom', 'fogFar', 'haze', 'fogFloor', 'fogThin', 'openAir'];
 
 export class Pipeline {
   // lights, casters: the pool of lights given off by things (lights.js), and
@@ -727,6 +741,10 @@ export class Pipeline {
     // (src/hell/), where the air is as thick at any height, makes this next
     // to nothing.
     this.fogThin = FOG_THIN;
+    // How far the view is open, 0..1: as the far view (far/) draws the land
+    // out past the streamed-in forest, the air goes over to the open air's
+    // (OPEN_AIR, above).
+    this.openAir = 0;
     // An optional second layer of fog, concentrated around a world height.
     this.groundMist = null;
     // A local bank of smoke or fog lying along a curved ledge.
@@ -780,6 +798,7 @@ export class Pipeline {
         uCamPos: { value: new THREE.Vector3() },
         uOutline: { value: 0 },
         uFogDensity: { value: FOG_DENSITY },
+        uFogFade: { value: FOG_FADE },
         uFogHeight: { value: FOG_THIN },
         uFogFloor: { value: 0 },
         uFogFar: { value: 250 },
@@ -955,6 +974,12 @@ export class Pipeline {
     this.renderer.render(this.quad, this.quadCam);
   }
 
+  // How thick the air is at the haze's floor (per metre): the forest's, as
+  // thick as the place's country says (haze), and thinner as the view opens.
+  airDensity() {
+    return FOG_DENSITY * this.haze * (1 + (OPEN_AIR.density - 1) * this.openAir);
+  }
+
   // fogLight: how much daylight the air holds (the sky's `open`): in a cave
   // the far walls fade into the dark, not into a misty sky. dt: seconds
   // since the last frame, for the eye to adjust over.
@@ -986,7 +1011,7 @@ export class Pipeline {
     b.uFar.value = camera.far;
     this.draw(this.behind, this.rtBehind);
     BEHIND.uProj.value.copy(camera.projectionMatrix);
-    BEHIND.uAirFog.value = FOG_DENSITY * this.haze;
+    BEHIND.uAirFog.value = this.airDensity();
     // ...and what is on OVER, over it: the same shadows, not drawn again,
     // the same background, not cleared again, and everything where the
     // first go put it (three.js would otherwise work out where every
@@ -1058,9 +1083,11 @@ export class Pipeline {
     u.uFogTint.value = FOG_TINT * fogLight;
     u.uOutline.value = pixel ? this.outline : 0;
     u.uFogFar.value = this.fogFar || (CONFIG.viewRadius - 0.15) * CONFIG.chunkSize;
-    u.uFogDensity.value = FOG_DENSITY * this.haze;
+    const open = this.openAir;
+    u.uFogDensity.value = this.airDensity();
     u.uFogFloor.value = this.fogFloor;
-    u.uFogHeight.value = this.fogThin;
+    u.uFogHeight.value = this.fogThin + (OPEN_AIR.thin - this.fogThin) * open;
+    u.uFogFade.value = FOG_FADE + (OPEN_AIR.fade - FOG_FADE) * open;
     const mist = this.groundMist;
     u.uGroundMist.value.set(mist?.floor ?? 0, mist?.height ?? 1, mist?.density ?? 0);
     if (mist) u.uMistWind.value.copy(mist.wind);
@@ -1075,7 +1102,7 @@ export class Pipeline {
     }
     // the air round the lights, where they are in the picture's frame (slid
     // as the scene is)
-    u.uGlowAir.value = FOG_DENSITY * this.haze * GLOW_AIR;
+    u.uGlowAir.value = this.airDensity() * GLOW_AIR;
     const glow = this.lights.glow;
     for (let i = 0; i < glow.length; i++) {
       const o = glow[i];

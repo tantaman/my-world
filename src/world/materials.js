@@ -4,6 +4,7 @@ import { SHARED, LAND, UNDER } from '../render/uniforms.js';
 import { CUTS, CUT_GLSL, SHRINK, RIM } from './cuts.js';
 import { SEA } from './sea.js';
 import { FOLIAGE_GLSL, FOLIAGE_DEPTH_GLSL } from './foliage.js';
+import { photo, photosOn, PHOTO_GLSL } from '../render/photos.ts';
 
 // A shader here that needs to know where in the world something is asks
 // worldXZ() (render/glsl.js), never modelMatrix alone: while a frame is drawn
@@ -27,11 +28,36 @@ import { FOLIAGE_GLSL, FOLIAGE_DEPTH_GLSL } from './foliage.js';
 // With the camera under water, the post-process does the darkening (for
 // everything down there, not just the ground), and the net of light reaches
 // further down.
+//
+// The forest floor is photographed (render/photos.ts): needles and leaf
+// litter, and moss where the floor is mossy, each laid over the colour the
+// code gave it as its light and dark, its hue a little, and its lumps. So the
+// floor has the clutter of a real one close up, and is the colour it was
+// from further off. Only the floor's share of a spot (gFloor, glsl.js):
+// not a path, rock, a beach or the bed of a stream.
 const RELIEF_NEAR = 25; // m: the ground's lumps show in full this close
 const RELIEF_FAR = 80; // and are gone this far off
+const FLOOR_SAT = 0.35; // how much of the photos' own hue comes through, 0..1 (the rest is the code's)
+const FLOOR_CONTRAST = 1.15; // over 1 deepens the photos' light and dark
+const FLOOR_BUMP = 0.55; // how far the photos' lumps tip the ground's normal
 export function createTerrainMaterial() {
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
+  const photos = photosOn();
+  // (each: its id, and the metres one photo covers)
+  const litter = photos ? photo('forrest_ground_03', 2) : null; // pine needles, leaf litter, twigs
+  const moss = photos ? photo('forest_leaves_02', 3) : null; // moss, sticks and leaves
   mat.onBeforeCompile = (shader) => {
+    if (photos) {
+      Object.assign(shader.uniforms, {
+        tLitter: { value: litter.map },
+        tLitterArm: { value: litter.arm },
+        tLitterNormal: { value: litter.normal },
+        tMoss: { value: moss.map },
+        tMossArm: { value: moss.arm },
+        tMossNormal: { value: moss.normal },
+      });
+      shader.defines = { ...shader.defines, FLOOR_PHOTOS: '' };
+    }
     shader.uniforms.uTime = SHARED.uTime;
     shader.uniforms.uOrigin = SHARED.uOrigin;
     Object.assign(shader.uniforms, LAND);
@@ -84,9 +110,21 @@ export function createTerrainMaterial() {
         ${WORLD_NOISE_GLSL}
         ${GROUND_GLSL}
         ${ABSORB_GLSL}
+        #ifdef FLOOR_PHOTOS
+        ${PHOTO_GLSL}
+        uniform sampler2D tLitter;
+        uniform sampler2D tLitterArm;
+        uniform sampler2D tLitterNormal;
+        uniform sampler2D tMoss;
+        uniform sampler2D tMossArm;
+        uniform sampler2D tMossNormal;
+        #endif
         // Above the trees: thin, tawny turf among stones. Snow on top of that
-        // where it lies, in drifts, but not on the cliffs.
+        // where it lies, in drifts, but not on the cliffs. (gHigh: how much
+        // of what it gave is either, 0..1.)
+        float gHigh;
         vec3 highGround(vec3 col, vec2 wp, vec2 high, float slope) {
+          gHigh = 0.0;
           if (high.x + high.y < 0.001) return col;
           float n1 = wnoise(wp, 0.45, vec2(21.0));
           float n2 = wnoise(wp, 2.3, vec2(-8.0));
@@ -95,10 +133,12 @@ export function createTerrainMaterial() {
           vec3 turf = mix(vec3(0.085, 0.105, 0.04), vec3(0.15, 0.135, 0.075), smoothstep(0.35, 0.75, n1));
           vec3 stone = vec3(0.17, 0.165, 0.15) * (0.8 + 0.4 * n2);
           turf = mix(turf, stone, smoothstep(0.55, 0.8, n2 + (1.0 - n3) * 0.15) * 0.85);
-          col = mix(col, turf, clamp(high.x * 1.3 - 0.15 + (n3 - 0.5) * 0.5, 0.0, 1.0) * gentle);
+          float onTurf = clamp(high.x * 1.3 - 0.15 + (n3 - 0.5) * 0.5, 0.0, 1.0) * gentle;
+          col = mix(col, turf, onTurf);
           float lie = clamp(high.y * 1.6 - 0.3 + (n3 - 0.5) * 0.9 + (n1 - 0.5) * 0.25, 0.0, 1.0);
           lie *= 1.0 - smoothstep(0.26, 0.4, slope + (n2 - 0.5) * 0.08);
           vec3 snow = vec3(0.6, 0.62, 0.66) * (0.93 + 0.1 * n2);
+          gHigh = 1.0 - (1.0 - onTurf) * (1.0 - lie);
           return mix(col, snow, lie);
         }
         ${CUT_GLSL}
@@ -174,6 +214,9 @@ export function createTerrainMaterial() {
         `#include <color_fragment>
         vec2 wp = worldXZ(vWorldPos);
         diffuseColor.rgb = groundColor(wp, vWorldPos.y, vGround.x, vGround.y, 1.0 - vWorldNormal.y, vLand, vCountry);
+        // (how much of this spot is still the forest floor, as what is laid
+        // over it below takes its share)
+        float floorW = gFloor;
         // by the sea: a beach of pale sand, up from the waterline (the forest's:
         // a real place's own country, or the real Earth's, lays its own)
         float seaY = vWorldPos.y - uSea;
@@ -187,9 +230,11 @@ export function createTerrainMaterial() {
           onSand *= 1.0 - smoothstep(0.42, 0.6, 1.0 - vWorldNormal.y); // not on a cliff
           onSand *= 1.0 - vLand.z;
           diffuseColor.rgb = mix(diffuseColor.rgb, sand, onSand);
+          floorW *= 1.0 - onSand;
         }
         // high ground, and snow where it lies (over a beach too, in winter)
         diffuseColor.rgb = highGround(diffuseColor.rgb, wp, vHigh, 1.0 - vWorldNormal.y);
+        floorW *= 1.0 - gHigh;
         if (cutF < ${RIM.toFixed(3)} + 1.0) {
           // broken rock round a hole in the ground, ragged at its edge
           float rn = wnoise(wp, 1.3, vec2(vWorldPos.y)) * 0.65 + wnoise(wp, 4.7) * 0.35;
@@ -197,6 +242,7 @@ export function createTerrainMaterial() {
           vec3 stone = vec3(0.15, 0.14, 0.125) * (0.65 + 0.6 * wnoise(wp, 3.1, vec2(-vWorldPos.y * 2.0)));
           stone = mix(stone, vec3(0.06, 0.1, 0.03), smoothstep(0.55, 0.8, wnoise(wp, 0.9)) * 0.6);
           diffuseColor.rgb = mix(diffuseColor.rgb, stone, rim);
+          floorW *= 1.0 - rim;
         }
         if (vWater.y > 0.01) {
           float wd = vWater.x - vWorldPos.y; // depth under the water surface
@@ -205,7 +251,10 @@ export function createTerrainMaterial() {
           // a beach of sand and gravel just above the water, damp at the edge
           vec3 sand = mix(vec3(0.19, 0.16, 0.11), vec3(0.15, 0.135, 0.11), smoothstep(0.35, 0.7, n2));
           float beach = (1.0 - smoothstep(0.08, 0.3 + 0.35 * n1, -wd)) * vWater.y;
-          if (!seaWater) diffuseColor.rgb = mix(diffuseColor.rgb, sand, beach * 0.85);
+          if (!seaWater) {
+            diffuseColor.rgb = mix(diffuseColor.rgb, sand, beach * 0.85);
+            floorW *= 1.0 - beach * 0.85;
+          }
           diffuseColor.rgb *= 1.0 - 0.4 * (1.0 - smoothstep(0.0, 0.1 + 0.08 * n2, -wd)) * vWater.y;
           if (wd > 0.0) {
             // silt, pebbles and cobbles, rounded so they catch the light on
@@ -242,13 +291,29 @@ export function createTerrainMaterial() {
             float caustic = causticAt(wp, uTime);
             bed *= 1.0 + caustic * mix(0.8 * exp(-wd * 1.5), 1.1 * exp(-wd * 0.11), uUnder);
             diffuseColor.rgb = mix(diffuseColor.rgb, bed, smoothstep(0.0, 0.12, wd));
+            floorW *= 1.0 - smoothstep(0.0, 0.12, wd);
             // The daylight that reaches it came down through the water, which
             // took the reds first. (On the way back up to the eye, the water
             // does the same again: waterSurface.js. From below the surface,
             // the post-process does both, for everything.)
             if (uUnder < 0.5) diffuseColor.rgb *= exp(-wd * waterAbsorb(seaWater ? 1.0 : 0.0));
           }
-        }`,
+        }
+        // the floor, photographed: its clutter over the colour it already is
+        // (u along the world's x, v against its z: the frame its normals were
+        // drawn in, seen from above)
+        #ifdef FLOOR_PHOTOS
+        vec2 photoTip = vec2(0.0);
+        vec2 uvL = vec2(wp.x, -wp.y) / ${litter ? litter.metres.toFixed(6) : '1.0'};
+        vec2 uvM = vec2(wp.x, -wp.y) / ${moss ? moss.metres.toFixed(6) : '1.0'};
+        vec2 dxL = dFdx(uvL), dyL = dFdy(uvL), dxM = dFdx(uvM), dyM = dFdy(uvM);
+        if (floorW > 0.002) {
+          vec3 shade = mix(photoShade(tLitter, tLitterArm, uvL, dxL, dyL, ${FLOOR_SAT.toFixed(2)}), photoShade(tMoss, tMossArm, uvM, dxM, dyM, ${FLOOR_SAT.toFixed(2)}), gMoss);
+          shade = pow(shade, vec3(${FLOOR_CONTRAST.toFixed(2)}));
+          diffuseColor.rgb *= mix(vec3(1.0), shade, floorW);
+          photoTip = mix(photoTilt(tLitterNormal, uvL, dxL, dyL), photoTilt(tMossNormal, uvM, dxM, dyM), gMoss) * floorW * ${FLOOR_BUMP.toFixed(2)};
+        }
+        #endif`,
       )
       .replace(
         '#include <normal_fragment_maps>',
@@ -259,10 +324,15 @@ export function createTerrainMaterial() {
           float fw = length(fwidth(wp));
           float near = 1.0 - smoothstep(${RELIEF_NEAR.toFixed(1)}, ${RELIEF_FAR.toFixed(1)}, length(vViewPosition));
           if (near > 0.0) normal = reliefNormal(normal, relief(wp, 1.0 - vWorldNormal.y, fw) * near * (1.0 - 0.6 * vHigh.y));
+          #ifdef FLOOR_PHOTOS
+          // the photos' lumps: u runs along x and v against z, so a tip
+          // (along u, along v) leans the normal toward (x, -z)
+          if (floorW > 0.002) normal = normalize(normal + (viewMatrix * vec4(photoTip.x, 0.0, -photoTip.y, 0.0)).xyz);
+          #endif
         }`,
       );
   };
-  mat.customProgramCacheKey = () => 'terrain-v10';
+  mat.customProgramCacheKey = () => `terrain-v11${photos ? '-photos' : ''}`;
   return mat;
 }
 

@@ -15,17 +15,45 @@
 // ground between: each point sinks further by as much as the land falls
 // from it to the next.
 //
+// A wood from afar isn't a smooth green sheet: it's crowns, each lit on the
+// sun's side and dark on the other, with darker gaps between, gathered in
+// clumps and stands with hollows among them, the whole of it rough with
+// small gullies. So over a wood the picture draws a height for the canopy, a
+// pixel at a time: domes on a jittered grid (CROWNS), and over them clumps,
+// stands and hollows (STANDS), which tips the light as the real ones do and
+// is darker down in the gaps. Each scale gives way to its own average as it
+// gets smaller than a pixel or so, rather than shimmer: so close to, the
+// crowns; a few km off, the stands and hollows, which a photograph from
+// Mount Storm King shows as the texture of its far slopes (tools/look.mjs).
+// The crowns are the size of a real one at the hikes' 1:5.
+// ?no=canopy (config.js) leaves them out, the wood its one colour again.
+//
 // Each mesh is measured from its own corner and put there, like a chunk
 // (render/origin.js).
 
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import { SKY_GLSL, SKY_UNIFORMS_GLSL } from '../render/glsl.js';
-import { SKY } from '../render/uniforms.js';
+import { SKY_GLSL, SKY_UNIFORMS_GLSL, NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL } from '../render/glsl.js';
+import { SKY, SHARED } from '../render/uniforms.js';
 import { NO_WATER } from '../world/water.js';
 import { COUNTRIES } from '../world/country.js';
 
 const CANOPY = 11; // m: how far the crowns of a closed wood stand over the ground
+// The crowns drawn over a wood from afar (see the top). m between them (a
+// real crown's 8 or so at the hikes' 1:5, a little more), how much of their
+// cell each fills, how far a crown's dome tips the light at its edge, how
+// dark the gaps between them are (of the crowns' colour), how much one
+// crown's colour differs from the next, and the share of a crown's width a
+// pixel may be before they've all given way to their average.
+const CROWNS = { size: 2.4, fill: 0.8, tall: 1.2, gap: 0.3, vary: 0.35, gone: 0.9 };
+// Clumps, stands and the hollows between them over the crowns: each m
+// across, m high, and how much darker (of the canopy's colour) it is at the
+// bottom of one than at the top.
+const STANDS = [
+  { size: 7, tall: 2.2, dark: 0.3 },
+  { size: 20, tall: 5, dark: 0.35 },
+  { size: 55, tall: 11, dark: 0.3 },
+];
 const SINK = 45; // m: how far it drops out of sight under the loaded chunks
 const SINK_BAND = 48; // m inside their edge over which it drops
 const UNDER = 0.8; // m: it always sits this far under the real ground
@@ -117,8 +145,10 @@ export class FarView {
 
   _material(clip) {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+    const crowns = !CONFIG.no.has('canopy');
     mat.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, SKY, { uMid: this.mid, uHalf: this.half });
+      Object.assign(shader.uniforms, SKY, { uMid: this.mid, uHalf: this.half, uOrigin: SHARED.uOrigin });
+      if (crowns) shader.defines = { ...shader.defines, FAR_CROWNS: '' };
       shader.vertexShader = shader.vertexShader
         .replace(
           '#include <common>',
@@ -126,9 +156,11 @@ export class FarView {
           attribute float aCanopy;
           attribute float aWater;
           attribute float aDrop;
+          attribute float aWood;
           uniform vec2 uMid;
           uniform float uHalf;
           varying float vWater;
+          varying float vWood;
           varying vec3 vWPos;`,
         )
         .replace(
@@ -141,6 +173,7 @@ export class FarView {
             float under = smoothstep(0.0, ${SINK_BAND.toFixed(1)}, e);
             transformed.y += aCanopy * (1.0 - under) - under * (${SINK.toFixed(1)} + aDrop) - ${UNDER.toFixed(2)};
             vWater = aWater;
+            vWood = aWood;
             vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
           }`,
         );
@@ -149,9 +182,98 @@ export class FarView {
           '#include <common>',
           `#include <common>
           varying float vWater;
+          varying float vWood;
           varying vec3 vWPos;
           ${SKY_UNIFORMS_GLSL}
-          ${SKY_GLSL}`,
+          ${SKY_GLSL}
+          #ifdef FAR_CROWNS
+          ${NOISE_GLSL}
+          ${WORLD_GLSL}
+          ${WORLD_NOISE_GLSL}
+          // The nearest crown to wp: how far from its middle (0) to its edge
+          // (1), which way (off, in crown widths), and a number of its own.
+          float crownAt(vec2 wp, out vec2 off, out float id) {
+            float m = cellsIn(1.0 / ${CROWNS.size.toFixed(2)});
+            vec2 p = wp * (m / PERIOD);
+            vec2 c = floor(p);
+            vec2 f = fract(p);
+            float best = 9.0;
+            off = vec2(0.0);
+            id = 0.0;
+            for (int j = -1; j <= 1; j++) {
+              for (int i = -1; i <= 1; i++) {
+                vec2 o = vec2(float(i), float(j));
+                vec2 k = wrapCell(c + o, m);
+                vec2 at = o + 0.15 + 0.7 * vec2(hash12(k), hash12(k + 19.7));
+                float r = (0.75 + 0.5 * hash12(k + 3.1)) * ${(CROWNS.fill / 2).toFixed(3)};
+                vec2 d = (f - at) / r;
+                float q = length(d);
+                if (q < best) {
+                  best = q;
+                  off = d;
+                  id = hash12(k + 7.3);
+                }
+              }
+            }
+            return best;
+          }
+          // The normal (in view space) of a surface whose height over it is h
+          // here, from how h changes from pixel to pixel.
+          vec3 canopyNormal(vec3 n, float h) {
+            vec3 pos = -vViewPosition;
+            vec3 dpx = dFdx(pos);
+            vec3 dpy = dFdy(pos);
+            vec3 r1 = cross(dpy, n);
+            vec3 r2 = cross(n, dpx);
+            float det = dot(dpx, r1);
+            vec3 grad = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+            return normalize(abs(det) * n - grad);
+          }
+          #endif`,
+        )
+        .replace(
+          '#include <color_fragment>',
+          `#include <color_fragment>
+          #ifdef FAR_CROWNS
+          // crowns over a wood (see the top of far/view.js): darker in the
+          // gaps, each its own shade; as they shrink past a pixel, their average
+          float canopyH = 0.0;
+          if (vWood > 0.01) {
+            vec2 cwp = worldXZ(vWPos);
+            float fw = length(fwidth(cwp));
+            // the crowns, while they're bigger than a pixel or so
+            float crownNear = 1.0 - smoothstep(${(CROWNS.size * 0.3).toFixed(2)}, ${(CROWNS.size * CROWNS.gone).toFixed(2)}, fw);
+            vec2 off;
+            float id;
+            float r = crownAt(cwp, off, id);
+            float inCrown = 1.0 - smoothstep(0.85, 1.05, r);
+            float shade = mix(${CROWNS.gap.toFixed(2)}, 1.0 + (id - 0.5) * ${CROWNS.vary.toFixed(2)}, inCrown);
+            // (the average of that over a cell, for where they're too small to see)
+            float mean = mix(${CROWNS.gap.toFixed(2)}, 1.0, ${(Math.PI * (CROWNS.fill / 2) ** 2 * 1.08).toFixed(3)});
+            float tone = mix(mean, shade, crownNear);
+            canopyH = max(0.0, 1.0 - r * r) * ${CROWNS.tall.toFixed(2)} * crownNear;
+            // the clumps, stands and hollows, each while it's bigger than a pixel or so
+            ${STANDS.map(
+              (s, k) => `{
+              float near = 1.0 - smoothstep(${(s.size * 0.25).toFixed(2)}, ${(s.size * 0.7).toFixed(2)}, fw);
+              float v = wnoise(cwp, ${(1 / s.size).toFixed(5)}, vec2(${(k * 17.3).toFixed(1)})) - 0.5;
+              canopyH += v * ${s.tall.toFixed(2)} * near;
+              tone *= 1.0 + v * ${(2 * s.dark).toFixed(2)} * near;
+            }`,
+            ).join('\n            ')}
+            diffuseColor.rgb *= mix(1.0, tone, vWood);
+            canopyH *= vWood;
+          }
+          #endif`,
+        )
+        .replace(
+          '#include <normal_fragment_maps>',
+          `#include <normal_fragment_maps>
+          #ifdef FAR_CROWNS
+          // the canopy's height tips the light: crowns lit on the sun's side,
+          // stands and hollows on theirs
+          if (canopyH != 0.0) normal = canopyNormal(normal, canopyH);
+          #endif`,
         )
         .replace(
           '#include <clipping_planes_fragment>',
@@ -170,7 +292,7 @@ export class FarView {
           #include <opaque_fragment>`,
         );
     };
-    mat.customProgramCacheKey = () => `far-view-v4-${clip}`;
+    mat.customProgramCacheKey = () => `far-view-v5-${clip}${crowns ? '-crowns' : ''}`;
     return mat;
   }
 }
@@ -182,6 +304,7 @@ function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, c
   const pos = new Float32Array(N * 3);
   const col = new Float32Array(N * 3);
   const canopy = new Float32Array(N);
+  const woods = new Float32Array(N);
   const wet = new Float32Array(N);
   const y = new Float32Array(N);
   for (let k = 0; k < N; k++) y[k] = water[k] > NO_WATER * 0.5 ? water[k] : h[k];
@@ -239,6 +362,7 @@ function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, c
         const v = 0.85 + 0.3 * hash(i, j);
         _c.multiplyScalar(v);
         canopy[k] = wood * CANOPY * (0.8 + 0.4 * hash(j, i));
+        woods[k] = wood;
       }
       col[k * 3] = _c.r;
       col[k * 3 + 1] = _c.g;
@@ -262,6 +386,7 @@ function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, c
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   geo.setAttribute('aCanopy', new THREE.BufferAttribute(canopy, 1));
+  geo.setAttribute('aWood', new THREE.BufferAttribute(woods, 1));
   geo.setAttribute('aWater', new THREE.BufferAttribute(wet, 1));
   geo.setAttribute('aDrop', new THREE.BufferAttribute(drop, 1));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));

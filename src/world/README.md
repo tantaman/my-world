@@ -343,8 +343,10 @@ models.js             procedural trees, bushes, ferns, rocks, logs: trunks, bran
 modelsIsland.js       and other countries': palm, ironwood, tree fern, silversword, bald cypress
 foliage.js            what a plant's surfaces are: needles and leaves cut from cards, bark (shader)
 grass.js              grass blades, wildflowers, reeds and lilies near the player (and near the others on a split screen)
-materials.js          terrain / vegetation / grass shader hooks; plants' shadows, with their gaps
-sky.js                sky dome, clouds, stars, sun/moon, time-of-day palettes; how much
-                      daylight reaches the eye (open)
+materials.js          terrain / vegetation / grass shader hooks; plants' shadows, with their gaps;
+                      the forest floor photographed (render/photos.ts)
+sky.js                sky dome, its cumulus (cloudCover), stars, sun/moon, time-of-day palettes; how much
+                      daylight reaches the eye (open); the light all round as set by eye
+                      (hemi, ambient), which the sky as light takes (render/skyLight.ts)
 particles.js          pollen motes and fireflies
 ```

@@ -1,9 +1,12 @@
 # my-world
 
 An open-world forest in three.js, with building, wildlife, water and shared
-saved worlds. Everything is made in code: no textures, models or audio files.
-README.md describes the game; its "How it's put together" section is the
-architecture, and is worth reading before adding anything.
+saved worlds. Everything is made in code: models, sound, the land, the sky.
+The one thing that isn't is photographs of real surfaces (CC0 scans, in
+`public/photos/`), which give the code's colours the clutter and lumps of
+real ground, bark and stone (`src/render/photos.ts`). No model or audio
+files. README.md describes the game; its "How it's put together" section is
+the architecture, and is worth reading before adding anything.
 
 ## Commands
 
@@ -20,6 +23,8 @@ npm run earth        # the real Earth under the world, into src/world/earth/ (fe
 npm run zoo          # the National Zoo on its real ground, into src/zoo/ (fetches OSM + DC's surveyed roofs)
 npm run dc           # Washington, DC round it, into src/washington/ (fetches DC's roofs, streets, street trees)
 npm run metro        # Washington's Metro, into src/metro/ (fetches OSM's lines, DC's Metro entrances)
+npm run photos       # the photographs of surfaces that src/ asks for, into public/photos/ (fetches Poly Haven)
+npm run look -- mount-storm-king   # the game beside a hike's photo, measured (needs `npm run build`)
 ```
 
 Run `npm test` after any change. Run `npm run smoke` after touching anything
@@ -226,6 +231,34 @@ don't edit the same lines:
 - Values put into or taken out of the element record must be copies
   (`own()` in `save/regions.js` does this for domains that go through the
   registry).
+
+## The look, against photographs
+
+The look aims at a photograph of a real place, so it is set against real
+photographs, not by eye alone. That is how the abduction study (a remake of
+a three.js short, on its own branch) got its look: every first guess it made
+was wrong, and the numbers said so.
+
+- `npm run look -- <hike>` stands the camera where the hike's photo was
+  taken, at its hour, as wide as its lens, and sets the shot beside the
+  photo (`reference/hikes/`) with numbers: how bright the middle of the
+  picture is, and the colour of its thirds. A change to light, exposure,
+  colour or haze says in its commit what those numbers did, on which hikes.
+- `?no=skylight,photos` (config.js) leaves a part of the look out;
+  `npm run look -- <where> --pair <part>` shoots with and without it. A new
+  part of the look gets a name there, so it can be seen and costed alone.
+- A surface that looks too clean takes a photograph: `photo('id', metres)`
+  (render/photos.ts), read with `PHOTO_GLSL`, then `npm run photos` and
+  commit `public/photos/<id>/`. The photo is detail round its own average,
+  never the colour: the colour is still the code's (a country's ground is
+  its entry in `world/country.js`). Lay it at `worldXZ()` (or the thing's
+  own frame), at `photo.metres`, which repeats on the world's period.
+- Light that isn't the sun's is the sky's (render/skyLight.ts): its levels
+  are still the hemisphere light's in `world/sky.js`, which is what to
+  change, or read, for the light all round. Don't add an ambient light.
+- The browser in the cloud container draws in software: fine for what a
+  picture looks like, a minute or so a still, and no use for how fast it
+  is. Say so rather than guess at a cost.
 
 ## Style
 

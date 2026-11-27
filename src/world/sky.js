@@ -58,6 +58,21 @@ const SHADOW_SOFT = 2;
 // How bright the picture is made deep in a cave, whatever the hour outside.
 const DARK_EXPOSURE = 2.1;
 
+// The clouds: fair-weather cumulus on a layer overhead. How much of the sky
+// they cover, 0..1, as the weather has it (cloudCover; overcast covers it
+// more). How bright they are was set against a photograph (tools/look.mjs:
+// Mount Storm King on a summer afternoon): where the sun is on them, about
+// twice the blue sky's brightness, a little warm; in their own shade and
+// underneath, grey, about as bright as the blue between them.
+const CLOUD_COVER = 0.45;
+const CLOUD = {
+  sun: 0.6, // of the sun's colour, where it's on them
+  sky: 1.0, // and of the horizon's, all over
+  shade: 0.55, // grey (the horizon's, half drained of colour) times this, in their own shade
+  scale: 1.25, // how many billows across the sky (more: smaller)
+  edge: [0.62, 0.36], // where the billows' noise becomes cloud, with none of the sky covered and all of it
+};
+
 const _right = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _center = new THREE.Vector3();
@@ -68,14 +83,22 @@ export class Sky {
     this.hours = CONFIG.timeOfDay;
     this.exposure = 1;
     this.open = 1;
+    // The hemisphere light's intensity as the sky gives it, before the open
+    // sky's share (open) or anyone else's change: what the sky as light
+    // (render/skyLight.ts) measures their changes against.
+    this.ambient = 1;
     this.sunDir = new THREE.Vector3();
     this.lightDir = new THREE.Vector3(0, 1, 0);
     // 0..1: how much of the sun cloud overhead is taking (set by whoever
     // knows what the sky is doing: the country feature). The light goes flat.
     this.overcast = 0;
+    // 0..1: how much of the sky the fair-weather clouds cover (more as it
+    // goes overcast)
+    this.cloudCover = CLOUD_COVER;
+    this._cover = { value: CLOUD_COVER };
 
     const mat = new THREE.ShaderMaterial({
-      uniforms: SKY,
+      uniforms: { ...SKY, uCloudCover: this._cover },
       vertexShader: /* glsl */ `
         varying vec3 vDir;
         void main() {
@@ -87,7 +110,12 @@ export class Sky {
         ${SKY_UNIFORMS_GLSL}
         ${NOISE_GLSL}
         ${SKY_GLSL}
+        uniform float uCloudCover;
         varying vec3 vDir;
+        // The clouds' billows over the layer at q: how much cloud, 0..1-ish.
+        float billows(vec2 q) {
+          return fbm4(q * 0.9) * 0.62 + fbm4(q * 2.6 + 4.0) * 0.38;
+        }
         void main() {
           vec3 rd = normalize(vDir);
           vec3 col = skyGradient(rd);
@@ -113,16 +141,25 @@ export class Sky {
               col += vec3(0.8, 0.85, 1.0) * star * tw * uNight * smoothstep(0.0, 0.25, rd.y) * 1.6;
             }
           }
-          // clouds: a soft drifting layer
+          // clouds: fair-weather cumulus on a layer overhead, seen in
+          // perspective. Billows (noise pushed about by noise), as much of
+          // the sky as uCloudCover says, white where the sun is on them,
+          // grey in their own shade (thicker toward the sun than here) and
+          // where they're deep, going into the haze toward the horizon.
           if (rd.y > 0.0) {
-            vec2 uv = rd.xz / (rd.y + 0.18) * 1.6 + vec2(uTime * 0.006, uTime * 0.002);
-            float c = fbm4(uv * 0.9);
-            float c2 = fbm4(uv * 2.3 + 4.0);
-            float cov = smoothstep(0.56, 0.8, c * 0.75 + c2 * 0.35) * smoothstep(0.0, 0.25, rd.y);
-            float lit = clamp(0.55 + 0.45 * dot(normalize(vec3(rd.x, 0.0, rd.z)), normalize(vec3(uSunDir.x, 0.0, uSunDir.z) + 1e-4)), 0.0, 1.0);
-            vec3 cloudCol = mix(uHorizon * 0.75 + uZenith * 0.2, uHorizon * 0.6 + uSunColor * 0.65, lit * (1.0 - uNight));
-            cloudCol = mix(cloudCol, cloudCol * 0.72, smoothstep(0.6, 0.95, c2));
-            col = mix(col, cloudCol, cov * 0.85);
+            vec2 uv = rd.xz / (rd.y + 0.12) * ${CLOUD.scale.toFixed(2)} + vec2(uTime * 0.006, uTime * 0.002);
+            vec2 q = uv + (vec2(fbm4(uv * 0.55 + 3.1), fbm4(uv * 0.55 - 7.4)) - 0.5) * 1.1;
+            float d = billows(q);
+            float edge = mix(${CLOUD.edge[0].toFixed(2)}, ${CLOUD.edge[1].toFixed(2)}, uCloudCover);
+            float cov = smoothstep(edge, edge + 0.07, d) * smoothstep(0.0, 0.05, rd.y);
+            float deep = smoothstep(edge, edge + 0.3, d);
+            float towardSun = billows(q + normalize(uSunDir.xz + 1e-4) * 0.12);
+            float shade = clamp((towardSun - d) * 6.0 + deep * 0.5 - 0.1, 0.0, 1.0);
+            vec3 lit = uSunColor * ${CLOUD.sun.toFixed(2)} * (1.0 - uNight) + uHorizon * ${CLOUD.sky.toFixed(2)};
+            vec3 grey = mix(uHorizon, vec3(dot(uHorizon, vec3(0.2126, 0.7152, 0.0722))), 0.5) * ${CLOUD.shade.toFixed(2)};
+            vec3 cloudCol = mix(lit, grey, shade);
+            cloudCol = mix(cloudCol, uHorizon, (1.0 - smoothstep(0.0, 0.25, rd.y)) * 0.55);
+            col = mix(col, cloudCol, cov);
           }
           gl_FragColor = vec4(col, 1.0);
         }`,
@@ -180,6 +217,7 @@ export class Sky {
     SKY.uHorizon.value.setRGB(...k.hor);
     SKY.uSunColor.value.setRGB(...k.sun);
     SKY.uNight.value = night;
+    this._cover.value = Math.max(this.cloudCover, this.overcast);
     this.exposure = lerp(DARK_EXPOSURE, k.exp, this.open);
 
     // At night the "sun" light becomes moonlight from the opposite side.
@@ -194,7 +232,8 @@ export class Sky {
     this.sun.intensity = k.li * Math.max(fadeAtHorizon, night > 0.5 ? 1 : 0) * (1 - 0.8 * this.overcast) * this.open;
     this.hemi.color.setRGB(...k.amb);
     this.hemi.groundColor.setRGB(...k.gnd);
-    this.hemi.intensity = k.ai * (1 + 0.3 * this.overcast) * this.open;
+    this.ambient = k.ai * (1 + 0.3 * this.overcast);
+    this.hemi.intensity = this.ambient * this.open;
     this.aim(focus, cameraPos);
   }
 
