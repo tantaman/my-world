@@ -11,9 +11,17 @@
 //   npm run look -- mount-storm-king --pair photos     ours with and without a part (config.js, ?no=)
 //   npm run look -- mount-storm-king --no skylight     ours without it
 //
-// Options: --time h (the hour; a hike's photo's own by default), --fov deg
+// Options: --time h (the hour; a hike's photo's own by default), --sun deg
+// (how high the sun stood in the photo: the game's hour with its sun that
+// high, on the same side of noon. The game's sun keeps no season or
+// latitude, so the photo's own hour can put it far lower or higher than it
+// was: at 16:21 on a summer afternoon on the Olympic Peninsula the sun is
+// about 43° up, the game's about 23°), --fov deg
 // (how wide it sees, top to bottom; the photo's, from its lens, by default),
-// --pitch rad, --size WxH (the photo's shape, 1440 wide, by default),
+// --lens mm (the lens as if on 35 mm film, for a photo whose EXIF is gone:
+// a phone's main camera is 26 to 28), --bearing deg (which way, clockwise
+// from north: for another photo from the same spot), --pitch rad (+ is
+// down), --size WxH (the photo's shape, 1440 wide, by default),
 // --ref file, --out dir (out/look), --settle n (frames drawn before the
 // shot, 3), --dev (Vite's dev server: no build).
 //
@@ -43,7 +51,7 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const { chromium } = createRequire(import.meta.url)('playwright');
 
 // ── What was asked ──────────────────────────────────────────────────────────
-const FLAGS = ['time', 'fov', 'pitch', 'size', 'ref', 'out', 'no', 'pair', 'settle'];
+const FLAGS = ['time', 'sun', 'fov', 'lens', 'bearing', 'pitch', 'size', 'ref', 'out', 'no', 'pair', 'settle'];
 const arg = (name) => {
   const i = process.argv.indexOf(`--${name}`);
   return i < 0 ? null : process.argv[i + 1];
@@ -65,7 +73,9 @@ const FULL_FRAME_DIAGONAL = 43.27; // mm: what a 35 mm equivalent focal length i
 // The place: a hike's photo, or a spot.
 const coords = /^-?[\d.]+(,-?[\d.]+){2,3}$/.test(where) ? where.split(',').map(Number) : null;
 const [hike, at = 'view'] = coords || where === 'start' ? [null] : where.split(':');
-const name = coords ? `at-${where.replace(/,/g, '_')}` : hike ? `${hike}${at === 'view' ? '' : `-${at}`}` : where;
+const name =
+  (coords ? `at-${where.replace(/,/g, '_')}` : hike ? `${hike}${at === 'view' ? '' : `-${at}`}` : where) +
+  (arg('ref') ? `.${arg('ref').split('/').pop().replace(/\.[a-z]+$/i, '')}` : '');
 
 // The photograph, if there is one, and what its EXIF says.
 const refFile = arg('ref') || (hike && join(ROOT, 'reference', 'hikes', at === 'view' ? `${hike}.jpg` : `${hike}/${at}.jpg`));
@@ -121,7 +131,8 @@ const fovFrom35 = (f35) => {
   const diag = Math.hypot(W, H);
   return (2 * Math.atan((FULL_FRAME_DIAGONAL * (H / diag)) / (2 * f35)) * 180) / Math.PI;
 };
-const FOV = arg('fov') ? Number(arg('fov')) : exif?.focal35 ? fovFrom35(exif.focal35) : GAME_FOV;
+const lens = arg('lens') ? Number(arg('lens')) : exif?.focal35;
+const FOV = arg('fov') ? Number(arg('fov')) : lens ? fovFrom35(lens) : GAME_FOV;
 
 async function shoot(no) {
   const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
@@ -132,7 +143,7 @@ async function shoot(no) {
   await page.goto(`${server.url}?${query}`);
   await page.waitForFunction(() => document.getElementById('loader')?.classList.contains('gone') && window.world, null, { timeout: 300000 });
   const view = await page.evaluate(
-    async ({ hike, at, coords, time, pitch, fov }) => {
+    async ({ hike, at, coords, time, pitch, fov, bearing, sun }) => {
       const w = window.world;
       const frame = () => new Promise((r) => requestAnimationFrame(r));
       if (hike) await w.hikes.go(hike, at);
@@ -145,7 +156,22 @@ async function shoot(no) {
       // from the hiker's own eyes, as a photo is taken
       w.player.firstPerson = true;
       if (time !== null) w.sky.hours = Number(time);
+      if (sun !== null) {
+        // the hour, on the photo's side of noon, whose sun stands that high
+        const want = (Number(sun) * Math.PI) / 180;
+        const pm = w.sky.hours >= 12;
+        const dir = w.sky.sunDir.clone();
+        let best = w.sky.hours;
+        let miss = Infinity;
+        for (let h = pm ? 12 : 6; h <= (pm ? 18 : 12); h += 0.01) {
+          const m = Math.abs(Math.asin(w.sky.computeSunDir(h, dir).y) - want);
+          if (m < miss) [best, miss] = [h, m];
+        }
+        w.sky.hours = best;
+      }
       if (pitch !== null) w.player.camPitch = Number(pitch);
+      // (a bearing is clockwise from north; the camera's yaw turns the other way)
+      if (bearing !== null) w.player.camYaw = (-Number(bearing) * Math.PI) / 180;
       // how wide it sees, held each frame after the hiker's eye has set its own
       const cam = w.game.camera;
       w.game.addSystem({
@@ -159,13 +185,16 @@ async function shoot(no) {
       while (!w.game.chunks.isFullyLoaded()) await frame();
       return { x: w.player.pos.x, y: w.player.pos.y, z: w.player.pos.z, yaw: w.player.camYaw, pitch: w.player.camPitch, hours: w.sky.hours };
     },
-    { hike, at, coords, time: arg('time'), pitch: arg('pitch'), fov: FOV },
+    { hike, at, coords, time: arg('time'), pitch: arg('pitch'), fov: FOV, bearing: arg('bearing'), sun: arg('sun') },
   );
   // everything fetched (the photographs of surfaces among it), then the eye
   // let straight to where it would settle, and a few frames drawn
   await page.waitForLoadState('networkidle');
   await page.evaluate(async (n) => {
     const frame = () => new Promise((r) => requestAnimationFrame(r));
+    // the haze's edge straight out to where the land drawn ends (far/), as
+    // it would be after a few seconds of standing there
+    window.world.far?.settle?.();
     for (let i = 0; i < n; i++) {
       window.world.game.pipeline.adaptFresh = true;
       await frame();
