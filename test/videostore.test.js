@@ -59,8 +59,10 @@ test('branches stand beside the villages people live in, inside the town\'s squa
   const branches = new Branches(gen, { towns, keepOff, also: (...box) => !clear(box, home.box) || !clear(box, airfield.box) });
   const pinned = {};
   let rolled = 0;
-  for (let j = -3; j < 3; j++) {
-    for (let i = -3; i < 3; i++) {
+  // (the town squares round the start: four each way, since Mount Storm
+  // King's land took in Lake Crescent and the town 1.5 km east with it)
+  for (let j = -4; j < 4; j++) {
+    for (let i = -4; i < 4; i++) {
       const t = towns.cell(i, j);
       const b = t && branches.forTown(t);
       if (t && hasBranch(t, gen.seed)) rolled++;

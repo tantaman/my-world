@@ -23,6 +23,11 @@ Mount Storm King → src/world/hikes/mount-storm-king.js (223 kB, fetched when i
   water: Lake Crescent, Falls Creek, Smith Creek, Barnes Creek, 78 unnamed streams
 ```
 
+(That was its first import. Mount Storm King has since been imported again
+with `--radius 15000`, so that all of Lake Crescent, which its photo looks
+down the length of, is the real lake and the real mountains round it rather
+than the coarse Earth's: see the [reference photos](../../reference/README.md).)
+
 A photo that has lost its location on the way (sent through a chat, say)
 can still be used: say where it was taken with `--lat` and `--lon`, and
 `--bearing` and `--hour` if you remember which way you looked and when.

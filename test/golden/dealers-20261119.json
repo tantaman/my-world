@@ -1,11 +1,38 @@
 [
  {
-  "id": "dealer:town:1:-1",
-  "name": "Lindqvist Motor Co.",
-  "road": "road:1:-1:e",
-  "x": 1649.411,
-  "z": -367.546,
-  "yaw": -3.134,
-  "top": 22.783
+  "id": "dealer:town:-4:-2",
+  "name": "Gilchrist Auto Sales",
+  "road": "road:-5:-2:e",
+  "x": -3363.161,
+  "z": -1307.104,
+  "yaw": 0.491,
+  "top": 32.447
+ },
+ {
+  "id": "dealer:town:-4:1",
+  "name": "Gilchrist Motors",
+  "road": "road:-4:1:e",
+  "x": -3066.265,
+  "z": 1148.599,
+  "yaw": 0.003,
+  "top": 4.254
+ },
+ {
+  "id": "dealer:town:-4:3",
+  "name": "Tolliver Auto Sales",
+  "road": "road:-4:2:s",
+  "x": -3325.764,
+  "z": 3430.241,
+  "yaw": 0.528,
+  "top": 7.329
+ },
+ {
+  "id": "dealer:town:0:3",
+  "name": "Rourke Motor Co.",
+  "road": "road:0:3:s",
+  "x": 546.046,
+  "z": 3928.592,
+  "yaw": -2.082,
+  "top": 2.728
  }
 ]

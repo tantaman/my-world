@@ -39,11 +39,12 @@ const FAR_POINTS = 400;
 const FAR_MAKE = 1500; // m past a hike's edge: nearer than this its far view is made…
 const FAR_DROP = 2500; // …and further than this, let go
 // A place too big to draw whole (Washington, life size: 24 km across) has a
-// square of it drawn round you instead, as the forest's own far view is:
+// square of it drawn round you instead, as the forest's own far view is
+// (Mount Storm King, 6.4 km across with all of Lake Crescent, is drawn whole):
 // over this much of it (m, its outer edge from its middle), the square this
 // big (half of it, m), its heights this far apart, re-made as you go once
 // you've walked this far (m) from where it was drawn round.
-const FAR_WHOLE = 3000;
+const FAR_WHOLE = 4000;
 const FAR_ROUND = { half: 1100, step: 16, move: 400 };
 const VIEW_PITCH = 0.18; // rad: the camera looks out, a little down, as a photo does
 const CAIRN_ASIDE = 1.4; // m to the left of where the photo was taken

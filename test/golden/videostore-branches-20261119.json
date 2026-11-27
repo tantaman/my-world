@@ -1,16 +1,16 @@
 {
- "videostore:town:1:-3": {
-  "name": "Rewind Video, Little Mosscombe",
-  "x": 1616.858,
-  "z": -2322.679,
-  "yaw": -2.17,
-  "top": 88.386
- },
  "videostore:town:-2:1": {
   "name": "Rewind Video, Mossbrook",
   "x": -1952.005,
   "z": 1255.549,
   "yaw": 2.128,
   "top": 4.271
+ },
+ "videostore:town:-4:3": {
+  "name": "Rewind Video, Cherryton",
+  "x": -3092.143,
+  "z": 3457.315,
+  "yaw": -1.362,
+  "top": 5.914
  }
 }
