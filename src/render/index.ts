@@ -38,6 +38,10 @@ declare module '../game/game.ts' {
 
 const PIXEL_MAX = 12; // screen pixels per art pixel, at the most
 const CAMERA_FAR = 1200;
+// m: the furthest the land is drawn for a view (a hike's far view reaches
+// about 4.6 km): the camera sees as far as that. Past it, a fog that far off
+// is someone turning the fog off (the Metro, a stage), not a view.
+const LONG_VIEW_MOST = 8000;
 
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['ui'];
@@ -159,7 +163,7 @@ export function installRender(game: Game) {
   // The scene from a camera, through a pipeline: drawn from an origin near
   // the camera (origin.js).
   function draw(through: Pipeline, eye: THREE.PerspectiveCamera, dt: number) {
-    const longView = eye.far === CAMERA_FAR && through.fogFar > 1000 && through.fogFar <= CONFIG.cityView;
+    const longView = eye.far === CAMERA_FAR && through.fogFar > 1000 && through.fogFar <= LONG_VIEW_MOST;
     if (longView) {
       eye.far = Math.max(2400, through.fogFar * 1.5);
       eye.updateProjectionMatrix();

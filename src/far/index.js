@@ -32,6 +32,10 @@ import { isNotYet } from '../core/notYet.ts';
 // this rate (1/s), so it opens out as the land comes rather than jumping.
 const FOG_SHORT = 80;
 const FOG_EASE = 1.2;
+// m of land drawn round you over which the view counts as opening, from
+// closed (the forest's haze) to open (the open air's: render/pipeline.js,
+// OPEN_AIR)
+const OPEN = { from: 600, full: 2500 };
 // how much daylight reaches the eye (world/sky.js: open) under which it's
 // under the ground, and the far view isn't drawn
 const UNDERGROUND = 0.3;
@@ -199,6 +203,7 @@ export function installFar(game) {
   }
 
   let fog = 0;
+  let settle = false; // (the fog straight to where it would go: settle())
   game.addSystem({
     name: 'far',
     phase: 'world',
@@ -212,8 +217,12 @@ export function installFar(game) {
       // As far as there is land drawn in every direction, the air is clear.
       const base = (CONFIG.viewRadius - 0.15) * CONFIG.chunkSize;
       const clear = Math.max(base, far.reach(camera.position.x, camera.position.z, FOG_SHORT));
-      fog = fog ? fog + (clear - fog) * (1 - Math.exp(-dt * FOG_EASE)) : clear;
+      fog = fog && !settle ? fog + (clear - fog) * (1 - Math.exp(-dt * FOG_EASE)) : clear;
+      settle = false;
       pipeline.fogFar = fog > base + 1 ? fog : 0;
+      // and the further the land is drawn, the clearer the air
+      const t = Math.min(1, Math.max(0, (fog - OPEN.from) / (OPEN.full - OPEN.from)));
+      pipeline.openAir = t * t * (3 - 2 * t);
     },
   });
 
@@ -230,6 +239,9 @@ export function installFar(game) {
       // whether the land round you has enough shape to be drawn far off
       worthIt: () => worthIt(focus.x, focus.z),
       reach: () => Math.round(far.reach(camera.position.x, camera.position.z)),
+      // the fog straight to where it's going, rather than easing out to it
+      // (tools/look.mjs, for a still)
+      settle: () => (settle = true),
     },
   });
 }

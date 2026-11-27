@@ -244,7 +244,10 @@ test('only towns that are kept up can have one: western towns and villages', () 
 test('a dealership stands beside its town’s road, on flat dry ground, clear of everything else', () => {
   const { dealers, towns, roads, gen } = dealersOf(SEED);
   const found = [];
-  for (let j = -2; j < 2; j++) for (let i = -2; i < 2; i++) {
+  // (the town squares round the start: four each way, since Mount Storm
+  // King's land took in Lake Crescent and Broken Gulch, the town 1.5 km
+  // east, whose dealership was the nearest, with it)
+  for (let j = -4; j < 4; j++) for (let i = -4; i < 4; i++) {
     const t = towns.cell(i, j);
     if (!t) continue;
     const d = dealers.forTown(t);
@@ -290,7 +293,8 @@ for (const land of LANDS) for (const seed of [SEED, 42]) {
     const { dealers, towns } = dealersOf(seed, land);
     const round = (v) => Math.round(v * 1000) / 1000;
     const list = [];
-    for (let j = -3; j < 3; j++) for (let i = -3; i < 3; i++) {
+    // (four town squares each way: see above)
+    for (let j = -4; j < 4; j++) for (let i = -4; i < 4; i++) {
       const t = towns.cell(i, j);
       const d = t && dealers.forTown(t);
       if (d) list.push({ id: d.id, name: d.name, road: d.road, x: round(d.x), z: round(d.z), yaw: round(d.yaw), top: round(d.top) });
@@ -302,7 +306,7 @@ for (const land of LANDS) for (const seed of [SEED, 42]) {
 test('a dealership looks like one: the lot, the showroom, a bay for each kind of car', () => {
   const { dealers, towns, gen } = dealersOf(SEED);
   let d = null;
-  for (let j = -2; j < 2 && !d; j++) for (let i = -2; i < 2 && !d; i++) {
+  for (let j = -4; j < 4 && !d; j++) for (let i = -4; i < 4 && !d; i++) {
     const t = towns.cell(i, j);
     d = t && dealers.forTown(t);
   }
