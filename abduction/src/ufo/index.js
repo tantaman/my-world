@@ -1,16 +1,20 @@
 // The abduction, put together: the saucer on its flight, its trails, the
 // beam, and the cow it takes.
 import { Group, Vector3 } from 'three/webgpu';
-import { createSaucer } from './saucer.js';
+import { createSaucer, SAUCER } from './saucer.js';
 import { flightAt, createFlightState } from './flight.js';
 import { createTrails } from './trails.js';
 import { createBeam } from './beam.js';
 import { createLift } from './lift.js';
 import { createCow } from '../props/cow.js';
 
+// Where the beam starts and the cow goes in: up inside the bore, so the
+// beam's top is hidden by its wall, metres above the lip.
+const OPENING_Y = 0.35;
+
 export function createUfo(ctx) {
   const group = new Group();
-  const saucer = createSaucer();
+  const saucer = createSaucer({ litBy: [ctx.rig.lights.ufoLight] });
   const trails = createTrails(ctx);
   const beam = createBeam(ctx);
   const cow = createCow();
@@ -28,9 +32,9 @@ export function createUfo(ctx) {
       saucer.object.rotation.copy(state.rotation);
       saucer.object.updateMatrixWorld();
       saucer.update(t);
-      opening.set(0, 0.05, 0).applyMatrix4(saucer.object.matrixWorld);
+      opening.set(0, OPENING_Y, 0).applyMatrix4(saucer.object.matrixWorld);
       trails.update(t);
-      beam.update(t, opening, state.visible);
+      beam.update(t, opening, state.visible, SAUCER.bore);
       lift.update(t, opening);
     },
   };
