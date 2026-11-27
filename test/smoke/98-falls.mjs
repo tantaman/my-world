@@ -5,11 +5,18 @@
 
 import assert from 'node:assert/strict';
 
+const HIKE = 'havasu-falls';
+
 export default async function ({ page, step, frames, shot }) {
   await step('waterfalls', async () => {
     const before = await page.evaluate(() => world.falls.list());
     assert.ok(before.length > 0, 'a hike has falls');
-    const hike = before[0].hike;
+    // Havasu Creek's, each of which its land shows (src/falls/README.md):
+    // not every fall a map marks drops on a stream the land has (Zion's run
+    // off its cliffs when it rains), and Mount Storm King's are fetched by
+    // the time this is played, from Hell's gate a kilometre off
+    const hike = HIKE;
+    assert.ok(before.some((f) => f.hike === hike), `${hike} has falls`);
     assert.ok(before.filter((f) => f.hike === hike).every((f) => !f.drawn), "none is drawn before its hike's land is here");
     await page.evaluate((h) => world.hikes.go(h, 'view'), hike);
     await frames(10);

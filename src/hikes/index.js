@@ -307,6 +307,7 @@ export function installHikes(game) {
           photos: (c.photos || []).map((p, k) => ({ name: p.name, ...spot(c, `photo-${k}`) })),
           trail: c.trail,
           water: waterOn(c),
+          country: c.country || 'forest',
           land: landforms.has(c.id),
           farView: far.has(c.id),
         })),

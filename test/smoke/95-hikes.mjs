@@ -10,7 +10,9 @@ export default async function ({ page, step, key, frames, shot }) {
   await step('go on a hike', async () => {
     const hikes = await page.evaluate(() => world.hikes.list());
     assert.ok(hikes.length > 0, 'there is a hike to go on');
-    const [h] = hikes;
+    // (the first whose land no part before has been near enough to fetch:
+    // Hell's gate is a kilometre from Mount Storm King's)
+    const h = hikes.find((x) => !x.land) || hikes[0];
     // the HUD points up the trail, unless you're following a mark of your own
     await page.evaluate(() => world.marks.setTracked(null));
     const near = (p, q, what) => assert.ok(Math.hypot(p.x - q.x, p.z - q.z) < 1, `${what}: at ${p.x}, ${p.z}, not ${q.x}, ${q.z}`);
@@ -38,7 +40,7 @@ export default async function ({ page, step, key, frames, shot }) {
     // its land is fetched the first time: wait to be there, and for the forest round it
     const arrive = (to) =>
       page.evaluate((p) => T.until(() => Math.hypot(world.player.pos.x - p.x, world.player.pos.z - p.z) < 1 && world.game.chunks.isFullyLoaded(), 60000), to);
-    const before = await page.evaluate(() => world.hikes.list()[0].land);
+    const before = await page.evaluate((id) => world.hikes.list().find((x) => x.id === id).land, h.id);
     assert.ok(!before, "a hike's land isn't fetched until you go near it");
     await pick('trailhead');
     await arrive(h.trailhead);
@@ -47,7 +49,7 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.match(start.track, new RegExp(h.name), 'and the HUD points the way to the view');
     await pick('view');
     await arrive(h.view);
-    const drawn = await page.evaluate(() => T.until(() => world.hikes.list()[0].farView && world.game.chunks.isFullyLoaded(), 90000));
+    const drawn = await page.evaluate((id) => T.until(() => world.hikes.list().find((x) => x.id === id).farView && world.game.chunks.isFullyLoaded(), 90000), h.id);
     assert.ok(drawn, 'the far view is drawn');
     await frames(60);
     const top = await where();

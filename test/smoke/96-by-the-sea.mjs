@@ -10,7 +10,8 @@ export default async function ({ page, step, shot }) {
     // A real place of its own kind of country, by the sea: the streams on
     // its map run, and where the sea breaks on its shore there is surf to hear.
     const got = await page.evaluate(async () => {
-      const h = world.hikes.list().find((x) => x.water.includes('the sea') && x.water.length > 1);
+      // (Mount Storm King's land reaches the Strait now, but it's the forest's own country)
+      const h = world.hikes.list().find((x) => x.water.includes('the sea') && x.water.length > 1 && x.country !== 'forest');
       if (!h) return null;
       await world.hikes.go(h.id, 'view');
       const { gen, chunks, player, sound } = world;
