@@ -87,10 +87,13 @@ export function createRockMaterial({ decor = false } = {}) {
       .replace(
         '#include <lights_fragment_maps>',
         `irradiance *= max(vSky, 0.004) * uSkyFill;
-        #include <lights_fragment_maps>`,
+        #include <lights_fragment_maps>
+        #if defined( RE_IndirectSpecular )
+        radiance *= max(vSky, 0.004) * uSkyFill; // (the sky it mirrors, render/skyLight.ts)
+        #endif`,
       );
   };
-  mat.customProgramCacheKey = () => (decor ? 'cave-decor-v4' : 'cave-rock-v4');
+  mat.customProgramCacheKey = () => (decor ? 'cave-decor-v5' : 'cave-rock-v5');
   return mat;
 }
 

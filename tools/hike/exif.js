@@ -10,8 +10,11 @@
 
 const td = new TextDecoder('latin1');
 
-// → { lat, lon, alt, bearing, taken, hour } — any of which may be missing
-// (null) if the photo doesn't say. Throws if there is no EXIF at all.
+// → { lat, lon, alt, bearing, taken, hour, focal35, exposure } — any of
+// which may be missing (null) if the photo doesn't say. Throws if there is no
+// EXIF at all. focal35 is the lens's focal length as if on 35 mm film (mm),
+// which says how wide the photo sees; exposure is { seconds, fNumber, iso },
+// which says how bright what it saw was (tools/look.mjs).
 export function readPhoto(bytes) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   const tiff = isJpeg(b) ? jpegTiff(b) : heifTiff(b);
@@ -193,5 +196,8 @@ function describe({ ifd0, gps, exif }) {
   const taken = exif.get(0x9003) || ifd0.get(0x0132) || null;
   const m = taken && /^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d)/.exec(taken);
   const hour = m ? Number(m[4]) + Number(m[5]) / 60 : null;
-  return { lat, lon, alt, bearing, taken, hour };
+  const focal35 = exif.get(0xa405) || null;
+  const iso = exif.get(0x8827);
+  const exposure = exif.has(0x829a) && exif.has(0x829d) ? { seconds: exif.get(0x829a), fNumber: exif.get(0x829d), iso: (Array.isArray(iso) ? iso[0] : iso) || 100 } : null;
+  return { lat, lon, alt, bearing, taken, hour, focal35, exposure };
 }

@@ -234,6 +234,11 @@ float stones(vec2 p, float m, out float id, out float gap) {
   float face = dot(f - at1, vec2(cos(a), sin(a)));
   return clamp(0.35 + 0.6 * fract(id * 3.7) + face * 0.5, 0.0, 1.0);
 }
+// How much of what groundColor() last gave is forest floor (leaf litter,
+// needles, moss), 0..1, and how much of that is moss: for whoever lays the
+// floor's own detail over it (world/materials.js: a photograph of it).
+float gFloor;
+float gMoss;
 float rubble(vec2 wp, out float id) {
   // the edges wander, so no block is a tidy polygon
   vec2 w = wp + (vec2(wnoise(wp, 1.7), wnoise(wp, 1.7, vec2(9.1))) - 0.5) * 0.7;
@@ -279,11 +284,13 @@ vec3 groundColor(vec2 wp, float y, float pathM, float forestM, float slope, vec3
   vec3 needles = vec3(0.110, 0.070, 0.035);
   vec3 moss = vec3(0.045, 0.085, 0.020);
   vec3 floorc = mix(litter, needles, smoothstep(0.3, 0.7, n2));
-  floorc = mix(floorc, moss, smoothstep(0.45, 0.75, n1) * 0.8);
+  gMoss = smoothstep(0.45, 0.75, n1) * 0.8;
+  floorc = mix(floorc, moss, gMoss);
   floorc *= 0.78 + 0.4 * n4;
 
   float forest = clamp(forestM + (n1 - 0.5) * 0.35, 0.0, 1.0);
-  vec3 col = mix(meadow, floorc, smoothstep(0.3, 0.9, forest));
+  gFloor = smoothstep(0.3, 0.9, forest);
+  vec3 col = mix(meadow, floorc, gFloor);
 
   // footpath: packed earth, the odd pebble, worn grassy edges
   float pm = pathM + (n2 - 0.5) * 0.38 + (n4 - 0.5) * 0.18;
@@ -297,6 +304,7 @@ vec3 groundColor(vec2 wp, float y, float pathM, float forestM, float slope, vec3
   float edge = smoothstep(0.30, 0.45, pm) * (1.0 - smoothstep(0.45, 0.62, pm));
   col = mix(col, col * 0.62 + dirtDark * 0.3, edge);
   col = mix(col, dirtc, smoothstep(0.45, 0.6, pm));
+  gFloor *= 1.0 - smoothstep(0.45, 0.6, pm);
 
   // the country's own bare ground (cinder, lava, clay), in patches where
   // it's only partly bare, speckled, and stony here and there. Where it is
@@ -320,6 +328,7 @@ vec3 groundColor(vec2 wp, float y, float pathM, float forestM, float slope, vec3
     bare = mix(bare, block, uRubble[c]);
   }
   col = mix(col, bare, bareM);
+  gFloor *= 1.0 - bareM;
 
   // rock on steep slopes
   vec3 rock = mix(vec3(0.16, 0.155, 0.145), uRock[c], land.z) * (0.75 + 0.5 * n2);
@@ -336,10 +345,13 @@ vec3 groundColor(vec2 wp, float y, float pathM, float forestM, float slope, vec3
     stone *= 1.0 - lay.z * streak * 0.65;
     rock = mix(rock, stone * (0.86 + 0.24 * n2), layered);
   }
-  col = mix(col, rock, smoothstep(0.30, 0.45, slope + (n1 - 0.5) * 0.12));
+  float rockM = smoothstep(0.30, 0.45, slope + (n1 - 0.5) * 0.12);
+  col = mix(col, rock, rockM);
 
   // a beach
-  col = mix(col, uSand[c] * (0.82 + 0.3 * n4), smoothstep(0.25, 0.7, land.y + (n2 - 0.5) * 0.2));
+  float beachM = smoothstep(0.25, 0.7, land.y + (n2 - 0.5) * 0.2);
+  col = mix(col, uSand[c] * (0.82 + 0.3 * n4), beachM);
+  gFloor *= (1.0 - rockM) * (1.0 - beachM);
 
   return col;
 }

@@ -1,6 +1,8 @@
 # How the look works
 
-Everything is generated in code. There are no textures or model files.
+Everything is generated in code, but for photographs of real surfaces: CC0
+scans of real ground, laid over the colours the code gives it as their fine
+detail (below). There are no model files.
 
 The picture aims to look like a photograph of a real place: light in real
 units of brightness, things the colour they really are, and a camera's (or an
@@ -8,7 +10,8 @@ eye's) way of turning that into a picture. Pixel art is a setting.
 
 1. **HDR render.** The scene is drawn into a high-dynamic-range target with a
    depth buffer, real-time sun shadows (a little soft at the edge, as the
-   sun's own width makes them) and sky/ground ambient light. It's drawn as
+   sun's own width makes them) and the sky's own light from all round
+   (below). It's drawn as
    finely as the screen, up to 1080 lines (`?sharp=`); past that it's drawn
    at 1080 and blown up smoothly. It's multisampled (`?msaa=`, 4 unless
    `q=low`), so edges are smooth, and a leaf cut from its card covers as much
@@ -57,6 +60,43 @@ eye's) way of turning that into a picture. Pixel art is a setting.
 7. **Up to the screen.** With pixel art, each art pixel is snapped and then
    blended across a narrow band at its edges. The band's width is the
    *softness* setting, and it's what lets the pixels melt together.
+
+**The sky as light.** What isn't lit by the sun is lit by the whole sky
+(`skyLight.ts`): brighter and warmer from the sun's side, bluer from the
+other, flat under cloud, and the ground's colour from below. It is a light
+probe (spherical harmonics) worked out from the sky as the dome draws it,
+whenever the sky has changed enough to see. How bright and what colour it
+is from above, from below and on average from the side are still the
+hemisphere light's (`world/sky.js`), set by eye and read and changed by
+whatever else lights the forest (lightning, a cave's mouth): the sky gives
+that light its direction. And what is glossy mirrors the sky itself: the
+same sky, drawn into a small cube and blurred for each roughness
+(`scene.environment`). Only what it mirrors: three.js would light rough
+things from that cube too, more roughly than the probe, so that part is
+taken out of three.js's shaders. And only what is glossy (paint, tin, wet
+stone): something rough mirrors a wide cone, which in a wood is mostly the
+wood, and three.js can't tell what's in the way, so needles and bark took a
+blue sheen of open sky until it was kept from them. `?no=skylight` leaves it
+all out.
+
+**Photographs of real surfaces.** Code draws the ground too clean: noise is
+not leaf litter. So the forest floor is photographed (`photos.ts`; CC0
+scans from Poly Haven, in `public/photos/`, fetched by `npm run photos`):
+pine needles and leaf litter, and moss where it's mossy. A photo is never
+the colour of anything. It is divided by its own average (its smallest
+mipmap), so it says only where the floor is lighter or darker, which way
+each needle and twig catches the light, and where it's in the shade of its
+own clutter, round the colour the code gave it; and as it gets smaller than
+a pixel the mipmaps average it away, back to the code's colour, with
+nothing to fade. It is laid from above at `worldXZ()`, its size fitted to a
+whole number of repeats in the world's period. `?no=photos` leaves them out.
+
+**Set against photographs.** The look is measured against real photographs
+of real places: `npm run look -- <hike>` (`tools/look.mjs`) stands the camera
+where a hike's photo was taken, at its hour, seeing as wide as its lens, and
+sets the shot beside the photo with numbers (how bright the middle of the
+picture is; the colour of its thirds). `--pair skylight` shoots with and
+without a part of the look.
 
 **Light from things.** A fire, a pool of lava, a lantern gives light of its
 own (`lights.js`): a feature says where light comes from and how bright,
@@ -198,6 +238,8 @@ origin.js             where each frame is drawn from, so far-off places stay sha
 pipeline.js           render (all but the water; a copy; the water over it; the heat) → occlusion → composite → bloom → the eye → tone map → screen
 views.ts              the screen split between cameras: a part each, each drawn through a pipeline of its own
 uniforms.js           shader uniforms everything shares: time, wind, sky
+skyLight.ts           the sky as light: the light all round (a probe), and the sky that glossy things mirror
+photos.ts             photographs of real surfaces: loading them, and laying them over a colour (PHOTO_GLSL)
 glsl.js               shared GLSL: noise (and in three dimensions), patterns over the world, sky, ground colour, relief, a mirror
 lights.js             light given off by things: a pool of real lights for those that matter most, and their shadows
 casters.ts            shadows drawn from just the instances each light reaches, not whole meshes of them

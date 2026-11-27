@@ -8,6 +8,7 @@ import { growWorld } from './lands.js';
 import { ChunkManager } from './chunks.js';
 import { Grass } from './grass.js';
 import { Sky } from './sky.js';
+import { SkyLight } from '../render/skyLight.ts';
 import { Solids } from './solids.js';
 import { Spaces } from './spaces.js';
 import { Basins } from './basins.js';
@@ -36,7 +37,7 @@ const wrapHours = (h) => ((h % 24) + 24) % 24;
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['render', 'ui'];
 export function installWorld(game) {
-  const { scene, camera, hud, save } = game;
+  const { scene, camera, hud, save, renderer } = game;
 
   // The forest a seed grows on its land, and out past the middle, the real
   // Earth (earth.js). The real hikes are set into it as their land arrives,
@@ -94,6 +95,14 @@ export function installWorld(game) {
   game.casters.light(sky.sun);
   // its position is the way up, not a place: it stays put when the scene is slid to be drawn
   game.origin.keep(sky.hemi);
+  // The sky as light: the light all round, and what shines mirrors, from the
+  // sky as it is (render/skyLight.ts). Not with ?no=skylight.
+  const skyLight = CONFIG.no.has('skylight') ? null : new SkyLight(renderer, scene, sky);
+  // (the probe's position is no place either)
+  if (skyLight) {
+    game.origin.keep(skyLight.probe);
+    game.api.skyLight = skyLight;
+  }
   const particles = createParticles();
   scene.add(particles.object);
   placeStructures(scene, STRUCTURES, gen, materials);
@@ -218,6 +227,7 @@ export function installWorld(game) {
       chunks.update(at.x, at.z, 5, at.x + vel.x * reach, at.z + vel.z * reach, others);
       grass.update(at.x, at.z, 3, dt, others);
       sky.update(at, camera.position);
+      skyLight?.update();
       particles.update(at, at.y, sky.open);
     },
   });
