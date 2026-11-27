@@ -17,15 +17,22 @@ ground and the real trees you see, and the far land only shows past their
 edge. Under the ground (deep in a cave, down in the Metro), where no
 daylight reaches your eye, it isn't drawn at all. As far as there is land
 drawn in every direction, the air clears: climb a massif and the haze opens
-out with you.
+out with you. And the further the land is drawn, the more the air is the
+open air's (`pipeline.openAir`, render/pipeline.js): from a summit, the
+forest's thick haze gives way to air as clear as a photograph of a real view
+measured, so the ridges across a lake are still ridges, blue with distance.
+(Mount Storm King's photo, at the hike's 1:5: slopes 1 km off a tenth of the
+way into the sky's colour, ridges 3 to 4 km off four tenths.)
 
 You never ask for it. Whoever has something worth seeing does: the land,
 where it stands high enough to be worth it (on the real Earth, 1,500 m over
 the sea somewhere near: the Olympics' summits, not the Hoh's valley under
 them; see [the world](../world/README.md)), and a hike, for the real place
 you are standing on ([hikes](../hikes/README.md)). The default range is one
-kilometre. Graded city terrain requests a longer range alongside its distant
-building and street meshes. Fog closes in just before the terrain ends.
+kilometre. A hike asks for 3.6 km round it, seen to the edge of its square,
+so from its top you see as far as its photo does; graded city terrain
+requests a longer range alongside its distant building and street meshes.
+Fog closes in just before the terrain ends.
 
 Land that is really there is what gets drawn. A real place's land is fetched
 from the network when it is first needed, so a square waiting on one is held
@@ -37,6 +44,7 @@ From the console:
 ```js
 world.far.list()    // what is drawn, what is being sampled, what is waited for
 world.far.reach()   // how far the land is drawn from where you stand (m)
+world.far.settle()  // the haze's edge straight to where it's going (for a still)
 ```
 
 ## Files

@@ -41,7 +41,11 @@ eye's) way of turning that into a picture. Pixel art is a setting.
      hills melt into the horizon and valleys hold more mist (measured up
      from the forest floor, or from the bottom of a real place that goes
      down below it, a canyon cut into a plateau, so the air down there is
-     as clear as on the forest floor); or, with the
+     as clear as on the forest floor). Where the far view opens the view
+     out past the streamed-in forest, the haze goes over to the open air's,
+     as clear as a photograph of a real view across a lake measured
+     (`OPEN_AIR`): thinner at the floor, thinning upward far more slowly,
+     so distant ridges go blue rather than white; or, with the
      camera under water, the water's own: reds going first with depth,
      green in a lake and blue in the sea, and light coming down in slanting
      shafts (see [Under the water](../underwater/README.md))
