@@ -116,7 +116,7 @@ const PAVER = { long: 0.2, wide: 0.1 };
 const PHOTO_LOOK = {
   brick: { sat: 0.55, contrast: 1.1, bump: 0.7 },
   stone: { sat: 0.25, contrast: 1.2, bump: 0.45 },
-  pavers: { sat: 0.5, contrast: 1.1, bump: 0.7 },
+  pavers: { sat: 0.3, contrast: 1.1, bump: 0.7 },
   asphalt: { sat: 0.15, contrast: 1.15, bump: 0.55 },
   concrete: { sat: 0.2, contrast: 1.1, bump: 0.45 },
 };
