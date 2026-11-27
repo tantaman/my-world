@@ -3,24 +3,36 @@
 // directional light from its side (which turns the trees green in 11), the
 // fog and environment brightened, and the bolt's streak in the wet road,
 // which the ground's mirror gives for nothing because the bolt is in the scene.
-import { Group, Mesh, BufferGeometry, Float32BufferAttribute, MeshBasicNodeMaterial, AdditiveBlending, Vector3, Color } from 'three/webgpu';
+import { Group, Mesh, BufferGeometry, Float32BufferAttribute, MeshBasicNodeMaterial, AdditiveBlending, DoubleSide, Vector3, Color } from 'three/webgpu';
 import { uniform, vec3, uv, smoothstep, abs, float, positionWorld } from 'three/tsl';
 import { flash, T } from '../timeline.js';
+import { cameraAt } from '../camera/path.js';
+import { rayThroughLens, drawnFov } from '../post/pipeline.js';
 import { rand } from '../noise1.js';
 
-// Where each bolt comes down, and how tall it is (metres).
+// Each bolt as the original shows it: the strike's time, where its top and
+// its foot are in the finished picture (u, v from the top left, 0..1, read
+// off stills 02 and 11), and how far off it is (metres). Its place in the
+// world is worked out from our camera at that moment, through our lens, so
+// it stays where the original has it however the camera is keyed.
 export const BOLTS = [
-  { at: [215, 0, 92], top: 260, seed: 3, seen: [-17, 1.5, 7.6] },   // strike 1, beyond the road, left of the sign
-  { at: [-25, 0, 230], top: 260, seed: 11, seen: [1, 1.5, 9.6] },   // strike 2, over the trees, a little right of north
+  // field: lux at the peak on what faces the camera (the second strike turns the trees green; the first lights little).
+  { strike: T.strike1, top: [0.493, 0.07], foot: [0.43, 0.44], distance: 230, seed: 3, field: 1.2 },   // beyond the road, over the sign
+  { strike: T.strike2, top: [0.41, 0.19], foot: [0.38, 0.42], distance: 210, seed: 11, field: 4 },     // over the trees
 ];
 const HALVINGS = 7;
-const WIDTH = 1.4;           // metres, the ribbon's width at the cloud
-const BRIGHT = 60;           // emissive strength, so bloom makes the glow
+const WIDTH = 0.7;           // metres, the ribbon's width at the cloud: the original's bolts are thin
+const BRIGHT = 45;           // emissive strength, so bloom makes the glow
+// The light a strike throws on the field, from the camera's side and above
+// (the original's trees turn green in the flash, lit on the faces we see).
+const FROM = [-60, 18];      // metres behind the camera, and up: low, so it skims the ground and lights the trees' faces
 
-// A jagged line from cloud to ground by midpoint displacement, with forks.
-function boltPoints(base, top, seed) {
-  let pts = [new Vector3(base[0] + (rand(seed, 1) - 0.5) * 40, top, base[2] + (rand(seed, 2) - 0.5) * 20), new Vector3(...base)];
-  let spread = top * 0.18;
+// A jagged line from the cloud (top) down to its foot by midpoint
+// displacement, with forks; both ends are points in the world.
+function boltPoints(top, foot, seed) {
+  let pts = [top.clone(), foot.clone()];
+  const height = top.distanceTo(foot);
+  let spread = height * 0.18;
   let r = seed * 100;
   for (let h = 0; h < HALVINGS; h++) {
     const next = [pts[0]];
@@ -38,13 +50,13 @@ function boltPoints(base, top, seed) {
   }
   const lines = [pts];
   // One to three short forks off the upper part.
-  const forks = 1 + Math.floor(rand(seed, 9) * 3);
+  const forks = 3 + Math.floor(rand(seed, 9) * 3);
   for (let f = 0; f < forks; f++) {
     const start = Math.floor(pts.length * (0.15 + 0.4 * rand(seed, 20 + f)));
     const fork = [pts[start].clone()];
     const dir = new Vector3((rand(seed, 30 + f) - 0.5) * 2, -1, (rand(seed, 40 + f) - 0.5)).normalize();
     for (let i = 1; i < 18; i++) {
-      const p = fork[i - 1].clone().addScaledVector(dir, top * 0.02);
+      const p = fork[i - 1].clone().addScaledVector(dir, height * 0.02);
       p.x += (rand(r++, seed) - 0.5) * 6;
       p.z += (rand(r++, seed) - 0.5) * 3;
       fork.push(p);
@@ -85,14 +97,40 @@ function ribbon(lines, toward) {
   return g;
 }
 
+// Where a point of the original's picture at time t is, `distance` metres
+// out from our camera then (the hand's sway left out).
+const _view = {};
+const _ray = new Vector3();
+const _f = new Vector3();
+const _r = new Vector3();
+const _u = new Vector3();
+function seenAt(t, [u, v], distance) {
+  cameraAt(t, _view);
+  const yaw = (_view.yaw * Math.PI) / 180;
+  const pitch = (_view.pitch * Math.PI) / 180;
+  _f.set(Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw));
+  _r.set(-Math.sin(yaw), 0, Math.cos(yaw));
+  _u.crossVectors(_r, _f);
+  rayThroughLens(u, v, drawnFov(_view.fov), _ray);
+  const d = new Vector3().addScaledVector(_r, _ray.x).addScaledVector(_u, _ray.y).addScaledVector(_f, _ray.z);
+  return new Vector3(_view.x, _view.y, _view.z).addScaledVector(d, distance);
+}
+
 export function createLightning({ rig }) {
   const group = new Group();
   const level = uniform(0);
-  const material = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending, fog: false });
-  const core = smoothstep(0.5, 0.0, abs(uv().x.sub(0.5)));
+  // Both sides: which way a ribbon's triangles wind depends on the bolt's shape.
+  const material = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending, fog: false, side: DoubleSide });
+  const core = float(1).sub(smoothstep(0.0, 0.5, abs(uv().x.sub(0.5))));
   material.colorNode = vec3(0.85, 0.9, 1.0).mul(core.mul(core).mul(BRIGHT)).mul(level);
-  const meshes = BOLTS.map((b) => {
-    const m = new Mesh(ribbon(boltPoints(b.at, b.top, b.seed), new Vector3(...b.seen)), material);
+  const placed = BOLTS.map((b) => {
+    const top = seenAt(b.strike, b.top, b.distance);
+    const foot = seenAt(b.strike, b.foot, b.distance);
+    cameraAt(b.strike, _view);
+    return { top, foot, mid: top.clone().lerp(foot, 0.4), seen: new Vector3(_view.x, _view.y, _view.z), seed: b.seed, field: b.field };
+  });
+  const meshes = placed.map((b) => {
+    const m = new Mesh(ribbon(boltPoints(b.top, b.foot, b.seed), b.seen), material);
     m.frustumCulled = false;
     m.visible = false;
     group.add(m);
@@ -111,13 +149,16 @@ export function createLightning({ rig }) {
       state.which = f.which;
       level.value = f.flash;
       meshes.forEach((m, i) => { m.visible = f.flash > 0.01 && i === f.which; });
-      const b = BOLTS[f.which];
+      const b = placed[f.which];
       // The direction to the middle of the bolt, for the sky's glow.
-      dir.set(b.at[0], b.top * 0.6, b.at[2]).sub(camera.position).normalize();
+      dir.copy(b.mid).sub(camera.position).normalize();
       state.boltDir.copy(dir);
-      light.position.set(b.at[0], b.top * 0.7, b.at[2]);
-      light.target.position.set(0, 0, 10);
-      light.intensity = f.flash * 1.3;
+      camera.getWorldDirection(_f);
+      _f.y = 0;
+      _f.normalize();
+      light.position.copy(camera.position).addScaledVector(_f, FROM[0]).setY(FROM[1]);
+      light.target.position.copy(camera.position).addScaledVector(_f, 40);
+      light.intensity = f.flash * b.field;
     },
   };
 }

@@ -15,9 +15,10 @@ import {
 
 // Distance fog: density at the ground (per metre) and how fast it thins with height.
 export const FOG = {
-  colour: new Color(0.030, 0.028, 0.032),   // linear; meets the sky at the horizon
-  density: 0.017,       // per metre at y = 0
+  colour: new Color(0.085, 0.080, 0.090),   // linear; meets the sky at the horizon (the original's horizon mist is #464348)
+  density: 0.012,       // per metre at y = 0
   falloff: 0.075,       // per metre of height
+  start: 6,             // metres of clear air before the fog begins: near things stay dark, as the original's do
 };
 
 export const fogUniforms = {
@@ -36,7 +37,7 @@ export const fogFactor = Fn(() => {
   const k = b.mul(ry).mul(dist);
   // (1 - e^-k) / k, without dividing by zero when the ray is level.
   const shape = select(abs(k).lessThan(1e-3), float(1).sub(k.mul(0.5)), float(1).sub(exp(k.negate())).div(k));
-  const od = fogUniforms.density.mul(exp(b.negate().mul(eye.y))).mul(dist).mul(shape);
+  const od = fogUniforms.density.mul(exp(b.negate().mul(eye.y))).mul(max(dist.sub(FOG.start), 0)).mul(shape);
   return float(1).sub(exp(od.negate()));
 });
 
@@ -59,10 +60,11 @@ export function createScatterLights() {
   return {
     uniforms: u,
     begin() { n = 0; },
-    // position, colour (Color), strength, aim (Vector3 or null), cone half-angle (radians), softness 0..1
-    add(p, colour, strength, dir = null, half = Math.PI, soft = 0.25) {
+    // position, colour (Color), strength, aim (Vector3 or null), cone half-angle (radians), softness 0..1,
+    // and how much of its glow is a halo all round it rather than in the cone (0..1)
+    add(p, colour, strength, dir = null, half = Math.PI, soft = 0.25, halo = 0) {
       if (n >= SCATTER_MAX || strength <= 0) return;
-      pos[n].set(p.x, p.y, p.z, 0);
+      pos[n].set(p.x, p.y, p.z, halo);
       col[n].set(colour.r * strength, colour.g * strength, colour.b * strength, 0);
       if (dir) aim[n].set(dir.x, dir.y, dir.z, Math.cos(half));
       else aim[n].set(0, -1, 0, -2);
@@ -101,7 +103,8 @@ export const scatter = Fn(([eye, ray, dist, lights, time, density]) => {
     });
     const near = clamp(b, 0, dist);
     const atten = exp(density.mul(near).mul(-0.6));
-    sum.addAssign(c.xyz.mul(glow).mul(coneSum.div(3)).mul(wispSum.div(3)).mul(atten));
+    const shaped = mix(coneSum.div(3), float(1), lights.pos.element(i).w);
+    sum.addAssign(c.xyz.mul(glow).mul(shaped).mul(wispSum.div(3)).mul(atten));
   });
   return sum;
 });

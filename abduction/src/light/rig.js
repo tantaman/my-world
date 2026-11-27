@@ -24,13 +24,19 @@ RectAreaLightNode.setLTC(RectAreaLightTexturesLib.init());
 export const LIGHTS = {
   lamp: { colour: new Color('#ffdcc0'), cd: 320, angle: 1.31, penumbra: 0.55, real: 3 },
   tube: { colour: new Color('#e4efe6'), nits: 70, w: 1.2, h: 0.15 },
-  canopySpot: { colour: new Color('#e4efe6'), cd: 260, angle: 1.2, penumbra: 0.9 },
+  // Casts the shadows under the van and the islands; kept low, because the
+  // original's floor under the canopy has no broad glare, only the tubes' streaks.
+  canopySpot: { colour: new Color('#e4efe6'), cd: 110, angle: 1.2, penumbra: 0.9 },
   warm: { colour: new Color('#ffd6a8'), cd: 6, reach: 7 },
   pendant: { colour: new Color('#ffb070'), cd: 38, reach: 6 },
   shopTube: { colour: new Color('#fff2e0'), cd: 26, reach: 7 },
   headlight: { colour: new Color('#fff4e0'), cd: 9000, angle: 0.3, penumbra: 0.5 },
   lightning: { colour: new Color('#cfd8ff'), lux: 6 },
   ufo: { colour: new Color('#dfeaff'), cd: 250, reach: 40 },
+  // The saucer's lamps on the field while it hovers: the original's tree
+  // crowns turn green from about 50 s, before the beam, well away from it.
+  // Falling off as 1/d, not 1/d^2 (it stands for many lamps round the rim), so it reaches the far crowns.
+  ufoField: { colour: new Color('#e6efff'), cd: 85, angle: 1.5, penumbra: 0.35, below: 1.5, decay: 1 },
   beam: { colour: new Color('#e8f2ff'), cd: 2500, angle: 0.16, penumbra: 0.6 },
   sky: { colour: new Color('#3a3842'), ground: new Color('#1a1714'), lux: 0.9 },
   bounce: { colour: new Color('#d8d6cc'), nits: 0.22 },
@@ -40,6 +46,11 @@ export const LIGHTS = {
 export const SCATTER = 0.0005;
 
 export const FAR_LAMPS = 16;
+
+// How a street lamp lights the fog: strength (times SCATTER per candela),
+// its cone's half-angle (times the lamp's), how soft the cone's edge is, and
+// the share that is a halo all round the head.
+const LAMP_FOG = { gain: 1.9, cone: 0.62, soft: 0.95, halo: 0.03 };
 
 export function createRig({ scene, camera, scatterLights, has }) {
   const group = new Group();
@@ -106,6 +117,9 @@ export function createRig({ scene, camera, scatterLights, has }) {
   // Under the saucer, and its beam.
   const ufoLight = point(LIGHTS.ufo, L.UFO.x, 60, L.UFO.z);
   ufoLight.intensity = 0;
+  const ufoField = spot(LIGHTS.ufoField);
+  ufoField.decay = LIGHTS.ufoField.decay;
+  ufoField.intensity = 0;
   const beam = spot(LIGHTS.beam, true, 1024);
   beam.intensity = 0;
   if (beam.castShadow) { beam.shadow.camera.near = 2; beam.shadow.camera.far = 20; }
@@ -133,7 +147,13 @@ export function createRig({ scene, camera, scatterLights, has }) {
 
   return {
     object: group,
-    lights: { bounce, lamps, tubes, canopySpot, doorLamp, wallLamp, pendants, shopTube, headlight, lightning, ufoLight, beam, sky },
+    lights: { bounce, lamps, tubes, canopySpot, doorLamp, wallLamp, pendants, shopTube, headlight, lightning, ufoLight, ufoField, beam, sky },
+    // The saucer's light on the field: where it is, and how near it is to hovering (0..1).
+    ufoOver(position, strength) {
+      ufoField.position.set(position.x, position.y - LIGHTS.ufoField.below, position.z);
+      ufoField.target.position.set(position.x, 0, position.z);
+      ufoField.intensity = LIGHTS.ufoField.cd * strength;
+    },
     farLamps,
     lampHead,
     update(t) {
@@ -156,9 +176,11 @@ export function createRig({ scene, camera, scatterLights, has }) {
       // The fog's light list: the lamps nearest first, then the rest of what glows.
       for (let i = 0; i < 11 && i < order.length; i++) {
         _aim.copy(lampAim);
-        scatterLights.add(lampHead(order[i]), LIGHTS.lamp.colour, LIGHTS.lamp.cd * SCATTER * 1.6, _aim, LIGHTS.lamp.angle * 0.5, 0.75);
+        // A wide soft cone inside a halo: the original's lamps glow broadly into the fog, merging along the row.
+        scatterLights.add(lampHead(order[i]), LIGHTS.lamp.colour, LIGHTS.lamp.cd * SCATTER * LAMP_FOG.gain, _aim,
+          LIGHTS.lamp.angle * LAMP_FOG.cone, LAMP_FOG.soft, LAMP_FOG.halo);
       }
-      scatterLights.add(canopySpot.position, LIGHTS.tube.colour, 15 * SCATTER, _down, 1.3, 0.8);
+      // (Nothing for the canopy's lights: the air under it is clear in the original.)
       scatterLights.add(doorLamp.position, LIGHTS.warm.colour, LIGHTS.warm.cd * SCATTER * 2.5);
       scatterLights.add(wallLamp.position, LIGHTS.warm.colour, LIGHTS.warm.cd * SCATTER * 2.5);
     },

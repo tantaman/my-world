@@ -20,6 +20,12 @@ export const RAIN = {
   wind: [1.4, 0, 0.6],      // m/s
   width: 0.006,             // metres
   brightness: 0.55,         // how much a drop gathers of the light round it
+  // The original's drops are 10 to 20 pixels long at 2048 wide (a shutter of
+  // about 1/120 s), seen over the whole sky, and only a little brighter in
+  // the beam or under a lamp.
+  shutter: 1 / 120,         // seconds of fall in a streak
+  ambient: 0.08,            // how bright a drop is with no light near it
+  most: 0.35,               // the brightest a drop gets from the lights round it
 };
 
 export function createRain({ scatterLights }) {
@@ -54,7 +60,7 @@ export function createRain({ scatterLights }) {
     const along = normalize(vel);
     const toCam = normalize(cameraPosition.sub(p));
     const side = normalize(cross(along, toCam));
-    const len = length(vel).div(60).mul(hash(id.add(3.3)).mul(0.6).add(0.7));
+    const len = length(vel).mul(RAIN.shutter).mul(hash(id.add(3.3)).mul(0.6).add(0.7));
     const corner = positionLocal.xy;
     const world = p.add(along.mul(corner.y.mul(len))).add(side.mul(corner.x.mul(RAIN.width).mul(keep)));
     // How lit it is: the lights in the fog's list, near it.
@@ -69,7 +75,9 @@ export function createRain({ scatterLights }) {
       lit.addAssign(c.x.add(c.y).add(c.z).mul(cone).div(d2.add(1.0)));
     });
     const far = smoothstep(4, 18, length(p.sub(cameraPosition)));
-    glow.assign(lit.mul(RAIN.brightness).add(flash.mul(0.25)).add(0.012).mul(float(1).sub(far.mul(0.5))).mul(keep));
+    const fromLights = lit.mul(RAIN.brightness);
+    const capped = fromLights.div(fromLights.div(RAIN.most).add(1));
+    glow.assign(capped.add(flash.mul(0.25)).add(RAIN.ambient).mul(float(1).sub(far.mul(0.5))).mul(keep));
     return cameraProjectionMatrix.mul(cameraViewMatrix).mul(vec4(world, 1));
   })();
   const across = abs(uv().x.sub(0.5)).mul(2);

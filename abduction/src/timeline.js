@@ -20,12 +20,12 @@ export const T = {
   ufoStop: 50.5,         // above the cow
   ringOn: 53.3,          // the ring under the hull brightens
   beamStart: 53.5,       // the beam grows down
-  beamGround: 54.2,      // and reaches the ground
-  liftStart: 54.6,       // the cow leaves the ground
-  liftEnd: 58.8,         // and reaches the hull
+  beamGround: 54.4,      // and reaches the ground
+  liftStart: 55.3,       // the cow leaves the ground (still down at 55.2, measured at 10 fps)
+  liftEnd: 57.9,         // and is inside the hull (by 58.0)
   beamUp: 59.0,          // the beam draws back up
   beamOff: 59.8,
-  ufoTip: 61.8,          // tips over, then leaves fast
+  ufoTip: 60.8,          // tips over (trails wrap from 60.7, tilt 60.7 to 61.4), then leaves fast from about 61.3
   ufoGone: 64.8,
   glitch: [71.2, 71.8],  // signal loss, then black
   black: 71.8,

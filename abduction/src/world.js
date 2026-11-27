@@ -1,7 +1,7 @@
 // Builds the scene: the set, the things in it, the weather, the saucer and
 // the lights, and updates them all from t. (?blockout shows milestone 0's
 // grey boxes instead of the set.)
-import { Color, Vector3, Group } from 'three/webgpu';
+import { Color, Group } from 'three/webgpu';
 import { fog } from 'three/tsl';
 import { createBlockout } from './set/blockout.js';
 import { batchStatic } from './set/batch.js';
@@ -15,16 +15,16 @@ import { createFence } from './set/fence.js';
 import { createSign } from './set/welcome.js';
 import { createSmallProps } from './props/small.js';
 import { createVan } from './props/van.js';
-import { createSedan, carX, CAR } from './props/sedan.js';
-import { CANOPY } from './set/layout.js';
+import { createSedan } from './props/sedan.js';
 import { createTrees } from './plants/tree.js';
 import { createGrass } from './plants/grass.js';
 import { createUfo } from './ufo/index.js';
-import { emi, T } from './timeline.js';
+import { emi, ramp, T } from './timeline.js';
 import { createSky } from './weather/sky.js';
 import { createLightning } from './weather/lightning.js';
 import { createRain } from './weather/rain.js';
 import { fogUniforms, fogFactor, FOG } from './weather/fog.js';
+import { createEnvironment } from './light/environment.js';
 
 export async function buildWorld(ctx) {
   const { scene, camera, scatterLights, has, params } = ctx;
@@ -38,6 +38,7 @@ export async function buildWorld(ctx) {
   scene.add(rig.object);
   const sky = createSky(ctx);
   scene.add(sky.object);
+  const environment = createEnvironment({ ...ctx, sky });
   const lightning = createLightning({ ...ctx, rig });
   scene.add(lightning.object);
   add(createGround({ ...ctx, farLamps: rig.farLamps }));
@@ -64,51 +65,26 @@ export async function buildWorld(ctx) {
   const rain = has('rain') ? createRain(ctx) : null;
   if (rain) scene.add(rain.object);
 
-  // What the sound needs to know each frame (audio/mix.js).
-  const listener = { underCanopy: false, car: null, ufo: null };
-  const carRel = { x: 0, z: 0, approach: 0 };
-  const ufoRel = { distance: 0, speed: 0 };
-  const _fwd = new Vector3();
-  const _rel = new Vector3();
-  function listen(t) {
-    const c = camera.position;
-    listener.underCanopy = c.x > CANOPY.x0 && c.x < CANOPY.x1 && c.z > CANOPY.z0 && c.z < CANOPY.z1;
-    camera.getWorldDirection(_fwd);
-    _fwd.y = 0;
-    _fwd.normalize();
-    if (!params.blockout && t > T.carSeen - 3 && t < T.carGone + 2) {
-      _rel.set(carX(t), 0.7, CAR.lane).sub(c);
-      carRel.z = _rel.dot(_fwd);
-      carRel.x = -_rel.x * _fwd.z + _rel.z * _fwd.x;
-      carRel.approach = (CAR.speed * _rel.x) / Math.max(1, _rel.length());
-      listener.car = carRel;
-    } else listener.car = null;
-    if (ufo && ufo.state.visible) {
-      ufoRel.distance = ufo.state.position.distanceTo(c);
-      ufoRel.speed = ufo.state.speed;
-      listener.ufo = ufoRel;
-    } else listener.ufo = null;
-  }
-
   const fogColour = FOG.colour.clone();
   const flashColour = new Color(0.25, 0.27, 0.34);
 
   return {
     rig,
-    listener,
     update(t) {
       scatterLights.begin();
       lightning.update(t, camera);
       const f = lightning.state.flash;
       sky.update(t, { flash: f, boltDir: lightning.state.boltDir });
-      fogUniforms.colour.value.copy(fogColour).lerp(flashColour, f * 0.22);
+      environment.update(f);
+      fogUniforms.colour.value.copy(fogColour).lerp(flashColour, f * 0.1);
       rig.update(t);
       for (const p of parts) p.update(t);
+      // The saucer's lamps light the field while it is over it.
+      if (ufo) rig.ufoOver(ufo.state.position, ufo.state.visible ? ramp(t, T.ufoArrive + 2, T.ufoStop) * (1 - ramp(t, T.ufoTip, T.ufoTip + 1.5)) : 0);
       // A stronger gust in the trees while the saucer is overhead.
       if (trees) trees.update(t, emi(t));
       scatterLights.end();
       if (rain) rain.update(t, camera, f);
-      listen(t);
     },
   };
 }
