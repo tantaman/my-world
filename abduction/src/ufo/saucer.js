@@ -36,6 +36,10 @@ import { pbr } from '../materials/textures.js';
 // Sizes, metres, in the saucer's own frame: y = 0 at the bottom of the lip
 // round the opening, the lowest point.
 export const SAUCER = {
+  // The whole saucer drawn this size: with the camera matched to the
+  // original's, its hull is 210 px wide at 1440 at 53 and 57 s; at 1 ours
+  // was 200.
+  scale: 1.05,
   radius: 6.0,        // the rim
   rimY: 1.455,        // the middle of the rim's band of lights
   bore: 2.0,          // the opening's radius

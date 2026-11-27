@@ -30,7 +30,7 @@ export const LIGHTS = {
   warm: { colour: new Color('#ffd6a8'), cd: 6, reach: 7 },
   pendant: { colour: new Color('#ffb070'), cd: 38, reach: 6 },
   shopTube: { colour: new Color('#fff2e0'), cd: 26, reach: 7 },
-  headlight: { colour: new Color('#fff4e0'), cd: 9000, angle: 0.3, penumbra: 0.5 },
+  headlight: { colour: new Color('#fff4e0'), cd: 5000, angle: 0.3, penumbra: 0.6 },
   lightning: { colour: new Color('#cfd8ff'), lux: 6 },
   ufo: { colour: new Color('#dfeaff'), cd: 250, reach: 40 },
   // The saucer's lamps on the field while it hovers: the original's tree

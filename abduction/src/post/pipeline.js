@@ -29,7 +29,7 @@ export const LENS = {
   k: 0.135,
   zoom: 0.727,           // so the corners just reach the drawn picture's corners: never black but for the vignette
   overdraw: 1.3,         // the scene is drawn this much larger, so the warped middle stays sharp
-  fringe: 0.0035,        // colour fringing at the corners, as a fraction of the radius
+  fringe: 0.0012,        // colour fringing at the corners, as a fraction of the radius (the original shows little outside its tears)
   emiSplit: 0.0008,      // red and blue apart over the whole picture at full interference, of the width
   grain: 0.0028,         // sensor noise, display-linear: the original is smooth (its compression crushes grain: 0.7 of 255 in flat sky)
   // The original's mean frame (every frame averaged) is not darkened at its

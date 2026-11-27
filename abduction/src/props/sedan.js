@@ -21,12 +21,18 @@ import { createAtlas, surf, fbm, smooth, clamp01 } from './atlas.js';
 import { bodyMaterial, chrome, plastic, lens, wheel, sweep, roundedRect, mergeByMaterial, groundShadow, part } from './vehicle.js';
 
 export const CAR = {
-  speed: 14,                                   // m/s
-  lane: (ROAD.z0 + ROAD.centre) / 2,           // the near lane, driving toward -X
-  passX: -2.0,                                 // where it is at T.carPasses
+  speed: 9,                                    // m/s: the original's crosses the frame at about half the rate 14 gave, 19.5 to 20.5 s
+  // Driving toward -X, a little in from the near lane's middle: at 20.5 s
+  // the original's car is about a fifth smaller in frame than in the near lane's middle.
+  lane: ROAD.centre - 0.9,
+  passX: 0.5,                                  // where it is at T.carPasses (so at 19.5 s it is where the original's is)
   wheel: 0.325,                                // tyre radius, m
 };
-const HEADLIGHT_GLOW = 30;   // the lit lenses' brightness, for bloom
+// The lit lenses' brightness, for bloom: the original's are small white-hot
+// rectangles with a modest glow, the body round them still readable.
+const HEADLIGHT_GLOW = 7;
+// Their light in the fog: a soft pool ahead on the road, not a searchlight.
+const HEADLIGHT_FOG = { strength: 0.15, half: 0.25, soft: 0.8 };
 const TAIL_GLOW = 1.4;      // the tail lamps: red, not so bright the tone curve turns them pink
 
 // Sizes, metres, along the car from its middle (nose +X).
@@ -143,7 +149,7 @@ export function createSedan({ rig, scatterLights }) {
       light.position.copy(front);
       aim.set(x - 30, 0, CAR.lane + 0.5);
       light.target.position.copy(aim);
-      scatterLights.add(front, colour, 2.2, fogAim, 0.35, 0.7);
+      scatterLights.add(front, colour, HEADLIGHT_FOG.strength, fogAim, HEADLIGHT_FOG.half, HEADLIGHT_FOG.soft);
     },
   };
 }

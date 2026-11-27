@@ -88,7 +88,8 @@ export const TREES = { z0: 32, z1: 170, x0: -160, x1: 220 };
 export const POWER = { z: 60, x0: 40, step: 45, count: 6 };
 
 // Where the saucer hovers: above the cow, the middle of its rim surveyed
-// 13.3 m up (y is the bottom of its lip, 1.46 m below: ufo/saucer.js).
-export const UFO = { x: 5.51, y: 11.85, z: 28.69, radius: 5.5, depth: 2.4 };
+// 13.3 m up (y is the bottom of its lip, 1.46 m below at full size, times
+// SAUCER.scale: ufo/saucer.js).
+export const UFO = { x: 5.51, y: 11.77, z: 28.69, radius: 5.5, depth: 2.4 };
 
 export const EYE = 1.5;  // chest height of the camera

@@ -13,7 +13,7 @@ export const T = {
   strike1: 5.70,
   lightInSky: [9.5, 15.0],
   carSeen: 16.5,
-  carPasses: 20.3,       // nearest the camera
+  carPasses: 20.0,       // nearest the camera (where the original's car is at 18.5, 19.5 and 20.5 s)
   carGone: 24.0,
   strike2: 42.20,
   ufoArrive: 46.5,       // comes in from +X along the road

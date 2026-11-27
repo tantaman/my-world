@@ -30,11 +30,12 @@ export function createUfo(ctx) {
       saucer.object.visible = state.visible;
       saucer.object.position.copy(state.position);
       saucer.object.rotation.copy(state.rotation);
+      saucer.object.scale.setScalar(SAUCER.scale);
       saucer.object.updateMatrixWorld();
       saucer.update(t);
       opening.set(0, OPENING_Y, 0).applyMatrix4(saucer.object.matrixWorld);
       trails.update(t);
-      beam.update(t, opening, state.visible, SAUCER.bore);
+      beam.update(t, opening, state.visible, SAUCER.bore * SAUCER.scale);
       lift.update(t, opening);
     },
   };

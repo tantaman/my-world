@@ -18,7 +18,9 @@ import { noise1 } from '../noise1.js';
 const ARRIVE_FROM = new Vector3(80, 2, 75);    // metres from the hover point at T.ufoArrive: in from +X, far off, at about its hover height
 const ARRIVE_EASE = 2.0;     // the power its distance to go falls by: still moving as it comes over the cow
 const BANK = { pitch: 0.08, roll: 0.2 };        // radians at the start of the arrival (top away from the road, +X side up), easing to level
-const LEAVE_DIR = new Vector3(-0.32, 0.14, 0.94).normalize();   // away, a little right and up, as the camera follows it
+// Away toward +X, left of frame, and climbing a little: the original's camera
+// turns left and down after it (yaw 57 to 47.5, pitch 23.5 to 14, 61 to 64 s).
+const LEAVE_DIR = new Vector3(0.72, 0.3, 0.62).normalize();
 // Leaving, its distance is LEAVE_SCALE (e^(LEAVE_RATE s) - 1) metres, s seconds after it starts to move.
 const LEAVE_SCALE = 30;
 const LEAVE_RATE = 0.65;     // 1/s

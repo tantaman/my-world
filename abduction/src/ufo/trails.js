@@ -154,8 +154,8 @@ export function createTrails({ camera }) {
   // (applied first, flight.js) is taken back out.
   const rimPoint = (out, p, q, swirl, s, time) => {
     const a = s.angle + swirl + SPIN_RATE * time;   // three turns a point at angle a about Y by θ to a - θ
-    const rr = SAUCER.radius + s.out;
-    _local.set(Math.cos(a) * rr, SAUCER.rimY + s.up, Math.sin(a) * rr).applyQuaternion(q);
+    const rr = (SAUCER.radius + s.out) * SAUCER.scale;
+    _local.set(Math.cos(a) * rr, (SAUCER.rimY + s.up) * SAUCER.scale, Math.sin(a) * rr).applyQuaternion(q);
     return out.copy(p).add(_local);
   };
 

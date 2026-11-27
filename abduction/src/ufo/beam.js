@@ -40,7 +40,9 @@ const UNDER = { cd: 35, drop: 2.2 };    // the lit ground's glow on the hull: a 
 // opening its point is. The point is up inside the hull, so the bright
 // tip of the cone's glow is hidden by the metal and what shows below is a
 // haze as wide as the opening, not a spike from a point in it.
-const SCATTER = { strength: 3.0, half: 0.25, soft: 0.5, above: 8 };
+// (At 8 m up its tip showed over the top of the hull as a spike; 3 m is
+// about the hull's top, and the wider cone keeps it as wide at the opening.)
+const SCATTER = { strength: 3.0, half: 0.55, soft: 0.5, above: 3 };
 // Rain falling through it, lit: the scene's rain is lit only near the
 // opening (by the fog's list, which falls off with distance), so the beam
 // has drops of its own, all the way down.
