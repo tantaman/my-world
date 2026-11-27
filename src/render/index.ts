@@ -178,6 +178,10 @@ export function installRender(game: Game) {
     }
   }
 
+  // Before the world is first shown, the shaders for the first picture of
+  // it, compiled all at once (pipeline.js: warm).
+  game.beforeShown(() => pipeline.warm(scene, camera));
+
   game.addSystem({
     name: 'render',
     phase: 'render',

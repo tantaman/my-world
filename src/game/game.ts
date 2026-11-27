@@ -103,6 +103,7 @@ export class Game extends Emitter {
   // see beforeArrival().
   arrivals: Promise<unknown>[];
   running: boolean;
+  private _showing: Array<() => unknown>;
   private _covers: Array<{ on: () => boolean; idle: () => boolean }>;
   private _before: Promise<unknown> | null = null;
   private _last: number;
@@ -119,6 +120,7 @@ export class Game extends Emitter {
     this.api = { game: this };
     this.budget = new Budget();
     this.arrivals = [];
+    this._showing = [];
     // (The controls arrive when a feature provides them, as 'input'. The game
     // itself only asks three things of them: wasPressed(code), down(code),
     // endFrame().)
@@ -172,6 +174,20 @@ export class Game extends Emitter {
   // main.js waits for these, a while, before they arrive.
   beforeArrival(wait: Promise<unknown>): void {
     this.arrivals.push(wait.catch(() => {}));
+  }
+
+  // Something to do once the world round the hiker has come in and they're
+  // set down in it, before any of it is shown: the shaders the first picture
+  // needs compiled (render/), so it isn't drawn in front of you a shader at a
+  // time. fn is called then, and main.js waits, a while, for what it returns.
+  beforeShown(fn: () => unknown): void {
+    this._showing.push(fn);
+  }
+
+  // → a promise that everything asked for by beforeShown() is done (a
+  // failure among it is no reason not to be shown the world)
+  readyToShow(): Promise<unknown> {
+    return Promise.all(this._showing.map((fn) => Promise.resolve().then(fn).catch((err) => console.error(err))));
   }
 
   // While fn() is true something covers the whole view (the map, say) and the

@@ -36,6 +36,13 @@ const SAY_FOR = 6000;
 // ms at most that the opening waits for code a feature needs before you're
 // set down (game.beforeArrival): past that you arrive without it
 const ARRIVAL_WAIT = 8000;
+// ms at most that it waits for what's to be done before the world is shown
+// (game.beforeShown: the shaders compiled): past that it's shown anyway
+const SHOW_WAIT = 15000;
+// frames drawn behind the loader before it goes: whatever the first picture
+// still had to compile is compiled in them, not in front of you
+const FIRST_FRAMES = 2;
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ── Which world? ─────────────────────────────────────────────────────────────
 // ?w=<id> opens a world kept on the save server. Its seed and its land live
@@ -86,13 +93,18 @@ for (let i = 0; i < 6; i++) {
 }
 // (and what's fetched only when it's wanted, where it's wanted at once:
 // a feature whose save left you standing on something it builds says so)
-await Promise.race([Promise.all(game.arrivals), new Promise((r) => setTimeout(r, ARRIVAL_WAIT))]);
+await Promise.race([Promise.all(game.arrivals), wait(ARRIVAL_WAIT)]);
 player.arrive();
+
+// The first pictures are drawn behind the loader, so that the world is
+// shown moving, not frozen while the graphics card gets ready for it.
+loader.say('getting the picture ready…', 0.95);
+await Promise.race([game.readyToShow(), wait(SHOW_WAIT)]);
+game.start();
+for (let i = 0; i < FIRST_FRAMES; i++) await nextFrame();
 loader.done();
 
 // Anything worth knowing about how this world opened.
 if (opened && opened.recovered) hud.flash('picked up where you left off');
 else if (opened && opened.offline) hud.flash("opened this browser's copy · the save server is out of reach");
 else if (save.detail) hud.flash(save.detail, SAY_FOR);
-
-game.start();
