@@ -68,6 +68,10 @@ export class Sky {
     this.hours = CONFIG.timeOfDay;
     this.exposure = 1;
     this.open = 1;
+    // The hemisphere light's intensity as the sky gives it, before the open
+    // sky's share (open) or anyone else's change: what the sky as light
+    // (render/skyLight.ts) measures their changes against.
+    this.ambient = 1;
     this.sunDir = new THREE.Vector3();
     this.lightDir = new THREE.Vector3(0, 1, 0);
     // 0..1: how much of the sun cloud overhead is taking (set by whoever
@@ -194,7 +198,8 @@ export class Sky {
     this.sun.intensity = k.li * Math.max(fadeAtHorizon, night > 0.5 ? 1 : 0) * (1 - 0.8 * this.overcast) * this.open;
     this.hemi.color.setRGB(...k.amb);
     this.hemi.groundColor.setRGB(...k.gnd);
-    this.hemi.intensity = k.ai * (1 + 0.3 * this.overcast) * this.open;
+    this.ambient = k.ai * (1 + 0.3 * this.overcast);
+    this.hemi.intensity = this.ambient * this.open;
     this.aim(focus, cameraPos);
   }
 

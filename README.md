@@ -57,6 +57,8 @@ npm run earth        # the real Earth under the world (see src/world/README.md)
 npm run zoo          # a real zoo's buildings and exhibits on its real ground (see src/zoo/README.md)
 npm run dc           # the city round it, Washington, DC, life size (see src/washington/README.md)
 npm run metro        # its Metro, under and over it (see src/metro/README.md)
+npm run photos       # the photographs of real surfaces the code asks for (see src/render/README.md)
+npm run look -- mount-storm-king   # the game beside a hike's photo, measured (see reference/README.md)
 ```
 
 The game is a static site and runs on its own; `npm run api` adds the save
@@ -260,6 +262,7 @@ place in that order, not at the end:
 | `render/lights.js` | light given off by something (a fire, lava, a lantern), and its shadows | `game.lights.add(scene, { x, y, z, color, power, range })`, or `addSource(scene, (eye, out) => …)` |
 | `render/liquid.js` | the surface of a liquid other than the forest's water (blood, pitch, lava) | `createLiquidMaterial(kinds)` on the `OVER` layer |
 | `render/origin.js` | a uniform that says where something is | `game.origin.place(uniform)` |
+| `render/photos.ts` | a photograph of a real surface, as the fine detail over the colour the code gives it | `photo('id', metres)`, read with `PHOTO_GLSL` (`photoShade`, `photoTilt`); then `npm run photos` |
 | `render/pipeline.js` | something drawn over the water, not seen through it (a splash, a spark), or over what's behind it | `object.layers.set(OVER)`; a light on it: `light.layers.enableAll()` |
 | `render/rig.js` | a creature or a person as one skinned mesh, built from primitives | `new RigBuilder(seed)`, `r.bone(…)`, `r.part(bone, geometry, { color })`, `r.build()` |
 | `render/sculpt.js` | a shape made of simple ones: boxes, drums, balls, limbs, tubes, panels (or melted out of them) | `new Sculpt()`, `s.box / drum / ball / limb / tube / quad`, `s.build()` |
@@ -518,6 +521,12 @@ tools/
   dc/                     a tile of the city's bytes; its landmarks
   metro.mjs               npm run metro: Washington's Metro, from OpenStreetMap's lines and the city's survey of its entrances
   metro/                  how high its rails run
+  photos.mjs              npm run photos: the photographs of real surfaces src/ asks for, from Poly Haven (CC0)
+  look.mjs                npm run look: the game beside a photograph of the same place, and how far apart they are
+public/
+  photos/<id>/            photographs of real surfaces: colour, normal, and occlusion/roughness/metalness
+reference/
+  hikes/                  your photographs of the hikes, to set the look against (npm run look)
 worker/
   index.js                the front door: mint an id, route to the world
   world.js                a world's Durable Object — the only writer, and who is who

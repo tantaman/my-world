@@ -91,4 +91,10 @@ export const CONFIG = {
   mute: params.has('mute'),
   reset: params.has('reset'),
   debug: params.has('debug'),
+
+  // Parts of the look left out, to see what each does and costs:
+  // ?no=skylight,photos (tools/look.mjs shoots with and without).
+  //   skylight  the sky as light (render/skyLight.ts): back to a two-colour ambient
+  //   photos    photographs of real surfaces (render/photos.ts): the code's colours alone
+  no: new Set((params.get('no') || '').split(',').map((s) => s.trim()).filter(Boolean)),
 };
