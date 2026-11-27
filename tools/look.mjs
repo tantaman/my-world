@@ -19,7 +19,10 @@
 // about 43° up, the game's about 23°), --clouds 0..1 (how much of the sky
 // the day's clouds covered: world.sky.cloudCover), --fov deg
 // (how wide it sees, top to bottom; the photo's, from its lens, by default),
-// --lens mm (the lens as if on 35 mm film, for a photo whose EXIF is gone:
+// --at dx,dz (m from where the hike says its photo was taken, east and south:
+// a phone's position on a ridge a few metres wide can be off it, and the
+// photo taken from its top), --lens mm (the lens as if on 35 mm film, for a
+// photo whose EXIF is gone:
 // a phone's main camera is 26 to 28), --bearing deg (which way, clockwise
 // from north: for another photo from the same spot), --pitch rad (+ is
 // down), --size WxH (the photo's shape, 1440 wide, by default),
@@ -52,7 +55,7 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const { chromium } = createRequire(import.meta.url)('playwright');
 
 // ── What was asked ──────────────────────────────────────────────────────────
-const FLAGS = ['time', 'sun', 'clouds', 'fov', 'lens', 'bearing', 'pitch', 'size', 'ref', 'out', 'no', 'pair', 'settle'];
+const FLAGS = ['at', 'time', 'sun', 'clouds', 'fov', 'lens', 'bearing', 'pitch', 'size', 'ref', 'out', 'no', 'pair', 'settle'];
 const arg = (name) => {
   const i = process.argv.indexOf(`--${name}`);
   return i < 0 ? null : process.argv[i + 1];
@@ -144,10 +147,16 @@ async function shoot(no) {
   await page.goto(`${server.url}?${query}`);
   await page.waitForFunction(() => document.getElementById('loader')?.classList.contains('gone') && window.world, null, { timeout: 300000 });
   const view = await page.evaluate(
-    async ({ hike, at, coords, time, pitch, fov, bearing, sun, clouds }) => {
+    async ({ hike, at, coords, time, pitch, fov, bearing, sun, clouds, shift }) => {
       const w = window.world;
       const frame = () => new Promise((r) => requestAnimationFrame(r));
       if (hike) await w.hikes.go(hike, at);
+      if (shift) {
+        const [dx, dz] = shift.split(',').map(Number);
+        const P = w.player.pos;
+        const yaw = w.player.camYaw;
+        w.player.spawn(P.x + dx, P.z + dz, yaw - Math.PI, yaw);
+      }
       else if (coords) {
         // (yaw is the camera's, as world.player.camYaw)
         const [x, z, yaw, p = 0] = coords;
@@ -187,7 +196,7 @@ async function shoot(no) {
       while (!w.game.chunks.isFullyLoaded()) await frame();
       return { x: w.player.pos.x, y: w.player.pos.y, z: w.player.pos.z, yaw: w.player.camYaw, pitch: w.player.camPitch, hours: w.sky.hours };
     },
-    { hike, at, coords, time: arg('time'), pitch: arg('pitch'), fov: FOV, bearing: arg('bearing'), sun: arg('sun'), clouds: arg('clouds') },
+    { hike, at, coords, time: arg('time'), pitch: arg('pitch'), fov: FOV, bearing: arg('bearing'), sun: arg('sun'), clouds: arg('clouds'), shift: arg('at') },
   );
   // everything fetched (the photographs of surfaces among it), then the eye
   // let straight to where it would settle, and a few frames drawn
