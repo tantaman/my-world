@@ -1,23 +1,31 @@
-// Trees (PLAN.md 5.7): grown in code, acacias bent by the wind. A trunk that
-// rises, leans and forks low; two to four limbs spreading up and out; twigs
-// to a dozen clumps of leaves that together make a wide, flat-topped crown
-// with sky between the clumps. Every tree leans the same way, give or take,
-// as wind-swept trees do (toward -X, as the original's do from the road).
+// Trees (PLAN.md 5.7): grown in code, acacias in the wind, as the original's
+// are. A trunk rises bare for a third to a half of the tree, leaning a
+// little, and carries on thinner up into the crown; two or three limbs leave
+// it at different heights and spread up and out in a V, bowed, and each ends
+// in branches that hold up heads of rounded clumps of leaves. The heads sit
+// on a dome: high ones near the middle, low ones far out, with sky between
+// them, so a crown is a broad, deep dome, lumpy and ragged at the edge, not
+// a flat lid. Most trees lean a little toward -X, some the other way.
 //
 // A clump is a few dozen leaf cards turned every way, each showing a cluster
 // of small leaves painted to a canvas here (paintCluster) and cut out by
 // alpha test, so a clump's edge is ragged and the eye reads leaves, not
-// cards. Their normals are bent outward from the clump and the crown, so a
-// crown shades as a few round masses: near-black against the fog, green
-// where lightning or the saucer lights it.
+// cards. Their normals are bent mostly outward from the crown and a little
+// from the clump, so a crown shades as one dome with lumps: lit on top and
+// on the faces toward a light, darker underneath, green where lightning or
+// the saucer lights it, near-black against the fog where nothing does.
 //
-// Five shapes, instanced, turned a little and scaled; each grown twice, in
-// full for the trees near where the camera goes and with fewer, larger cards
-// for those off in the fog. Wood and leaves are one geometry and one material
-// (wood is the part with no cut-out), so a shape costs one draw. They sway,
-// harder while the saucer is overhead.
+// They stand in loose rows across the field: one by one along the fence,
+// few behind with fog and sky between, denser off in the fog; and one big
+// tree behind the cow, as in the original, its crown lit by the beam.
+//
+// Five shapes, instanced, turned and scaled; each grown twice, in full for
+// the trees near where the camera goes and with fewer, larger cards for those
+// off in the fog. Wood and leaves are one geometry and one material (wood is
+// the part with no cut-out), so a shape costs one draw. They sway, harder
+// while the saucer is overhead.
 import {
-  Group, InstancedMesh, BufferGeometry, Float32BufferAttribute, Object3D, Vector3, MeshStandardNodeMaterial, DoubleSide,
+  Group, InstancedMesh, BufferGeometry, Float32BufferAttribute, Object3D, Vector3, MeshPhysicalNodeMaterial, DoubleSide,
   CanvasTexture, NoColorSpace,
 } from 'three/webgpu';
 import {
@@ -27,26 +35,98 @@ import {
 import { TREES, COW } from '../set/layout.js';
 import { rand } from '../noise1.js';
 
-const SHAPES = 5;
+const TAU = Math.PI * 2;
 
-// The two levels of detail: cards per cubic metre of clump, a card's size
-// (m), how many sides the wood has and in how many pieces it bends.
-const DETAIL = [
-  { cardsPerM3: 13, card: 0.85, trunkSides: 7, limbSides: 5, twigSides: 4, segments: 5 },
-  { cardsPerM3: 2.6, card: 1.5, trunkSides: 5, limbSides: 4, twigSides: 3, segments: 2 },
+// The five shapes. height: m. spread: the crown's radius, and depth: how deep
+// it is, each a fraction of the height. fork: where the first limb leaves
+// the trunk, a fraction of the height. limbs: how many; heads: how many heads
+// of leaves each limb ends in. clump: a head's main clump's radius, a
+// fraction of the crown's. top: clumps over the middle that round the dome.
+// lean: radians.
+const KINDS = [
+  // Big and spreading, a broad dome of many heads (the one behind the cow).
+  { height: 10.0, spread: 0.55, depth: 0.42, fork: 0.34, limbs: 3, heads: 3, clump: 0.27, top: 2, lean: 0.1 },
+  // Rounder and fuller, a dome.
+  { height: 8.2, spread: 0.62, depth: 0.4, fork: 0.34, limbs: 3, heads: 2, clump: 0.28, top: 2, lean: 0.14 },
+  // An umbrella: flatter-topped, a few heads held apart on long limbs.
+  { height: 7.6, spread: 0.78, depth: 0.32, fork: 0.4, limbs: 3, heads: 2, clump: 0.25, top: 1, lean: 0.08 },
+  // Young: small and round, low down.
+  { height: 6.2, spread: 0.62, depth: 0.42, fork: 0.34, limbs: 2, heads: 3, clump: 0.32, top: 1, lean: 0.16 },
+  // Tall and thin, leaning, a few heads high up.
+  { height: 9.0, spread: 0.58, depth: 0.34, fork: 0.46, limbs: 3, heads: 2, clump: 0.3, top: 1, lean: 0.2 },
 ];
+const SHAPES = KINDS.length;
+
+// The trunk's radius at its foot (m): this, plus this much per metre of height.
+const TRUNK_R = 0.12;
+const TRUNK_R_PER_M = 0.024;
+// How far (m) the trunk's knee is pushed aside, at most: trunks that bend.
+const KNEE = 0.45;
+// Where on the crown's dome the heads of leaves are: their angle from its top
+// (radians), from this to this, more of them toward the edge.
+const DOME = [0.4, 1.3];
+
+// The two levels of detail: cards per square metre of a clump's surface, a
+// card's size (m), how many sides the wood has and in how many pieces it bends.
+const DETAIL = [
+  { cardsPerM2: 4.4, card: 0.6, trunkSides: 7, limbSides: 5, branchSides: 4, segments: 5 },
+  { cardsPerM2: 0.55, card: 1.45, trunkSides: 5, limbSides: 4, branchSides: 3, segments: 2 },
+];
+// Leaf cards keep out of this much of a clump's middle (a fraction of its
+// radius): unseen there, and the clump reads as a rounded mass.
+const HOLLOW = 0.35;
 // Trees nearer than this (m) to where the camera goes are drawn in full.
 const NEAR = { x: -6, z: 12, r: 85 };
 // Beyond this (m) from there, none: the fog has them.
 const FAR_R = 190;
 
-// Colours (linear albedo): leaves, and the wood.
-const LEAF = [0.11, 0.17, 0.05];
-const WOOD = [0.04, 0.034, 0.028];
+// Where they stand: rows across the field, in three bands by how far past
+// TREES.z0 (m) a row is: along the fence, trees one by one; behind them few,
+// with fog and sky between, as the original's; then denser into the fog.
+// step: m between trees along a row, at least, and the most added at random;
+// row: m between rows, likewise, and how much more per metre past TREES.z0.
+// A tree is left out if its crown would crowd one already placed (gap: two
+// trees stand at least this times the sum of their crowns' radii apart).
+const PLACING = [
+  { to: 14, step: [11, 13], row: [9, 5, 0], jitter: [8, 6], gap: 1.0 },
+  { to: 60, step: [15, 16], row: [11, 7, 0], jitter: [10, 6], gap: 1.1 },
+  { to: Infinity, step: [11, 12], row: [10, 7, 0.04], jitter: [6, 4], gap: 0.95 },
+];
+// How big a tree is drawn: its shape's height times this, plus up to this much at random.
+const SCALE = [0.8, 0.35];
+// No tree taller than this (m): the saucer comes in over the field at 12 to 14 m.
+const MAX_HEIGHT = 10.5;
+// The big tree that stands behind the cow in the original, its crown lit by
+// the beam: where, from the cow (m; 9 m behind it from the road at 42 s, a
+// little to its left), and its shape, scale and turn (leaning a little
+// toward -X, to the right there).
+const BEHIND_COW = { dx: 4.1, dz: 8, shape: 0, scale: 0.85, turn: Math.PI + 0.4 };
+
+// Colours (linear albedo): leaves, a full green with little blue (the
+// lightning and the fog bring blue enough), and the wood, dark brown.
+const LEAF = [0.09, 0.25, 0.012];
+const WOOD = [0.035, 0.026, 0.018];
+
+// How much of a dielectric's specular the leaves and the wood keep: a crown's
+// bent normals face every way, and the full sheen at their grazing edges
+// greys a crown against the sky; on the limbs it turns them pale grey.
+const LEAF_SPECULAR = 0.25;
+const WOOD_SPECULAR = 0.4;
+
+// How much darker a card is deep in its clump, and low in the crown (0..1 of
+// its albedo taken away at the very middle, and at the crown's underside).
+const DEEP = 0.25;
+const UNDER = 0.5;
+// How much a card's normal follows its own clump's round rather than the
+// crown's: low, so a crown shades as one dome with lumps, not a heap of balls.
+const CLUMP_ROUND = 0.3;
 
 // The painted cluster of leaves on each card: its size (px) and how many leaves.
 const CLUSTER_PX = 512;
 const CLUSTER_LEAVES = 1100;
+
+// The sway's reference height (m): the crown moves by its height over this, squared.
+const SWAY_HEIGHT = 8;
 
 // A repeatable stream of random numbers in 0..1.
 const stream = (seed) => {
@@ -54,9 +134,9 @@ const stream = (seed) => {
   return () => rand(i++, seed);
 };
 
-// The canvas a card shows: small leaves, lighter and darker, thick in the
-// middle and thinning to the edge, on a few dark twigs. Grey: the material
-// gives it its green.
+// The canvas a card shows: small leaves, lighter and darker, some yellower,
+// thick in the middle and thinning to the edge, on a few dark twigs. Near
+// grey: the material gives it its green.
 function paintCluster() {
   const c = document.createElement('canvas');
   c.width = c.height = CLUSTER_PX;
@@ -66,7 +146,7 @@ function paintCluster() {
   const R = CLUSTER_PX * 0.47;
   g.lineCap = 'round';
   for (let i = 0; i < 7; i++) {
-    const a = next() * Math.PI * 2;
+    const a = next() * TAU;
     g.strokeStyle = 'rgb(60,52,44)';
     g.lineWidth = 3 + next() * 3;
     g.beginPath();
@@ -75,18 +155,19 @@ function paintCluster() {
     g.stroke();
   }
   for (let i = 0; i < CLUSTER_LEAVES; i++) {
-    const a = next() * Math.PI * 2;
+    const a = next() * TAU;
     const r = Math.sqrt(next()) * R;
     // Fewer toward the edge, so it is ragged rather than round.
     if (next() < Math.pow(r / R, 2.5)) continue;
     const len = CLUSTER_PX * (0.03 + next() * 0.035);
-    const v = Math.round(120 + next() * 135 - (r / R) * 30);
-    g.fillStyle = `rgb(${v},${v},${v})`;
+    const v = 110 + next() * 145 - (r / R) * 25;
+    const warm = next() * 0.25;   // some leaves yellower, some bluer
+    g.fillStyle = `rgb(${Math.round(v * (0.9 + warm))},${Math.round(v)},${Math.round(v * (1.05 - warm * 1.4))})`;
     g.save();
     g.translate(mid + Math.cos(a) * r, mid + Math.sin(a) * r);
     g.rotate(next() * Math.PI);
     g.beginPath();
-    g.ellipse(0, 0, len / 2, len * 0.19, 0, 0, Math.PI * 2);
+    g.ellipse(0, 0, len / 2, len * 0.19, 0, 0, TAU);
     g.fill();
     g.restore();
   }
@@ -137,7 +218,7 @@ function tube(parts, pts, radii, sides) {
     _n.normalize();
     _b.crossVectors(_t, _n);
     for (let s = 0; s < sides; s++) {
-      const th = (s / sides) * Math.PI * 2;
+      const th = (s / sides) * TAU;
       _d.copy(_n).multiplyScalar(Math.cos(th)).addScaledVector(_b, Math.sin(th));
       _p.copy(pts[i]).addScaledVector(_d, radii[i]);
       parts.vertex(_p, _d, -1, -1, WOOD);
@@ -167,102 +248,133 @@ function curve(a, bow, b, n) {
   return out;
 }
 
+// A piece of wood from a to b, bowed up by `rise` (m) and out (away from the
+// tree's axis through `axis`) by `out` (m), radius r0 to r1.
+const wood = (a, b, rise, r0, r1, out = 0, axis = a) => {
+  const bow = a.clone().lerp(b, 0.5);
+  _d.set(bow.x - axis.x, 0, bow.z - axis.z);
+  if (_d.lengthSq() > 1e-6) bow.addScaledVector(_d.normalize(), out);
+  bow.y += rise;
+  return { a, b, bow, r0, r1 };
+};
+
 // The skeleton of one tree shape, the same for both levels of detail: the
-// trunk, the limbs, the twigs and the clumps, about 5 to 8 m tall.
-function skeleton(seed) {
+// trunk, the limbs and branches (wood), and the clumps of leaves.
+function skeleton(kind, seed) {
   const next = stream(seed * 101 + 7);
-  const height = 5.0 + next() * 2.8;
-  const radius = 0.55 * height + 0.5 + next() * 1.5;  // the crown's, m
-  const lean = 0.25 + next() * 0.35;             // radians, toward +X here (turned to -X when placed)
-  const forkY = 0.9 + next() * 1.6;
-  const trunkR = 0.13 + 0.025 * height;
-  // The trunk: up from the ground, then leaning, a knee low down.
-  const knee = new Vector3(0.05, forkY * 0.35, (next() - 0.5) * 0.2);
-  const fork = new Vector3(Math.tan(lean) * forkY * 0.9, forkY, (next() - 0.5) * 0.5);
-  const trunk = { a: new Vector3(0, -0.1, 0), bow: knee, b: fork, r0: trunkR, r1: trunkR * 0.75 };
-  // The crown's middle, further along the lean.
-  const crownY = height - 0.5;
-  const centre = new Vector3(fork.x + Math.tan(lean) * (crownY - forkY) * 0.55, crownY, fork.z);
-  // Clumps round it, flat on top, the edges a little lower.
+  const H = kind.height * (0.94 + next() * 0.12);
+  const R = kind.spread * H;
+  const D = kind.depth * H;
+  const forkY = kind.fork * H;
+  const lean = kind.lean * (0.7 + next() * 0.6);    // radians, toward +X here (turned to -X when placed)
+  const trunkR = TRUNK_R + TRUNK_R_PER_M * H;
+  // The trunk: up from the ground, leaning, a slight knee low down.
+  const fork = new Vector3(Math.tan(lean) * forkY, forkY, (next() - 0.5) * 0.3);
+  const knee = new Vector3(fork.x * 0.25 + (next() - 0.5) * KNEE, forkY * 0.45, fork.z * 0.3 + (next() - 0.5) * KNEE);
+  const pieces = [{ a: new Vector3(0, -0.1, 0), bow: knee, b: fork, r0: trunkR, r1: trunkR * 0.8, sides: 'trunkSides' }];
+  // The crown's middle, over the fork and carried on a little along the lean.
+  const midY = H - D * 0.5;
+  const centre = new Vector3(fork.x + Math.tan(lean) * (midY - forkY) * 0.5, midY, fork.z);
+  // The trunk carries on, thinner and leaning aside, up into the crown, and
+  // the limbs leave it at different heights: not all from one point.
+  const la = next() * TAU;
+  const lead = new Vector3(centre.x + Math.cos(la) * R * 0.15, H - D * 0.7, centre.z + Math.sin(la) * R * 0.15);
+  pieces.push({ ...wood(fork, lead, 0, trunkR * 0.75, trunkR * 0.35), sides: 'limbSides' });
   const clumps = [];
-  const n = 12 + Math.floor(next() * 7);
-  const phase = next() * Math.PI * 2;
-  for (let i = 0; i < n; i++) {
-    const a = phase + (i / n) * Math.PI * 2 + (next() - 0.5) * 0.5;
-    const rr = radius * (i % 4 === 0 ? 0.2 + next() * 0.3 : 0.6 + next() * 0.4);
-    const fall = (rr / radius) * (rr / radius);
-    clumps.push({
-      c: new Vector3(centre.x + Math.cos(a) * rr, crownY - fall * 0.8 + (next() - 0.5) * 0.4, centre.z + Math.sin(a) * rr),
-      rx: 0.85 + next() * 0.8,
-      ry: 0.38 + next() * 0.3,
-      a,
-    });
+  const clump = (c, rx, ry) => clumps.push({ c, rx, ry });
+  const phase = next() * TAU;
+  for (let l = 0; l < kind.limbs; l++) {
+    const a = phase + (l / kind.limbs) * TAU + (next() - 0.5) * 0.7;
+    const from = fork.clone().lerp(lead, ((l * 2) % kind.limbs) / kind.limbs * 0.55 + next() * 0.15);
+    // Where the limb divides: well out, a little under the crown, so the
+    // limbs show beneath it in a V, bowed outward as they go.
+    const er = R * (0.3 + next() * 0.15);
+    const ey = Math.max(from.y + 0.5, from.y + (H - D - from.y) * (0.6 + next() * 0.25));
+    const elbow = new Vector3(centre.x + Math.cos(a) * er, ey, centre.z + Math.sin(a) * er);
+    const len = from.distanceTo(elbow);
+    pieces.push({ ...wood(from, elbow, 0.05 * len, trunkR * (0.68 - 0.2 * (from.y - forkY) / (lead.y - forkY)), trunkR * 0.36, 0.12 * len, centre), sides: 'limbSides' });
+    for (let h = 0; h < kind.heads; h++) {
+      // A head: a main clump and a few smaller ones round it, at the end of a
+      // branch, somewhere on the dome: high near the middle, low far out.
+      const ha = a + (kind.heads > 1 ? (h - (kind.heads - 1) / 2) * (0.6 + next() * 0.5) * (TAU / kind.limbs) / kind.heads : 0) + (next() - 0.5) * 0.3;
+      const rx = R * kind.clump * (0.85 + next() * 0.35);
+      const ry = Math.min(rx * (0.6 + next() * 0.2), D * 0.5);
+      const phi = DOME[0] + Math.sqrt(next()) * (DOME[1] - DOME[0]);
+      const hr = Math.max(Math.sin(phi) * (R - rx * 0.6), er + 0.3);
+      const hy = H - D + Math.cos(phi) * (D - ry);
+      const hc = new Vector3(centre.x + Math.cos(ha) * hr, hy, centre.z + Math.sin(ha) * hr);
+      clump(hc, rx, ry);
+      pieces.push({ ...wood(elbow, hc.clone().setY(hy - ry * 0.35), 0.3, trunkR * 0.34, trunkR * 0.16, 0.2, centre), sides: 'branchSides' });
+      const satellites = 1 + Math.floor(next() * 3);
+      for (let s = 0; s < satellites; s++) {
+        const sa = ha + (next() - 0.5) * 1.6;
+        const out = rx * (0.55 + next() * 0.45);
+        const k = 0.5 + next() * 0.3;
+        clump(new Vector3(hc.x + Math.cos(sa) * out, hy + (next() - 0.4) * ry * 1.1, hc.z + Math.sin(sa) * out), rx * k, ry * k);
+      }
+    }
   }
-  // Limbs from the fork, each feeding the clumps nearest its way round.
-  const nl = 2 + Math.floor(next() * 3);
-  const lp = next() * Math.PI * 2;
-  const ways = Array.from({ length: nl }, (_, i) => lp + (i / nl) * Math.PI * 2 + (next() - 0.5) * 0.6);
-  const apart = (a, b) => Math.abs((((a - b) % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
-  const limbs = [];
-  ways.forEach((a, i) => {
-    const mine = clumps.filter((c) => ways.every((b, j) => j === i || apart(c.a, a) <= apart(c.a, b)));
-    if (!mine.length) return;
-    const mean = mine.reduce((m, c) => m.add(c.c), new Vector3()).multiplyScalar(1 / mine.length);
-    const end = fork.clone().lerp(mean, 0.6);
-    end.y = fork.y + (crownY - fork.y) * (0.55 + next() * 0.2);
-    const bow = fork.clone().lerp(end, 0.5).add(new Vector3(0, 0.3, 0));
-    limbs.push({ a: fork, bow, b: end, r0: trunkR * 0.7, r1: trunkR * 0.4, clumps: mine });
-  });
-  return { trunk, limbs, clumps, centre, seed };
+  // Over the middle, at the top of the trunk: the top of the dome.
+  for (let i = 0; i < kind.top; i++) {
+    const rx = R * kind.clump * (1.0 + next() * 0.3);
+    const ry = Math.min(rx * 0.72, D * 0.45);
+    const a = next() * TAU;
+    const off = R * 0.18 * next();
+    const c = new Vector3(centre.x + Math.cos(a) * off, H - ry * 0.95, centre.z + Math.sin(a) * off);
+    clump(c, rx, ry);
+    pieces.push({ ...wood(lead, c.clone().setY(c.y - ry * 0.5), 0.2, trunkR * 0.35, trunkR * 0.2), sides: 'branchSides' });
+  }
+  return { pieces, clumps, centre, H, R, D, seed };
 }
 
 // One shape's geometry at one level of detail.
 function build(sk, detail) {
   const parts = new Parts();
-  const next = stream(sk.seed * 977 + detail.cardsPerM3 * 13);
-  const { trunk } = sk;
-  const tp = curve(trunk.a, trunk.bow, trunk.b, detail.segments);
-  tube(parts, tp, tp.map((_, i) => trunk.r0 + (trunk.r1 - trunk.r0) * (i / (tp.length - 1))), detail.trunkSides);
-  for (const limb of sk.limbs) {
-    const lp = curve(limb.a, limb.bow, limb.b, Math.max(2, detail.segments - 1));
-    tube(parts, lp, lp.map((_, i) => limb.r0 + (limb.r1 - limb.r0) * (i / (lp.length - 1))), detail.limbSides);
-    for (const c of limb.clumps) {
-      const to = c.c.clone().add(new Vector3(0, -c.ry * 0.4, 0));
-      const bow = limb.b.clone().lerp(to, 0.5).add(new Vector3(0, 0.35, 0));
-      const twig = curve(limb.b, bow, to, Math.max(1, detail.segments - 2));
-      tube(parts, twig, twig.map((_, i) => limb.r1 * (1 - 0.6 * (i / (twig.length - 1)))), detail.twigSides);
-    }
+  const next = stream(sk.seed * 977 + Math.round(detail.cardsPerM2 * 100));
+  for (const w of sk.pieces) {
+    const n = w.sides === 'trunkSides' ? detail.segments : Math.max(1, detail.segments - (w.sides === 'limbSides' ? 2 : 3));
+    const pts = curve(w.a, w.bow, w.b, n);
+    tube(parts, pts, pts.map((_, i) => w.r0 + (w.r1 - w.r0) * (i / (pts.length - 1))), detail[w.sides]);
   }
   // Leaf cards through each clump, turned every way, their normals bent
-  // outward from the clump and from the crown, darker deep inside.
+  // outward from the clump and from the crown, darker deep inside and low.
   const right = new Vector3();
   const up = new Vector3();
   const n = new Vector3();
   const bent = new Vector3();
   const p = new Vector3();
   const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  // The crown's normals point away from a point low in it, so its top faces up.
+  const ball = sk.centre.clone().setY(sk.H - sk.D * 0.8);
+  const bottom = sk.H - sk.D;
   for (const c of sk.clumps) {
-    const volume = (4 / 3) * Math.PI * c.rx * c.rx * c.ry;
-    const cards = Math.max(4, Math.round(volume * detail.cardsPerM3));
+    // The surface of the ellipsoid, nearly (m²).
+    const area = 4 * Math.PI * (c.rx * c.rx + 2 * c.rx * c.ry) / 3;
+    const cards = Math.max(5, Math.round(area * detail.cardsPerM2));
     for (let k = 0; k < cards; k++) {
-      // A point in the clump, flattened on top.
-      let x; let y; let z;
-      do { x = next() * 2 - 1; y = next() * 2 - 1; z = next() * 2 - 1; } while (x * x + y * y + z * z > 1);
-      y = Math.min(y, 0.45);
+      // A point in the clump, out of its middle, the underside a little flattened.
+      let x; let y; let z; let rr;
+      do {
+        x = next() * 2 - 1; y = next() * 2 - 1; z = next() * 2 - 1;
+        rr = Math.sqrt(x * x + y * y + z * z);
+      } while (rr > 1 || rr < HOLLOW);
+      y = Math.max(y, -0.7);
       p.set(c.c.x + x * c.rx, c.c.y + y * c.ry, c.c.z + z * c.rx);
-      const depth = Math.sqrt(x * x + y * y + z * z);
       n.set(next() - 0.5, next() - 0.5 + 0.15, next() - 0.5).normalize();
       right.set(0, 1, 0).cross(n);
       if (right.lengthSq() < 0.01) right.set(1, 0, 0);
       right.normalize();
       up.crossVectors(n, right).normalize();
       const s = detail.card * (0.75 + next() * 0.5) * 0.5;
-      bent.set(x, y * 0.6 + 0.2, z).normalize().multiplyScalar(0.5)
-        .add(_d.subVectors(p, sk.centre).setY(0).normalize().multiplyScalar(0.3)).add(_t.set(0, 0.8, 0)).normalize();
-      const shade = 0.45 + 0.55 * depth;
+      // Partly the clump's own round (its ellipsoid's normal), mostly the crown's, a little up.
+      bent.set(x / c.rx, y / c.ry, z / c.rx).normalize().multiplyScalar(CLUMP_ROUND);
+      _d.set((p.x - ball.x) / sk.R, (p.y - ball.y) / sk.D, (p.z - ball.z) / sk.R).normalize();
+      bent.addScaledVector(_d, 1 - CLUMP_ROUND).add(_t.set(0, 0.2, 0)).normalize();
+      const low = Math.min(1, Math.max(0, (p.y - bottom) / sk.D));
+      const shade = (1 - DEEP * (1 - rr)) * (1 - UNDER * (1 - low));
       const hue = 0.9 + next() * 0.2;
       const col = [LEAF[0] * shade * (2 - hue), LEAF[1] * shade, LEAF[2] * shade * hue];
-      const turn = next() * Math.PI * 2;
+      const turn = next() * TAU;
       const base = parts.count;
       for (const [cx, cy] of corners) {
         _p.copy(p).addScaledVector(right, cx * s).addScaledVector(up, cy * s);
@@ -277,30 +389,39 @@ function build(sk, detail) {
   return parts.geometry();
 }
 
-// Where the trees stand: loose rows across the field, closer near the road,
-// thinning into the fog. [x, z, turn, scale, shape, level of detail].
-function placements() {
+// Where the trees stand: [x, z, turn, scale, shape, level of detail].
+function placements(skeletons) {
   const out = [];
+  const crowns = [];   // [x, z, radius] of each placed, to keep the next off it
+  const lod = (x, z) => (Math.hypot(x - NEAR.x, z - NEAR.z) < NEAR.r ? 0 : 1);
+  const b = BEHIND_COW;
+  out.push([COW.x + b.dx, COW.z + b.dz, b.turn, b.scale, b.shape, lod(COW.x + b.dx, COW.z + b.dz)]);
+  crowns.push([COW.x + b.dx, COW.z + b.dz, skeletons[b.shape].R * b.scale]);
   let i = 0;
   let z = TREES.z0;
   while (z < TREES.z1) {
-    const near = z < TREES.z0 + 40;
+    const P = PLACING.find((band) => z < TREES.z0 + band.to);
     let x = TREES.x0 + rand(i, 1) * 8;
     while (x < TREES.x1) {
       i++;
-      const px = x + (rand(i, 5) - 0.5) * 5;
-      const pz = z + (rand(i, 6) - 0.5) * 4;
-      x += (near ? 10 : 9) + rand(i, 4) * (near ? 7 : 8);
+      const px = x + (rand(i, 5) - 0.5) * P.jitter[0];
+      const pz = z + (rand(i, 6) - 0.5) * P.jitter[1];
+      x += P.step[0] + rand(i, 4) * P.step[1];
       // Keep the cow's patch and the beam's ground clear.
       if (Math.abs(px - COW.x) < 7 && pz < TREES.z0 + 6) continue;
-      if (rand(i, 7) < 0.15) continue;
+      if (rand(i, 7) < 0.12) continue;
       const d = Math.hypot(px - NEAR.x, pz - NEAR.z);
       if (d > FAR_R) continue;
-      // Leaning toward -X, give or take.
-      const turn = Math.PI + (rand(i, 8) - 0.5) * 0.9;
-      out.push([px, pz, turn, 0.8 + rand(i, 9) * 0.45, Math.floor(rand(i, 10) * SHAPES), d < NEAR.r ? 0 : 1]);
+      const shape = Math.floor(rand(i, 10) * SHAPES);
+      const scale = Math.min(SCALE[0] + rand(i, 9) * SCALE[1], MAX_HEIGHT / (skeletons[shape].H * 1.1));
+      const r = skeletons[shape].R * scale;
+      if (crowns.some(([cx, cz, cr]) => Math.hypot(px - cx, pz - cz) < (r + cr) * P.gap)) continue;
+      crowns.push([px, pz, r]);
+      // Leaning toward -X, give or take; one in five the other way.
+      const turn = (rand(i, 11) < 0.2 ? 0 : Math.PI) + (rand(i, 8) - 0.5) * 1.2;
+      out.push([px, pz, turn, scale, shape, lod(px, pz)]);
     }
-    z += (near ? 7.5 : 9) + rand(i, 3) * (near ? 3.5 : 6) + (z - TREES.z0) * 0.04;
+    z += P.row[0] + rand(i, 3) * P.row[1] + (z - TREES.z0) * P.row[2];
   }
   return out;
 }
@@ -309,13 +430,13 @@ export function createTrees() {
   const group = new Group();
   const time = uniform(0);
   const gust = uniform(0);
-  const skeletons = Array.from({ length: SHAPES }, (_, s) => skeleton(s + 1));
-  const spots = placements();
+  const skeletons = KINDS.map((k, s) => skeleton(k, s + 1));
+  const spots = placements(skeletons);
 
   // Sway: the crown moves most, by its height squared.
   const sway = Fn(() => {
     const ph = hash(float(instanceIndex).mul(7.31)).mul(6.28);
-    const k = positionLocal.y.div(7).pow(2);
+    const k = positionLocal.y.div(SWAY_HEIGHT).pow(2);
     const amp = float(0.06).add(gust.mul(0.35));
     const sx = sin(time.mul(1.1).add(ph)).add(sin(time.mul(2.7).add(ph.mul(2))).mul(0.3)).mul(amp).mul(k);
     const sz = cos(time.mul(0.9).add(ph)).mul(amp).mul(k).mul(0.6);
@@ -323,17 +444,18 @@ export function createTrees() {
   });
 
   const cluster = paintCluster();
-  const material = new MeshStandardNodeMaterial({ side: DoubleSide, roughness: 0.8, alphaTest: 0.5 });
+  const material = new MeshPhysicalNodeMaterial({ side: DoubleSide, roughness: 0.8, alphaTest: 0.5 });
   const leaf = texture(cluster, uv());
-  const wood = step(uv().x, -0.5);
+  const isWood = step(uv().x, -0.5);
+  material.specularIntensityNode = mix(float(LEAF_SPECULAR), float(WOOD_SPECULAR), isWood);
   // Far off, the texture's smaller copies average the leaves' cut-out away:
   // make up for it, so distant crowns stay whole.
   const lod = log2(max(fwidth(uv().x), fwidth(uv().y)).mul(CLUSTER_PX)).max(0);
-  material.opacityNode = max(leaf.a.mul(lod.mul(0.08).add(1)), wood);
+  material.opacityNode = max(leaf.a.mul(lod.mul(0.06).add(1)), isWood);
   // Each tree a little different in colour: some yellower, some darker.
   const h = hash(float(instanceIndex).mul(3.3));
   const tint = mix(vec3(0.8, 0.9, 0.85), vec3(1.2, 1.1, 0.8), h);
-  material.colorNode = attribute('color').mul(mix(leaf.rgb.mul(tint), vec3(1), wood));
+  material.colorNode = attribute('color').mul(mix(leaf.rgb.mul(tint), vec3(1), isWood));
   // The bent normals as they are, on both faces of a card.
   material.normalNode = normalViewGeometry;
   material.positionNode = sway();
@@ -348,7 +470,7 @@ export function createTrees() {
       mine.forEach(([x, z, turn, scale], i) => {
         dummy.position.set(x, 0, z);
         dummy.rotation.set(0, turn, 0);
-        dummy.scale.set(scale * (0.9 + 0.2 * rand(i, s + 20)), scale * (0.88 + 0.24 * rand(i, s + 30)), scale * (0.9 + 0.2 * rand(i, s + 40)));
+        dummy.scale.set(scale * (0.9 + 0.2 * rand(i, s + 20)), scale * (0.9 + 0.2 * rand(i, s + 30)), scale * (0.9 + 0.2 * rand(i, s + 40)));
         dummy.updateMatrix();
         mesh.setMatrixAt(i, dummy.matrix);
       });
