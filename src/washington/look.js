@@ -23,6 +23,7 @@ import { buildBuildings } from './buildings.js';
 import { buildPaving, polygonsOf, LOOKS } from './paving.js';
 import { streetTrees, treesLod, kerbside } from './trees.js';
 import { createBuildingMaterial } from '../build/surfaces.js';
+import { photo, photosOn } from '../render/photos.ts';
 
 export { TILE };
 export const USE = { building: 1, paved: 2 };
@@ -49,13 +50,34 @@ const GROUND_CELL = 2; // sample on the same grid and diagonal as the terrain
 // what the map draws as a sidewalk; the rest of the paving, as a road
 const WALKS = new Set(['sidewalk', 'island', 'stairs']);
 
+// What the city's walls and paving are, photographed (render/photos.ts; CC0
+// scans from Poly Haven): each its id and the metres one photo covers, as
+// Poly Haven measured it. They're the walls' and the paving's fine detail,
+// round the colours buildings.js and paving.js give them (build/surfaces.js
+// says which surface each is for).
+function cityPhotos() {
+  if (!photosOn()) return { walls: null, paving: null };
+  return {
+    walls: {
+      brick: photo('brick_wall_006', 3), // common red brick in running bond, pale mortar, as a row house's is
+      stone: photo('concrete_wall_008', 2.71), // a weathered pale wall, its stains and pits: an office's stone or precast front
+    },
+    paving: {
+      asphalt: photo('asphalt_02', 3), // a city street's, gritty, a crack or two
+      concrete: photo('brushed_concrete', 2.5), // a sidewalk's, scuffed and stained
+      pavers: photo('brick_pavement_04', 2), // red brick pavers in courses, as downtown's sidewalks are laid
+    },
+  };
+}
+
 // The materials every tile is drawn with.
 export function makeMaterials() {
-  const solid = createBuildingMaterial();
+  const photos = cityPhotos();
+  const solid = createBuildingMaterial({ photos: photos.walls });
   // (paving gives way where the ground is cut: over the well of a Metro entrance)
-  const paving = createBuildingMaterial({ cut: true });
+  const paving = createBuildingMaterial({ cut: true, photos: photos.paving });
   Object.assign(paving, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
-  const gradedPaving = createBuildingMaterial({ roadGrade: true, cut: true });
+  const gradedPaving = createBuildingMaterial({ roadGrade: true, cut: true, photos: photos.paving });
   Object.assign(gradedPaving, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   const distant = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide });
   const distantPaving = distant.clone();

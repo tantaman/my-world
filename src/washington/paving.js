@@ -35,9 +35,9 @@ export const LOOKS = {
   bridge: { col: 0x7a7874, surf: SURF.clay, lift: 0.02, made: 'stone' },
   footbridge: { col: 0x7a7874, surf: SURF.clay, lift: 0.02, made: 'stone' },
 };
-// …and a sidewalk of brick, as so many of Washington's are, this often (but
-// not a plaza: a polygon of sidewalk bigger than `most` m²)
-const BRICK = { col: 0x8a4c3e, surf: SURF.stone, share: 0.3, most: 3000 };
+// …and a sidewalk of brick pavers, as so many of Washington's are, this
+// often (but not a plaza: a polygon of sidewalk bigger than `most` m²)
+const BRICK = { col: 0x8a4c3e, surf: SURF.pavers, share: 0.3, most: 3000 };
 const ROAD_LIFT = LOOKS.road.lift;
 // m: the longest side a triangle laid on the ground is left with
 const FINE = 6;

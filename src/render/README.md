@@ -94,6 +94,11 @@ own clutter, round the colour the code gave it; and as it gets smaller than
 a pixel the mipmaps average it away, back to the code's colour, with
 nothing to fade. It is laid from above at `worldXZ()`, its size fitted to a
 whole number of repeats in the world's period. `?no=photos` leaves them out.
+What people build can be photographed the same way: the building material
+(`build/surfaces.js`) takes photos for its brick, stone, pavers, asphalt and
+concrete, and Washington's walls and paving have them
+(`washington/look.js`). A wall's is laid along its own grain, from its
+corner and its foot; paving's from above, as the floor's.
 
 **Set against photographs.** The look is measured against real photographs
 of real places: `npm run look -- <hike>` (`tools/look.mjs`) stands the camera

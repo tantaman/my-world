@@ -1,6 +1,7 @@
 // Washington, DC: picked on the map, `go here` sets you down in front of the
 // Capitol, and the city stands up round you, life size: its buildings with
-// their surveyed roofs, its streets and sidewalks, its street trees. A walk
+// their surveyed roofs, its streets and sidewalks, its street trees; its
+// walls and paving photographed. A walk
 // along the pavement, on the ground and not through it; the Capitol counted
 // as been to; a street that says it's tarmac, skated along; a wall that
 // stops you; and over a bridge, on its deck and not down in the creek under
@@ -48,6 +49,37 @@ export default async function ({ page, step, frames, key, shot }) {
     await frames(30);
     await shot('the Capitol');
     return city;
+  });
+
+  await step('its walls and paving are photographed', async () => {
+    // (build/surfaces.js: the photos each material of the city's carries, by
+    // surface; render/photos.ts: each fetched from public/photos/)
+    const seen = await page.evaluate(async () => {
+      const photos = {};
+      for (const o of world.scene.children) {
+        if (!o.name.startsWith('washington ')) continue;
+        o.traverse((m) => Object.assign(photos, m.material?.userData?.photos));
+      }
+      const fetched = () =>
+        performance
+          .getEntriesByType('resource')
+          .filter((r) => /photos\/[a-z0-9_]+\/(diff|nor_gl|arm)\.jpg/.test(r.name))
+          .map((r) => ({ name: r.name.replace(/^.*photos\//, ''), status: r.responseStatus }));
+      // (as they come in)
+      const ids = new Set(Object.values(photos));
+      await T.until(() => [...ids].every((id) => fetched().filter((f) => f.name.startsWith(`${id}/`)).length === 3), 60000);
+      return { photos, fetched: fetched() };
+    });
+    for (const surface of ['brick', 'stone', 'asphalt', 'concrete', 'pavers']) assert.ok(seen.photos[surface], `its ${surface} has a photo (${JSON.stringify(seen.photos)})`);
+    for (const id of new Set(Object.values(seen.photos))) {
+      for (const map of ['diff', 'nor_gl', 'arm']) {
+        assert.ok(
+          seen.fetched.some((f) => f.name === `${id}/${map}.jpg` && (!f.status || f.status === 200)),
+          `${id}'s ${map} was fetched (${seen.fetched.map((f) => f.name).join(', ') || 'nothing'})`,
+        );
+      }
+    }
+    return seen.photos;
   });
 
   await step('along the pavement', async () => {

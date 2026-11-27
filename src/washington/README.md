@@ -46,7 +46,12 @@ building is that roof with its walls dropped to the ground (and the step
 where a higher roof meets a lower one). The 11,000 the roof survey hasn't
 (built since it flew, such as the National Museum of African American
 History and Culture) are the city's later blocks of them, flat-topped.
-Taller buildings have brick, stone or glass fronts. Window bays fit between
+Taller buildings have brick, stone or glass fronts, and up close they're
+photographs of real walls (CC0 scans from Poly Haven, `public/photos/`):
+the brick is a real brick wall's, each brick its own colour and pitted, the
+mortar pale between them; a stone or concrete front has a weathered wall's
+stains and pits. The photo is the wall's detail, not its colour: each
+building is still the colour it was given. Window bays fit between
 the corners and have sills, frames and recessed glazing, and behind the
 glass a room: its walls, floor and ceiling, lit by the daylight coming in
 and darker the further in, shifting as you go by, with the blinds let down
@@ -69,7 +74,10 @@ Its map destination faces the west front.
 **The streets** follow the city's aerial survey. Roads, intersections, alleys,
 drives and car parks have asphalt with subtle wear. Regular straight blocks
 have inferred center markings. Sidewalks and traffic islands sit on curbs,
-with some sidewalks laid in brick. Where the survey left a sliver of ground
+with some sidewalks laid in brick pavers. Up close the paving is
+photographed too: the streets a real street's gritty, cracked asphalt, the
+sidewalks scuffed, stained concrete between their joints, and the brick
+ones real pavers in courses. `?no=photos` leaves the photographs out. Where the survey left a sliver of ground
 between one piece of paving and the next, or between a sidewalk and a wall,
 the paving is carried over it, so no line of lawn runs down an avenue; a
 tree box, or a strip of lawn wider than a metre and a half, is left as it is. Its 330 bridges carry the
@@ -144,7 +152,7 @@ city.js         (written by tools/dc.mjs) which tiles there are; the landmarks, 
 codec.js        a tile as it's kept, and read back: its buildings, paving, bridges, street trees
 pictures.js     the city in your pack
 onMap.js        the city on the map, close up: its streets and its roofs
-look.js         (fetched) a CityTile: a tile stood up a little at a time, and what's on each square metre of it
+look.js         (fetched) a CityTile: a tile stood up a little at a time, and what's on each square metre of it; the materials, and the photographs of real walls and paving they're given
 buildings.js    the buildings: their surveyed roofs, their walls, their fronts
 capitol.js      the Capitol's dome and East Front portico
 cathedral.js    the National Cathedral's exterior

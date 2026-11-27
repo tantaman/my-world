@@ -33,6 +33,21 @@
 //             run, stones pressed in, scuffed, darker where the rain stands.
 //             Its grain runs along the street from its end, and across it from
 //             its middle; with wear, it's going back to grass
+//   pavers    brick laid flat underfoot, in courses: a city's brick sidewalk
+//
+// A material can also be given photographs of real surfaces (render/photos.ts)
+// for some of these, which then take the place of the code's fine pattern
+// (a brick wall's courses) or lie over it (a concrete sidewalk's flags keep
+// their joints): createBuildingMaterial({ photos: { brick, stone, ... } }),
+// each a photo(). As everywhere, the photo is detail round the colour the
+// code gave the surface, never the colour itself. Which surface each is for:
+//
+//   brick     a row house's front (facade, FACADE.row), and masonry of brick
+//   stone     the other fronts (stone, and between a glass front's bands),
+//             and masonry of stone
+//   pavers    pavers
+//   asphalt   asphalt, laid from above
+//   concrete  concrete, laid from above
 //
 // Each sets how the surface stands up and down (bumped into its normal), how
 // rough and how metallic it is, and what it does to the vertex colour. As
@@ -52,6 +67,7 @@ import { CONFIG } from '../config.js';
 import { NOISE_GLSL, WORLD_GLSL, WORLD_NOISE_GLSL, SKY_GLSL, SKY_UNIFORMS_GLSL } from '../render/glsl.js';
 import { SHARED, SKY } from '../render/uniforms.js';
 import { CUTS, CUT_GLSL } from '../world/cuts.js';
+import { PHOTO_GLSL } from '../render/photos.ts';
 
 export const SURF = {
   plain: 0,
@@ -73,6 +89,7 @@ export const SURF = {
   concrete: 16,
   masonry: 17,
   earth: 18,
+  pavers: 19,
 };
 // The kinds of front a facade is, as its wear (0..1): a row house's, brick,
 // its windows tall and narrow; an older office's or a government building's,
@@ -90,6 +107,19 @@ const RELIEF = { bark: 0.005, wood: 0.0012, paint: 0.0006, stone: 0.012, shingle
 const EARTH = { gauge: 0.78, stones: 0.18 };
 // m: the side of a concrete sidewalk's flags, between its joints
 const CONCRETE = { flag: 1.5 };
+// m: a paver's length and width, as it's laid
+const PAVER = { long: 0.2, wide: 0.1 };
+// How each photograph lies over its surface (the `photos` a material is
+// given): how much of the photo's own hue comes through (0..1, the rest the
+// code's colour), how much its light and dark are deepened (over 1), and how
+// far its lumps tip the normal.
+const PHOTO_LOOK = {
+  brick: { sat: 0.55, contrast: 1.1, bump: 0.7 },
+  stone: { sat: 0.25, contrast: 1.2, bump: 0.45 },
+  pavers: { sat: 0.5, contrast: 1.1, bump: 0.7 },
+  asphalt: { sat: 0.15, contrast: 1.15, bump: 0.55 },
+  concrete: { sat: 0.2, contrast: 1.1, bump: 0.45 },
+};
 // The rooms seen through a facade's windows: how deep they are at the least
 // (m, and up to 2 m more), how much of the storey the floor takes up (m), how
 // many bays an open office floor runs before a wall, how far in behind the
@@ -120,12 +150,47 @@ vec4 courses(vec2 uv, float w, float h) {
 }
 `;
 
+// The GLSL for a material's photographs: for each it was given (by name, as
+// PHOTO_LOOK), its textures, PHOTO_<NAME> defined, and
+//   vec3 photo_<name>(at, dx, dy, out tip)
+// at a point in metres (dx, dy: its change from pixel to pixel), what to
+// multiply the surface's colour by; and tip, which way its lumps lean along
+// the two directions `at` runs, as far as they're to tip the normal.
+function photoGlsl(photos) {
+  const names = Object.keys(photos);
+  if (!names.length) return '';
+  const one = (n) => {
+    const l = PHOTO_LOOK[n];
+    const m = photos[n].metres.toFixed(6);
+    return `#define PHOTO_${n.toUpperCase()}
+uniform sampler2D tPhoto_${n};
+uniform sampler2D tPhoto_${n}Arm;
+uniform sampler2D tPhoto_${n}Nor;
+vec3 photo_${n}(vec2 at, vec2 dx, vec2 dy, out vec2 tip) {
+  vec2 uv = at / ${m};
+  dx /= ${m};
+  dy /= ${m};
+  tip = photoTilt(tPhoto_${n}Nor, uv, dx, dy) * ${l.bump.toFixed(3)};
+  return pow(photoShade(tPhoto_${n}, tPhoto_${n}Arm, uv, dx, dy, ${l.sat.toFixed(3)}), vec3(${l.contrast.toFixed(3)}));
+}`;
+  };
+  return `#define PHOTOS\n${PHOTO_GLSL}\n${names.map(one).join('\n')}\n`;
+}
+
 // cut: whether it gives way, as the ground does, where the ground is cut
 // (world/cuts.js): a city's paving, over the well of a Metro entrance.
-export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = false, cut = false } = {}) {
+// photos: { brick, stone, pavers, asphalt, concrete } (any of them), each a
+// photo() (render/photos.ts) to lay over that surface; see above.
+export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = false, cut = false, photos = null } = {}) {
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, side });
+  const shots = Object.fromEntries(Object.entries(photos || {}).filter(([n, p]) => p && PHOTO_LOOK[n]));
+  // (which, by surface: for whoever asks what it's drawn with)
+  mat.userData.photos = Object.fromEntries(Object.entries(shots).map(([n, p]) => [n, p.id]));
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, SKY, { uOrigin: SHARED.uOrigin }, cut ? CUTS : {});
+    for (const [n, p] of Object.entries(shots)) {
+      Object.assign(shader.uniforms, { [`tPhoto_${n}`]: { value: p.map }, [`tPhoto_${n}Arm`]: { value: p.arm }, [`tPhoto_${n}Nor`]: { value: p.normal } });
+    }
     if (roadGrade) {
       shader.uniforms.uRoadPlayer = SHARED.uPlayer;
       shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
@@ -170,7 +235,8 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
         ${WORLD_GLSL}
         ${WORLD_NOISE_GLSL}
         ${SKY_GLSL}
-        ${SURF_GLSL}`,
+        ${SURF_GLSL}
+        ${photoGlsl(shots)}`,
       )
       .replace(
         '#include <color_fragment>',
@@ -185,6 +251,27 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
         float rough = 0.85;
         float metal = 0.0;
         vec3 col = diffuseColor.rgb;
+        #ifdef PHOTOS
+        // The photographs: where on each the pixel is and how far a pixel
+        // spans, worked out here before any branch (photos.ts). Those laid
+        // from above (pg) run u along the world's x and v against its z; the
+        // rest (uv) run as the surface's own grain does, whose directions in
+        // the world are pT and pB. What their lumps do to the normal is
+        // photoBend (in the world), added to it below.
+        vec3 photoBend = vec3(0.0);
+        vec2 photoTip = vec2(0.0);
+        vec2 pgw = worldXZ(vWPos);
+        vec2 pg = vec2(pgw.x, -pgw.y);
+        vec3 pdx = dFdx(vWPos), pdy = dFdy(vWPos);
+        vec2 pgdx = vec2(pdx.x, -pdx.z), pgdy = vec2(pdy.x, -pdy.z);
+        vec2 pudx = dFdx(uv), pudy = dFdy(uv);
+        vec3 pc1 = cross(pdy, wn), pc0 = cross(wn, pdx);
+        vec3 pT = pc1 * pudx.x + pc0 * pudy.x;
+        vec3 pB = pc1 * pudx.y + pc0 * pudy.y;
+        float pScale = inversesqrt(max(max(dot(pT, pT), dot(pB, pB)), 1e-20));
+        pT *= pScale;
+        pB *= pScale;
+        #endif
 
         if (kind == S_BARK) {
           // plates and furrows along the log, wandering, broken across
@@ -323,6 +410,19 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
           float wearPattern = wnoise(p, 0.38) * 0.7 + wnoise(p, 1.9) * 0.3;
           col *= 0.87 + 0.23 * wearPattern + 0.12 * aggregate;
           rough = 0.94;
+          // (photographed, the grit and the patches between the code's wear)
+          #ifdef PHOTO_ASPHALT
+          if (kind == S_ASPHALT) {
+            col *= photo_asphalt(pg, pgdx, pgdy, photoTip);
+            photoBend = vec3(photoTip.x, 0.0, -photoTip.y);
+          }
+          #endif
+          #ifdef PHOTO_CONCRETE
+          if (kind == S_CONCRETE) {
+            col *= photo_concrete(pg, pgdx, pgdy, photoTip);
+            photoBend = vec3(photoTip.x, 0.0, -photoTip.y);
+          }
+          #endif
           if (kind == S_CONCRETE) {
             // Laid in flags, scored a joint every metre and a half each way:
             // each flag a shade of its own, dirt gathered in the joints, and
@@ -349,13 +449,42 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
           }
         } else if (kind == S_MASONRY) {
           bool brick = wear > 0.2;
-          vec4 course = courses(uv, brick ? 0.22 : 1.05, brick ? 0.076 : 0.47);
-          float joint = min(min(course.z, 1.0 - course.z), course.w);
-          float seam = (1.0 - smoothstep(0.014, brick ? 0.06 : 0.028, joint)) * shows(brick ? 0.035 : 0.12, fw);
-          float shade = mix(1.0, 0.92 + hash12(course.xy) * 0.16, shows(brick ? 0.075 : 0.42, fw));
-          col = mix(col * shade, col * (brick ? 1.34 : 0.71), seam * 0.62);
-          relief = -seam * (brick ? 0.004 : 0.008);
+          #ifdef PHOTO_BRICK
+          if (brick) {
+            col *= photo_brick(uv, pudx, pudy, photoTip);
+            photoBend = pT * photoTip.x + pB * photoTip.y;
+          } else
+          #endif
+          {
+            vec4 course = courses(uv, brick ? 0.22 : 1.05, brick ? 0.076 : 0.47);
+            float joint = min(min(course.z, 1.0 - course.z), course.w);
+            float seam = (1.0 - smoothstep(0.014, brick ? 0.06 : 0.028, joint)) * shows(brick ? 0.035 : 0.12, fw);
+            float shade = mix(1.0, 0.92 + hash12(course.xy) * 0.16, shows(brick ? 0.075 : 0.42, fw));
+            col = mix(col * shade, col * (brick ? 1.34 : 0.71), seam * 0.62);
+            relief = -seam * (brick ? 0.004 : 0.008);
+            #ifdef PHOTO_STONE
+            if (!brick) {
+              col *= photo_stone(uv, pudx, pudy, photoTip);
+              photoBend = pT * photoTip.x + pB * photoTip.y;
+            }
+            #endif
+          }
           rough = 0.92;
+        } else if (kind == S_PAVERS) {
+          // Brick laid flat in courses, each its own shade, sand in the
+          // joints; or a photograph of them, laid from above.
+          #ifdef PHOTO_PAVERS
+          col *= photo_pavers(pg, pgdx, pgdy, photoTip);
+          photoBend = vec3(photoTip.x, 0.0, -photoTip.y);
+          #else
+          vec4 c = courses(uv, ${PAVER.long.toFixed(2)}, ${PAVER.wide.toFixed(2)});
+          float joint = min(min(c.z, 1.0 - c.z) * ${PAVER.long.toFixed(2)}, min(c.w, 1.0 - c.w) * ${PAVER.wide.toFixed(2)}); // m in from the paver's edge
+          float sand = (1.0 - smoothstep(0.002, 0.006 + fw, joint)) * shows(0.02, fw);
+          col *= mix(1.0, 0.82 + 0.3 * hash12(c.xy), shows(0.1, fw));
+          col = mix(col, vec3(0.42, 0.38, 0.32), sand * 0.6);
+          relief = -sand * 0.003;
+          #endif
+          rough = 0.9;
         } else if (kind == S_FACADE) {
           // which kind of front: a row house's, stone, or banded in glass
           float style = wear;
@@ -376,14 +505,25 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
           float frame = smoothstep(-aa, aa, opening + 0.085) * windowShow;
           float win = smoothstep(-aa, aa, opening - 0.055 * detail) * windowShow;
           // the wall itself: brick in courses, or dressed stone, or render
+          // (photographed, where the material has a photo of it)
+          vec3 plain = col; // (its trim is painted, not brick)
           if (style < 0.33) {
+            #ifdef PHOTO_BRICK
+            col *= photo_brick(uv, pudx, pudy, photoTip);
+            photoBend = pT * photoTip.x + pB * photoTip.y;
+            #else
             vec4 c = courses(uv, 0.215, 0.075);
             float mortar = (1.0 - smoothstep(0.0, 0.06, c.z) * (1.0 - smoothstep(0.94, 1.0, c.z)) * smoothstep(0.0, 0.12, c.w)) * shows(0.03, fw);
             col *= mix(1.0, 0.86 + 0.24 * hash12(c.xy), shows(0.12, fw)) * (1.0 + mortar * 0.15);
             relief = -mortar * 0.004;
+            #endif
           } else {
             float block = courses(uv, 1.2, 0.6).z;
             col *= 0.9 + 0.16 * vnoise(uv * 2.0) + 0.06 * (1.0 - smoothstep(0.0, 0.02, block)) * shows(0.05, fw);
+            #ifdef PHOTO_STONE
+            col *= photo_stone(uv, pudx, pudy, photoTip);
+            photoBend = pT * photoTip.x + pB * photoTip.y;
+            #endif
           }
           float base = smoothstep(0.08, 0.18, uv.y) * (1.0 - smoothstep(0.42, 0.50, uv.y));
           float band = (1.0 - smoothstep(0.035, 0.085, min(inCell.y, storey - inCell.y))) * detail;
@@ -395,7 +535,7 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
           float sash = (1.0 - smoothstep(0.015, 0.05, abs(inCell.y - mix(sill.x, sill.y, 0.46)))) * detail;
           float mullion = (1.0 - smoothstep(0.018, 0.045, abs(inCell.x - bay * 0.5))) * detail * step(0.33, style);
           float bar = max(sash * (1.0 - step(0.66, style)), mullion);
-          vec3 trim = mix(col * 1.18 + 0.025, vec3(0.08, 0.09, 0.095), step(0.66, style));
+          vec3 trim = mix(plain * (1.0 - base * 0.17) * 1.18 + 0.025, vec3(0.08, 0.09, 0.095), step(0.66, style));
           col = mix(col, trim * mix(0.55, 1.0, smoothstep(-0.055, 0.04, head)), frame);
           // The glass itself takes almost no light: what you see in it is the
           // sky it mirrors (below, by the look's slant) and the room behind it.
@@ -403,6 +543,9 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
           col = mix(col, trim, win * bar);
           glazing = win * (1.0 - bar);
           relief += (ledge * 0.014 - win * (1.0 - bar) * 0.023) * detail;
+          #ifdef PHOTOS
+          photoBend *= 1.0 - frame; // (the photo's lumps are the wall's, not the window's)
+          #endif
           rough = mix(0.9, 0.14, glazing);
           if (glazing > 0.0) {
             // The room behind: the look followed in through the pane to the
@@ -528,6 +671,9 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
           float det = dot(dpx, r1);
           vec3 grad = sign(det) * (dFdx(relief) * r1 + dFdy(relief) * r2);
           normal = normalize(abs(det) * normal - grad);
+          #ifdef PHOTOS
+          normal = normalize(normal + (viewMatrix * vec4(photoBend, 0.0)).xyz);
+          #endif
         }`,
       )
       .replace(
@@ -559,6 +705,7 @@ export function createBuildingMaterial({ side = THREE.DoubleSide, roadGrade = fa
         .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (inCut(vWPos)) discard;');
     }
   };
-  mat.customProgramCacheKey = () => (roadGrade ? 'road-grade-v2' : 'building-v7') + (cut ? '-cut' : '');
+  const photoKey = Object.entries(shots).map(([n, p]) => `${n}:${p.id}@${p.metres}`).join(',');
+  mat.customProgramCacheKey = () => (roadGrade ? 'road-grade-v2' : 'building-v8') + (cut ? '-cut' : '') + (photoKey ? `-photos(${photoKey})` : '');
   return mat;
 }
