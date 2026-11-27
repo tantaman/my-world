@@ -341,8 +341,10 @@ export function installHell(game: Game) {
       if (!inside) {
         way.update(p);
         const far = Math.hypot(p.x - gate.x, p.z - gate.z);
-        // the dark wood, the first time you come on the gate
-        if (!found && far < WOOD) {
+        // the dark wood, the first time you come on the gate: once the wood
+        // round you is there to be seen (set down near it from the map, the
+        // card's while would otherwise run out as the land comes in)
+        if (!found && far < WOOD && chunks.isFullyLoaded()) {
           found = true;
           card.show(WORDS.darkwood);
           save.touch();
@@ -350,8 +352,10 @@ export function installHell(game: Game) {
         // The nine lines over the gateway, read to you as you come up to it
         // (they are cut in the stone to be read: gate.js). Walk in and they
         // go on being read down the passage, until the door; turn away from
-        // the tablet and they stop there, to begin again next time.
-        if (far < READS) {
+        // the tablet and they stop there, to begin again next time. (After
+        // the dark wood's words, the first time: set down at the gateway, the
+        // two come together, and these are what go on being read.)
+        if (far < READS && found) {
           if (!inscribed) {
             inscribed = true;
             reader.read({ lines: INSCRIPTION });

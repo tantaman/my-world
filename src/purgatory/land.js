@@ -366,13 +366,14 @@ export class MountLand {
   }
 
   // The cleft at the foot: a slot cut up through the cliff, its floor
-  // climbing evenly from the plain to the terrace.
+  // climbing evenly from the plain to the terrace, and out onto the terrace
+  // as it lies.
   _cleft(r, th, h) {
     if (r > R.foot + 1 || r < CLEFT.r1 - 2) return h;
     const across = Math.abs(wrap(th - AT.cleft)) * r;
     if (across > CLEFT.half + CLEFT.side) return h;
     const t = clamp((R.foot - r) / (R.foot - CLEFT.r1), 0, 1);
-    const tread = lerp(H.foot, H.terrace, lerp(t, smooth(t), 0.25));
+    const tread = lerp(lerp(H.foot, H.terrace, lerp(t, smooth(t), 0.25)), h, smoothstep(CLEFT.r1 - 2 + CLEFT.head, CLEFT.r1 - 2, r));
     // (its floor is the tread itself, however the rock it's cut through lies;
     // its sides fall to it)
     const side = lerp(h, Math.min(h, tread), 1 - smoothstep(CLEFT.half, CLEFT.half + CLEFT.side, across));

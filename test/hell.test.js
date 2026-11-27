@@ -9,7 +9,7 @@ import { growWorld, LANDS } from '../src/world/lands.js';
 import { findGate, GATE, TOP } from '../src/hell/site.js';
 import { HellLand, DOOR, WALL, CASTLE, STAIR } from '../src/hell/land.js';
 import { HellSpace } from '../src/hell/space.js';
-import { R, H, STEPS, SECTOR, SECTORS, BOLGE, LIQUID, WADE, REGIONS, TAU, regionAt, bolgiaAt, zoneAt, bankTop, bolgeOuter } from '../src/hell/plan.js';
+import { R, H, STEPS, SECTOR, SECTORS, BOLGE, ZONES, LIQUID, WADE, REGIONS, TAU, regionAt, bolgiaAt, zoneAt, bankTop, bolgeOuter } from '../src/hell/plan.js';
 import { WORDS, INSCRIPTION, DITCHES, ZONE_WORDS, SAID } from '../src/hell/words.js';
 import { strew, CELL } from '../src/hell/furnish.js';
 import { WEATHER } from '../src/hell/weather.js';
@@ -18,12 +18,18 @@ import { buildCave, finish } from '../src/caves/build.js';
 import { layoutCave, cellOf } from '../src/caves/sites.js';
 import { matchesGolden } from './helpers/golden.js';
 import { earthAtFirst } from './helpers/earth.js';
+import { HIKES } from '../src/world/hikes.js';
+import { Landforms } from '../src/world/landforms.js';
 // The real Earth under the world, as the game has it when it opens (world/earth.js).
 const EARTH = await earthAtFirst();
+// The gate keeps off wherever a real place reaches, as the game finds it
+// (hell/index.ts): that's the gate people have been to, so it's the one pinned.
+const landforms = new Landforms(HIKES);
+const offReal = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);
 
 const SEED = 20261119;
 const gen = growWorld(SEED, [], 1, [], EARTH);
-const gate = findGate(gen);
+const gate = findGate(gen, offReal);
 const land = new HellLand({ seed: SEED, ...gate.hell });
 const o = {};
 // The land at a place in Hell (heights from its top), on the turn th is on.
@@ -37,7 +43,7 @@ const at = (r, th, full = false) => {
 for (const n of LANDS) for (const seed of [SEED, 42]) {
   test(`seed ${seed}, land ${n}: where the gate is`, () => {
     const g = seed === SEED && n === 1 ? gen : growWorld(seed, [], n, [], EARTH);
-    const found = findGate(g);
+    const found = findGate(g, offReal);
     assert.ok(found, 'there is a hillside for it');
     const d = Math.hypot(found.x, found.z);
     assert.ok(d >= GATE.near && d <= GATE.far, `a walk from the start (${d.toFixed(0)} m)`);
@@ -48,7 +54,7 @@ for (const n of LANDS) for (const seed of [SEED, 42]) {
 
 test('the gate is found the same way twice, and leaves the land as it was', () => {
   const before = [gate.x, gate.z, gate.x + 30, gate.z - 12].map((v, i, a) => gen.height(a[i & 2], a[(i & 2) + 1]));
-  const again = findGate(growWorld(SEED, [], 1, [], EARTH));
+  const again = findGate(growWorld(SEED, [], 1, [], EARTH), offReal);
   assert.deepEqual([again.x, again.z, again.hell], [gate.x, gate.z, gate.hell]);
   const after = [gate.x, gate.z, gate.x + 30, gate.z - 12].map((v, i, a) => gen.height(a[i & 2], a[(i & 2) + 1]));
   assert.deepEqual(after, before);
@@ -459,16 +465,30 @@ test('each circle is strewn with what the poem puts there, the same every time',
     });
     return { c, list };
   };
+  // A ditch of the eighth circle is narrower than a square, so how much of
+  // one a square holds is where the squares happen to fall across it: there,
+  // the squares round the point, together.
+  const round = (r, th, seed = 99) => {
+    const p = land.place(r, th);
+    const c = {};
+    for (let j = -1; j <= 1; j++)
+      for (let i = -1; i <= 1; i++)
+        strew(land, th, (Math.floor(p.x / CELL) + i) * CELL, (Math.floor(p.z / CELL) + j) * CELL, seed, (kind) => (c[kind] = (c[kind] || 0) + 1));
+    return { c };
+  };
   assert.ok(count(R.c6 + 150, 0.2).c.tomb > 8, 'tombs in the sixth circle');
   assert.ok(count(R.c6 + 150, 0.2).c.flame > 8, 'and fire among them');
   const wood = count(R.wood + 170, 0.2).c;
   assert.ok(wood.thorn + wood.thorn2 + wood.thorn3 > 40, 'the wood is a wood');
   assert.ok(count(R.c4 + 140, 0.2).c.weight > 6, 'weights in the fourth');
   assert.ok((count(R.c3 + 140, 0.2).c.prone || 0) + (count(R.c3 + 140, 0.2).c.supine || 0) > 6, 'the gluttons lie in the mud');
-  assert.ok(count(bolgeOuter(2) - BOLGE.bank - BOLGE.ditch / 2, 0.2).c.hole > 3, 'holes in the third ditch');
-  assert.ok(count(bolgeOuter(7) - BOLGE.bank - BOLGE.ditch / 2, 0.2).c.flame > 3, 'flames in the eighth');
+  assert.ok(round(bolgeOuter(2) - BOLGE.bank - BOLGE.ditch / 2, 0.2).c.hole > 3, 'holes in the third ditch');
+  assert.ok(round(bolgeOuter(7) - BOLGE.bank - BOLGE.ditch / 2, 0.2).c.flame > 3, 'flames in the eighth');
   assert.ok(count(430, 0.2).c.headBowed > 5 && count(180, 0.2).c.headBack > 5, 'heads in the ice');
-  assert.deepEqual(count(60, 0.2).c, {}, 'and in Judecca nothing shows above it');
+  // and in Judecca nothing shows above it (what of its square lies in Judecca:
+  // the square may take in some of Ptolomea, round it, where the heads show)
+  const judecca = ZONES.find((z) => z.id === 'judecca').r;
+  assert.deepEqual(count(60, 0.2).list.filter(([, x, , z]) => land.polar(x, z, 0.2, {}).r < judecca), [], 'and in Judecca nothing shows above it');
   assert.deepEqual(count(R.c6 + 150, 0.2).list, count(R.c6 + 150, 0.2).list, 'the same twice');
   assert.notDeepEqual(count(R.c6 + 150, 0.2, 99).list, count(R.c6 + 150, 0.2, 100).list, 'and its own on each turn');
   // nothing stands in the air or under the ground

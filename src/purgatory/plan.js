@@ -86,8 +86,16 @@ export const BURROW = { r: 2335, half: 1.6, back: -1.2, rad: 17 };
 
 // The cleft at the foot (Canto IV): a slot cut up through the cliff, from
 // its foot on the plain to the terrace at `r1`, `half` m either side of its
-// line, its sides `side` m from top to bottom.
-export const CLEFT = { r1: 1926, half: 1.6, side: 1.4 };
+// line, its sides `side` m from top to bottom; over its last `head` m its
+// floor comes to the terrace as the terrace lies there (a little over or
+// under the terrace's own height, as its lumps fall), not up a step.
+export const CLEFT = { r1: 1926, half: 1.6, side: 1.4, head: 8 };
+// Whether (r, th) is in the cleft, or within `aside` m of its sides and
+// `out` m past its foot and its head (th: an angle about AT.cleft's, as the
+// land gives it).
+export function inCleft(r, th, aside = 0, out = aside) {
+  return r < R.foot + out && r > CLEFT.r1 - out && Math.abs(th - AT.cleft) * r < CLEFT.half + CLEFT.side + aside;
+}
 
 // The valley of the princes: a lap in the hillside, `rad` m across its
 // floor, which lies `sunk` m under where the slope is at its middle.

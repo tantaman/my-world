@@ -15,16 +15,23 @@ import { placeOf } from '../src/purgatory/site.js';
 import { R, H, AT, TERRACES, TOP, WIDE, BANK, WAYS, GAPS, GATE, CLEFT, VALLEY, BURROW, STREAM, LIQUID, WADE, DAY, EAST, REGIONS, TERRACE_IDS, regionAt, terraceAt } from '../src/purgatory/plan.js';
 import { WORDS, ARRIVAL, ANGELS, DREAMS, SLEEP, SAID, VOICES } from '../src/purgatory/words.js';
 import { strew, CELL } from '../src/purgatory/furnish.js';
+import { mulberry32, hash2i } from '../src/noise.js';
 import { Brow } from '../src/purgatory/brow.js';
 import { Card } from '../src/core/card.js';
 import { matchesGolden } from './helpers/golden.js';
 import { earthAtFirst } from './helpers/earth.js';
+import { HIKES } from '../src/world/hikes.js';
+import { Landforms } from '../src/world/landforms.js';
 // The real Earth under the world, as the game has it when it opens (world/earth.js).
 const EARTH = await earthAtFirst();
+// Hell's gate, as the game finds it: off wherever a real place reaches
+// (hell/index.ts), so the island is where the game has it.
+const landforms = new Landforms(HIKES);
+const offReal = (x0, z0, x1, z1) => !!landforms.reaches(x0, z0, x1, z1);
 
 const SEED = 20261119;
 const gen = growWorld(SEED, [], 1, [], EARTH);
-const hell = new HellLand({ seed: SEED, ...findGate(gen).hell });
+const hell = new HellLand({ seed: SEED, ...findGate(gen, offReal).hell });
 const land = new MountLand({ seed: SEED, ...placeOf(hell) });
 const space = new MountSpace(land);
 const o = {};
@@ -41,7 +48,7 @@ for (const n of LANDS)
   for (const seed of [SEED, 42]) {
     test(`seed ${seed}, land ${n}: where Purgatory is`, () => {
       const g = seed === SEED && n === 1 ? gen : growWorld(seed, [], n, [], EARTH);
-      const h = new HellLand({ seed, ...findGate(g).hell });
+      const h = new HellLand({ seed, ...findGate(g, offReal).hell });
       const p = placeOf(h);
       // it never meets Hell, and lies lower than any of Hell
       assert.ok(Math.hypot(p.cx - h.cx, p.cz - h.cz) > h.reach + R.reach + 1000, 'well clear of Hell');
@@ -146,6 +153,25 @@ test('the cliff at the foot is climbed only by its cleft', () => {
   // and its sides are walls
   const mid = (R.foot + CLEFT.r1) / 2;
   assert.ok(at(mid, AT.cleft + (CLEFT.half + 2) / mid).h - at(mid, AT.cleft).h > 8, 'with rock on either hand');
+});
+
+test('up the cleft, wherever the island lies', () => {
+  // The land's lumps lie where the land lies, so they meet the cleft's floor
+  // differently wherever the island is (and it is where Hell's gate puts it).
+  const STEP = 0.25; // m between heights asked
+  const rnd = mulberry32(11);
+  for (let k = 0; k < 40; k++) {
+    const dx = (rnd() - 0.5) * 8000;
+    const dz = (rnd() - 0.5) * 8000;
+    const L = new MountLand({ seed: SEED, ...placeOf(hell), cx: land.cx + dx, cz: land.cz + dz });
+    let last = null;
+    for (let r = R.foot + 8; r > CLEFT.r1 - 6; r -= STEP) {
+      const p = L.place(r, AT.cleft);
+      const h = L.height(p.x, p.z);
+      if (last !== null) assert.ok(Math.abs(h - last) / STEP < STEEP, `up the cleft, ${r.toFixed(1)} m out, with the island ${dx.toFixed(0)}, ${dz.toFixed(0)} m off`);
+      last = h;
+    }
+  }
 });
 
 test('the gate: three steps, a threshold, a door', () => {
@@ -304,6 +330,32 @@ test('what is strewn: the same every time, and where the poem has it', () => {
     const r = Math.hypot(k.x - land.cx, k.z - land.cz);
     const th = wrap(Math.atan2(k.z - land.cz, k.x - land.cx) - land.turn);
     if (k.kind !== 'flame') assert.equal(land.wayAt(r, th), null, `nothing stands in a way up (${k.kind})`);
+  }
+});
+
+test('nothing stands in the cleft at the foot, wherever the island lies', () => {
+  // A square's things fall where its seed says (world/strewn.js seeds it by
+  // where it is), so where the island lies says what lands in the cleft:
+  // strewn as the game strews it, here and with the island moved about.
+  const BIGGEST = 2; // m round: no boulder is bigger
+  const rnd = mulberry32(7);
+  for (let k = 0; k < 60; k++) {
+    const L = k === 0 ? land : new MountLand({ seed: SEED, ...placeOf(hell), cx: land.cx + (rnd() - 0.5) * 8000, cz: land.cz + (rnd() - 0.5) * 8000 });
+    const cells = new Set();
+    for (let r = R.foot + 12; r > CLEFT.r1 - 12; r -= 8)
+      for (const aside of [-8, 8]) {
+        const p = L.place(r, AT.cleft + aside / r);
+        cells.add(`${Math.floor(p.x / CELL)},${Math.floor(p.z / CELL)}`);
+      }
+    for (const c of cells) {
+      const [i, j] = c.split(',').map(Number);
+      strew(L, 0, i * CELL, j * CELL, hash2i(i, j, L.seed), (kind, x, y, z) => {
+        const q = L.polar(x, z, 0, {});
+        const across = Math.abs(q.th - AT.cleft) * q.r;
+        const inIt = q.r < R.foot + 4 && q.r > CLEFT.r1 - 8 && across < CLEFT.half + BIGGEST;
+        assert.ok(!inIt, `a ${kind} in the way up the cleft (${q.r.toFixed(1)} m out, ${across.toFixed(1)} m aside)`);
+      });
+    }
   }
 });
 

@@ -16,7 +16,7 @@
 import { mulberry32 } from '../noise.js';
 import { createShadeMaterial, createFlameMaterial, createFlameHaze, flameGeometry } from '../render/shades.js';
 import { kind } from '../world/strewn.js';
-import { R, TERRACES, TOP, WIDE, RUN, WAYS, LIQUID, STREAM, regionAt, terraceAt } from './plan.js';
+import { R, TERRACES, TOP, WIDE, RUN, WAYS, LIQUID, STREAM, regionAt, terraceAt, inCleft } from './plan.js';
 import { soul, burden, rushes, flowers, boulder, createFigureMaterial } from './models.js';
 import { wrap } from './land.js';
 
@@ -33,6 +33,11 @@ const TOP_FLOWERS = ['vermilion', 'yellow', 'pearl'];
 // overhang it, and Eunoë has a wider opening to the sky.
 const LETHE_GROVE = { from: 2, to: 10 };
 const EUNOE_GLADES = 16;
+// m beside the cleft at the foot, and past either end of it, that nothing is
+// put down: so its floor, and the way out at its foot and at its head, are
+// open wherever the squares fall (a square's boulders lie where its seed
+// says, and the biggest, on the terrace above, is nearly two metres round)
+const CLEFT_CLEAR = { aside: 2.5, out: 10 };
 const BLOOM = {
   gold: [0.85, 0.55, 0.04],
   silver: [0.75, 0.77, 0.8],
@@ -103,6 +108,8 @@ export function strew(land, ref, x0, z0, seed, put) {
       if (s.r > R.shore + 25) continue;
       const r = s.r;
       const th = s.th;
+      // (after its three rolls, so the rest of the square is as it was)
+      if (inCleft(r, th, CLEFT_CLEAR.aside, CLEFT_CLEAR.out)) continue;
       const y = s.h;
       const h = y - land.top;
       const depth = s.liq > s.h ? s.liq - s.h : 0;
