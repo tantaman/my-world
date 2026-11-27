@@ -66,6 +66,7 @@ const PITCHED_ROOF = [0x4c5258, 0x5a4e48, 0x3e4246, 0x6a4038, 0x585a5c];
 // A front starts at walls this tall (m) over the ground: lower is a shed's
 // or a garage's, plain.
 const FRONT_FROM = 4.5;
+const BRICK_WEAR = 0.35; // masonry's wear for brick (build/surfaces.js: over 0.2), as facades.js lays it
 // A row house is under this tall (m) and this big (m² of roof); an office
 // over it is glass this often.
 const ROW_UNDER = { tall: 15, big: 450 };
@@ -148,6 +149,9 @@ export function* buildBuildings(buildings, { ground, offset, names = new Map(), 
     const mode = detail && streetStyle(name, front, cityCorner[0] + cx, cityCorner[1] + cz, tall, roofArea);
     let entrance = null;
     const wallSurf = front === null ? SURF.stone : SURF.facade + front;
+    // (a wall too short for a window, or the step between two roofs, is
+    // its front's own masonry: a row house's brick, an office's stone)
+    const blankSurf = front === null ? SURF.stone : front === FACADE.row ? SURF.masonry + BRICK_WEAR : SURF.masonry;
     const wallCol = _c.set(look.wall).clone();
     const roofCol = _c.set(look.roof).clone();
     const roofSurf = look.roof === MARBLE ? SURF.concrete : b.roof === 'flat' || b.roof === 'default' ? SURF.asphalt : b.roof === 'dome' ? SURF.steel : SURF.slate;
@@ -237,7 +241,7 @@ export function* buildBuildings(buildings, { ground, offset, names = new Map(), 
       const u = hasWindows ? Math.max(1, Math.round(len / bay)) * bay : len;
       const tone = !detail && hasWindows ? 0.85 : 1;
       walls.quad([ax, bottoms[0], az], [bx, bottoms[1], bz], [bx, tops[1], bz], [ax, tops[0], az], wallCol.r * tone, wallCol.g * tone, wallCol.b * tone,
-        hasWindows ? wallSurf : SURF.stone, [0, bottoms[0] - foot, u, bottoms[1] - foot, u, tops[1] - foot, 0, tops[0] - foot]);
+        hasWindows ? wallSurf : blankSurf, [0, bottoms[0] - foot, u, bottoms[1] - foot, u, tops[1] - foot, 0, tops[0] - foot]);
     }
     if (entrance) buildFront(walls, entrance, { mode, ground, foot, wall: wallCol, variant: h, street, solids });
     if (detail) obstacles.push({ x: cx, z: cz, r, what: name || 'a building in Washington' });
