@@ -100,8 +100,8 @@ const TYRE = rubber('#141414', 0.86);
 
 // A wheel: tyre and rim, the axle along Z, the outer face toward +Z.
 // draw(ctx, size) paints the rim's face (a canvas of size x size, the
-// face's radius at its edge).
-export function wheel({ radius, width, rim, dish = 0.035, draw, rimRough = 0.4 }) {
+// face's radius at its edge). rimMetal: 0 for a painted steel wheel.
+export function wheel({ radius, width, rim, dish = 0.035, draw, rimRough = 0.4, rimMetal = 0.25 }) {
   const g = new Group();
   const tyre = new Mesh(tyreGeometry(radius, width, rim), TYRE);
   const h = width / 2;
@@ -113,7 +113,7 @@ export function wheel({ radius, width, rim, dish = 0.035, draw, rimRough = 0.4 }
     [rim - 0.012, -h * 0.6], [rim * 0.4, -h * 0.4],
   ];
   const tex = canvasTexture(256, 256, (ctx, w) => draw(ctx, w));
-  const m = new MeshStandardNodeMaterial({ roughness: rimRough, metalness: 0.25 });
+  const m = new MeshStandardNodeMaterial({ roughness: rimRough, metalness: rimMetal });
   m.colorNode = texture(tex, uv()).rgb;
   // Outside in, so the lathe's faces look out of the wheel.
   const rimMesh = new Mesh(rimGeometry(prof.reverse(), face), m);
@@ -123,8 +123,10 @@ export function wheel({ radius, width, rim, dish = 0.035, draw, rimRough = 0.4 }
 }
 
 // A profile [[n, b], ...] swept along a path of points: n along `out(p, i)`
-// (made square to the path), b square to both. Open ends, smooth normals.
-export function sweep(profile, path, out, { closed = true } = {}) {
+// (made square to the path), b square to both. Smooth normals; the ends are
+// open unless `caps`, which closes each with a flat fan (for a closed,
+// roughly convex profile: a bumper's square ends).
+export function sweep(profile, path, out, { closed = true, caps = false } = {}) {
   const pos = [], uvs = [], idx = [];
   const P = path.map((p) => new Vector3(...p));
   const t = new Vector3(), n = new Vector3(), b = new Vector3(), o = new Vector3();
@@ -156,7 +158,31 @@ export function sweep(profile, path, out, { closed = true } = {}) {
   g.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
   g.setIndex(idx);
   g.computeVertexNormals();
-  return g;
+  if (!caps) return g;
+  // Each end a fan round its own centre, wound to face out along the path,
+  // with its own flat normal (kept apart from the tube's smooth ones).
+  const ends = [];
+  for (const [i, j] of [[0, 1], [P.length - 1, P.length - 2]]) {
+    o.subVectors(P[i], P[j]).normalize();   // out of this end
+    const ring = [];
+    for (let k = 0; k < w; k++) ring.push(new Vector3(pos[(i * w + k) * 3], pos[(i * w + k) * 3 + 1], pos[(i * w + k) * 3 + 2]));
+    const c = ring.reduce((sum, p) => sum.add(p), new Vector3()).divideScalar(w);
+    // Which way the ring runs round the path decides the winding.
+    n.subVectors(ring[0], c).cross(t.subVectors(ring[1], c));
+    const flip = n.dot(o) < 0;
+    const fan = [];
+    for (let k = 0; k < w; k++) {
+      const a = ring[k], b2 = ring[(k + 1) % w];
+      const [p1, p2] = flip ? [b2, a] : [a, b2];
+      fan.push(c.x, c.y, c.z, p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
+    }
+    const e = new BufferGeometry();
+    e.setAttribute('position', new Float32BufferAttribute(fan, 3));
+    e.setAttribute('uv', new Float32BufferAttribute(new Float32Array((fan.length / 3) * 2), 2));
+    e.computeVertexNormals();
+    ends.push(e);
+  }
+  return mergeGeometries([g.toNonIndexed(), ...ends], false);
 }
 
 // A rounded rectangle as a closed profile, w x h, corner radius r, for sweeps.

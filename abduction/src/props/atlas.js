@@ -113,7 +113,12 @@ export function createAtlas(width, height, regions) {
 
 // Lettering at (a, b) metres, `size` metres tall, upright and unmirrored on
 // the canvas whatever the region's transform, keeping metre proportions.
-export function letter(ctx, text, a, b, size, { font = 'Arial', weight = '900', align = 'left', skew = 0, colour = '#000', stretch = 1 } = {}) {
+// stretch squeezes it along the line; skew leans it (or `italic` asks the
+// font for its own); outline: { colour, width } (metres) draws a line round
+// each letter first, as a sign-writer outlines lettering on a stripe.
+export function letter(ctx, text, a, b, size, {
+  font = 'Arial', weight = '900', align = 'left', skew = 0, colour = '#000', stretch = 1, italic = false, outline = null,
+} = {}) {
   const m = ctx.getTransform();
   const px = m.a * a + m.c * b + m.e;
   const py = m.b * a + m.d * b + m.f;
@@ -121,12 +126,31 @@ export function letter(ctx, text, a, b, size, { font = 'Arial', weight = '900', 
   const kx = Math.abs(m.a);
   ctx.save();
   ctx.setTransform((kx / ky) * stretch, 0, -skew, 1, px, py);
-  ctx.font = `${weight} ${Math.max(1, size * ky)}px ${font}`;
+  ctx.font = `${italic ? 'italic ' : ''}${weight} ${Math.max(1, size * ky)}px ${font}`;
   ctx.textAlign = align;
   ctx.textBaseline = 'alphabetic';
+  if (outline) {
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 2 * outline.width * ky;
+    ctx.strokeStyle = outline.colour;
+    ctx.strokeText(text, 0, 0);
+  }
   ctx.fillStyle = colour;
   ctx.fillText(text, 0, 0);
   ctx.restore();
+}
+
+// How wide `text` sets in `font`, and how tall its capitals stand, both as
+// fractions of the font's size: for fitting lettering to a length whatever
+// font the machine has.
+export function measure(ctx, text, font, { weight = '900', italic = false } = {}) {
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.font = `${italic ? 'italic ' : ''}${weight} 100px ${font}`;
+  const width = ctx.measureText(text).width / 100;
+  const cap = ctx.measureText('H').actualBoundingBoxAscent / 100 || 0.72;
+  ctx.restore();
+  return { width, cap };
 }
 
 // Surface values as a CSS colour for the surface canvas: height (0..1, 0.5
