@@ -17,8 +17,10 @@ import { rand } from '../noise1.js';
 // it stays where the original has it however the camera is keyed.
 export const BOLTS = [
   // field: lux at the peak on what faces the camera (the second strike turns the trees green; the first lights little).
-  { strike: T.strike1, top: [0.493, 0.07], foot: [0.43, 0.44], distance: 230, seed: 3, field: 1.2 },   // beyond the road, over the sign
-  { strike: T.strike2, top: [0.41, 0.19], foot: [0.38, 0.42], distance: 210, seed: 11, field: 4 },     // over the trees
+  // power: how much the strike lights the sky, fog and everything else, against the
+  // envelope (fitted to the original's median brightness at 5.8 and 42.3 s).
+  { strike: T.strike1, top: [0.493, 0.07], foot: [0.43, 0.44], distance: 230, seed: 3, field: 1.0, power: 0.35 },   // beyond the road, over the sign
+  { strike: T.strike2, top: [0.41, 0.19], foot: [0.38, 0.42], distance: 210, seed: 11, field: 14, power: 1.5 },     // over the trees
 ];
 const HALVINGS = 7;
 const WIDTH = 0.7;           // metres, the ribbon's width at the cloud: the original's bolts are thin
@@ -127,7 +129,7 @@ export function createLightning({ rig }) {
     const top = seenAt(b.strike, b.top, b.distance);
     const foot = seenAt(b.strike, b.foot, b.distance);
     cameraAt(b.strike, _view);
-    return { top, foot, mid: top.clone().lerp(foot, 0.4), seen: new Vector3(_view.x, _view.y, _view.z), seed: b.seed, field: b.field };
+    return { top, foot, mid: top.clone().lerp(foot, 0.4), seen: new Vector3(_view.x, _view.y, _view.z), seed: b.seed, field: b.field, power: b.power };
   });
   const meshes = placed.map((b) => {
     const m = new Mesh(ribbon(boltPoints(b.top, b.foot, b.seed), b.seen), material);
@@ -145,11 +147,12 @@ export function createLightning({ rig }) {
     state,
     update(t, camera) {
       const f = flash(t);
-      state.flash = f.flash;
+      const b = placed[f.which];
+      // The bolt at the envelope's brightness; the world it lights, at the strike's power.
+      state.flash = f.flash * b.power;
       state.which = f.which;
       level.value = f.flash;
       meshes.forEach((m, i) => { m.visible = f.flash > 0.01 && i === f.which; });
-      const b = placed[f.which];
       // The direction to the middle of the bolt, for the sky's glow.
       dir.copy(b.mid).sub(camera.position).normalize();
       state.boltDir.copy(dir);

@@ -32,7 +32,7 @@ export const CAR = {
 // rectangles with a modest glow, the body round them still readable.
 const HEADLIGHT_GLOW = 7;
 // Their light in the fog: a soft pool ahead on the road, not a searchlight.
-const HEADLIGHT_FOG = { strength: 0.15, half: 0.25, soft: 0.8 };
+const HEADLIGHT_FOG = { strength: 0.04, half: 0.2, soft: 0.8 };
 const TAIL_GLOW = 1.4;      // the tail lamps: red, not so bright the tone curve turns them pink
 
 // Sizes, metres, along the car from its middle (nose +X).

@@ -141,7 +141,8 @@ function draw(t) {
   placeCamera(t);
   world.update(t);
   const g = params.raw ? 0 : clamp((t - T.glitch[0]) / (T.glitch[1] - T.glitch[0]));
-  const black = params.raw ? 0 : ramp(t, T.glitch[0] + 0.25, T.black);
+  // The picture darkens from early in the glitch (the original's is well down by 71.5 s).
+  const black = params.raw ? 0 : ramp(t, T.glitch[0] + 0.1, T.black);
   post.update(t, { emi: params.raw ? 0 : emi(t), glitch: t >= T.glitch[0] && t < LENGTH ? Math.max(g, 0.001) : 0, black });
   post.render();
   if (hud) {

@@ -4,7 +4,7 @@
 import { Fn, vec3, float, dot, mix, max, pow, agxToneMapping, smoothstep, clamp } from 'three/tsl';
 
 export const GRADE = {
-  exposure: 0.85,       // before tone mapping (AgX: a gentler toe than ACES, so the darks keep detail)
+  exposure: 0.6,        // before tone mapping (AgX: a gentler toe than ACES, so the darks keep detail)
   saturation: 0.9,    // 1 leaves colour as it is
   lift: 0.0,        // pulls the blacks down to zero
   contrast: 0.25,      // 0..1, an S-curve after tone mapping
