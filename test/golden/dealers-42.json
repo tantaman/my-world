@@ -1,5 +1,14 @@
 [
  {
+  "id": "dealer:town:-4:0",
+  "name": "Kessler & Sons Motors",
+  "road": "road:-5:0:e",
+  "x": -3560.58,
+  "z": 645.454,
+  "yaw": 2.85,
+  "top": -11.118
+ },
+ {
   "id": "dealer:town:-3:1",
   "name": "Dunmore Motors",
   "road": "road:-3:1:s",

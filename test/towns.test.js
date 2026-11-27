@@ -174,7 +174,9 @@ test('no town is grown where a real place reaches, and everywhere else they are 
     const fi = cell(card.at[0] + reachOf(card) + 2 * CELL);
     if (!keepOff(fi * CELL - 110, cj * CELL - 110, (fi + 1) * CELL + 110, (cj + 1) * CELL + 110)) assert.deepEqual(found.cell(fi, cj), plain.cell(fi, cj));
   }
-  assert.deepEqual(found.within(-1500, -1500, 1500, 1500), plain.within(-1500, -1500, 1500, 1500), 'the towns near the start are where they were');
+  // (all but the one 1.5 km east, Broken Gulch: Mount Storm King's land
+  // reaches its square since it took in the whole of Lake Crescent)
+  assert.deepEqual(found.within(-1500, -1500, 1200, 1500), plain.within(-1500, -1500, 1200, 1500), 'the towns near the start are where they were');
 });
 
 test("a town's id finds it again, and nothing else", () => {

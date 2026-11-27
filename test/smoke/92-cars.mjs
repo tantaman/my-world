@@ -1,15 +1,28 @@
-// Cars: onto the lot of the nearest dealership; beside a car on it, F (the
-// act key), and it's yours, with you at the wheel; W drives it off, S stops
-// it; F gets you out beside it, where it waits; F beside it, and you're back in.
+// Cars: onto the lot of a dealership; beside a car on it, F (the act key),
+// and it's yours, with you at the wheel; W drives it off, S stops it; F gets
+// you out beside it, where it waits; F beside it, and you're back in.
+//
+// The dealership is a named one (pinned in test/golden/dealers-20261119.json):
+// none is near enough to the start to be the nearest from wherever the parts
+// before left you, since Mount Storm King's land took in the town that had
+// one. A lot faces across its town's road, into the town, so what's straight
+// ahead of a car leaving it is a few dozen metres off: it's driven off for
+// far enough to be under way, not to the far side of town.
 //
 // Needs: nothing of what came before. Leaves: you standing beside your car.
 
 import assert from 'node:assert/strict';
 
+// Rattler Gulch's, with the clearest run off its lot of those round the start
+const DEALER = 'dealer:town:-4:-2';
+// m W is held for: well under way, short of what stands across the road
+// (however quickly the frames come)
+const DRIVE_TO = 8;
+
 export default async function ({ page, step, key, frames, shot }) {
   await step('buy a car, and drive it', async () => {
-    const d = await page.evaluate(() => world.cars.go());
-    assert.ok(d, 'there’s a dealership near enough');
+    const d = await page.evaluate((id) => world.cars.go(id), DEALER);
+    assert.ok(d, `there’s ${DEALER}`);
     await page.waitForFunction(() => world.chunks.isFullyLoaded(), null, { timeout: 120000 });
     await frames(20);
     const lot = await page.evaluate(() => world.cars.at && world.cars.at.name);
@@ -24,7 +37,7 @@ export default async function ({ page, step, key, frames, shot }) {
     // off it goes
     const from = { x: mine.x, z: mine.z };
     await page.keyboard.down('KeyW');
-    await frames(120);
+    await page.evaluate(({ from, far }) => T.until(() => Math.hypot(world.cars.mine.x - from.x, world.cars.mine.z - from.z) > far, 20000), { from, far: DRIVE_TO });
     await page.keyboard.up('KeyW');
     const going = await page.evaluate(() => ({ v: world.cars.car.v, ...world.cars.mine }));
     const went = Math.hypot(going.x - from.x, going.z - from.z);

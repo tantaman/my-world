@@ -55,7 +55,11 @@ export default async function ({ page, step, key, frames, shot }) {
     const seen = await page.evaluate(() => ({ hours: world.sky.hours, fog: world.game.pipeline.fogFar, climb: world.player.pos.y }));
     assert.ok(seen.fog > 400, `from up there you can see a long way (${Math.round(seen.fog)} m)`);
     // what the forest grows of its own accord (an old cabin, a dock, a cave) keeps off a real place
-    const old = await page.evaluate((v) => world.map.places.within(v.x - 600, v.z - 600, v.x + 600, v.z + 600).filter((p) => !p.id.startsWith('hike:')).map((p) => p.id), h.view);
+    // (the hike's own places are its own: its spots, and the falls on its streams)
+    const old = await page.evaluate(
+      ({ v, id }) => world.map.places.within(v.x - 600, v.z - 600, v.x + 600, v.z + 600).filter((p) => !p.id.startsWith('hike:') && !p.id.startsWith(`fall:${id}:`)).map((p) => p.id),
+      { v: h.view, id: h.id },
+    );
     assert.deepEqual(old, [], 'no old place stands on the hike');
     await shot('the-view');
     return { hike: h.id, ...seen };
