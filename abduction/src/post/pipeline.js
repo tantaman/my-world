@@ -23,15 +23,44 @@ import { scatter } from '../weather/fog.js';
 const ASPECT = 4 / 3;
 
 export const LENS = {
-  k: 0.32,               // barrel warp: sample at r (1 + k r^2), r = 1 at the top edge's middle
+  // Barrel warp: an output point p (r = 1 at the top edge's middle) samples
+  // the drawn scene at p (1 + k r^2) zoom. k from straight poles in the
+  // original (plumb lines at 42 s and 57 s both give 0.13 to 0.14).
+  k: 0.135,
+  zoom: 0.727,           // so the corners just reach the drawn picture's corners: never black but for the vignette
   overdraw: 1.3,         // the scene is drawn this much larger, so the warped middle stays sharp
   fringe: 0.0035,        // colour fringing at the corners, as a fraction of the radius
-  grain: 0.010,          // sensor noise, display-linear
-  vignette: [0.70, 1.22],// where the vignette starts and reaches black (rounded-rectangle distance)
+  emiSplit: 0.0008,      // red and blue apart over the whole picture at full interference, of the width
+  grain: 0.0028,         // sensor noise, display-linear: the original is smooth (its compression crushes grain: 0.7 of 255 in flat sky)
+  // The original's mean frame (every frame averaged) is not darkened at its
+  // edges at all: a soft circle cuts off only the corners, from about 1.39
+  // to 1.62 half-heights from the middle (the corners are at 1.67).
+  vignette: [1.39, 1.62],
   scatterFar: 900,       // metres: the sky counts as this far for the fog's glow
 };
 
-const BLOOM = { strength: 0.5, radius: 0.75, threshold: 1.0 };
+// The overlay's FOV against what three.js is told. The number the original
+// shows moves with its zoom, but its picture is far narrower than a lens of
+// that many degrees: fitted through our lens (tools/fit.mjs, still 01), the
+// tangent of the half-angle drawn is this times the overlay's.
+export const FOV_TAN = 0.613;
+export const drawnFov = (shown) => (2 * Math.atan(FOV_TAN * Math.tan((shown * Math.PI) / 360)) * 180) / Math.PI;
+
+// The direction, in the camera's own frame (x right, y up, z ahead), that
+// shows at a point of the finished picture (u, v from its top left, 0..1),
+// through the lens's warp, for a drawn vertical fov in degrees.
+export function rayThroughLens(u, v, fov, out) {
+  const px = (u - 0.5) * 2 * ASPECT;
+  const py = (0.5 - v) * 2;
+  const s = (1 + LENS.k * (px * px + py * py)) * LENS.zoom;
+  const tan = Math.tan((fov * Math.PI) / 360);
+  return out.set(px * s * tan, py * s * tan, 1).normalize();
+}
+
+// Bloom: tight round bright things (the original's lamp heads have a small halo;
+// the broad glow round them is the fog's, weather/fog.js). A wide radius laid
+// a veil over the saucer's hull from the lamp beside it.
+const BLOOM = { strength: 0.45, radius: 0.45, threshold: 1.0 };
 
 export function createPipeline(renderer, scene, camera, { raw, scatterLights, fogDensity, has }) {
   const scenePass = pass(scene, camera, { samples: 4 });
@@ -73,20 +102,21 @@ export function createPipeline(renderer, scene, camera, { raw, scatterLights, fo
     const pix = suv.mul(screenSize);
     // Rows slid sideways by the saucer's interference and the final glitch.
     const inter = raw ? vec3(0) : interference(suv, u.time, u.emi);
-    const gl = raw ? vec2(0) : glitch(suv, u.time, u.glitch);
+    const gl = raw ? vec3(0) : glitch(suv, u.time, u.glitch);
     const p = suv.sub(0.5).mul(vec2(2 * ASPECT, 2)).toVar();
     p.x.addAssign(inter.x.add(gl.x).mul(2 * ASPECT));
     const r2 = dot(p, p);
-    // The barrel warp, scaled so the left and right edges just fit; the
-    // corners then fall outside the drawn picture and go black.
-    const fit = float(1).div(u.k.mul(ASPECT * ASPECT).add(1));
-    const q = raw ? p : p.mul(u.k.mul(r2).add(1)).mul(fit);
+    // The barrel warp, zoomed so the left and right edges just fit; the
+    // corners fall a little outside the drawn picture, under the vignette.
+    const q = raw ? p : p.mul(u.k.mul(r2).add(1)).mul(LENS.zoom);
     const toUV = (qq) => qq.div(vec2(2 * ASPECT, 2)).add(0.5);
     const uv = toUV(q);
     const inside = step(0, uv.x).mul(step(uv.x, 1)).mul(step(0, uv.y)).mul(step(uv.y, 1));
-    // Colour fringing toward the edges, plus the bands' and glitch's split.
-    const fr = r2.mul(LENS.fringe).add(inter.y).add(gl.y);
-    const sideways = vec2(inter.y.add(gl.y).mul(2 * ASPECT), 0);
+    // Colour fringing toward the edges; while the saucer is near, red and
+    // blue apart sideways over the whole picture (the original's fence posts
+    // and the hull's ring fringe at 57 s); and the tears' and glitch's split.
+    const fr = r2.mul(LENS.fringe);
+    const sideways = vec2(inter.y.add(gl.y).add(u.emi.mul(LENS.emiSplit)).mul(2 * ASPECT), 0);
     const red = sceneAt(toUV(q.mul(fr.add(1)).add(sideways))).r;
     const mid = sceneAt(uv);
     const blue = sceneAt(toUV(q.mul(float(1).sub(fr)).sub(sideways))).b;
@@ -100,12 +130,13 @@ export function createPipeline(renderer, scene, camera, { raw, scatterLights, fo
       const n = hash(pix.x.add(pix.y.mul(4096.0)).add(floor(u.time.mul(60)).mul(1013.0))).sub(0.5);
       const y = dot(c, vec3(0.2126, 0.7152, 0.0722));
       c.addAssign(n.mul(LENS.grain).mul(float(1).sub(y.mul(0.6))));
-      // A heavy vignette shaped like a rounded rectangle, black in the corners.
-      const e = pow(pow(abs(p.x).div(ASPECT), 4).add(pow(abs(p.y), 4)), 0.25);
-      const vig = float(1).sub(smoothstep(LENS.vignette[0], LENS.vignette[1], e));
-      c.mulAssign(vig.mul(vig).mul(inside));
+      // The vignette: a soft circle that takes only the corners (measured in
+      // display values, so raised to 2.2 here, before the output encodes).
+      const vig = float(1).sub(smoothstep(LENS.vignette[0], LENS.vignette[1], length(p)));
+      c.mulAssign(pow(vig, 2.2).mul(inside));
     }
-    c.mulAssign(float(1).sub(u.black));
+    // The glitch's blocks going dark, then the fade to black.
+    c.mulAssign(float(1).sub(gl.z).mul(float(1).sub(u.black)));
     return vec4(max(c, 0), 1);
   });
 

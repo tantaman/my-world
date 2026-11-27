@@ -1,8 +1,10 @@
 /* The bodycam overlay: HTML over the canvas, so it is never warped or
    glitched (it is not, in the original). Sizes are fractions of the stage. */
-#hud { position: absolute; inset: 0; pointer-events: none; color: rgba(255, 255, 255, 0.9);
-  font-family: VT323, ui-monospace, monospace; font-size: calc(var(--h) * 0.0195); line-height: calc(var(--h) * 0.0165);
-  text-shadow: 0 0 2px rgba(0, 0, 0, 0.6); letter-spacing: 0.04em; }
+/* Measured on the original at 1440x1080: capitals about 7 px tall, lines
+   17 px apart, a soft white with no dark halo. */
+#hud { position: absolute; inset: 0; pointer-events: none; color: rgba(236, 234, 228, 0.84);
+  font-family: VT323, ui-monospace, monospace; font-size: calc(var(--h) * 0.0167); line-height: calc(var(--h) * 0.0158);
+  letter-spacing: 0.05em; }
 #hud .c { position: absolute; white-space: pre; }
 #hud .tl { left: 6.2%; top: 4.3%; }
 #hud .tr { right: 5.8%; top: 4.3%; text-align: right; }

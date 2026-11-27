@@ -8,10 +8,11 @@ import { params, has } from './params.js';
 import { createClock, LENGTH, T, emi, ramp, clamp } from './timeline.js';
 import { cameraAt } from './camera/path.js';
 import { handheldAt } from './camera/handheld.js';
-import { createPipeline } from './post/pipeline.js';
+import { createPipeline, drawnFov } from './post/pipeline.js';
 import { createHud } from './hud/hud.js';
 import { createScatterLights, fogUniforms } from './weather/fog.js';
 import { buildWorld } from './world.js';
+import { texturesReady } from './materials/textures.js';
 import { PUBLIC } from './words.js';
 
 const started = performance.now();
@@ -35,6 +36,8 @@ scene.add(camera);
 
 const scatterLights = createScatterLights();
 const world = await buildWorld({ scene, camera, renderer, scatterLights, params, has });
+// Nothing is drawn half-dressed: every photo texture asked for while building has come.
+await texturesReady();
 
 const post = createPipeline(renderer, scene, camera, {
   raw: params.raw, scatterLights, fogDensity: fogUniforms.density, has,
@@ -91,9 +94,7 @@ if (params.t != null || params.mute) {
 const again = document.getElementById('again');
 document.getElementById('replay').addEventListener('click', () => location.reload());
 
-// The overlay's FOV against what three.js is told: fitted with the lens warp
-// (tools/fit.mjs), they are the same.
-const FOV_SCALE = 1.0;
+
 
 // The camera: path, then the hand holding it, or flown by hand with ?free.
 const view = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, fov: 95 };
@@ -107,6 +108,11 @@ function placeCamera(t) {
   if (!free || !freeSeeded) { cameraAt(t, view); freeSeeded = true; }
   if (free) free.update(view);
   handheldAt(t, hand);
+  if (params.cam) {
+    const [x, y, z, yaw = view.yaw, pitch = view.pitch, fov = view.fov] = params.cam;
+    Object.assign(view, { x, y, z, yaw, pitch, fov });
+    for (const k in hand) hand[k] = 0;
+  }
   const yaw = MathUtils.degToRad(view.yaw + hand.yaw);
   const pitch = MathUtils.degToRad(view.pitch + hand.pitch);
   _dir.set(Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw));
@@ -115,7 +121,7 @@ function placeCamera(t) {
   camera.up.set(0, 1, 0);
   camera.lookAt(camera.position.x + _dir.x, camera.position.y + _dir.y, camera.position.z + _dir.z);
   camera.rotateZ(MathUtils.degToRad(hand.roll));
-  camera.fov = view.fov * FOV_SCALE;
+  camera.fov = params.cam ? view.fov : drawnFov(view.fov);
   camera.updateProjectionMatrix();
   camera.updateMatrixWorld();
 }
@@ -134,7 +140,6 @@ function draw(t) {
   resize();
   placeCamera(t);
   world.update(t);
-  if (audio) audio.update(t, world.listener);
   const g = params.raw ? 0 : clamp((t - T.glitch[0]) / (T.glitch[1] - T.glitch[0]));
   const black = params.raw ? 0 : ramp(t, T.glitch[0] + 0.25, T.black);
   post.update(t, { emi: params.raw ? 0 : emi(t), glitch: t >= T.glitch[0] && t < LENGTH ? Math.max(g, 0.001) : 0, black });
@@ -186,7 +191,7 @@ if (params.capture) {
     frames++;
     if (frames === 1) console.info(`first frame drawn ${(performance.now() - started).toFixed(0)} ms after start`);
     if (params.stats) stats(t);
-    if (params.still && frames === STILL_FRAMES) {
+    if ((params.still || params.shot) && frames === STILL_FRAMES) {
       window.__ready = true;
       renderer.setAnimationLoop(null);
     }
