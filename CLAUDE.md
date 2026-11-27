@@ -253,6 +253,12 @@ was wrong, and the numbers said so.
   never the colour: the colour is still the code's (a country's ground is
   its entry in `world/country.js`). Lay it at `worldXZ()` (or the thing's
   own frame), at `photo.metres`, which repeats on the world's period.
+  What's built with the building material takes them as
+  `createBuildingMaterial({ photos: { brick, stone, ... } })`
+  (build/surfaces.js says which surface each is for), as Washington's
+  walls and paving do. Check the size Poly Haven gives a photo against
+  the photo itself (count its courses): one brick wall's said 3 m and
+  covered 1.1.
 - Light that isn't the sun's is the sky's (render/skyLight.ts): its levels
   are still the hemisphere light's in `world/sky.js`, which is what to
   change, or read, for the light all round. Don't add an ambient light.
