@@ -26,7 +26,9 @@ Mount Storm King → src/world/hikes/mount-storm-king.js (223 kB, fetched when i
 (That was its first import. Mount Storm King has since been imported again
 with `--radius 15000`, so that all of Lake Crescent, which its photo looks
 down the length of, is the real lake and the real mountains round it rather
-than the coarse Earth's: see the [reference photos](../../reference/README.md).)
+than the coarse Earth's; and Angels Landing with `--radius 8000`, so that the
+head of Zion Canyon and the white cliffs over it are real: see the
+[reference photos](../../reference/README.md).)
 
 A photo that has lost its location on the way (sent through a chat, say)
 can still be used: say where it was taken with `--lat` and `--lon`, and

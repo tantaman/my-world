@@ -26,13 +26,13 @@
   ]
  },
  {
-  "id": "airfield:197117:222311",
+  "id": "airfield:192477:223551",
   "region": "angels-landing",
   "name": "Rourke Strip",
-  "x": 197116.5,
-  "z": 222310.9,
-  "yaw": 2.88,
-  "mid": 352.119,
+  "x": 192476.5,
+  "z": 223550.9,
+  "yaw": 0,
+  "mid": 240.899,
   "clear": [
    true,
    true
