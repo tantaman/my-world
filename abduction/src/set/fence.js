@@ -3,14 +3,16 @@
 import { Group, InstancedMesh, BoxGeometry, CylinderGeometry, Object3D, Mesh } from 'three/webgpu';
 import { FENCE } from './layout.js';
 import { weathered } from '../materials/weathered.js';
+import { pbr } from '../materials/textures.js';
 import { rand } from '../noise1.js';
 
 const WIRES = [0.45, 0.78, 1.1];   // heights of the strands, metres
 
 export function createFence() {
   const group = new Group();
-  const wood = weathered({ colour: '#4a3e30', under: '#2c241b', scale: 0.3, vary: 0.4, streaks: 0.6, dirt: 0.5, rough: 0.9, wet: 0.5 });
-  const wire = weathered({ colour: '#3a3a38', rust: 0.6, metal: 0.5, rough: 0.5, bump: 0 });
+  const wood = weathered({ colour: '#4a3e30', under: '#2c241b', scale: 0.3, vary: 0.4, streaks: 0.6, dirt: 0.5, rough: 0.9, wet: 0.5,
+    photo: pbr('wood_planks_grey'), photoScale: 1.2, photoSat: 0.4, photoContrast: 1.3 });
+  const wire = weathered({ colour: '#3a3a38', rust: 0.6, metal: 0.5, rough: 0.5, bump: 0, photo: pbr('rust_coarse_01'), photoScale: 0.4 });
   const count = Math.floor((FENCE.x1 - FENCE.x0) / FENCE.step) + 1;
   const post = new BoxGeometry(0.12, FENCE.post + 0.1, 0.12);
   post.translate(0, (FENCE.post + 0.1) / 2 - 0.1, 0);

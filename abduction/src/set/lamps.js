@@ -6,13 +6,15 @@ import { vec3 } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LAMPS, lampX } from './layout.js';
 import { weathered } from '../materials/weathered.js';
+import { pbr } from '../materials/textures.js';
 
 const HEAD_GLOW = 14;     // emissive strength of a lamp's glass (blooms above 1)
 
 export function createLamps() {
   const group = new Group();
   const n = LAMPS.count;
-  const paint = weathered({ colour: '#1e201f', rust: 0.35, rough: 0.55, metal: 0.4, streaks: 0.3, wet: 0.4, bump: 0 });
+  const paint = weathered({ colour: '#1e201f', rust: 0.35, rough: 0.55, metal: 0.4, streaks: 0.3, wet: 0.4, bump: 0,
+    photo: pbr('rusty_metal_02'), photoScale: 0.6, photoSat: 0.6 });
   const glass = new MeshStandardNodeMaterial({ color: new Color(1, 0.9, 0.8), roughness: 0.2 });
   glass.emissiveNode = vec3(1.0, 0.84, 0.69).mul(HEAD_GLOW);
 

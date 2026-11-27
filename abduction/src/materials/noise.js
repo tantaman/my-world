@@ -1,6 +1,6 @@
-// Shared pieces for the materials, all procedural (no image textures, as
-// everywhere in this repository): noise in metres, a coordinate on whichever
-// face a fragment is on, and a bump from any height.
+// Shared pieces for the materials, procedural: noise in metres, a
+// coordinate on whichever face a fragment is on, and a bump from any height.
+// (The photo-scanned surfaces are materials/textures.js.)
 import {
   Fn, vec2, vec3, float, mx_noise_float, mx_fractal_noise_float, positionWorld, normalWorld, positionView, normalView,
   abs, select, dFdx, dFdy, cross, dot, normalize, sign, faceDirection, smoothstep, hash, floor, fract, mix, min, length,
@@ -27,12 +27,13 @@ export const faceUV = Fn(() => {
 });
 
 // The view-space normal bent by the screen-space slope of a height (metres
-// times scale), for surfaces whose detail is all procedural.
-export const bumpNormal = Fn(([height, scale]) => {
+// times scale): the surface's own normal, or `base` (a view-space normal
+// already bent by a normal map).
+export const bumpNormal = Fn(([height, scale, base]) => {
   const dHdxy = vec2(dFdx(height), dFdy(height)).mul(scale);
   const vSigmaX = dFdx(positionView);
   const vSigmaY = dFdy(positionView);
-  const vN = normalView;
+  const vN = base ?? normalView;
   const R1 = cross(vSigmaY, vN);
   const R2 = cross(vN, vSigmaX);
   const fDet = dot(vSigmaX, R1).mul(faceDirection);
