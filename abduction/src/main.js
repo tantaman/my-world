@@ -75,6 +75,13 @@ if (params.t != null || params.mute) {
   title.remove();
   if (params.t == null) clock.start(null);
 } else {
+  // On the private page, the original's own sound where reference/ has it
+  // (audio/original.js), fetched now so that Play need not wait; ours
+  // otherwise, and always on the page built to be shown. Vite's mode is
+  // written out here rather than PUBLIC so that that build drops the module.
+  const recorded = import.meta.env.MODE !== 'publish' && !params.ours
+    ? import('./audio/original.js').then((m) => m.loadOriginal())
+    : null;
   let starting = false;
   const play = async (scale) => {
     if (starting) return;
@@ -83,7 +90,7 @@ if (params.t != null || params.mute) {
     title.remove();
     if (!params.mute) {
       const { createMix } = await import('./audio/mix.js');
-      audio = await createMix();
+      audio = await createMix({ recorded });
       clock.start(audio.ctx, audio.startTime);
     } else clock.start(null);
   };

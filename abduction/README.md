@@ -13,7 +13,11 @@ are not in this repository (`reference/` is not committed). The signs and the
 overlay carry the original's words while this is compared with it in
 private, and our own in anything built to be shown (`npm run
 abduction:publish`; both sets are in `src/words.js`), as PLAN.md section 10,
-decision 3 has it.
+decision 3 has it. The sound goes the same way: the private page plays the
+original's own, from `reference/audio.wav` where `tools/reference.mjs` has
+cut it (`src/audio/original.js`), and ours only where that file is not
+there or with `?sound=ours`; the page built to be shown always plays ours,
+and leaves the original's out of the build.
 
 Unlike the game, not everything here is made in code. The surfaces are CC0
 photo-scanned textures and the clouds a CC0 sky panorama, all from Poly
@@ -24,7 +28,7 @@ textures, said to be generated images). They are not committed either:
 
 ```bash
 node abduction/tools/assets.mjs        # fetch the CC0 textures and sky the page asks for (needs curl, ffmpeg); once
-npm run abduction                      # the page, http://localhost:5174 (click to play, with sound)
+npm run abduction                      # the page, http://localhost:5174 (click to play, with the original's sound)
 npm run abduction:build                # a static page in abduction/dist/
 npm run abduction:publish              # the same with our own words, for showing; also dist/page.html
 node abduction/tools/reference.mjs     # fetch the original and cut its stills (needs curl, ffmpeg; --full for 2048x1536)
@@ -51,7 +55,8 @@ frames and says so (for tools), `?cam=x,y,z,yaw,pitch,fov` holds the camera
 over ours half see-through, `?raw` drops the lens and the overlay,
 `?scale=0.5` draws smaller, `?stats` shows frame time (and the card's own
 time where WebGPU can say), draw calls and triangles, `?free` flies the
-camera (drag, WASD, Q/E), `?mute`, `?webgl` uses the WebGL 2 backend,
+camera (drag, WASD, Q/E), `?mute`, `?sound=ours` plays our sound where the
+private page would play the original's, `?webgl` uses the WebGL 2 backend,
 `?blockout` shows milestone 0's grey boxes, and `?no=mirror,rain,scatter,
 bloom,shadows,trees,grass,farlamps,batch` leaves parts out to see what each costs.
 
@@ -89,7 +94,10 @@ camera matches:
   foot, the lift.
 - **Sound (`src/audio/`).** Measured against the original's, layer by layer,
   and remade: a pulse, a drone and chords of our own on the original's beats;
-  rain; the car; the saucer's whistles and drones; the fade at the end.
+  rain; the car; the saucer's whistles and drones; the fade at the end. By ear
+  it was not close enough, so the private page plays the original's own
+  instead, on the same clock (above); ours is for the page built to be
+  shown.
 
 ## Measured from the original
 
@@ -186,8 +194,9 @@ original's wispy ones, and the far rows a little more visible; the van's and
 sedan's painted wear is less varied than image textures, and the sedan's body
 reads darker; the cow has no fur; the shopfront close-ups (27 and 30 s) are
 framed 20 to 60 px off; the saucer's arrival path; the return at 71 s is about
-9 levels too bright; and the sound has not been heard: nobody has listened to
-it yet.
+9 levels too bright; and our sound, within 3 dB of the original's in every
+band but not close enough by ear (the private page plays the original's
+own).
 
 Brightness of the middle of the frame, ours against the original's (0 to
 255), from all 19 stills at 1440×1080 after the final exposure pass:
@@ -244,7 +253,8 @@ Brightness of the middle of the frame, ours against the original's (0 to
 - `src/post/`: `pipeline.js` (the frame after the scene, the lens, and the drawn FOV), `grade.js`,
   `interference.js`, `glitch.js`.
 - `src/hud/`: the overlay.
-- `src/audio/`: `mix.js` (buses, room, the end, the offline render), `voices.js` (rain, car, saucer),
+- `src/audio/`: `mix.js` (buses, room, the end, the offline render; or the original's take played as it
+  is), `original.js` (the original's own sound, on the private page), `voices.js` (rain, car, saucer),
   `music.js` (the instruments), `score.js` (our cue, in beats), `hearing.js` (where things are from the
   listener), `dsp.js` (noise, filters, buffers, the room's impulse response).
 - `tools/`: `reference.mjs`, `assets.mjs` (the CC0 textures), `browser.mjs`, `shoot.mjs`, `compare.mjs`,

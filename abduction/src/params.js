@@ -10,6 +10,9 @@
 //   ?cam=x,y,z,yaw,pitch,fov  hold the camera there (degrees, as camera/path.js), no hand:
 //                        for looking at one thing up close (tools/look.mjs)
 //   ?mute                no sound (also: no title card when stopped at a time)
+//   ?sound=ours          our own sound where the private page would play the
+//                        original's (audio/original.js); the published page
+//                        always plays ours
 //   ?shot                with ?t: stop after a few frames and set window.__ready (tools/look.mjs)
 //   ?capture             draw only when tools/capture.mjs asks (window.__drawAt)
 //   ?blockout            milestone 0's grey boxes instead of the set
@@ -35,6 +38,7 @@ export const params = {
   free: q.has('free'),
   cam: q.has('cam') ? q.get('cam').split(',').map(Number) : null,
   mute: q.has('mute'),
+  ours: q.get('sound') === 'ours',
   webgl: q.has('webgl'),
   blockout: q.has('blockout'),
   capture: q.has('capture'),

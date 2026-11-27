@@ -11,7 +11,8 @@
 // (renderTake, for tools/sound.mjs) play the same take sample for sample.
 // Started from the title card's click (a browser will not play sound
 // without one); its clock then drives t (timeline.js), so picture and sound
-// cannot drift.
+// cannot drift. On the private page the original's own sound plays in its
+// place where reference/ has it (original.js), on the same clock.
 import { LENGTH } from '../timeline.js';
 import { impulse, softClip, dB, gain, once } from './dsp.js';
 import { rain, thunder, car, saucer, prepareVoices } from './voices.js';
@@ -89,12 +90,26 @@ function build(ctx, start, destination) {
   return limit;
 }
 
-export async function createMix() {
+// The page's sound, started from the title card's click. `recorded` (an
+// AudioBuffer, or a promise of one or of null) is played instead of ours,
+// from its first sample at t = 0: the original's own, on the private page
+// (original.js). The context is made before it is waited for, while the
+// click still counts.
+export async function createMix({ recorded = null } = {}) {
   const ctx = new AudioContext();
   await ctx.resume();
-  prepare(ctx.sampleRate);
+  const take = await recorded;
+  if (!take) prepare(ctx.sampleRate);
   const start = ctx.currentTime + LEAD_IN;
-  const out = build(ctx, start, ctx.destination);
+  let out;
+  if (take) {
+    // As it is: its own level, its own fade at the end.
+    out = ctx.createBufferSource();
+    out.buffer = take;
+    out.connect(ctx.destination);
+    out.start(start);
+  } else out = build(ctx, start, ctx.destination);
+  console.info(`sound: ${take ? 'the original\'s' : 'ours'}`);
   // The picture follows what is heard: the audio clock runs ahead of the
   // speakers by the output's latency, so t = 0 is that much after `start`.
   const heard = start + (ctx.outputLatency || ctx.baseLatency || 0);
