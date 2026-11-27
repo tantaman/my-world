@@ -22,7 +22,10 @@
     "dc": "node --max-old-space-size=8000 tools/dc.mjs",
     "metro": "node tools/metro.mjs",
     "earth": "node --max-old-space-size=8000 tools/earth.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "abduction": "vite abduction --config abduction/vite.config.js --port 5174",
+    "abduction:build": "vite build abduction --config abduction/vite.config.js",
+    "abduction:publish": "node abduction/tools/publish.mjs"
   },
   "dependencies": {
     "three": "^0.187.0"

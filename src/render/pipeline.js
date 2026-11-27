@@ -955,6 +955,72 @@ export class Pipeline {
     this.renderer.render(this.quad, this.quadCam);
   }
 
+  // The shaders that drawing `scene` from `camera` will want, compiled ahead,
+  // all at once where the browser can (KHR_parallel_shader_compile): left to
+  // render(), three.js compiles each the first time it's drawn, one after
+  // another, and on some machines (a Mac, where they're translated for
+  // Metal) that freezes the first picture for seconds. → a promise that
+  // they're ready.
+  //
+  // A shader is compiled for the lights it's drawn with and what it draws
+  // into (its colour space), so each is compiled as render() will want it:
+  // what's shown (whichever way you look) for each go at the scene, with the
+  // pool of lights in it and the lights that go sees, into that go's
+  // target; then each step after it, into its own. Only the shadows are left
+  // to be compiled as they're first drawn.
+  warm(scene, camera) {
+    const r = this.renderer;
+    this._share();
+    _eye.copy(camera.position).sub(scene.position);
+    this.lights.assign(scene, _eye, SHARED.uTime.value);
+    const target = r.getRenderTarget();
+    const layers = camera.layers.mask;
+    const goes = [
+      [layers & ~(1 << OVER), this.rtScene],
+      [1 << OVER, this.rtScene],
+    ];
+    if (scene.userData.heat) goes.push([1 << HEAT, this.rtHeat]);
+    // (three.js compiles everything under what it's handed, shown or not and
+    // on whatever layer: what a go doesn't draw is without its material while
+    // that go is compiled)
+    const shown = new Set();
+    scene.traverseVisible((o) => shown.add(o));
+    const drawn = [];
+    scene.traverse((o) => o.material && drawn.push(o));
+    const materials = drawn.map((o) => o.material);
+    const ready = [];
+    try {
+      for (const [mask, into] of goes) {
+        camera.layers.mask = mask;
+        drawn.forEach((o, i) => (o.material = shown.has(o) && o.layers.mask & mask ? materials[i] : null));
+        r.setRenderTarget(into);
+        ready.push(r.compileAsync(scene, camera));
+      }
+    } finally {
+      drawn.forEach((o, i) => (o.material = materials[i]));
+      camera.layers.mask = layers;
+    }
+    const chain = this.bloomChain;
+    const direct = !this.enabled && this.lowW === this.screenW && this.lowH === this.screenH;
+    const steps = [
+      [this.behind, this.rtBehind],
+      [this.composite, this.rtHDR],
+      [this.adapt, this.adapted[1]],
+      [this.final, direct ? null : this.rtLow],
+    ];
+    if (this.ao > 0) steps.push([this.occlusion, this.rtAO]);
+    if (chain.length) steps.push([this.bloomDown, chain[0]]);
+    if (this.bloom > 0 && chain.length > 1) steps.push([this.bloomUp, chain[0]]);
+    if (!direct) steps.push([this.upscale, null]);
+    for (const [material, into] of steps) {
+      this.quad.material = material;
+      r.setRenderTarget(into);
+      ready.push(r.compileAsync(this.quad, this.quadCam));
+    }
+    r.setRenderTarget(target);
+    return Promise.all(ready);
+  }
+
   // fogLight: how much daylight the air holds (the sky's `open`): in a cave
   // the far walls fade into the dark, not into a misty sky. dt: seconds
   // since the last frame, for the eye to adjust over.

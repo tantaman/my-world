@@ -1,0 +1,6 @@
+# The piece being studied (someone else's work) and what we render to compare.
+reference/
+out/
+dist/
+# CC0 textures, fetched by tools/assets.mjs (src/materials/textures.js).
+public/tex/
