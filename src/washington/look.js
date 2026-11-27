@@ -63,7 +63,7 @@ function cityPhotos() {
       stone: photo('concrete_wall_008', 2.71), // a weathered pale wall, its stains and pits: an office's stone or precast front
     },
     paving: {
-      asphalt: photo('asphalt_07', 2.5), // a city street's, worn to its grit (no cracks: each would come round again every few metres)
+      asphalt: photo('asphalt_02', 3), // a city street's, gritty, cracked (laid twice: build/surfaces.js)
       concrete: photo('brushed_concrete', 2.5), // a sidewalk's, scuffed and stained
       pavers: photo('brick_pavement_04', 2), // red brick pavers in courses, as downtown's sidewalks are laid
     },
