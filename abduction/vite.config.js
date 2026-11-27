@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   base: './',
-  // Not the game's public/ folder: this page has no static assets of its own.
-  publicDir: false,
+  // Its own public/: the photo-scanned textures tools/assets.mjs fetches (public/tex/).
+  publicDir: 'public',
   server: { host: true, port: 5174, fs: { allow: ['..'] } },
   build: {
     outDir: 'dist',

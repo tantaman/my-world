@@ -6,9 +6,10 @@
 //
 //   node abduction/tools/compare.mjs            every still we have drawn
 //   node abduction/tools/compare.mjs 01 04      only those
-//   node abduction/tools/compare.mjs --dir raw  compare out/raw/ instead
+//   node abduction/tools/compare.mjs --dir raw  compare out/raw/ instead, into out/compare-raw/
 //
-// Writes out/compare/<name>.jpg: theirs | ours, and a half-and-half blend below.
+// Writes out/compare/<name>.jpg: theirs (left) | ours (right), and a
+// half-and-half blend below.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -88,7 +89,7 @@ const args = process.argv.slice(2);
 const di = args.indexOf('--dir');
 const dir = di >= 0 ? args.splice(di, 2)[1] : 'stills';
 const OURS = join(ROOT, 'out', dir);
-const OUT = join(ROOT, 'out', 'compare');
+const OUT = join(ROOT, 'out', dir === 'stills' ? 'compare' : `compare-${dir}`);
 mkdirSync(OUT, { recursive: true });
 
 for (const [name] of STILLS) {

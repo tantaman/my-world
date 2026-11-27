@@ -10,10 +10,14 @@ import { fileURLToPath } from 'node:url';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
-export const WEBGPU_ARGS = [
-  '--enable-unsafe-webgpu', '--enable-features=Vulkan', '--use-angle=swiftshader',
-  '--use-webgpu-adapter=swiftshader', '--ignore-gpu-blocklist',
-];
+export const WEBGPU_ARGS = process.platform === 'darwin'
+  // On a Mac, headless Chromium draws WebGL 2 on the machine's own card through
+  // ANGLE's Metal backend: a frame in milliseconds rather than seconds.
+  ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist']
+  : [
+    '--enable-unsafe-webgpu', '--enable-features=Vulkan', '--use-angle=swiftshader',
+    '--use-webgpu-adapter=swiftshader', '--ignore-gpu-blocklist',
+  ];
 
 export async function startPage({ width = 1440, height = 1080 } = {}) {
   const server = await createServer({

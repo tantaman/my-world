@@ -2,3 +2,5 @@
 reference/
 out/
 dist/
+# CC0 textures, fetched by tools/assets.mjs (src/materials/textures.js).
+public/tex/

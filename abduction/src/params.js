@@ -7,7 +7,10 @@
 //   ?scale=0.5           draw smaller (software rendering is slow)
 //   ?stats               frame time, draw calls, triangles
 //   ?free                fly the camera yourself
+//   ?cam=x,y,z,yaw,pitch,fov  hold the camera there (degrees, as camera/path.js), no hand:
+//                        for looking at one thing up close (tools/look.mjs)
 //   ?mute                no sound (also: no title card when stopped at a time)
+//   ?shot                with ?t: stop after a few frames and set window.__ready (tools/look.mjs)
 //   ?capture             draw only when tools/capture.mjs asks (window.__drawAt)
 //   ?blockout            milestone 0's grey boxes instead of the set
 //   ?webgl               WebGPURenderer's WebGL 2 backend (headless Chromium here
@@ -30,10 +33,12 @@ export const params = {
   scale: Math.min(2, Math.max(0.1, num('scale', 1))),
   stats: q.has('stats'),
   free: q.has('free'),
+  cam: q.has('cam') ? q.get('cam').split(',').map(Number) : null,
   mute: q.has('mute'),
   webgl: q.has('webgl'),
   blockout: q.has('blockout'),
   capture: q.has('capture'),
+  shot: q.has('shot'),
   // Turn single parts off to see what each costs: ?no=mirror,rain,scatter,bloom,shadows,trees
   no: new Set((q.get('no') ?? '').split(',').filter(Boolean)),
 };
