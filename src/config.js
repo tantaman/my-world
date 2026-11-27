@@ -96,5 +96,6 @@ export const CONFIG = {
   // ?no=skylight,photos (tools/look.mjs shoots with and without).
   //   skylight  the sky as light (render/skyLight.ts): back to a two-colour ambient
   //   photos    photographs of real surfaces (render/photos.ts): the code's colours alone
+  //   canopy    the crowns of a wood seen from afar (far/view.js): one colour again
   no: new Set((params.get('no') || '').split(',').map((s) => s.trim()).filter(Boolean)),
 };

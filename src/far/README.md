@@ -10,7 +10,12 @@ the point of the climb is what is laid out below.
 So past the streamed-in forest the land is drawn once more, coarsely — one
 mesh to a square, no trees standing on it but the dark crowns of the woods
 raised over the ground, meadows, bare rock on the steeps, snow on the tops,
-and water that mirrors the sky. Where the real chunks are it sinks out of
+and water that mirrors the sky. Over a wood the crowns are drawn a pixel at a
+time: a jumble of domes, each lit on the sun's side and shaded on the other,
+darker in the gaps, the size a photograph of real ones says (Mount Storm
+King's, at the hike's 1:5); as they get smaller than a pixel they give way to
+their own average, as dark as a canopy is from afar, rather than shimmer
+(`?no=canopy` leaves them out). Where the real chunks are it sinks out of
 sight beneath them (the further where the land falls away steeply between
 its points, as down the walls of a canyon), so close to you it is the real
 ground and the real trees you see, and the far land only shows past their
