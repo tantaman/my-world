@@ -1,8 +1,9 @@
 // What keeps the animals in and the people out, and what tells you who's
 // there: the walls and fences the map draws, as they're drawn; a fence round
 // each pen, of the kind its animals want (species.js: a tall wire mesh for
-// the big cats, a timber rail at the Kids' Farm), wherever its edge isn't on
-// a path, under a roof, in the water (Lion/Tiger Hill has its moat) or
+// the big cats, a timber rail at the Kids' Farm), wherever its edge doesn't
+// run where people walk (a step inside it isn't path, plaza or roof), isn't
+// in the water (Lion/Tiger Hill has its moat) and isn't
 // along a wall or fence the map already has (one fence, not two side by
 // side), and none at all round a yard the map has fenced in already (the
 // goats'); and at each exhibit, a sign by the path with its name on it.
@@ -30,6 +31,10 @@ export const FENCES = {
 // The map's own, by its barrier tag.
 const MAPPED = { wall: 'wall', retaining_wall: 'wall', city_wall: 'wall', fence: 'mesh', hedge: 'wall', guard_rail: 'rail', handrail: 'rail' };
 const PIECE = 2; // m: a pen's edge is looked at this much at a time
+// m in from a pen's edge that what's there is asked: its edge runs where
+// people walk (a path through it, an open front under a roof) if that's
+// theirs, not if only what's beside the pen is
+const IN = 0.75;
 // A piece of a pen's edge with a wall or fence of the map's running along it
 // nearer than this (m), and as near parallel as this (the cosine of the
 // angle between them), has that for its fence. (Not one that only crosses
@@ -63,6 +68,11 @@ export function* buildFences(site, ground, out = {}) {
       const [bx, bz] = P[(i + 1) % P.length];
       const len = Math.hypot(bx - ax, bz - az);
       const n = Math.max(1, Math.ceil(len / PIECE));
+      // which way is into the pen from this edge (a step in, to ask what's
+      // there: on the edge itself, a plaza or a path beside the pen and the
+      // pen are a square's width either way of where its edge falls)
+      let [ix, iz] = len > 1e-6 ? [-(bz - az) / len, (bx - ax) / len] : [0, 0];
+      if (!inside(P, (ax + bx) / 2 + ix * IN, (az + bz) / 2 + iz * IN)) [ix, iz] = [-ix, -iz];
       // the pieces of it that are wanted, joined up where they run on
       let from = null;
       for (let j = 0; j <= n; j++) {
@@ -70,7 +80,7 @@ export function* buildFences(site, ground, out = {}) {
         const t1 = (j + 1) / n;
         const mx = ax + (bx - ax) * ((t0 + t1) / 2);
         const mz = az + (bz - az) * ((t0 + t1) / 2);
-        const wanted = j < n && !(site.use(mx, mz) & (USE.path | USE.building | USE.fence | USE.plaza)) && !site.wet(mx, mz) && !alongside(site, mx, mz, bx - ax, bz - az);
+        const wanted = j < n && !(site.use(mx + ix * IN, mz + iz * IN) & (USE.path | USE.building | USE.fence | USE.plaza)) && !site.wet(mx, mz) && !alongside(site, mx, mz, bx - ax, bz - az);
         if (wanted && from === null) from = t0;
         if (!wanted && from !== null) {
           run(out, kind, ax + (bx - ax) * from, az + (bz - az) * from, ax + (bx - ax) * t0, az + (bz - az) * t0, ground);

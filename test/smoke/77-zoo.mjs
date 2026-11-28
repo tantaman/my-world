@@ -132,8 +132,10 @@ export default async function ({ page, step, key, frames, shot }) {
     const on = await page.evaluate(() => world.skateboarding.state());
     assert.ok(on.active, 'F, and you are on your board');
     assert.equal(on.surface, 'stone', 'the wheels on the paving stones');
+    // (pushed until it has rolled a way: how far a few seconds take it is
+    // the frames', and whether the walk runs uphill from here)
     await page.keyboard.down('KeyW');
-    await frames(150);
+    await page.evaluate(() => T.until(() => world.skateboarding.state().session.distance > 5, 30000));
     await page.keyboard.up('KeyW');
     const rolled = await page.evaluate(() => world.skateboarding.state());
     assert.ok(rolled.session.distance > 4, `pushed along the walk (${rolled.session.distance.toFixed(1)} m)`);
