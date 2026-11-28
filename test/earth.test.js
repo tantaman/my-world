@@ -143,7 +143,7 @@ test('you start in the real Hoh rain forest, by its river, under the Olympics, a
   const [px, pz] = at(47.68, -124.45);
   gen.height(px, pz);
   assert.equal(gen.water.kind, 'sea', 'the Pacific is west of the start');
-  assert.ok(Math.hypot(px, pz) < 9000, 'a long walk west');
+  assert.ok(Math.hypot(px, pz) / S < 45000, 'a long walk west');
   // Mount Olympus, 20 km east, with its glaciers
   const [ox, oz] = at(47.8013, -123.7108);
   let top = null;
@@ -177,9 +177,9 @@ test('the oceans are where the oceans are, and the land where the land is', asyn
   assert.equal(water(PACIFIC).level, SEA.level, 'at the one level the sea stands at everywhere');
   assert.ok(height(GULF) < SEA.level, 'the Gulf of Mexico is sea');
   const k = height(KANSAS) - SEA.level;
-  assert.ok(k > 60 && k < 160, `Kansas stands about as high as it really does, at 1 : 5 (${k.toFixed(0)} m over the sea)`);
+  assert.ok(k > 300 && k < 800, `Kansas stands about as high as it really does (${k.toFixed(0)} m over the sea)`);
   const z = height(ZION) - SEA.level;
-  assert.ok(z > 250, `and the plateau round Zion higher still (${z.toFixed(0)} m)`);
+  assert.ok(z > 1250, `and the plateau round Zion higher still (${z.toFixed(0)} m)`);
 });
 
 test('a range of mountains is finer: its peaks stand about as high as they really do', async () => {
@@ -246,17 +246,28 @@ test('a hike on the Earth stands at its real height, its sea at the sea’s', as
   for (const L of gen.landforms) {
     let mean = 0;
     let worst = 0;
+    let n = 0;
     for (let k = 0; k < 64; k++) {
       const a = (k / 64) * Math.PI * 2;
-      mean += (L.ground(L.cx + Math.cos(a) * L.radius, L.cz + Math.sin(a) * L.radius) + L.offset - bare.height(L.cx + Math.cos(a) * L.outer, L.cz + Math.sin(a) * L.outer)) / 64;
+      // (where both are land: a real place's sea has a bed of its own, a
+      // few metres down, where the Earth's goes on down to its real depth)
+      const real = L.ground(L.cx + Math.cos(a) * L.radius, L.cz + Math.sin(a) * L.radius) + L.offset;
+      const round = bare.height(L.cx + Math.cos(a) * L.outer, L.cz + Math.sin(a) * L.outer);
+      if (real > SEA.level && round > SEA.level) {
+        mean += real - round;
+        n++;
+      }
+      // (every 50 real m, from 500 inside its land to 500 past its edge)
+      const step = 50 * S;
       let last = null;
-      for (let r = L.radius - 100; r <= L.outer + 100; r += 10) {
+      for (let r = L.radius - 500 * S; r <= L.outer + 500 * S; r += step) {
         const h = gen.height(L.cx + Math.cos(a) * r, L.cz + Math.sin(a) * r);
-        if (last !== null && h > SEA.level) worst = Math.max(worst, Math.abs(h - last) / 10);
+        if (last !== null && h > SEA.level) worst = Math.max(worst, Math.abs(h - last) / step);
         last = h;
       }
     }
-    assert.ok(Math.abs(mean) < 100, `${L.id}: the real land and the Earth's round it meet (${mean.toFixed(0)} m apart on the whole)`);
+    mean /= Math.max(1, n);
+    assert.ok(Math.abs(mean) / S < 500, `${L.id}: the real land and the Earth's round it meet (${(mean / S).toFixed(0)} real m apart on the whole)`);
     assert.ok(worst < 3, `${L.id}: no wall round its edge (steepest ${worst.toFixed(2)})`);
   }
   // the sea off Kaihalulu is the Earth's sea, at its level, right up to the land's own

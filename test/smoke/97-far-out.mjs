@@ -7,14 +7,14 @@ import assert from 'node:assert/strict';
 
 export default async function ({ page, step, frames, shot }) {
   await step('the far side of the world', async () => {
-    // As far as the world goes: 4,000 km of game from the middle, which at
-    // 1:5 is the far side of the Earth. The graphics card works in 32-bit
-    // floats, which out here are a quarter of a metre apart, so nothing may
+    // As far as the world goes: the far side of the Earth, 18,500 km from the
+    // middle. The graphics card works in 32-bit floats, which out here are a
+    // metre or two apart, so nothing may
     // be handed to it from this far out: each frame is drawn from an origin
     // near you, and whatever fills a buffer measures from a spot of its own
     // (src/render/origin.js). Go there, set things going, draw it, and look
     // at every number there is to draw.
-    const FAR = [3987654, -2345678];
+    const FAR = [15987654, -9345678];
     const got = await page.evaluate(async ([x, z]) => {
       await world.teleport(x, z);
       const { player, fires, splashes, builder, wildlife, chunks, scene, origin, camera } = world;
@@ -28,7 +28,10 @@ export default async function ({ page, step, frames, shot }) {
       T.picture(true); // shaders, shadows and all
       await T.frames(8);
       T.picture(false);
-      const LIMIT = 4096; // m from zero: the origin's reach, and as far as anything is drawn from it
+      // m from zero: the most anything is measured across from a spot of its
+      // own (the far view's outer ring, 55 km across, from its corner), and
+      // far short of any number from the middle of the world
+      const LIMIT = 60000;
       const big = [];
       let buffers = 0;
       const check = (o, name, arr) => {

@@ -25,7 +25,7 @@
 // gets smaller than a pixel or so, rather than shimmer: so close to, the
 // crowns; a few km off, the stands and hollows, which a photograph from
 // Mount Storm King shows as the texture of its far slopes (tools/look.mjs).
-// The crowns are the size of a real one at the hikes' 1:5.
+// The crowns are the size of real ones.
 // ?no=canopy (config.js) leaves them out, the wood its one colour again.
 //
 // Each mesh is measured from its own corner and put there, like a chunk
@@ -40,19 +40,19 @@ import { COUNTRIES } from '../world/country.js';
 
 const CANOPY = 11; // m: how far the crowns of a closed wood stand over the ground
 // The crowns drawn over a wood from afar (see the top). m between them (a
-// real crown's 8 or so at the hikes' 1:5, a little more), how much of their
+// real crown's, 8 or so, a little more), how much of their
 // cell each fills, how far a crown's dome tips the light at its edge, how
 // dark the gaps between them are (of the crowns' colour), how much one
 // crown's colour differs from the next, and the share of a crown's width a
 // pixel may be before they've all given way to their average.
-const CROWNS = { size: 2.4, fill: 0.8, tall: 1.2, gap: 0.3, vary: 0.35, gone: 0.9 };
+const CROWNS = { size: 9, fill: 0.8, tall: 3, gap: 0.3, vary: 0.35, gone: 0.9 };
 // Clumps, stands and the hollows between them over the crowns: each m
 // across, m high, and how much darker (of the canopy's colour) it is at the
 // bottom of one than at the top.
 const STANDS = [
-  { size: 7, tall: 2.2, dark: 0.3 },
-  { size: 20, tall: 5, dark: 0.35 },
-  { size: 55, tall: 11, dark: 0.3 },
+  { size: 35, tall: 4.4, dark: 0.3 },
+  { size: 100, tall: 10, dark: 0.35 },
+  { size: 275, tall: 22, dark: 0.3 },
 ];
 const SINK = 45; // m: how far it drops out of sight under the loaded chunks
 const SINK_BAND = 48; // m inside their edge over which it drops
@@ -98,18 +98,39 @@ export class FarView {
     return this.meshes.has(id);
   }
 
-  // A grid from sampleFar() → a mesh for hike `id`.
-  add(id, grid, clip = FAR_CLIP) {
+  // A grid from sampleFar() → a mesh for `id`. A ring round a square drawn
+  // finer (ringed: true) has a hole in it, where that square is and it isn't
+  // drawn (setHole): cut, not sunk under it, since a coarse ring's heights
+  // across a steep valley stand far over its floor. A material of its own,
+  // for where its hole is.
+  add(id, grid, clip = FAR_CLIP, ringed = false) {
     this.remove(id);
-    if (!this.materials.has(clip)) this.materials.set(clip, this._material(clip));
-    const mesh = new THREE.Mesh(buildGeometry(grid), this.materials.get(clip));
+    let mat;
+    if (ringed) mat = this._material(clip, true);
+    else {
+      if (!this.materials.has(clip)) this.materials.set(clip, this._material(clip));
+      mat = this.materials.get(clip);
+    }
+    const mesh = new THREE.Mesh(buildGeometry(grid), mat);
     mesh.name = `far view: ${id}`;
-    mesh.userData.grid = { x0: grid.x0, z0: grid.z0, x1: grid.x0 + (grid.n - 1) * grid.step, z1: grid.z0 + (grid.n - 1) * grid.step };
+    mesh.userData.grid = { x0: grid.x0, z0: grid.z0, x1: grid.x0 + (grid.n - 1) * grid.step, z1: grid.z0 + (grid.n - 1) * grid.step, step: grid.step };
     mesh.userData.clip = clip;
+    mesh.userData.ringed = ringed;
     mesh.position.set(grid.x0, 0, grid.z0);
     mesh.visible = this.shown;
     this.scene.add(mesh);
     this.meshes.set(id, mesh);
+  }
+
+  // The square a ring is drawn round, finer, where it isn't drawn
+  // ({ x0, z0, x1, z1 }, world m; null: none, and it's all drawn).
+  setHole(id, hole) {
+    const m = this.meshes.get(id);
+    if (!m || !m.userData.ringed) return;
+    const g = m.userData.grid;
+    const u = m.material.userData.hole;
+    if (hole) u.value.set(hole.x0 - g.x0, hole.z0 - g.z0, hole.x1 - g.x0, hole.z1 - g.z0);
+    else u.value.set(1, 1, 0, 0);
   }
 
   remove(id) {
@@ -117,6 +138,7 @@ export class FarView {
     if (!m) return;
     this.scene.remove(m);
     m.geometry.dispose();
+    if (m.userData.ringed) m.material.dispose();
     this.meshes.delete(id);
   }
 
@@ -143,12 +165,15 @@ export class FarView {
     this.half.value = (R + 0.5) * S;
   }
 
-  _material(clip) {
+  _material(clip, ringed = false) {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
     const crowns = !CONFIG.no.has('canopy');
+    // (a ring's hole, from its own corner: x0, z0, x1, z1)
+    mat.userData.hole = { value: new THREE.Vector4(1, 1, 0, 0) };
     mat.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, SKY, { uMid: this.mid, uHalf: this.half, uOrigin: SHARED.uOrigin });
+      Object.assign(shader.uniforms, SKY, { uMid: this.mid, uHalf: this.half, uOrigin: SHARED.uOrigin, uHole: mat.userData.hole });
       if (crowns) shader.defines = { ...shader.defines, FAR_CROWNS: '' };
+      if (ringed) shader.defines = { ...shader.defines, FAR_RING: '' };
       shader.vertexShader = shader.vertexShader
         .replace(
           '#include <common>',
@@ -161,7 +186,10 @@ export class FarView {
           uniform float uHalf;
           varying float vWater;
           varying float vWood;
-          varying vec3 vWPos;`,
+          varying vec3 vWPos;
+          #ifdef FAR_RING
+          varying vec2 vLocal;
+          #endif`,
         )
         .replace(
           '#include <begin_vertex>',
@@ -172,6 +200,9 @@ export class FarView {
             float e = uHalf - max(abs(wp.x - uMid.x), abs(wp.z - uMid.y));
             float under = smoothstep(0.0, ${SINK_BAND.toFixed(1)}, e);
             transformed.y += aCanopy * (1.0 - under) - under * (${SINK.toFixed(1)} + aDrop) - ${UNDER.toFixed(2)};
+            #ifdef FAR_RING
+            vLocal = position.xz;
+            #endif
             vWater = aWater;
             vWood = aWood;
             vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
@@ -184,6 +215,11 @@ export class FarView {
           varying float vWater;
           varying float vWood;
           varying vec3 vWPos;
+          #ifdef FAR_RING
+          // (where the square drawn finer within it is, from its own corner)
+          uniform vec4 uHole;
+          varying vec2 vLocal;
+          #endif
           ${SKY_UNIFORMS_GLSL}
           ${SKY_GLSL}
           #ifdef FAR_CROWNS
@@ -234,11 +270,13 @@ export class FarView {
         .replace(
           '#include <color_fragment>',
           `#include <color_fragment>
+          // the water, where the shore between two heights says it is
+          if (vWater > 0.0) diffuseColor.rgb = vec3(${WATER.r.toFixed(4)}, ${WATER.g.toFixed(4)}, ${WATER.b.toFixed(4)});
           #ifdef FAR_CROWNS
           // crowns over a wood (see the top of far/view.js): darker in the
           // gaps, each its own shade; as they shrink past a pixel, their average
           float canopyH = 0.0;
-          if (vWood > 0.01) {
+          if (vWood > 0.01 && vWater <= 0.0) {
             vec2 cwp = worldXZ(vWPos);
             float fw = length(fwidth(cwp));
             // the crowns, while they're bigger than a pixel or so
@@ -278,11 +316,15 @@ export class FarView {
         .replace(
           '#include <clipping_planes_fragment>',
           `#include <clipping_planes_fragment>
-          if (distance(vWPos, cameraPosition) > ${clip.toFixed(1)}) discard;`,
+          if (distance(vWPos, cameraPosition) > ${clip.toFixed(1)}) discard;
+          #ifdef FAR_RING
+          // not where it's drawn finer, within it: the two meet at its edge
+          if (vLocal.x > uHole.x && vLocal.x < uHole.z && vLocal.y > uHole.y && vLocal.y < uHole.w) discard;
+          #endif`,
         )
         .replace(
           '#include <opaque_fragment>',
-          `if (vWater > 0.5) {
+          `if (vWater > 0.0) {
             // still water, from afar, is mostly the sky it mirrors
             vec3 V = normalize(cameraPosition - vWPos);
             vec3 R = reflect(-V, vec3(0.0, 1.0, 0.0));
@@ -292,13 +334,13 @@ export class FarView {
           #include <opaque_fragment>`,
         );
     };
-    mat.customProgramCacheKey = () => `far-view-v5-${clip}${crowns ? '-crowns' : ''}`;
+    mat.customProgramCacheKey = () => `far-view-v6-${clip}${crowns ? '-crowns' : ''}${ringed ? '-ring' : ''}`;
     return mat;
   }
 }
 
 // Positions are from the grid's corner (x0, z0), where the mesh is put.
-function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, country, real, above, snow }) {
+function buildGeometry({ n, step, h, water, shore, forest, species, bare, sand, land, country, real, above, snow }) {
   const _g = new THREE.Color();
   const N = n * n;
   const pos = new Float32Array(N * 3);
@@ -323,8 +365,10 @@ function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, c
       pos[k * 3] = i * step;
       pos[k * 3 + 1] = y[k];
       pos[k * 3 + 2] = j * step;
+      // how far into the water (m; less than nothing on land): where it
+      // crosses nothing between two heights is the shore (the shader)
+      wet[k] = shore ? shore[k] : water[k] > NO_WATER * 0.5 ? 1 : -1;
       if (water[k] > NO_WATER * 0.5) {
-        wet[k] = 1;
         _c.copy(WATER);
       } else {
         const dx = h[j * n + Math.min(n - 1, i + 1)] - h[j * n + Math.max(0, i - 1)];
@@ -369,6 +413,30 @@ function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, c
       col[k * 3 + 2] = _c.b;
     }
   }
+  // The water's heights take the colour of the land beside them, so the
+  // land up to the shore between them isn't darkened by it (the water's own
+  // colour is the shader's, past the shore).
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const k = j * n + i;
+      if (wet[k] <= 0) continue;
+      let r = 0, g = 0, b = 0, m = 0;
+      for (let jj = Math.max(0, j - 1); jj <= Math.min(n - 1, j + 1); jj++) {
+        for (let ii = Math.max(0, i - 1); ii <= Math.min(n - 1, i + 1); ii++) {
+          const q = jj * n + ii;
+          if (wet[q] > 0) continue;
+          r += col[q * 3];
+          g += col[q * 3 + 1];
+          b += col[q * 3 + 2];
+          m++;
+        }
+      }
+      if (!m) continue;
+      col[k * 3] = r / m;
+      col[k * 3 + 1] = g / m;
+      col[k * 3 + 2] = b / m;
+    }
+  }
   const idx = new Uint32Array((n - 1) * (n - 1) * 6);
   let w = 0;
   for (let j = 0; j < n - 1; j++) {
@@ -382,18 +450,58 @@ function buildGeometry({ n, step, h, water, forest, species, bare, sand, land, c
       idx[w++] = a + n + 1;
     }
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  geo.setAttribute('aCanopy', new THREE.BufferAttribute(canopy, 1));
-  geo.setAttribute('aWood', new THREE.BufferAttribute(woods, 1));
-  geo.setAttribute('aWater', new THREE.BufferAttribute(wet, 1));
-  geo.setAttribute('aDrop', new THREE.BufferAttribute(drop, 1));
-  geo.setIndex(new THREE.BufferAttribute(idx, 1));
-  geo.computeVertexNormals();
+  const grid = new THREE.BufferGeometry();
+  grid.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  grid.setIndex(new THREE.BufferAttribute(idx, 1));
+  grid.computeVertexNormals();
+  const geo = withSkirt(n, step, grid.getAttribute('normal').array, idx, { position: [pos, 3], color: [col, 3], aCanopy: [canopy, 1], aWood: [woods, 1], aWater: [wet, 1], aDrop: [drop, 1] });
+  grid.dispose();
   geo.computeBoundingSphere();
   // the canopy is raised in the shader
   geo.boundingSphere.radius += CANOPY;
+  return geo;
+}
+
+// A skirt round the edge of a grid: the edge hung down SKIRT of its own steps,
+// so that where it meets coarser land round it (a ring: far/index.js), whose
+// heights between its own points don't agree with these, no sky shows
+// through the seam. Its normals are the edge's own, worked out before it's
+// hung (normals: the grid's), so the edge isn't shaded as if it fell away;
+// and it faces both ways, since what it hides is on either side of it.
+// attrs: name -> [array, size] for the grid's n × n points.
+const SKIRT = 5;
+function withSkirt(n, step, normals, idx, attrs) {
+  const edge = [];
+  for (let i = 0; i < n; i++) edge.push(i);
+  for (let j = 1; j < n; j++) edge.push(j * n + n - 1);
+  for (let i = n - 2; i >= 0; i--) edge.push((n - 1) * n + i);
+  for (let j = n - 2; j >= 1; j--) edge.push(j * n);
+  const N = n * n;
+  const E = edge.length;
+  const geo = new THREE.BufferGeometry();
+  for (const [name, [arr, size]] of Object.entries(attrs)) {
+    const out = new Float32Array((N + E) * size);
+    out.set(arr);
+    for (let e = 0; e < E; e++) for (let c = 0; c < size; c++) out[(N + e) * size + c] = arr[edge[e] * size + c];
+    if (name === 'position') for (let e = 0; e < E; e++) out[(N + e) * 3 + 1] -= SKIRT * step;
+    geo.setAttribute(name, new THREE.BufferAttribute(out, size));
+  }
+  const nor = new Float32Array((N + E) * 3);
+  nor.set(normals);
+  for (let e = 0; e < E; e++) for (let c = 0; c < 3; c++) nor[(N + e) * 3 + c] = normals[edge[e] * 3 + c];
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  const all = new Uint32Array(idx.length + E * 12);
+  all.set(idx);
+  let w = idx.length;
+  for (let e = 0; e < E; e++) {
+    const a = edge[e];
+    const b = edge[(e + 1) % E];
+    const a2 = N + e;
+    const b2 = N + ((e + 1) % E);
+    all.set([a, a2, b, b, a2, b2, a, b, a2, b, b2, a2], w);
+    w += 12;
+  }
+  geo.setIndex(new THREE.BufferAttribute(all, 1));
   return geo;
 }
 

@@ -61,7 +61,7 @@ const LINES = [
 // m: points of track no further apart than this
 const DENSE = 12;
 // m from the middle of the city that the track is kept to: the life-size
-// land, and a little into where it fades into the 1 : 5 world (past it,
+// land, and a little into where it fades into the coarse Earth's (past it,
 // the ground isn't the city's alone)
 const REACH = 11700;
 // m: a station is kept if its stop is within this: on the life-size land

@@ -10,7 +10,7 @@ import { Landform, packHeights2, packShore, packCover, COVER } from '../../src/w
 import { countryOf } from '../../src/world/country.js';
 
 export const DEFAULTS = {
-  scale: 0.2, // game metres per real metre
+  scale: 1, // game metres per real metre: life size, as the Earth is
   radius: 4000, // real metres of real land around the photo
   fade: 1000, // real metres over which it gives way to the forest
   cell: 30, // real metres between heights
@@ -25,22 +25,24 @@ export const DEFAULTS = {
 // to the coarse grid (landform.js), so a tile need only ask its neighbours.
 const FINE_TILE = 32;
 
-// How near (game m) the photo has to be to a trail for that trail to be the
-// walk to it.
-const ON_TRAIL = 30;
-// How near (game m) a trail has to come to a road or a car park for the walk
-// to start there.
-const AT_ROAD = 4;
-// A walk that starts this far (game m) over the middle of the land's edge
+// How near (real m) the photo has to be to a trail for that trail to be the
+// walk to it: a phone's position, and a map's line, are each off by a few
+// tens of metres. These are real metres, made game metres at the place's
+// own scale (the walk's helpers take it as `m`, game metres to a real one).
+const ON_TRAIL = 150;
+// How near (real m) a trail has to come to a road or a car park for the
+// walk to start there.
+const AT_ROAD = 20;
+// A walk that starts this far (real m) over the middle of the land's edge
 // starts on top of the mountain.
-const SUMMIT = 40;
-// Points of two paths nearer than this (game m) are the same point.
-const SAME = 0.05;
+const SUMMIT = 200;
+// Points of two paths nearer than this (real m) are the same point.
+const SAME = 0.25;
 // A walk said to start or end somewhere (from, to) crosses where the map's
-// paths stop short of one another by up to this much (game m): a scramble it
-// didn't draw, as down the cliff beside a fall. A crossing steeper than
+// paths stop short of one another by up to this much (real m): a scramble
+// it didn't draw, as down the cliff beside a fall. A crossing steeper than
 // STEEP (rise over run) has chains to hold on to.
-const GAP = 12;
+const GAP = 60;
 const STEEP = 0.5;
 // Lakes stop this far (game m) inside the real land, so they never reach
 // the forest's edge.
@@ -481,8 +483,8 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
   const [vx, vz] = toGame([photo.lat, photo.lon]).map((v) => round(v, 10));
   const view = { x: vx, z: vz, bearing: round(photo.bearing, 10), hour: round(photo.hour, 100) };
   const drive = roads.map((r) => r.map(toGame));
-  const walkable = { roads: drive.flatMap((r) => within(r, TRAIL_INSET)), gap: GAP };
-  let found = from ? walkBetween(whole, [toGame([from.lat, from.lon]), [vx, vz]], walkable) : walkFromRoad(whole, drive, [vx, vz]);
+  const walkable = { roads: drive.flatMap((r) => within(r, TRAIL_INSET)), gap: GAP * s, m: s };
+  let found = from ? walkBetween(whole, [toGame([from.lat, from.lon]), [vx, vz]], walkable) : walkFromRoad(whole, drive, [vx, vz], s);
   if (found && to) found = walkBetween(whole, [found.pts[0], [vx, vz], toGame([to.lat, to.lon])], walkable);
   if (!found && (from || to)) throw new Error(`no paths lead ${from ? 'from where the walk is to start ' : ''}to the photo${to ? ' and on to where it is to end' : ''}`);
   // The stretches of it off the map's paths (along a village's lanes, across
@@ -492,7 +494,7 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
     const steep = a.gap && a.pts.some((p, k) => k > 0 && Math.abs(fineElevation(...fromGame(...p)) - fineElevation(...fromGame(...a.pts[k - 1]))) > (STEEP * dist(p, a.pts[k - 1])) / s);
     lines.push({ name: '', pts: simplify(a.pts, SIMPLIFY), rope: steep, closed: false });
   }
-  const route = found ? { ...found, pts: simplify(found.pts, SIMPLIFY) } : walkTo(lines, heightAt, [vx, vz]);
+  const route = found ? { ...found, pts: simplify(found.pts, SIMPLIFY) } : walkTo(lines, heightAt, [vx, vz], s);
   const trailhead = route ? { x: route.pts[0][0], z: route.pts[0][1], yaw: route.yaw } : { x: vx, z: vz, yaw: Math.PI - ((photo.bearing || 0) * Math.PI) / 180 };
   // where it ends, if that's past the photo
   const last = route && route.pts[route.pts.length - 1];
@@ -583,7 +585,7 @@ export function buildHike({ id, name, photo, elevation, fineElevation = elevatio
     for (let k = 0; k < 96; k++) rim.push(L.raw(at[0] + Math.cos((k / 96) * Math.PI * 2) * R, at[1] + Math.sin((k / 96) * Math.PI * 2) * R));
     rim.sort((a, b) => a - b);
     const edge = rim[rim.length >> 1];
-    if (anchor > edge + SUMMIT) anchor = edge;
+    if (anchor > edge + SUMMIT * s) anchor = edge;
     def.datum = { at: [...at], outer: def.radius + def.fade, anchor: round(anchor, 1000), base: def.base };
   }
   return { def, preview: preview(H, n, cell, lakeCells, lines, route, runs, fine, cover, [vx, vz]), walk: route ? route.pts : null };
@@ -1034,9 +1036,9 @@ const lengthOf = (pts) => pts.reduce((sum, p, k) => sum + (k ? dist(p, pts[k - 1
 // photo, joined end to end with the rest of the trail of the same name, from
 // its lower end to the point nearest the photo.
 // → { name, pts, length, yaw } or null if the photo wasn't taken on a trail.
-export function walkTo(lines, heightAt, to = [0, 0]) {
+export function walkTo(lines, heightAt, to = [0, 0], m = 1) {
   let near = null;
-  let nearD = ON_TRAIL;
+  let nearD = ON_TRAIL * m;
   for (const l of lines) {
     for (const p of l.pts) {
       const d = dist(p, to);
@@ -1080,12 +1082,13 @@ export function walkTo(lines, heightAt, to = [0, 0]) {
 // The paths as a graph: their points, joined where paths meet, and which
 // lead to which ([[other, metres, line], ...] for each point). Paths closed
 // to walkers are left out of it.
-function pathGraph(lines) {
+function pathGraph(lines, m = 1) {
   const ids = new Map();
   const pts = [];
   const next = [];
+  const same = SAME * m;
   const idOf = (p) => {
-    const key = `${Math.round(p[0] / SAME)},${Math.round(p[1] / SAME)}`;
+    const key = `${Math.round(p[0] / same)},${Math.round(p[1] / same)}`;
     if (!ids.has(key)) {
       ids.set(key, pts.length);
       pts.push(p);
@@ -1107,9 +1110,9 @@ function pathGraph(lines) {
 }
 
 // The point of the graph nearest p, if one is within ON_TRAIL; else -1.
-function nearestPoint({ pts }, p) {
+function nearestPoint({ pts }, p, m = 1) {
   let best = -1;
-  let bestD = ON_TRAIL;
+  let bestD = ON_TRAIL * m;
   pts.forEach((q, k) => {
     const d = dist(q, p);
     if (d < bestD) [best, bestD] = [k, d];
@@ -1206,13 +1209,13 @@ function bridge(graph, lines, gap) {
 //   roads  [[[x, z], ...], ...]
 // → { name, pts, length, yaw }, or null if the photo wasn't taken on a path,
 //   or no path from it comes to a road.
-export function walkFromRoad(lines, roads, to = [0, 0]) {
-  const graph = pathGraph(lines);
-  const end = nearestPoint(graph, to);
+export function walkFromRoad(lines, roads, to = [0, 0], m = 1) {
+  const graph = pathGraph(lines, m);
+  const end = nearestPoint(graph, to, m);
   if (end < 0) return null;
   const search = shortestFrom(graph, end);
   // the nearest point, along the paths, that is at a road
-  const atRoad = (p) => roads.some((r) => r.some((q, k) => k > 0 && segDist(p, r[k - 1], q) < AT_ROAD));
+  const atRoad = (p) => roads.some((r) => r.some((q, k) => k > 0 && segDist(p, r[k - 1], q) < AT_ROAD * m));
   let start = -1;
   for (let k = 0; k < graph.pts.length; k++) if (search.far[k] < Infinity && (start < 0 || search.far[k] < search.far[start]) && atRoad(graph.pts[k])) start = k;
   if (start < 0 || start === end) return null;
@@ -1229,11 +1232,11 @@ export function walkFromRoad(lines, roads, to = [0, 0]) {
 // → { name, pts, length, yaw, added }, added being the stretches of it that
 //   aren't on the map's paths ([{ pts, gap }], gap for a way across a gap);
 //   or null if a stop isn't on a path, or nothing leads from one to the next.
-export function walkBetween(lines, stops, { roads = [], gap = 0 } = {}) {
+export function walkBetween(lines, stops, { roads = [], gap = 0, m = 1 } = {}) {
   const all = [...lines, ...roads.map((pts) => ({ name: '', pts, road: true }))];
-  const graph = pathGraph(all);
+  const graph = pathGraph(all, m);
   if (gap > 0) bridge(graph, all, gap);
-  const at = stops.map((p) => nearestPoint(graph, p));
+  const at = stops.map((p) => nearestPoint(graph, p, m));
   if (at.some((k) => k < 0)) return null;
   const names = new Map();
   let pts = [];

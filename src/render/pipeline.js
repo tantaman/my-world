@@ -71,12 +71,12 @@ const FOG_THIN = 0.03; // per metre of height: how quickly the forest's haze thi
 // its floor and gone a few tens of metres up, and closes in before the land
 // drawn round you runs out. Seen from a summit, real air is far clearer down
 // in the valley and thins far more slowly upward: the photo's ridges 15 to
-// 20 km off (3 to 4 km here, at the hikes' 1:5) are 0.4 of the way into the
-// sky's colour, slopes 5 km off barely 0.1. So, as the view opens: the haze
+// 20 km off are 0.4 of the way into the sky's colour, slopes 5 km off barely
+// 0.1. So, as the view opens: the haze
 // this share of the forest's at the floor, thinning upward this fast (1/m),
 // and the last of the land fading into the sky only from this share of the
 // way to where it ends (the forest's: FOG_FADE).
-const OPEN_AIR = { density: 0.1, thin: 0.002, fade: 0.8 };
+const OPEN_AIR = { density: 0.02, thin: 0.0004, fade: 0.8 };
 const FOG_FADE = 0.55; // share of the way to where the land drawn ends that it starts fading into the sky
 const FOG_TINT = 0.82; // the fog's colour: the sky's behind it, a little dimmed
 const FAR_Z = 6.0e4; // m: how far off the sky is said to be in the copy (as far as half a float holds)

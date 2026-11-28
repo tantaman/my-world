@@ -35,9 +35,9 @@ most snow below it within 15 km of the start (the summit of Mount Olympus,
 over the Hoh), and then one in every ten kilometres square where the high
 country holds snow enough (*Raven Bowl*, *Tarn Face*, *Granite Couloir*),
 with how many metres of snow lie below its top, and the snowy real places
-among them. The high country is the real Earth's mountains, at its scale as
-the rest of it is, so a run there wants a fifth as many metres of snow as
-one on a made-up land: Baker, Rainier and Adams have one, and the Coast
+among them. The high country is the real Earth's mountains, life size as
+the rest of it is, so a run there wants as many metres of snow as one on a
+made-up land: Baker, Rainier and Adams have one, and the Coast
 Mountains north of the border. Pick one for directions, or *go here* to
 stand on its top. They're on the map too.
 

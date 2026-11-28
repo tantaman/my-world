@@ -75,6 +75,9 @@ export function blockTiles(bytes, z, bx, by) {
   return out;
 }
 
-// Below this (m) is no height at all: 3DEP's no-data, and black.
+// Below this (m) is no height at all: 3DEP's no-data, and black. Nor is
+// anything higher than any mountain: out at sea some of its no-data comes
+// through as heights of kilometres.
 const NOTHING = -15000;
-export const missing = (h) => !(h > NOTHING);
+const HIGHEST = 9000;
+export const missing = (h) => !(h > NOTHING && h < HIGHEST);

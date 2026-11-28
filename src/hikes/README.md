@@ -16,18 +16,19 @@ trails, lakes and streams on it, and the coast if it's by the sea
 it:
 
 ```
-photo: 48.05540, -123.77340, looking 280°, at 16:21
-Mount Storm King → src/world/hikes/mount-storm-king.js (223 kB, fetched when it's needed)
-  at 2625.1, -4570.8 in the world, 26 km from the middle as the crow flies: the real land for 800 m round the photo, at 1 : 5
-  the walk: Mt. Storm King Trail, 567 m, climbing 125 m
-  water: Lake Crescent, Falls Creek, Smith Creek, Barnes Creek, 78 unnamed streams
+photo: 48.05540, -123.77340, looking 281°, at 16:21
+Mount Storm King → src/world/hikes/mount-storm-king.js (22906 kB, fetched when it's needed)
+  along the walk, heights every 5 m over 7.0 km², from 3DEP
+  at 13125.7, -22854.1 in the world, 26 km from the middle as the crow flies: the real land for 15000 m round the photo, at 1 : 1
+  the walk: Mt. Storm King Trail, 2876 m, climbing 628 m
+  water: Lake Crescent, Lake Sutherland, Falls Creek, Barnes Creek, … 1639 unnamed streams; 2 beaches
 ```
 
-(That was its first import. Mount Storm King has since been imported again
-with `--radius 15000`, so that all of Lake Crescent, which its photo looks
-down the length of, is the real lake and the real mountains round it rather
-than the coarse Earth's; and Angels Landing with `--radius 8000`, so that the
-head of Zion Canyon and the white cliffs over it are real: see the
+(That's as it was imported last: `--radius 15000`, so that all of Lake
+Crescent, which its photo looks down the length of, is the real lake and
+the real mountains round it, with `--dem 3dep --fine 5` for the lidar's
+heights along the walk. Angels Landing has `--radius 8000`, so that the head
+of Zion Canyon and the white cliffs over it are real: see the
 [reference photos](../../reference/README.md).)
 
 A photo that has lost its location on the way (sent through a chat, say)
@@ -64,11 +65,15 @@ keeps off a hike: a real place has what is really there.
 | **Tab**, **Enter** | in the list: move between the buttons, and go |
 | **M** / **Esc** | close it |
 
-**What gets imported.** The land is scaled 1 : 5, the same across and up, so
-slopes are as steep as they really are: 2.5 km of trail and 600 m of climb
-become a four-minute walk up 120 m, and the game's trees stand against the
-mountain about as big as real ones do. Inside 4 km of the photo (800 m in the
-game; `--radius`, `--middle`) the ground is the real ground; over the next
+**What gets imported.** The land is life size, as the whole world is: a
+trail is as long as it really is and a climb as high, so a hike takes about
+as long as it really does, and a valley seen from a summit is as deep and as
+far off as in the photo, its trees as small. (Until November 2026 the world
+was 1 : 5, and a valley's trees stood five times too big for it.) A real
+place's heights are 30 m apart unless it says (`--cell`); the US Geological
+Survey's lidar (`--dem 3dep`) and a finer grid along the walk (`--fine 5`)
+keep a narrow ridge narrow underfoot. Inside 4 km of the photo
+(`--radius`, `--middle`) the ground is the real ground; over the next
 kilometre it gives way to the forest around it. Every footpath, track and lake that OpenStreetMap has
 in there comes too, and the sea, up to its real shoreline: it breaks white
 along the shore, and stops at a low bank a little short of the edge of the
@@ -206,14 +211,12 @@ mountain over the forest round it, where otherwise the start of the walk is
 level with it. The weather that comes over you as you walk onto one, and the
 sound of its sea, are [the country feature](../country/README.md)'s.
 
-**Where it goes.** Where it really is. The game world is the real world at
-the hikes' own scale, 1 : 5, so hikes lie as far apart, and in the same
-directions, as they do in fact. The middle of the world, where everyone
-starts, is the Hoh rain forest, on the wet west side of the Olympic
-Mountains. Mount Storm King, 26 km north-north-east of the Hoh, is 5 km
-north-north-east of where you start; Angels Landing, 1,480 km away in fact,
-is 296 km to the south-east; and the hikes on Maui, 4,200 km away, are
-835 km off to the south-west. A hike is kept a couple of kilometres clear of
+**Where it goes.** Where it really is. The game world is the real world,
+life size, so hikes lie as far apart, and in the same directions, as they do
+in fact. The middle of the world, where everyone starts, is the Hoh rain
+forest, on the wet west side of the Olympic Mountains. Mount Storm King is
+26 km north-north-east of where you start; Angels Landing 1,480 km to the
+south-east; and the hikes on Maui 4,200 km off to the south-west. A hike is kept a couple of kilometres clear of
 where everyone starts (`tools/hike/place.js`). The land between the hikes is
 the real Earth, all of it, the Hoh too (see
 [the real Earth](../world/README.md#the-real-earth)): the Pacific lies
@@ -248,11 +251,10 @@ the further out, the wider than life the map is across that line: a tenth at
 it is; it's the gaps between hikes far out that are wide, and the importer
 says by how much. `--at x,z` puts one somewhere else.
 
-A real place can be brought in at a scale of its own: `--scale 1` is life
-size, as [the National Zoo](../zoo/README.md) is, so that what stands on it
-is as big as it is and as far apart. It still goes where it really is, at
-the world's 1 : 5; only its own land is the bigger for it, and a real height
-stands that far over the sea at its own scale. One that meets another is
+A real place can be brought in at a scale of its own (`--scale`), though
+every one now is life size, as the world is. It still goes where it really
+is, at the world's scale; only its own land is the bigger or smaller for it,
+and a real height stands that far over the sea at its own scale. One that meets another is
 placed from it, exactly, at that one's scale, as any two that meet are:
 [Washington](../washington/README.md), 23 km across, is placed from the zoo
 in the middle of it, so the zoo's buildings and the city's line up, and
@@ -261,7 +263,9 @@ laid over the outer. Like everything
 else a seed grows, a hike is part of the world description: a world built in
 near one keeps it there, so once placed it stays put. Importing it again
 (`--force`) leaves it where it is, and `npm test` checks that hikes leave the
-rest of the world alone.
+rest of the world alone. Each hike's file in `src/world/hikes/` says at its
+top the command it was imported with (`<photo>` standing for the photo), so
+it can be imported again the same way.
 
 It makes no odds which [land](../world/README.md#lands) a world is grown on.
 A hike is set into whichever it is, standing at the level of that land's

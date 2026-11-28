@@ -1,8 +1,8 @@
 // A long way from the middle of the world.
 //
 // The game thinks in 64-bit numbers; the graphics card is handed 32-bit
-// floats, which 4,000 km out (the far side of the Earth, at the game's 1:5)
-// can't tell a quarter of a metre apart. So nothing is handed to it from that
+// floats, which 4,000 km out can't tell a quarter of a metre apart (and at
+// the far side of the Earth, 20,000 km out, two metres). So nothing is handed to it from that
 // far: each frame is drawn from an origin near the camera, and everything
 // that fills a buffer measures from a spot of its own (src/render/origin.js).
 // These check both halves, out where it would show.

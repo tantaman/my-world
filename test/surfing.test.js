@@ -21,8 +21,8 @@ const SEED = 20261119;
 const gen = growWorld(SEED, [], 1, [], EARTH);
 const spots = new SurfSpots(gen);
 // the squares along the real coast nearest the start: the Strait of Juan de
-// Fuca a long walk north, the Pacific's beaches further west
-const ALONG = { i: [-8, 2], j: [-6, -1] };
+// Fuca, 36 km north (the Pacific's beaches are a little further, west)
+const ALONG = { i: [-9, -2], j: [-28, -23] };
 const around = (s) => {
   const list = [];
   for (let j = ALONG.j[0]; j <= ALONG.j[1]; j++) for (let i = ALONG.i[0]; i <= ALONG.i[1]; i++) {
@@ -48,7 +48,7 @@ test('breaks are grown from the seed: the same every time, one on the coast near
   const again = new SurfSpots(growWorld(SEED, [], 1, [], EARTH));
   for (const b of near) assert.deepEqual(again.cell(b.i, b.j), b);
   const d = Math.hypot(nearest.x - start.x, nearest.z - start.z);
-  assert.ok(d < 10000, `the nearest is on the real coast, ${d.toFixed(0)} m from the start`);
+  assert.ok(d < 50000, `the nearest is on the real coast, ${d.toFixed(0)} m from the start`);
   const other = new SurfSpots(growWorld(42, [], 1, [], EARTH));
   assert.notDeepEqual(other.cell(nearest.i, nearest.j)?.x, nearest.x);
 });

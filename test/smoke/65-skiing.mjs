@@ -320,9 +320,9 @@ export default async function ({ page, step, key, frames, shot }) {
     });
     assert.ok(found, 'there is a run out in the high country');
     assert.equal(found.kind, 'ski peak');
-    // (a run on the real Earth is at its scale: a fifth as many metres of snow
-    // below it as one on a made-up land, skiing/descent.js)
-    assert.ok(found.drop >= 44 && found.snow >= 0.6, `snow on its top, and plenty below (${JSON.stringify(found)})`);
+    // (a run on the real Earth is at its scale, life size: as many metres of
+    // snow below it as one on a made-up land, skiing/descent.js)
+    assert.ok(found.drop >= 220 && found.snow >= 0.6, `snow on its top, and plenty below (${JSON.stringify(found)})`);
     return found;
   });
 }

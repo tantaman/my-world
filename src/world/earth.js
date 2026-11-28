@@ -1,7 +1,7 @@
 // The real Earth, under the whole world.
 //
-// The game world is the real world at the hikes' own scale, 1 : 5, laid out
-// round its middle in the Hoh rain forest (core/geo.js), where everyone
+// The game world is the real world, life size (a game metre is a real
+// one), laid out round its middle in the Hoh rain forest (core/geo.js), where everyone
 // starts: the oceans are where the oceans are, at the sea's level, and as
 // deep as they are; the continents and islands rise out of them where they
 // do, as high as they are; plains are flat and mountains rugged; and every
@@ -11,7 +11,7 @@
 // real height, so its land meets the Earth's round it.
 //
 // What is known about the Earth is a grid of cells five minutes of arc across
-// (about 9 km, so 1.85 km in the game), cut into tiles 15° square and
+// (about 9 km), cut into tiles 15° square and
 // written by `npm run earth` (tools/earth.mjs) to world/earth/: for each
 // cell, the height of its land and the depth of its sea, how far it is from
 // the coast, and how rugged the land round it is (tools/earth/build.js says
@@ -38,7 +38,7 @@ import { smoothstep } from '../noise.js';
 import { COUNTRY, EARTH_COUNTRY } from './country.js';
 
 export const EARTH = {
-  scale: 0.2, // game metres per real metre: the hikes' own
+  scale: 1, // game metres per real metre: life size, as the hikes are
   // The coast: the land rises from the shore to its own height over this many
   // real km, and the seabed falls away to its depth over `shelf` km.
   rise: 2.5,

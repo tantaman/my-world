@@ -1,90 +1,90 @@
 [
  {
-  "id": "airfield:-3510:1051",
+  "id": "airfield:-2080:1400",
   "region": "home",
   "name": "Thibodeau Airstrip",
-  "x": -3509.665,
-  "z": 1050.872,
-  "yaw": 1.047,
-  "mid": 1.41,
+  "x": -2080,
+  "z": 1400,
+  "yaw": 2.618,
+  "mid": 161.197,
   "clear": [
    true,
    true
   ]
  },
  {
-  "id": "airfield:-688609:472394",
+  "id": "airfield:-3441607:2359211",
   "region": "waihee-ridge",
   "name": "Burke Airstrip",
-  "x": -688609.5,
-  "z": 472394.1,
-  "yaw": 0.262,
-  "mid": -21.326,
+  "x": -3441607.3,
+  "z": 2359210.6,
+  "yaw": 0,
+  "mid": -25.704,
   "clear": [
    true,
    true
   ]
  },
  {
-  "id": "airfield:192477:223551",
+  "id": "airfield:986383:1111995",
   "region": "angels-landing",
   "name": "Rourke Strip",
-  "x": 192476.5,
-  "z": 223550.9,
-  "yaw": 0,
-  "mid": 240.899,
+  "x": 986382.7,
+  "z": 1111994.6,
+  "yaw": 2.88,
+  "mid": 1854.903,
   "clear": [
    true,
    true
   ]
  },
  {
-  "id": "airfield:212265:71471",
+  "id": "airfield:1061087:367074",
   "region": "cascade-canyon",
   "name": "Iverson Field",
-  "x": 212265.3,
-  "z": 71470.8,
+  "x": 1061086.7,
+  "z": 367074.1,
   "yaw": 0.524,
-  "mid": 380.935,
+  "mid": 2041.607,
   "clear": [
    true,
    true
   ]
  },
  {
-  "id": "airfield:938292:-1440286",
+  "id": "airfield:4676581:-7201549",
   "region": "tignes",
   "name": "Vickery Strip",
-  "x": 938292.2,
-  "z": -1440285.7,
-  "yaw": 0.524,
-  "mid": 597.465,
+  "x": 4676581.2,
+  "z": -7201548.6,
+  "yaw": 0.785,
+  "mid": 2586.496,
   "clear": [
    true,
    true
   ]
  },
  {
-  "id": "airfield:648525:269526",
+  "id": "airfield:3239747:1350270",
   "region": "jean-lafitte",
   "name": "Tolliver Strip",
-  "x": 648525.4,
-  "z": 269525.9,
-  "yaw": 0,
-  "mid": -29.991,
+  "x": 3239747.2,
+  "z": 1350269.5,
+  "yaw": 1.309,
+  "mid": -25.321,
   "clear": [
    true,
    true
   ]
  },
  {
-  "id": "airfield:787632:-36439",
+  "id": "airfield:3862917:-198642",
   "region": "national-zoo",
   "name": "Talbot Airfield",
-  "x": 787632.43,
-  "z": -36439.47,
-  "yaw": 1.309,
-  "mid": -29.635,
+  "x": 3862917.43,
+  "z": -198642.17,
+  "yaw": 1.833,
+  "mid": 14.406,
   "clear": [
    true,
    true

@@ -28,6 +28,7 @@ function creek(drop) {
   };
   const def = buildHike({
     id: 'creek',
+    scale: 0.2,
     name: 'Creek',
     photo: PHOTO,
     elevation,

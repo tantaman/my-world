@@ -36,7 +36,7 @@ const gen = def && growWorld(SEED, [], 1, [def]);
 const land = gen && gen.landforms.find((L) => L.id === tour.hike);
 const shore = (x, z) => land.shore(x, z);
 const stops = card && [[...onCard(card, tour.landing.lat, tour.landing.lon)], ...tour.by.map((b) => onCard(card, b.lat, b.lon))];
-const route = land && findRoute(shore, [...stops, stops[0]], { cell: 1, clear: CLEAR });
+const route = land && findRoute(shore, [...stops, stops[0]], { clear: CLEAR });
 
 test('the tour is on a real place in the bayou country', () => {
   assert.ok(card, `there is a hike called ${tour.hike}`);
@@ -59,10 +59,10 @@ test('the way round is on the water, from the landing past where the real boat w
   }
   // it passes by each place, and starts and ends by the landing
   const nearest = ([x, z]) => Math.min(...P.map((p) => Math.hypot(p[0] - x, p[1] - z)));
-  for (const [k, s] of stops.entries()) assert.ok(nearest(s) < 25, `it goes by stop ${k} (${nearest(s).toFixed(1)} m off)`);
+  for (const [k, s] of stops.entries()) assert.ok(nearest(s) < 125, `it goes by stop ${k} (${nearest(s).toFixed(1)} m off)`);
   assert.ok(Math.hypot(P[0][0] - P[P.length - 1][0], P[0][1] - P[P.length - 1][1]) < 3, 'and comes back where it set out');
   const C = new Course(route);
-  assert.ok(C.length > 1500 && C.length < 4000, `a few kilometres round (${C.length.toFixed(0)} m)`);
+  assert.ok(C.length > 7500 && C.length < 20000, `ten kilometres or so round (${C.length.toFixed(0)} m)`);
 });
 
 test('the boat slows to a stand at its stops, and keeps to the pace the water allows', () => {

@@ -181,9 +181,8 @@ land of its own (a land 2's files end in `-land2`).
 Real land can be set into the world: a mountain you've climbed, brought in
 from a photo you took on it (see [Hikes](../hikes/README.md)). Inside one the
 ground, its trails, its lakes, its streams and its woods are the real ones,
-at 1 : 5 (or at a scale of its own: [the zoo](../zoo/README.md) and
-[Washington](../washington/README.md) round it are life size), and over a
-fade the forest takes over again round its edge (`landform.js`). A place
+life size, and over a fade the forest takes over again round its edge
+(`landform.js`). A place
 inside another (the zoo, in Washington) is laid over it: where the inner one
 is whole, its ground, its water and its country are what's there, whichever
 of the two came first. A city's ground is `graded`: the forest's small bumps
@@ -228,8 +227,8 @@ of its own, where it lay when the photo was taken in winter.
 
 ## The real Earth
 
-The land is the real Earth's, everywhere, at the hikes' own scale, 1 : 5,
-laid out round the Hoh as the hikes are (`core/geo.js`): the oceans are
+The land is the real Earth's, everywhere, life size, laid out round the
+Hoh as the hikes are (`core/geo.js`): the oceans are
 where the oceans are and as deep, the continents and islands rise out of
 them where they do and as high, plains are flat and mountains rugged, and
 every part of it is the kind of country its climate makes it. You start in

@@ -1,30 +1,30 @@
 {
- "racetrack:town:-4:-2": {
-  "name": "Rattler Gulch Motor Speedway",
+ "racetrack:town:1:-1": {
+  "name": "Broken Gulch Motor Speedway",
   "layout": "trioval",
-  "x": -3563.601,
-  "z": -1191.957,
-  "yaw": 2.065
+  "x": 1871.624,
+  "z": -838.783,
+  "yaw": -1.158
  },
  "racetrack:town:-4:1": {
   "name": "Mossby Raceway",
   "layout": "hairpin",
-  "x": -3331.02,
-  "z": 1384.313,
-  "yaw": 2.998
+  "x": -3395.759,
+  "z": 1833.829,
+  "yaw": -1.62
+ },
+ "racetrack:town:-2:1": {
+  "name": "Mossbrook Circuit",
+  "layout": "kidney",
+  "x": -1878.694,
+  "z": 1272.79,
+  "yaw": 1.276
  },
  "racetrack:town:-4:3": {
-  "name": "Cherryton Circuit",
-  "layout": "kidney",
-  "x": -3621.6,
-  "z": 3578.284,
-  "yaw": 1.408
- },
- "racetrack:town:0:3": {
-  "name": "Orcutt's Camp Speedway",
+  "name": "Underhill's Camp Speedway",
   "layout": "oval",
-  "x": 679.376,
-  "z": 3601.554,
-  "yaw": 0.326
+  "x": -3610.272,
+  "z": 3360.973,
+  "yaw": 1.949
  }
 }

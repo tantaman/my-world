@@ -293,10 +293,9 @@ export function withRealPlaces(Land) {
     // On the Earth, though, a real place stands at its real height: its sea
     // at the Earth's sea, and its land where the Earth's land is (the same
     // land, finer). A real height stands that far over the sea at the
-    // place's own scale: at the Earth's, for a place at 1 : 5 as the Earth
-    // is; and life size for one brought in life size (a zoo, a city), so
-    // that two life-size places that meet (the zoo, in Washington) stand at
-    // the same heights, and Washington's tidal rivers at the sea's level.
+    // place's own scale, the Earth's as every place is now (life size), so
+    // that two places that meet (the zoo, in Washington) stand at the same
+    // heights, and Washington's tidal rivers at the sea's level.
     _settle(L) {
       const def = L.def;
       if (this.earth) {

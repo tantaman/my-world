@@ -185,7 +185,8 @@ test('a far club is the same looked for a little at a time, waiting on what it k
   slow.ready = () => ++asked > 5;
   const bit = clubs({ keepOff: slow });
   let at = null;
-  for (let k = 1; !at; k++) if (bit.spot(k, 1)) at = [k, 1];
+  // (a square that has one: one up in the mountains looks, and finds none)
+  for (let k = 1; !at && k < 200; k++) if (bit.spot(k, 1) && outright.cell(k, 1)) at = [k, 1];
   assert.equal(bit.peek(...at), undefined, 'not known at first');
   let rounds = 0;
   while (bit.pump(1) > 0) rounds++;

@@ -17,12 +17,12 @@ import { smoothstep, lerp } from '../noise.js';
 
 export const CELL = 2; // m: the grid the way is looked for on
 export const CLEAR = 0.55; // m of water either side of the boat's middle, at the least: its hull brushes the reeds
-const MARGIN = 160; // m round the stops that the way may go
+const MARGIN = 800; // m round the stops that the way may go
 const WIDE = 2.5; // how much more a cell costs on the edge of what's wide enough than in open water
 const BEEN = 1.8; // how much more water costs that an earlier leg went by
 const BEEN_NEAR = 3; // cells either side of an earlier leg that it counts for
 const STEP = 1; // m between the points the way is kept as
-const SNAP = 60; // m from a stop that the water for it may be looked for
+const SNAP = 300; // m from a stop that the water for it may be looked for (the real boat's places are told by the map, a little off the water's line)
 // m/s: in a narrow canal and out on open water; the clearance (m) each is for
 export const PACE = { narrow: 5, open: 13, idle: 1.2 };
 const PACE_CLEAR = [1.2, 9];

@@ -570,7 +570,7 @@ export class Landform {
     this.country = countryOf(def.country);
     // its lakes and streams frozen over, if its country's are (and it has no sea)
     this.frozen = !!this.country.frozen && !this.lakes.some((l) => l.sea);
-    this.scale = def.scale || 0.2;
+    this.scale = def.scale || 1;
     // a city's ground, graded for its streets: none of the forest's small
     // bumps on it (realPlaces.js)
     this.graded = !!def.graded;

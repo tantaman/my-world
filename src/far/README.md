@@ -12,8 +12,7 @@ mesh to a square, no trees standing on it but the dark crowns of the woods
 raised over the ground, meadows, bare rock on the steeps, snow on the tops,
 and water that mirrors the sky. Over a wood the crowns are drawn a pixel at a
 time: a jumble of domes, each lit on the sun's side and shaded on the other,
-darker in the gaps, the size a photograph of real ones says (Mount Storm
-King's, at the hike's 1:5); as they get smaller than a pixel they give way to
+darker in the gaps, the size real ones are; as they get smaller than a pixel they give way to
 their own average, as dark as a canopy is from afar, rather than shimmer
 (`?no=canopy` leaves them out). Where the real chunks are it sinks out of
 sight beneath them (the further where the land falls away steeply between
@@ -26,18 +25,29 @@ out with you. And the further the land is drawn, the more the air is the
 open air's (`pipeline.openAir`, render/pipeline.js): from a summit, the
 forest's thick haze gives way to air as clear as a photograph of a real view
 measured, so the ridges across a lake are still ridges, blue with distance.
-(Mount Storm King's photo, at the hike's 1:5: slopes 1 km off a tenth of the
-way into the sky's colour, ridges 3 to 4 km off four tenths.)
+(Mount Storm King's photo: slopes 5 km off a tenth of the way into the
+sky's colour, ridges 15 to 20 km off four tenths.)
+
+Round whatever square is drawn round you, the land goes on in rings, each
+coarser than the one inside it: a height every 55 m out to 5.5 km, and every
+275 m out to 27.5 km. What's far off is seen small, so a ring draws it about
+as finely as it can be seen, and each is re-made only once you've gone a
+good way off its middle. A ring isn't drawn where the square inside it is,
+bar a step of overlap at its edge (their heights between their points don't
+agree, and where they meet the sky would show through); and every square
+hangs a skirt from its edges, for the same. A lake's shore is drawn where it
+is between two heights, from how far each is from the water's edge, not
+round the grid.
 
 You never ask for it. Whoever has something worth seeing does: the land,
 where it stands high enough to be worth it (on the real Earth, 1,500 m over
 the sea somewhere near: the Olympics' summits, not the Hoh's valley under
 them; see [the world](../world/README.md)), and a hike, for the real place
-you are standing on ([hikes](../hikes/README.md)). The default range is one
-kilometre. A hike asks for 3.6 km round it, seen to the edge of its square,
-so from its top you see as far as its photo does; graded city terrain
-requests a longer range alongside its distant building and street meshes.
-Fog closes in just before the terrain ends.
+you are standing on ([hikes](../hikes/README.md)): a small one whole, with
+3.6 km round it, a bigger one a square round you. The rings go on past
+either, so from a hike's top you see as far as its photo does; graded city
+terrain requests a longer range alongside its distant building and street
+meshes. Fog closes in just before the outermost ring ends.
 
 Land that is really there is what gets drawn. A real place's land is fetched
 from the network when it is first needed, so a square waiting on one is held

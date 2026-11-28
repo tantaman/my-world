@@ -53,7 +53,7 @@ import { formatDistance } from '../core/format.js';
 const PREPARE = 2500; // m from the landing: nearer than this, its land is asked for and the way round found
 const SHOW = 900; // m: the landing and the boat are stood up this close...
 const HIDE = 1050; // ...and taken down past this
-const ROUTE_CELL = 1; // m: the grid the way round is found on (route.js)
+const ROUTE_CELL = 2; // m: the grid the way round is found on (route.js): a canal is a few of them across
 const BOARD = 4; // m from the boat's side that you can climb in from
 const GREET = 14; // m from the boat the guide says hello from
 const GREET_AGAIN = 120; // s before they say it again

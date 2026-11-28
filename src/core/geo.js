@@ -6,8 +6,8 @@
 // real is (a tour's landing, by its latitude and longitude) finds it on the
 // same.
 //
-// And the whole of it, as the game world lays it out: the real world at the
-// hikes' own scale, 1 : 5, by an azimuthal equidistant projection about the
+// And the whole of it, as the game world lays it out: the real world, life
+// size, by an azimuthal equidistant projection about the
 // middle of the world, in the Hoh rain forest. Distance and direction from the
 // middle are true everywhere; the further out, the wider than life the map is
 // across that line (stretch()): a tenth at 5,000 km, half as much again at

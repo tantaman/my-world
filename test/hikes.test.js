@@ -235,15 +235,15 @@ test('the walk starts where the car is left, by whatever paths lead to the photo
   const up = line([[0, 100], [0, 60], [0, 20]]);
   const on = line([[0, 20], [2, 5], [0, 0]]);
   const round = line([[0, 20], [-80, 20], [-80, 100]]);
-  const w = walkFromRoad([on, round, up], road);
+  const w = walkFromRoad([on, round, up], road, [0, 0], 0.2);
   assert.deepEqual([w.pts[0], w.pts[w.pts.length - 1]], [[0, 100], [0, 0]], 'from the road to the photo');
   near(w.length, 80 + Math.hypot(2, 15) + Math.hypot(2, 5), 1e-9, 'the short way');
   near(Math.cos(w.yaw), -1, 1e-9, 'setting off north');
   // downhill or up makes no odds: a cove is walked down to
-  assert.equal(walkFromRoad([on, round, up], []), null, 'no road: left to the old rule');
-  assert.equal(walkFromRoad([on, up], road, [300, 300]), null, 'nor if the photo is nowhere near a path');
+  assert.equal(walkFromRoad([on, round, up], [], [0, 0], 0.2), null, 'no road: left to the old rule');
+  assert.equal(walkFromRoad([on, up], road, [300, 300], 0.2), null, 'nor if the photo is nowhere near a path');
   // it takes its name from the named path most of it is on
-  const named = walkFromRoad([{ ...on, name: 'Spur' }, { ...up, name: 'Main Trail' }], road);
+  const named = walkFromRoad([{ ...on, name: 'Spur' }, { ...up, name: 'Main Trail' }], road, [0, 0], 0.2);
   assert.equal(named.name, 'Main Trail');
 });
 
@@ -292,6 +292,7 @@ const LAKE = Array.from({ length: 49 }, (_, k) => toLL(LAKE_AT[0] + Math.cos((k 
 const AT = [5000, 2000];
 const built = buildHike({
   id: 'made-up',
+  scale: 0.2,
   name: 'Made-up Mountain',
   photo: PHOTO,
   elevation,
@@ -387,6 +388,7 @@ const byTheSea = (lat, lon) => {
 };
 const coastal = buildHike({
   id: 'by-the-sea',
+  scale: 0.2,
   name: 'By the Sea',
   photo: PHOTO,
   elevation: byTheSea,
@@ -451,6 +453,7 @@ const coved = (lat, lon) => {
 const brookAt = (k) => [300 + k * 50, 500 + Math.sin(k / 2) * 30]; // east, north (real m)
 const watered = buildHike({
   id: 'watered',
+  scale: 0.2,
   name: 'Watered',
   photo: PHOTO,
   elevation: coved,
@@ -667,6 +670,7 @@ const COVERS = [
 ];
 const coveredDef = buildHike({
   id: 'made-up',
+  scale: 0.2,
   name: 'Made-up Mountain',
   photo: PHOTO,
   elevation,
@@ -721,6 +725,7 @@ test('a long trail: the land centred part way along it, and the photo where it w
   const [lat, lon] = toLL(-1000, 0);
   const long = buildHike({
     id: 'made-up',
+    scale: 0.2,
     name: 'Made-up Mountain',
     photo: PHOTO,
     middle: { lat, lon },
@@ -920,7 +925,8 @@ test('hikes lie as far apart as they really are, at their own scale', () => {
   // The whole Earth is in reach. What gives, far out, is the shape of the
   // map: true along the line from the middle, wider than life across it.
   const sydney = placeHike({ photo: { lat: -33.87, lon: 151.21 }, ...card }); // ~12,400 km
-  assert.ok(Math.abs(Math.hypot(...sydney.at) / 0.2 - haversine(ORIGIN, { lat: -33.87, lon: 151.21 })) < 20000, 'Sydney is as far from the middle as it really is');
+  // (where a place goes is by the world's scale, whatever its own land's)
+  assert.ok(Math.abs(Math.hypot(...sydney.at) / EARTH.scale - haversine(ORIGIN, { lat: -33.87, lon: 151.21 })) < 20000, 'Sydney is as far from the middle as it really is');
   assert.ok(sydney.stretch > 2 && sydney.stretch < 2.2, `and the map round it is twice as wide as life (${sydney.stretch.toFixed(2)})`);
   assert.match(sydney.notes.join(), /wider than life/, 'which the importer says');
   const placed = placeHike({ photo: stormKing, ...card });
@@ -929,18 +935,19 @@ test('hikes lie as far apart as they really are, at their own scale', () => {
 });
 
 test('hikes that overlap line up exactly, and stand on the same heights', () => {
-  // A mountainside rolling for kilometres, and two photos 2 km apart on it
+  // A mountainside rolling for kilometres, and two photos 2 km apart on it,
+  // each with 3 km of land round it, life size as the world is
   const wave = (lat, lon) => 600 + 240 * Math.sin(lat * 260) * Math.cos(lon * 170) + 90 * Math.sin(lat * 900 + lon * 400);
-  const opts = { radius: 2400, fade: 600, cell: 40, trails: [], waters: [] };
+  const opts = { scale: 1, radius: 2400, fade: 600, cell: 40, trails: [], waters: [] };
   const photoA = { lat: 46.5, lon: -121.6, bearing: 90, hour: 12 };
   const photoB = { lat: 46.512, lon: -121.585, bearing: 200, hour: 12 };
-  const placeA = placeHike({ photo: photoA, scale: 0.2, radius: 480, fade: 120 });
+  const placeA = placeHike({ photo: photoA, scale: 1, radius: 2400, fade: 600 });
   const A = buildHike({ id: 'a', name: 'A', photo: photoA, elevation: wave, at: placeA.at, ...opts }).def;
-  const placeB = placeHike({ photo: photoB, scale: 0.2, radius: 480, fade: 120 }, [splitHike(A).card]);
+  const placeB = placeHike({ photo: photoB, scale: 1, radius: 2400, fade: 600 }, [splitHike(A).card]);
   assert.equal(placeB.near.id, 'a', 'B is placed from A');
   const [e, n] = localFrame(photoA.lat, photoA.lon).toEN(photoB.lat, photoB.lon);
-  near(placeB.at[0], A.at[0] + e * 0.2, 0.06, 'east of A by as much as it really is');
-  near(placeB.at[1], A.at[1] - n * 0.2, 0.06, 'and north');
+  near(placeB.at[0], A.at[0] + e, 0.06, 'east of A by as much as it really is');
+  near(placeB.at[1], A.at[1] - n, 0.06, 'and north');
   assert.deepEqual(placeB.datum, A.datum, 'B shares A’s heights');
   const B = buildHike({ id: 'b', name: 'B', photo: photoB, elevation: wave, at: placeB.at, datum: placeB.datum, ...opts }).def;
   const gen = world([A, B]);
@@ -948,8 +955,8 @@ test('hikes that overlap line up exactly, and stand on the same heights', () => 
   // where both are real land, they say the same thing
   let worst = 0;
   for (let k = 0; k < 200; k++) {
-    const x = (A.at[0] + B.at[0]) / 2 + ((k % 20) - 10) * 12;
-    const z = (A.at[1] + B.at[1]) / 2 + (Math.floor(k / 20) - 5) * 12;
+    const x = (A.at[0] + B.at[0]) / 2 + ((k % 20) - 10) * 60;
+    const z = (A.at[1] + B.at[1]) / 2 + (Math.floor(k / 20) - 5) * 60;
     worst = Math.max(worst, Math.abs(LA.raw(x, z) + LA.offset - (LB.raw(x, z) + LB.offset)));
   }
   assert.ok(worst < 0.25, `the same ground ${worst.toFixed(3)} m apart`);
@@ -974,6 +981,7 @@ const FIN_TRAIL = Array.from({ length: 49 }, (_, k) => finLL(0, -1200 + k * 25))
 const finHike = (fine) =>
   buildHike({
     id: 'fin',
+    scale: 0.2,
     name: 'The Fin',
     photo: FIN,
     elevation: finGround,
@@ -1044,6 +1052,7 @@ const slopeGround = (lat, lon) => {
 };
 const slopeHike = buildHike({
   id: 'slope',
+  scale: 0.2,
   name: 'Slope',
   photo: SLOPE,
   elevation: slopeGround,
@@ -1112,16 +1121,16 @@ test('the walk can start where it is said to, and go on past the photo', () => {
   const lane = line([[-150, 0], [-150, 40]]);
   const cut = line([[-300, 0], [-300, -200], [400, -200], [400, 0]], { closed: true });
   const lines = [west, east, lane, cut];
-  const w = walkBetween(lines, [[-302, 3], [0, 1], [398, -2]]);
+  const w = walkBetween(lines, [[-302, 3], [0, 1], [398, -2]], { m: 0.2 });
   assert.deepEqual([w.pts[0], w.pts[w.pts.length - 1]], [[-300, 0], [400, 0]], 'from where it is said to start to where it is said to end');
   assert.ok(w.pts.some((p) => p[0] === 0 && p[1] === 0), 'by way of the photo');
   near(w.length, 700, 1e-9, 'along the paths, not the closed one');
   assert.equal(w.name, 'Canyon Trail');
   near(Math.sin(w.yaw), 1, 1e-9, 'setting off east');
   // the village's lane is a road to walkFromRoad, which would start there
-  assert.deepEqual(walkFromRoad(lines, [[[-150, 40], [-100, 40]]]).pts[0], [-150, 40]);
-  assert.equal(walkBetween(lines, [[-300, 0], [0, 500]]), null, 'a stop off the paths: no walk');
-  assert.equal(walkBetween([west, line([[600, 0], [700, 0]])], [[-300, 0], [700, 0]]), null, 'nor between paths that never meet');
+  assert.deepEqual(walkFromRoad(lines, [[[-150, 40], [-100, 40]]], [0, 0], 0.2).pts[0], [-150, 40]);
+  assert.equal(walkBetween(lines, [[-300, 0], [0, 500]], { m: 0.2 }), null, 'a stop off the paths: no walk');
+  assert.equal(walkBetween([west, line([[600, 0], [700, 0]])], [[-300, 0], [700, 0]], { m: 0.2 }), null, 'nor between paths that never meet');
   // It goes where it has to: along a village's lanes, and across a gap the
   // map left between two paths (a scramble down beside a fall). Each stretch
   // of that is said, so it can be made a path.
@@ -1129,16 +1138,17 @@ test('the walk can start where it is said to, and go on past the photo', () => {
   const lower = line([[0, 108], [0, 200]], { name: 'Lower' });
   const village = line([[-100, 0], [-60, 0]], { name: 'Trail' });
   const lanes = [[[-60, 0], [-30, 5], [0, 0]]];
-  const far = walkBetween([village, upper, lower], [[-100, 0], [0, 200]], { roads: lanes, gap: 12 });
+  const far = walkBetween([village, upper, lower], [[-100, 0], [0, 200]], { roads: lanes, gap: 12, m: 0.2 });
   assert.deepEqual([far.pts[0], far.pts[far.pts.length - 1]], [[-100, 0], [0, 200]]);
   assert.deepEqual(far.added, [{ pts: [[-60, 0], [-30, 5], [0, 0]], gap: false }, { pts: [[0, 100], [0, 108]], gap: true }]);
-  assert.equal(walkBetween([village, upper, lower], [[-100, 0], [0, 200]], { roads: lanes, gap: 6 }), null, 'a wider gap is not crossed');
-  assert.equal(walkBetween([village, upper, lower], [[-100, 0], [0, 200]], { gap: 12 }), null, 'nor is a road there unless it is said');
+  assert.equal(walkBetween([village, upper, lower], [[-100, 0], [0, 200]], { roads: lanes, gap: 6, m: 0.2 }), null, 'a wider gap is not crossed');
+  assert.equal(walkBetween([village, upper, lower], [[-100, 0], [0, 200]], { gap: 12, m: 0.2 }), null, 'nor is a road there unless it is said');
   // built into a hike: the trailhead is where it starts, and it ends past the photo
   const LL = (e, n) => slopeFrame.toLatLon(e, n);
   const ll = (e, n) => ({ lat: LL(e, n)[0], lon: LL(e, n)[1] });
   const through = {
     id: 'through',
+    scale: 0.2,
     name: 'Through',
     photo: SLOPE,
     elevation: slopeGround,
@@ -1199,7 +1209,7 @@ test('OpenStreetMap: waterfalls, and paths closed to walkers', () => {
   assert.deepEqual(trails(osm).map((t) => !!t.closed), [true, false]);
   // on a hike, the falls on its land, where they are
   const photos = [{ name: 'Beaver Falls', lat: 36.258, lon: -112.7, bearing: 147, hour: 14.5 }];
-  const def = buildHike({ id: 'f', name: 'F', photo: { lat: 36.255, lon: -112.695, bearing: 0, hour: 12 }, elevation: () => 900, falls: falls(osm), photos, at: [0, 0], radius: 2000, fade: 400, cell: 60 }).def;
+  const def = buildHike({ id: 'f', name: 'F', scale: 0.2, photo: { lat: 36.255, lon: -112.695, bearing: 0, hour: 12 }, elevation: () => 900, falls: falls(osm), photos, at: [0, 0], radius: 2000, fade: 400, cell: 60 }).def;
   assert.deepEqual(def.falls.map((f) => f.name), ['Havasu Falls', 'Mooney Falls', 'Little Navajo Falls']);
   // and a more photo taken on the walk, a spot of its own on the card, kept clear as the view is
   assert.equal(def.photos.length, 1);
@@ -1325,6 +1335,7 @@ test('a stream is as wide as it really is: as the map says, between its banks, o
   const line = (n) => Array.from({ length: 31 }, (_, k) => LL(-1500 + k * 100, n));
   const def = buildHike({
     id: 'wide',
+    scale: 0.2,
     name: 'Wide',
     photo: P,
     elevation: () => 600,

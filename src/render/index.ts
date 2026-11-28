@@ -38,10 +38,11 @@ declare module '../game/game.ts' {
 
 const PIXEL_MAX = 12; // screen pixels per art pixel, at the most
 const CAMERA_FAR = 1200;
-// m: the furthest the land is drawn for a view (a hike's far view reaches
-// about 4.6 km): the camera sees as far as that. Past it, a fog that far off
-// is someone turning the fog off (the Metro, a stage), not a view.
-const LONG_VIEW_MOST = 8000;
+// m: the furthest the land is drawn for a view (the far view's outer ring
+// reaches about 27 km: far/index.js): the camera sees as far as that. Past
+// it, a fog that far off is someone turning the fog off (the Metro, a
+// stage), not a view.
+const LONG_VIEW_MOST = 40000;
 
 // The features this uses, so it is installed after them (game/features.js).
 export const after = ['ui'];

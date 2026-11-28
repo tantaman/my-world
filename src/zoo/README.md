@@ -18,8 +18,7 @@ for flying in, is out past the edge of the city, 18 km east (see
 [Airports](../airports/README.md)). In your pack, *National Zoo: where it
 is* says how far it is from wherever you are.
 
-**Life size.** The rest of the world is the real world at 1 : 5; the zoo is
-at 1 : 1. Its ground is the real ground, a height every two metres from the
+**Life size**, as the whole world is. Its ground is the real ground, a height every two metres from the
 USGS's lidar, so Olmsted Walk runs downhill as it does, the paths are cut
 into the hillside, and Rock Creek runs along the bottom, 20 m wide. Out past
 the zoo's own fence it gives way, over half a kilometre round its edge, to

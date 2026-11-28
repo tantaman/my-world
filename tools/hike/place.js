@@ -1,7 +1,7 @@
 // Where a hike goes in the game world: where it really is.
 //
-// The game world is the real world at the hikes' own scale (1:5), so hikes
-// lie as far apart, and in the same directions, as they do in real life.
+// The game world is the real world, life size, so hikes lie as far apart,
+// and in the same directions, as they do in real life.
 // Its middle, where everyone starts, is a real place on land: the Hoh rain
 // forest, on the wet west side of the Olympic Mountains, on the real Earth as
 // all of it is (src/world/earth.js). A hike is kept a couple of kilometres
@@ -17,7 +17,7 @@
 // one's heights (its datum: see src/world/landform.js), so the same mountain
 // stands at the same height in both.
 //
-// The whole Earth fits: the far side of it is 4,000 km of game from the
+// The whole Earth fits: the far side of it is 20,000 km of game from the
 // middle, and the game is as sharp there as anywhere (src/render/origin.js).
 // What a flat world can't do is keep a round one's shape. Distances from the
 // middle are true everywhere, but the further out, the more the map is
@@ -50,10 +50,9 @@ export const centreOf = (h) => h.middle || h.photo;
 // metres to a real metre of its land; existing: the cards of the hikes
 // already in the game.
 //
-// Where it goes is by the world's scale (the Earth's, 1 : 5), whatever its
-// own land is at: a place brought in life size (1 : 1, a zoo, where the
-// buildings and the walk between them are to be as big as they are) is still
-// where it really is, and only its own land is the larger for it.
+// Where it goes is by the world's scale (the Earth's), whatever its own land
+// is at: a place brought in at a scale of its own is still where it really
+// is, and only its own land is the larger or smaller for it.
 // → { at, datum, near, stretch, notes }: datum is the datum to share (null:
 // this hike sets its own), near the hike it was placed from (or null),
 // stretch how many times wider than life the map is there.

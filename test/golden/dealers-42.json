@@ -1,29 +1,47 @@
 [
  {
-  "id": "dealer:town:-4:0",
-  "name": "Kessler & Sons Motors",
-  "road": "road:-5:0:e",
-  "x": -3560.58,
-  "z": 645.454,
-  "yaw": 2.85,
-  "top": -11.118
+  "id": "dealer:town:2:-2",
+  "name": "Hadley Motors",
+  "road": "road:2:-2:e",
+  "x": 2426.732,
+  "z": -1419.912,
+  "yaw": 0.464,
+  "top": 171.056
+ },
+ {
+  "id": "dealer:town:0:-1",
+  "name": "Birdsall Auto Sales",
+  "road": "road:0:-1:e",
+  "x": 683.579,
+  "z": -783.943,
+  "yaw": -1.813,
+  "top": 158.542
+ },
+ {
+  "id": "dealer:town:0:0",
+  "name": "Coombs & Sons Motors",
+  "road": "road:0:0:e",
+  "x": 265.027,
+  "z": 288.186,
+  "yaw": 0.102,
+  "top": 168.269
  },
  {
   "id": "dealer:town:-3:1",
   "name": "Dunmore Motors",
   "road": "road:-3:1:s",
-  "x": -2243.059,
-  "z": 1370.785,
-  "yaw": 1.589,
-  "top": 8.53
+  "x": -2275.284,
+  "z": 1524.774,
+  "yaw": -1.579,
+  "top": 161.123
  },
  {
   "id": "dealer:town:-3:2",
   "name": "Rasmussen & Sons Motors",
-  "road": "road:-3:2:s",
-  "x": -2929.881,
-  "z": 2444.666,
-  "yaw": -1.767,
-  "top": 14.16
+  "road": "road:-4:2:e",
+  "x": -2857.131,
+  "z": 2298.153,
+  "yaw": 0.515,
+  "top": 125.9
  }
 ]

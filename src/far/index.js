@@ -40,6 +40,21 @@ const OPEN = { from: 600, full: 2500 };
 // under the ground, and the far view isn't drawn
 const UNDERGROUND = 0.3;
 
+// ── Rings ───────────────────────────────────────────────────────────────────
+// Round whatever square is drawn round you (the forest's, or a hike's), the
+// land further off, coarser the further: each ring a square centred on you,
+// a height every `step` m out to `half` m off, re-made once you've gone
+// `move` m off its middle, and not drawn inside the square within it
+// (view.js setHole). What's far off is seen small, so a ring of forty
+// thousand heights draws it about as finely as it can be seen.
+const RINGS = [
+  { id: 'ring:near', half: 5500, step: 55, move: 1500 },
+  { id: 'ring:far', half: 27500, step: 275, move: 7500 },
+];
+const isRing = (id) => id.startsWith('ring:');
+// how far a ring is drawn, past its half (the corners of its square)
+const RING_CLIP = 1.45;
+
 // ── The forest's own far view ───────────────────────────────────────────────
 // One square round you, re-made once you have walked far enough off its
 // middle. One square and not a grid of them, because what is drawn reaches
@@ -61,7 +76,7 @@ const FOREST = {
   move: 300, // m you may walk off its middle before it is re-made
   again: 100, // m you may walk off where it was judged not worth it, before it's judged again
   alpine: 0.15, // how much high country in the square makes it worth drawing
-  high: 300, // game m over the sea, on the Earth, that make it worth drawing
+  high: 1500, // game m over the sea, on the Earth, that make it worth drawing
   look: 5, // points each way the square is judged over
 };
 
@@ -96,7 +111,7 @@ export function installFar(game) {
         const box = square.get(id);
         if (!box || box.x0 !== grid.x0 || box.z0 !== grid.z0 || box.step !== grid.step) return;
         sampling.delete(id);
-        far.add(id, grid, box.clip);
+        far.add(id, grid, box.clip, box.ringed);
       };
       worker.onerror = (e) => {
         console.warn('far view worker failed, drawing it on the main thread', e.message);
@@ -115,8 +130,8 @@ export function installFar(game) {
   // up until the new square arrives, so there is no gap.
   const square = new Map(); // id -> the square drawn, or gone for sampling
   const same = (a, b) => !!a && a.x0 === b.x0 && a.z0 === b.z0 && a.x1 === b.x1 && a.z1 === b.z1 && a.step === b.step && a.clip === b.clip;
-  function want(id, x0, z0, x1, z1, step, clip = FAR_CLIP) {
-    const box = { x0, z0, x1, z1, step, clip };
+  function want(id, x0, z0, x1, z1, step, clip = FAR_CLIP, ringed = false) {
+    const box = { x0, z0, x1, z1, step, clip, ringed };
     if (same(square.get(id), box) || same(waiting.get(id), box)) return;
     waiting.set(id, box);
   }
@@ -141,7 +156,7 @@ export function installFar(game) {
         sampling.add(id);
         worker.postMessage({ type: 'far', id, x0: box.x0, z0: box.z0, n, step: box.step });
       } else {
-        far.add(id, sampleFar(gen, box.x0, box.z0, n, box.step), box.clip);
+        far.add(id, sampleFar(gen, box.x0, box.z0, n, box.step), box.clip, box.ringed);
       }
     }
   }
@@ -174,7 +189,7 @@ export function installFar(game) {
     // A square asked for by something else (a hike's) covers the same land,
     // and the two would draw it twice and fight: the forest's gives way.
     for (const id of far.meshes.keys()) {
-      if (id === FOREST.id) continue;
+      if (id === FOREST.id || isRing(id)) continue;
       if (forestAt) {
         drop(FOREST.id);
         forestAt = null;
@@ -199,7 +214,59 @@ export function installFar(game) {
     const n = Math.round((2 * FOREST.half) / FOREST.step) + 1;
     const x0 = Math.round((x - FOREST.half) / FOREST.step) * FOREST.step;
     const z0 = Math.round((z - FOREST.half) / FOREST.step) * FOREST.step;
-    want(FOREST.id, x0, z0, x0 + (n - 1) * FOREST.step, z0 + (n - 1) * FOREST.step, FOREST.step);
+    // (seen out to its corners: the rings go on past them)
+    want(FOREST.id, x0, z0, x0 + (n - 1) * FOREST.step, z0 + (n - 1) * FOREST.step, FOREST.step, Math.ceil(FOREST.half * Math.SQRT2 + FOREST.move));
+  }
+
+  // The rings round the square you're furthest inside of, asked for; or let
+  // go, where no square is drawn (down in the trees, where nothing is seen
+  // far off).
+  const ringAt = new Map(); // id -> where it was asked for round
+  function inner() {
+    const { x, z } = focus;
+    let best = null;
+    let most = 0;
+    for (const [id, m] of far.meshes) {
+      if (isRing(id)) continue;
+      const g = m.userData.grid;
+      const e = Math.min(x - g.x0, g.x1 - x, z - g.z0, g.z1 - z);
+      if (e > most) [best, most] = [g, e];
+    }
+    return best;
+  }
+  function wantRings() {
+    const { x, z } = focus;
+    if (!inner()) {
+      for (const r of RINGS) if (ringAt.has(r.id)) {
+        drop(r.id);
+        ringAt.delete(r.id);
+      }
+      return;
+    }
+    for (const r of RINGS) {
+      const at = ringAt.get(r.id);
+      if (at && Math.hypot(x - at[0], z - at[1]) < r.move) continue;
+      ringAt.set(r.id, [x, z]);
+      // (snapped to its own step, as the forest's square is)
+      const n = Math.round((2 * r.half) / r.step) + 1;
+      const x0 = Math.round((x - r.half) / r.step) * r.step;
+      const z0 = Math.round((z - r.half) / r.step) * r.step;
+      want(r.id, x0, z0, x0 + (n - 1) * r.step, z0 + (n - 1) * r.step, r.step, r.half * RING_CLIP, true);
+    }
+  }
+  // Each ring is cut where what's within it is drawn: the square, or the
+  // ring inside it once that's drawn; a step of that one's in from its
+  // edge, so the two overlap a little (their heights between their points
+  // don't agree, and a ring cut right at the edge would let the sky through
+  // where it stands the higher).
+  const inside = (g) => g && { x0: g.x0 + g.step, z0: g.z0 + g.step, x1: g.x1 - g.step, z1: g.z1 - g.step };
+  function holes() {
+    let hole = inside(inner());
+    for (const r of RINGS) {
+      far.setHole(r.id, hole);
+      const m = far.meshes.get(r.id);
+      if (m) hole = inside(m.userData.grid);
+    }
   }
 
   let fog = 0;
@@ -209,7 +276,9 @@ export function installFar(game) {
     phase: 'world',
     update({ dt }) {
       forestFar();
+      wantRings();
       sendReady();
+      holes();
       far.update(focus);
       // Under the ground (in a cave, down in the Metro) the land isn't to be
       // seen, and what's sunk under the chunks would show through the walls.

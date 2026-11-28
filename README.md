@@ -55,7 +55,7 @@ npm test           # the rules, in Node (see "Checking it still works")
 npm run hike -- photo.heic   # put a hike you've done into the world (see src/hikes/README.md)
 npm run earth        # the real Earth under the world (see src/world/README.md)
 npm run zoo          # a real zoo's buildings and exhibits on its real ground (see src/zoo/README.md)
-npm run dc           # the city round it, Washington, DC, life size (see src/washington/README.md)
+npm run dc           # the city round it, Washington, DC (see src/washington/README.md)
 npm run metro        # its Metro, under and over it (see src/metro/README.md)
 npm run photos       # the photographs of real surfaces the code asks for (see src/render/README.md)
 npm run look -- mount-storm-king   # the game beside a hike's photo, measured (see reference/README.md)
@@ -327,7 +327,7 @@ Each of those files opens with what the thing is and what it is handed.
   `forest.on('crash', …)`) rather than holding one `onSomething` slot that the
   last caller wins.
 - *Nothing big goes to the graphics card.* The game thinks in world
-  coordinates everywhere, and the world is thousands of kilometres across;
+  coordinates everywhere, and the world is tens of thousands of kilometres across;
   the card works in 32-bit floats. Each frame is drawn from an origin near
   the camera, and what that asks of anything that fills a buffer, sets a
   uniform or draws a pattern is in [the look](src/render/README.md) and at

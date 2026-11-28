@@ -45,8 +45,8 @@
 //   r0, r1    how near and far from there its airfield may be (m)
 //   hikes     the ids of the hikes it serves
 //   scale     game metres to a real metre between there and anywhere else:
-//             the world's (the Earth's, 1 : 5), whatever scale the hikes
-//             it serves are at themselves
+//             the world's (the Earth's, life size), whatever scale the
+//             hikes it serves are at themselves
 //
 // An airfield (a site, laid out in its own frame as an old place is:
 // world/frame.js's toWorld, toLocal, onPlan):
@@ -87,8 +87,9 @@ const DRY = 14; // m from the nearest water, everywhere on it
 // keeping this far over the ground, for this far out (m).
 const OUT = { grade: 0.14, over: 12, far: 1500, step: 50 };
 // Which parts of the world have their own: a hike this far (m) from where an
-// earlier part is measured from shares its airfield.
-export const SHARE = 60000;
+// earlier part is measured from shares its airfield (a part of the world:
+// Maui, the Alps, the Colorado Plateau).
+export const SHARE = 300000;
 const HOME_RING = [700, 4000]; // m from the start
 const HIKE_RING = [250, 4000]; // m out past a hike's reach (world/landforms.js)
 const WIDER = 4000; // m further out to look, where there's nowhere in the ring

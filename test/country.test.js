@@ -83,6 +83,7 @@ const cone = (lat, lon) => {
 const island = (over = {}) =>
   buildHike({
     id: 'island',
+    scale: 0.2,
     name: 'An Island',
     photo: PHOTO,
     elevation: cone,
@@ -277,6 +278,7 @@ test('high mountains: woods up to the treeline, turf and stones over it, snow on
   };
   const def = buildHike({
     id: 'peak',
+    scale: 0.2,
     name: 'A Peak',
     photo: PHOTO,
     elevation: peak,
@@ -372,6 +374,7 @@ test('in a desert canyon, cottonwoods by the creek, the odd juniper away from it
   const frame = localFrame(P.lat, P.lon);
   const def = buildHike({
     id: 'oasis',
+    scale: 0.2,
     name: 'Oasis',
     photo: P,
     elevation: (lat, lon) => 900 - frame.toEN(lat, lon)[0] * 0.01,

@@ -26,16 +26,19 @@ const SEED = 20261119;
 // The land, and a few squares near the start there that have caves
 // (checked below): most of what follows is about these.
 const gen = growWorld(SEED, [], 1, [], EARTH);
-// ...and on every land, the caves in the squares round the start
-const NEAR = [-2, -1, 0, 1];
-const SQUARES = NEAR.flatMap((cz) => NEAR.map((cx) => [cx, cz]))
+// ...and on every land, the caves in the squares near the start.
+// The squares looked at: on the slopes over the start, a kilometre north of
+// it (the Hoh's floor, where you start, is flat, and has few). Columns, rows.
+const ACROSS = [-3, -2, -1, 0];
+const DOWN = [-5, -4, -3, -2];
+const SQUARES = DOWN.flatMap((cz) => ACROSS.map((cx) => [cx, cz]))
   .filter(([cx, cz]) => layoutCave(gen, cx, cz))
   .slice(0, 4);
 const caves = SQUARES.map(([cx, cz]) => layoutCave(gen, cx, cz));
 const WORLDS = LANDS.map((land) => {
   const g = land === 1 ? gen : growWorld(SEED, [], land, [], EARTH);
   const found = [];
-  for (const cz of NEAR) for (const cx of NEAR) found.push(layoutCave(g, cx, cz));
+  for (const cz of DOWN) for (const cx of ACROSS) found.push(layoutCave(g, cx, cz));
   return { land, gen: g, caves: found.filter(Boolean) };
 });
 const built = new Map();
@@ -49,7 +52,7 @@ for (const land of LANDS) for (const seed of [SEED, 42]) {
   test(`seed ${seed}, land ${land}: where the caves are`, () => {
     const g = seed === SEED ? WORLDS[land - 1].gen : growWorld(seed, [], land, [], EARTH);
     const list = [];
-    for (const cz of NEAR) for (const cx of NEAR) {
+    for (const cz of DOWN) for (const cx of ACROSS) {
       const c = seed === SEED ? WORLDS[land - 1].caves.find((k) => k.cx === cx && k.cz === cz) : layoutCave(g, cx, cz);
       if (c) list.push({ id: c.id, x: c.mouth.x, z: c.mouth.z, name: c.name, nodes: c.nodes.length, rooms: c.rooms.length });
     }
@@ -74,7 +77,10 @@ test('caves are grown from the seed: the same every time, and some near the star
   const again = growWorld(SEED, [], 1, [], EARTH);
   for (const [cx, cz] of SQUARES) assert.deepEqual(layoutCave(again, cx, cz), layoutCave(gen, cx, cz));
   const start = gen.findSpawn(0, 0);
-  const nearest = Math.min(...caves.map((c) => Math.hypot(c.mouth.x - start.x, c.mouth.z - start.z)));
+  // (of all the squares round it: the start's own, on the valley floor, are few)
+  const round = [];
+  for (let cz = -4; cz < 4; cz++) for (let cx = -4; cx < 4; cx++) round.push(layoutCave(gen, cx, cz));
+  const nearest = Math.min(...round.filter(Boolean).map((c) => Math.hypot(c.mouth.x - start.x, c.mouth.z - start.z)));
   assert.ok(nearest < 1000, `the nearest is ${nearest.toFixed(0)} m from the start`);
   // and another seed has caves of its own
   const other = growWorld(42, [], 1, [], EARTH);

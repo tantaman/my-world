@@ -18,9 +18,8 @@ Memorial, looking down the Mall. Or walk out of the zoo's gate onto
 Connecticut Avenue: the city goes on from there, out to the District's line.
 In your pack, *Washington, DC: where it is* says how far the Capitol is.
 
-**Life size.** The rest of the world is the real world at 1 : 5;
-Washington, like the zoo inside it, is at 1 : 1, so a block is as long as it
-is and the Capitol is 5 km from the zoo, as it really is. Its ground is a
+**Life size**, as the whole world is, so a block is as long as it is and
+the Capitol is 5 km from the zoo, as it really is. Its ground is a
 real place of its own (`washington-dc` in
 [world/hikes.js](../world/hikes.js)), the USGS's lidar a height every 20 m,
 placed from the zoo's so the two line up exactly, and standing at the zoo's
@@ -37,7 +36,7 @@ mown grass, squirrels, songbirds and crows, deer and foxes in its parks, and
 no bear on its avenues. Past the District's line the land is still life
 size, out to a circle 11.6 km round its middle (Arlington, the edges of
 Silver Spring and Alexandria), with no city on it; past that it gives way
-to the 1 : 5 world.
+to the coarse Earth's.
 
 **The buildings**, all 112,000 of them, are as big as they are and stand
 where they stand: Washington flew the whole city with lidar and traced

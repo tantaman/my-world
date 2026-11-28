@@ -1,16 +1,16 @@
 {
+ "videostore:town:0:0": {
+  "name": "Rewind Video, Primrosecombe",
+  "x": 122.359,
+  "z": 430.219,
+  "yaw": 1.381,
+  "top": 168.398
+ },
  "videostore:town:-2:1": {
   "name": "Rewind Video, Mossbrook",
-  "x": -1952.005,
-  "z": 1255.549,
-  "yaw": 2.128,
-  "top": 4.271
- },
- "videostore:town:-4:3": {
-  "name": "Rewind Video, Cherryton",
-  "x": -3092.143,
-  "z": 3457.315,
-  "yaw": -1.362,
-  "top": 5.914
+  "x": -1475.16,
+  "z": 1561.694,
+  "yaw": -1.98,
+  "top": 134.94
  }
 }

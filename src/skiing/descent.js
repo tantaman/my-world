@@ -23,7 +23,7 @@ const STEP = 100;
 // How much high country (worldgen.js) makes a top worth sending you to, and
 // how much snow there must be under it for it to be a run at all (m). On the
 // real Earth (world/earth.js) its mountains are at its scale, and so is a run:
-// as many real metres of snow, so a fifth as many in the game.
+// as many real metres of snow, at the Earth's scale (life size, as many).
 const ALPINE = 0.5;
 const DROP_LEAST = 220;
 const onEarth = (gen, x, z) => !!gen.earthAt(x, z);

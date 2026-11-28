@@ -67,7 +67,7 @@ starts with the contract.
 - Read URL parameters only in `src/config.js`.
 - To be heard, extend `Emitter` and `emit`; do not add `onSomething` slots.
 - Nothing big goes to the graphics card: it works in 32-bit floats, and the
-  world is thousands of kilometres across. `src/render/origin.js` slides the
+  world is tens of thousands of kilometres across. `src/render/origin.js` slides the
   scene to an origin near the camera while a frame is drawn, and says what
   that asks of you. In short: build geometry (and instances) round its own
   mesh and put the mesh in the world; register a uniform that holds a place

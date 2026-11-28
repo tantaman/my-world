@@ -39,9 +39,9 @@
 // exposure says of how bright it really was (EV at ISO 100: the camera chose
 // it to make the middle of the picture mid grey).
 //
-// A hike's land is at a fifth of its real size (src/hikes/README.md), so the
-// near ground won't line up with the photo; the far ridges, the sky, the
-// light and the colours will. Compare those.
+// A hike's land is life size, as the world is, so the land lines up with
+// the photo; a phone's GPS is good to a few metres, so where it was taken
+// may want --at to stand on the edge it was taken from.
 //
 // In this repository's cloud container the browser draws in software:
 // a still at full size takes a minute or more.

@@ -75,7 +75,7 @@ test('her pier is grown from the seed: the same every time, on the coast, in wat
     assert.ok(b, `land ${land} has a berth`);
     assert.deepEqual(findBerth(gen, start, keepOff), b, 'and the same one again');
     const d = Math.hypot(b.x - start.x, b.z - start.z);
-    assert.ok(d > 300 && d < 15000, `on the real coast, a long walk from the start (${d.toFixed(0)} m)`);
+    assert.ok(d > 300 && d < 72000, `on the real coast, a long way from the start (${d.toFixed(0)} m: the Pacific is 35 km west)`);
     // deep water under her and round her
     const p = {};
     for (const x of [-HALF_BEAM - 4, 0, HALF_BEAM + 4]) {

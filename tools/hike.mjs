@@ -85,6 +85,8 @@ const zoomFor = (cell) => (cell >= 25 ? 13 : cell >= 12 ? 14 : cell >= 6 ? 15 : 
 // Where heights come from: AWS Terrain Tiles anywhere, or the USGS's 3DEP
 // in the United States (hike/usgs.js).
 const DEMS = ['terrain', '3dep'];
+// m: how far under 3DEP's sea Terrain Tiles' bed must be for it to be the bed
+const SEA_BED_UNDER = 5;
 const AGENT = 'my-world hike importer (a three.js game; occasional one-off imports)';
 
 // ── Arguments ────────────────────────────────────────────────────────────────
@@ -100,6 +102,21 @@ for (let k = 0; k < argv.length; k++) {
   else if (a === '--graded') flags.graded = true;
   else if (MANY.has(a.slice(2))) (flags[a.slice(2)] ||= []).push(argv[++k]);
   else flags[a.slice(2)] = argv[++k];
+}
+// How it was asked for, to be written down with it, so it can be imported
+// again the same way: everything but the photo (somewhere of yours: <photo>
+// stands for it) and what only says how to do it this time.
+const asked = ['<photo>'];
+for (let k = 0; k < argv.length; k++) {
+  const a = argv[k];
+  if (!a.startsWith('--') || a === '--force') continue;
+  if (a === '--preview') {
+    k++;
+    continue;
+  }
+  if (a === '--graded') asked.push(a);
+  else asked.push(a, /^[\w.,@:/-]+$/.test(argv[k + 1]) ? argv[k + 1] : JSON.stringify(argv[k + 1]));
+  if (a !== '--graded') k++;
 }
 if (files.length !== 1) {
   console.log('usage: npm run hike -- <photo.heic|jpg> [--name "…"] [options]   (see tools/hike.mjs)');
@@ -270,7 +287,10 @@ async function heightsFrom(source, z, boxes, what) {
 }
 // The heights for a grid `cell` real metres apart, over some boxes ([x0, z0,
 // x1, z1], game metres round the land's middle): from 3DEP if asked, with
-// Terrain Tiles where it has none.
+// Terrain Tiles where it has none, and under the sea, which 3DEP's lidar
+// doesn't see into (it has the sea at about nothing): where Terrain Tiles has
+// the bed well under that, the bed is Terrain Tiles'. (A bayou's channels,
+// a metre or two under the sea in the lidar, are the lidar's.)
 async function elevationFor(cell, boxes, what) {
   const pad = cell * 2;
   const ll = boxes.map(([x0, z0, x1, z1]) => [...frame.toLatLon(x0 / opt.scale - pad, -z0 / opt.scale + pad), ...frame.toLatLon(x1 / opt.scale + pad, -z1 / opt.scale - pad)]);
@@ -279,7 +299,10 @@ async function elevationFor(cell, boxes, what) {
   const usgs = await heightsFrom('3dep', zoomFor(cell), ll, `${what}, finer`);
   return (lat, lon) => {
     const h = usgs(lat, lon);
-    return Number.isNaN(h) ? terrain(lat, lon) : h;
+    if (Number.isNaN(h)) return terrain(lat, lon);
+    if (h > 0) return h;
+    const t = terrain(lat, lon);
+    return t < h - SEA_BED_UNDER ? t : h;
   };
 }
 const centre = middle || photo;
@@ -400,7 +423,9 @@ const { card, land } = splitHike(def);
 const module = `// The land of ${def.name}, as \`npm run hike\` imported it from a photo taken
 // there: fetched the first time it's needed (src/world/landforms.js). Its card is
 // in src/world/hikes.js. Re-import it rather than edit it here (see
-// src/world/landform.js for what the parts are).
+// src/world/landform.js for what the parts are), as it was:
+//
+//   npm run hike -- ${asked.join(' ')} --force
 //
 // The shape of the land: AWS Terrain Tiles (USGS 3DEP and others).
 ${MAP === 'dc' ? '// Water and woods: Open Data DC (DC GIS), CC BY 4.0.' : '// Trails and lakes: © OpenStreetMap contributors, under the ODbL.'}
@@ -449,7 +474,7 @@ function writeRegistry(cards) {
 // its entry here and its file in hikes/.
 //
 // Each is here as a card: what it is and where, a few hundred bytes. Its land
-// (the heights, the lakes, the trails: about 200 kB) is in hikes/<id>.js,
+// (the heights, the lakes, the trails: megabytes) is in hikes/<id>.js,
 // fetched the first time it's needed, not when the game starts (landforms.js).
 //
 // Where a hike sits is part of the world description, like the hills: a

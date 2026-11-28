@@ -15,15 +15,15 @@
 import { runDrop } from './descent.js';
 
 export const RUNS = {
-  cell: 10000, // m, the side of a square
-  step: 250, // m between the spots looked at in it
-  apart: 3000, // m kept from the High Country ski run
+  cell: 50000, // m, the side of a square: a range or two (Baker, Rainier and Adams each have one)
+  step: 1250, // m between the spots looked at in it
+  apart: 15000, // m kept from the High Country ski run
 };
 // How far from the start the High Country ski run is looked for, and the step
 // the search walks out in (m): fine enough not to step over the snow on a
-// real summit (the Olympics' own are a few hundred metres across, at the
-// Earth's scale), and far enough to take in a range round the start.
-export const HOME = { reach: 15000, step: 250 };
+// real summit (the Olympics' own are a kilometre or two across), and far
+// enough to take in the range round the start.
+export const HOME = { reach: 75000, step: 1250 };
 // What a run is called: a word for the mountain and one for the run, each
 // going round on a lattice (the mountain's i + 4j, of 16, so no two squares
 // within three of each other either way share one).

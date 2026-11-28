@@ -290,8 +290,14 @@ function topOf(object, x, z) {
       const l2 = ((D[2] - A[2]) * (x - D[0]) + (A[0] - D[0]) * (z - D[2])) / det;
       if (l1 < -1e-9 || l2 < -1e-9 || l1 + l2 > 1 + 1e-9) continue;
       const y = l1 * A[1] + l2 * B[1] + (1 - l1 - l2) * D[1];
-      if (!best || y > best.y + 1e-6) best = { y, r: C[a * 3], g: C[a * 3 + 1], b: C[a * 3 + 2], n: 1 };
-      else if (Math.abs(y - best.y) <= 1e-6) best.n++;
+      if (!best || y > best.y + 1e-6) best = { y, r: C[a * 3], g: C[a * 3 + 1], b: C[a * 3 + 2], n: 1, tri: [A, B, D] };
+      else if (Math.abs(y - best.y) <= 1e-6) {
+        // (a spot right on the edge two of its triangles share is one surface,
+        // not two: a second is one laid over it, sharing no edge with it)
+        const same = (p, q) => Math.abs(p[0] - q[0]) < 1e-6 && Math.abs(p[1] - q[1]) < 1e-6 && Math.abs(p[2] - q[2]) < 1e-6;
+        const shared = [A, B, D].filter((p) => best.tri.some((q) => same(p, q))).length;
+        if (shared < 2) best.n++;
+      }
     }
   }
   return best;

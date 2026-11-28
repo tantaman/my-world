@@ -1,38 +1,38 @@
 [
  {
-  "id": "dealer:town:-4:-2",
-  "name": "Gilchrist Auto Sales",
-  "road": "road:-5:-2:e",
-  "x": -3363.161,
-  "z": -1307.104,
-  "yaw": 0.491,
-  "top": 32.447
+  "id": "dealer:town:-3:-2",
+  "name": "Ashby Motors",
+  "road": "road:-3:-2:s",
+  "x": -2914.899,
+  "z": -1375.634,
+  "yaw": -1.619,
+  "top": 842.346
+ },
+ {
+  "id": "dealer:town:1:-1",
+  "name": "Lindqvist Motor Co.",
+  "road": "road:1:-1:e",
+  "x": 1545.47,
+  "z": -908.643,
+  "yaw": 0.813,
+  "top": 163.895
+ },
+ {
+  "id": "dealer:town:-2:0",
+  "name": "Hartigan Motors",
+  "road": "road:-2:0:e",
+  "x": -1782.494,
+  "z": 814.066,
+  "yaw": 2.372,
+  "top": 165.501
  },
  {
   "id": "dealer:town:-4:1",
   "name": "Gilchrist Motors",
-  "road": "road:-4:1:e",
-  "x": -3066.265,
-  "z": 1148.599,
-  "yaw": 0.003,
-  "top": 4.254
- },
- {
-  "id": "dealer:town:-4:3",
-  "name": "Tolliver Auto Sales",
-  "road": "road:-4:2:s",
-  "x": -3325.764,
-  "z": 3430.241,
-  "yaw": 0.528,
-  "top": 7.329
- },
- {
-  "id": "dealer:town:0:3",
-  "name": "Rourke Motor Co.",
-  "road": "road:0:3:s",
-  "x": 546.046,
-  "z": 3928.592,
-  "yaw": -2.082,
-  "top": 2.728
+  "road": "road:-4:1:s",
+  "x": -3653.207,
+  "z": 1900.959,
+  "yaw": -0.751,
+  "top": 191.89
  }
 ]

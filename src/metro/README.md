@@ -94,10 +94,10 @@ forty metres down. The map often draws two tracks side by side nearer than
 two trains can pass; the importer sets each off the other until they're
 4.1 m apart, middle to middle, easing them out to it.
 
-**Life size, and where it stops.** Washington is life size out to a circle
-11.6 km round its middle; past that the land is the 1 : 5 world, which holds
-the real Metro's outer reaches (Shady Grove, Dulles) only as the countryside
-it's drawn on. So the track here runs to the edge of the life-size land and
+**Where it stops.** Washington's own land reaches a circle 11.6 km round its
+middle; past that the land is the coarse Earth's, life size too but with no
+city on it, where the real Metro's outer reaches (Shady Grove, Dulles) are
+only the countryside they'd stand in. So the track here runs to the edge of the life-size land and
 stops, and the stations past it aren't here. The trains still say where
 they're going.
 

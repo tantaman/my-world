@@ -1,7 +1,7 @@
 // Hikes: real walks, set into the forest from photos taken on them.
 //
 // `npm run hike -- photo.heic` (tools/hike.mjs) imports one: the real land
-// round where the photo was taken, its trails and its lakes, at 1:5, placed
+// round where the photo was taken, its trails and its lakes, life size, placed
 // out in the world (world/hikes.js lists them; world/landform.js is how the
 // world grows them). This feature is the part you play:
 //
@@ -28,19 +28,21 @@ import { makeCairn, makeSignpost, makeChains } from './waymarks.js';
 import { HikesPanel } from './hikesPanel.js';
 import { isNotYet } from '../core/notYet.ts';
 
-// A hike's far view takes in this much of the land round it (m past its
-// edge), so that from its top you see as far as its photo does: the far
-// ridges in Mount Storm King's are 15 to 20 km off, 3 to 4 km at the hike's
-// 1:5 (tools/look.mjs). Its heights are this far apart (m), or further, so
-// that a side of it is never more than FAR_POINTS of them.
+// A hike small enough to draw whole has its far view take in this much of
+// the land round it (m past its edge); past that, and past the square round
+// you of a bigger one, the far view's rings go on to 27 km (far/index.js),
+// so that from its top you see as far as its photo does (Mount Storm King's
+// far ridges are 15 to 20 km off: tools/look.mjs). Its heights are this far
+// apart (m), or further, so that a side of it is never more than FAR_POINTS
+// of them.
 const FAR_MARGIN = 3600;
 const FAR_STEP = 16;
 const FAR_POINTS = 400;
 const FAR_MAKE = 1500; // m past a hike's edge: nearer than this its far view is made…
 const FAR_DROP = 2500; // …and further than this, let go
-// A place too big to draw whole (Washington, life size: 24 km across) has a
-// square of it drawn round you instead, as the forest's own far view is
-// (Mount Storm King, 6.4 km across with all of Lake Crescent, is drawn whole):
+// A place too big to draw whole (Washington, 24 km across; Mount Storm King,
+// 32 km with all of Lake Crescent) has a square of it drawn round you
+// instead, as the forest's own far view is:
 // over this much of it (m, its outer edge from its middle), the square this
 // big (half of it, m), its heights this far apart, re-made as you go once
 // you've walked this far (m) from where it was drawn round.
@@ -244,7 +246,8 @@ export function installHikes(game) {
     if (outer(c) > FAR_WHOLE) {
       const { half, step, move } = FAR_ROUND;
       const [mx, mz] = [Math.round(x / move) * move, Math.round(z / move) * move];
-      return [mx - half, mz - half, mx + half, mz + half, step];
+      // (seen out to its corners: the far view's rings go on past them)
+      return [mx - half, mz - half, mx + half, mz + half, step, Math.ceil(half * Math.SQRT2 + move)];
     }
     const half = outer(c) + FAR_MARGIN;
     const step = Math.max(FAR_STEP, Math.ceil((2 * half) / FAR_POINTS / 4) * 4);

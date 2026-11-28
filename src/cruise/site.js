@@ -58,7 +58,7 @@ export const GANGWAY = { x0: PIER.x0 + 1.4, x1: PIER.x0 + 3.4, foot: 0, head: -1
 const DEEP = DRAFT + 3; // m of water she wants under her and round her
 const ROOM = 6; // m of that water past her sides and ends
 const LOOK = { near: 150, step: 8 }; // the lines looked along: from (m), and how finely the water's edge is found on one
-const ROUND = { steps: 120, far: 14000, step: 40 }; // ...all the way round, how many, out to (m), and how coarsely the land is looked at first
+const ROUND = { steps: 120, far: 70000, step: 200 }; // ...all the way round, how many, out to (m: the Pacific is 35 km west of the start), and how coarsely the land is looked at first
 // Her lane out to sea (m): she moves off the pier sideways this far, then
 // swings round in water this wide round her (half her length and some);
 // the lane runs straight out as far as LANE.most and must reach LANE.least,
