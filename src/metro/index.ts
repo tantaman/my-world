@@ -108,9 +108,12 @@ const SAY = 5200; // ms a sentence stays on the screen
 const ENCLOSED = 0.8; // how shut in the station sounds (audio/soundscape.js)
 // The lamps the pool of real lights is given (render/lights.js), for what
 // moves under the street: along a platform, every `every` m, `up` m over
-// it, those within `near` m of the eye; and in each car of a train.
+// it, those within `near` m of the eye; and in each car of a train, `up` m
+// over the rail (just under its ceiling). In the car you're riding in, its
+// strips of lamps light you from over the aisle ahead of your seat and
+// behind it (`seat`: m either way along, and how bright).
 const LAMP = { every: 22, up: 4.2, power: 3.5, range: 22, near: 45, color: [1.0, 0.8, 0.56] };
-const CAR_LAMP = { up: 2.2, power: 8, range: 11, decay: 1.3, near: 70, color: [0.86, 0.93, 1.0] };
+const CAR_LAMP = { up: 2.95, power: 8, range: 11, decay: 1.3, near: 70, color: [0.9, 0.95, 1.0], seat: { along: 1.3, power: 2.5, range: 7 } };
 const BOARDS_EVERY = 1; // s between paintings of the boards near you
 const BOARDS_NEAR = 220; // m: the boards this near are kept up to date
 // Sitting in a seat: knees together, feet on the floor in front.
@@ -577,6 +580,7 @@ export function installMetro(game: Game) {
     return list;
   }
   const carLamps: Lamp[] = [];
+  const seatLamps: Lamp[] = [];
   game.lights.addSource(scene, (eye: { x: number; y: number; z: number }, out: object[]) => {
     if (!net || !below) return;
     for (const b of built.values()) {
@@ -585,10 +589,24 @@ export function installMetro(game: Game) {
       for (const l of lampsOf(L)) if (Math.abs(l.x - eye.x) < LAMP.near && Math.abs(l.z - eye.z) < LAMP.near && Math.abs(l.y - eye.y) < 12) out.push(l);
     }
     let k = 0;
+    let n = 0;
     for (const r of trains.values()) {
-      for (const car of r.train.cars) {
+      const mine = aboard && aboard.k === r.k && aboard.j === r.j ? aboard : null;
+      for (let c = 0; c < r.train.cars.length; c++) {
+        const car = r.train.cars[c];
         const p = car.group.position;
         if (!car.group.visible || Math.abs(p.x - eye.x) > CAR_LAMP.near || Math.abs(p.z - eye.z) > CAR_LAMP.near) continue;
+        if (mine && mine.car === c) {
+          // over the aisle, ahead of your seat and behind it
+          const z = look.loaded!.SEATS[mine.seat % look.loaded!.SEATS.length].z;
+          for (const s of [-1, 1]) {
+            const l = seatLamps[n] || (seatLamps[n] = { x: 0, y: 0, z: 0, color: CAR_LAMP.color, power: CAR_LAMP.seat.power, range: CAR_LAMP.seat.range, decay: CAR_LAMP.decay, shadow: false });
+            r.train.point(c, 0, CAR_LAMP.up, z + s * CAR_LAMP.seat.along, l);
+            out.push(l);
+            n++;
+          }
+          continue;
+        }
         const l = carLamps[k] || (carLamps[k] = { x: 0, y: 0, z: 0, color: CAR_LAMP.color, power: CAR_LAMP.power, range: CAR_LAMP.range, decay: CAR_LAMP.decay, shadow: false });
         l.x = p.x;
         l.y = p.y + CAR_LAMP.up;
@@ -626,6 +644,12 @@ export function installMetro(game: Game) {
     },
   };
   const runOf = () => (aboard ? trains.get(`${aboard.k}#${aboard.j}`) || null : null);
+  // Riding, the camera keeps inside the car you're in, as it would in a real
+  // one: it comes in as near as it has to.
+  player.cameraBlockers.push((o: { x: number; y: number; z: number }, dir: { x: number; y: number; z: number }) => {
+    const r = runOf();
+    return r && aboard ? r.train.inside(aboard.car, o, dir) : Infinity;
+  });
   const stopOf = (r: Run, k: number) => (r.route && k >= 0 ? r.route.stops[k] : null);
   function board(r: Run, car: number, seat: number) {
     const taken = player.rides.take({

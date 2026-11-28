@@ -6,10 +6,14 @@
 // and under it the headlights (or, at the back, the red tail lights).
 // Between the cars, the barriers that keep anyone from stepping into the gap;
 // under them, the trucks on their wheels and the boxes of their equipment.
-// Inside, rows of blue seats, grab poles and the bars along the ceiling, and
-// the light strips down it; the windows are open, so you can look in from
-// the platform and out from your seat. The inside is lit by its own lamps
-// (look.js): how lit each face is, ceiling to floor, is in its colour.
+// Inside, as tall as a real one (2.1 m from the floor to the ceiling, the
+// doorways 1.9 m): rows of blue seats, grab poles by the doors and the bars
+// along the ceiling, and the two strips of lamps down it; the windows are
+// open, so you can look in from the platform and out from your seat. The
+// inside is lit by those strips and nothing else (look.js): the light they
+// put on each corner of each face, falling off from them and coming back
+// off the pale walls, is worked out as it's built (carLight) and carried in
+// its colour, as a station's vault carries its coves' (stations.js).
 //
 // Each kind of car (a cab car, a car between) is built once, round itself,
 // and every car of every train is that geometry put where it is: so a train
@@ -22,6 +26,8 @@
 //   train.seat(car, k, out)               where someone sits in seat k of a car:
 //                                         out.x, y (the hips), z, yaw
 //   train.doors(car, out)                 the doors of a car, each side: [{ x, z, side }]
+//   train.inside(car, from, dir)          m along dir from `from` (in the car) to its walls
+//   train.point(car, x, y, z, out)        where (x, y, z) in a car's own frame is, in the world
 //
 // A car rests on two trucks TRUCK m either side of its middle; each sits on
 // the rail where it is, so a car rides round a curve with its ends over the
@@ -35,13 +41,22 @@ import { pointAt } from './network.js';
 import { CARS, CAR_LEN } from './timetable.js';
 import { destination } from './signs.js';
 
-export const CAR = { half: 1.55, floor: 1.12, eaves: 3.0, roof: 3.45, len: CAR_LEN - 0.6 };
+export const CAR = { half: 1.55, floor: 1.12, eaves: 3.08, roof: 3.45, len: CAR_LEN - 0.6 };
+// Inside (m across from the middle, and up from the rail): the walls; how
+// high they go before they curve in to the ceiling, and how far in that
+// curve meets it; the ceiling, 2.1 m over the floor.
+const IN = { wall: CAR.half * 0.97, cove: 3.02, edge: 1.1, ceiling: 3.22 };
 const TRUCK = 8.0; // m from a car's middle to each truck
 const DOORS = [-6.9, 0, 6.9]; // m along a car, the middle of each pair of doors
 const DOOR_HALF = 0.66;
-const WINDOW = { y0: 1.92, y1: 2.72 };
+const DOOR_TOP = 3.01; // m over the rail: a doorway 1.9 m tall
+const DOOR_GLASS = { y0: 2.05, y1: 2.85 }; // the window in each leaf
+const WINDOW = { y0: 1.9, y1: 2.86 };
 const CAB = 1.3; // m at the front of a cab car that's its nose
 const SIDE_SIGN = { y: 2.62, z: 3.45, w: 1.3 }; // a car's sign along its side: how high, where along, how wide
+const STRIP = { x: 0.8, half: 0.11, end: 0.8 }; // the lamps along the ceiling: m either side of the middle, half as wide, m short of each end
+const BAR = { x: 0.56, y: 3.02 }; // the bars to hold on to along the ceiling: m either side of the middle, and up (1.9 m over the floor)
+const END_DOOR = { half: 0.45, top: 2.98, glass: [2.1, 2.82, 0.26] }; // the door at a car's end, into the next: half its width, its top, its window (bottom, top, half its width)
 // The seats: rows across, facing along, two either side of the aisle, in the
 // bays between the doors.
 const SEAT = { y: 0.46, depth: 0.46, back: 0.62, w: 0.92, row: 0.86 };
@@ -57,9 +72,6 @@ export const SEATS = (() => {
 })();
 
 const lin = (hex) => new THREE.Color(hex);
-// (inside, each scaled by how lit it is: the ceiling's strips light the
-// ceiling least, the walls more, the floor in the seats' shadow less)
-const lit = (hex, k) => lin(hex).multiplyScalar(k);
 const COL = {
   steel: lin(0xc6c9cb),
   steelDark: lin(0x9ea1a4),
@@ -73,25 +85,83 @@ const COL = {
   wheel: lin(0x3a3633),
   nose: lin(0x0b0d0f),
   barrier: lin(0x141414),
-  floor: lit(0x6b6a66, 0.6),
-  wallIn: lit(0xe6e5e0, 0.78),
-  wallLow: lit(0x9fa3a8, 0.7),
-  ceiling: lit(0xf4f3ee, 0.68),
-  endDoor: lit(0x2a2d31, 0.8),
-  seat: lit(0x26478a, 0.75),
-  seatBack: lit(0x2f5297, 0.8),
-  pole: lit(0xd4d6d7, 0.85),
-  light: lin(0xfff8ec),
+  // (inside: what each is made of; the light on it is carLight's)
+  floor: lin(0x8f8b84),
+  wallIn: lin(0xe6e5e0),
+  wallLow: lin(0x9fa3a8),
+  ceiling: lin(0xf4f3ee),
+  doorIn: lin(0xa9adb1), // (the doors, inside)
+  glass: lin(0x1d2124),
+  seat: lin(0x26478a),
+  seatBack: lin(0x2f5297),
+  pole: lin(0xd4d6d7),
+  light: lin(0xf2f6ff),
   head: lin(0xffffff),
   tail: lin(0xff2a1a),
 };
 
-// One side's wall of a car, x = ±half, as panels round its windows and
-// doors: `out` its outside face (+1) or inside (-1).
-function sideWall(m, x, out, cab, colours) {
-  const facing = Math.sign(x) * out; // which way across this face looks
-  const z0 = -CAR.len / 2;
-  const z1 = CAR.len / 2 - (cab ? CAB : 0);
+// How the inside is lit: the two strips of lamps along the ceiling, each
+// taken as a lamp every `step` m along it, shining down; how much a face
+// turned a little away from them still catches; what comes back off the
+// pale walls and seats onto everything, the ceiling too, which the strips
+// themselves don't reach; and the most a face gets. Under the seats, the
+// floor and the foot of the walls are in their shadow, down to `shadow` of
+// what they'd get, `low` m up from the floor and less. (look.js has the
+// inside give off `own` of this, and take no other light; it's scaled so
+// that the aisle's floor under the lamps gets 1.)
+const LIGHT = { step: 0.5, wrap: 0.25, bounce: 0.5, most: 1.3, shadow: 0.5, low: 0.55 };
+const LAMP = new THREE.Color(0.94, 0.97, 1.0); // LEDs, a cool white
+const BOUNCE = new THREE.Color(0.93, 0.94, 0.96);
+const AISLE = { half: 0.78, fade: 0.25 }; // m either side of the middle that's the aisle, out from under the seats; m the seats' shadow comes in over
+
+// How much light the strips (from z0 to z1 along the car) put on a point p
+// ([x, y, z] in the car's frame) of a face looking n, unscaled.
+function strips(p, n, z0, z1) {
+  let sum = 0;
+  const y = IN.ceiling - 0.03;
+  for (const sx of [-STRIP.x, STRIP.x]) {
+    for (let z = z0 + LIGHT.step / 2; z < z1; z += LIGHT.step) {
+      const vx = sx - p[0];
+      const vy = y - p[1];
+      const vz = z - p[2];
+      const d2 = vx * vx + vy * vy + vz * vz;
+      if (d2 < 1e-4 || vy <= 0) continue;
+      const d = Math.sqrt(d2);
+      const facing = Math.max(0, ((n[0] * vx + n[1] * vy + n[2] * vz) / d + LIGHT.wrap) / (1 + LIGHT.wrap));
+      sum += ((vy / d) * facing) / d2;
+    }
+  }
+  return sum;
+}
+const UP = [0, 1, 0];
+const FULL = strips([0, CAR.floor, 0], UP, -CAR.len / 2 + STRIP.end, CAR.len / 2 - STRIP.end);
+
+// The light on a point p of a face looking n, in a car whose strips run
+// from z0 to z1, as a colour to take its own by.
+const _bounce = new THREE.Color();
+function carLight(p, n, z0, z1, out = new THREE.Color()) {
+  const direct = Math.min(LIGHT.most, strips(p, n, z0, z1) / FULL);
+  // under the seats, in their shadow
+  const low = Math.min(1, Math.max(0, (p[1] - CAR.floor) / LIGHT.low));
+  const under = Math.min(1, Math.max(0, (Math.abs(p[0]) - AISLE.half) / AISLE.fade));
+  const shade = 1 - (1 - LIGHT.shadow) * under * (1 - low);
+  // (and of what comes back off everything, some of that too)
+  return out.copy(LAMP).multiplyScalar(direct * shade).add(_bounce.copy(BOUNCE).multiplyScalar(LIGHT.bounce * (0.6 + 0.4 * shade)));
+}
+
+// Where a car's side is cut, along it: its end, each doorway's edges, the
+// other end (or the back of the cab).
+function cutsOf(cab) {
+  const cuts = [-CAR.len / 2];
+  for (const d of DOORS) cuts.push(d - DOOR_HALF, d + DOOR_HALF);
+  cuts.push(CAR.len / 2 - (cab ? CAB : 0));
+  return cuts;
+}
+
+// One side's wall of a car, outside, x = ±half: panels round its windows
+// and doors.
+function sideWall(m, x, cab) {
+  const facing = Math.sign(x); // which way across this face looks
   const panel = (za, zb, ya, yb, col) => {
     if (zb - za < 0.01 || yb - ya < 0.01) return;
     const a = [x, ya, za];
@@ -103,36 +173,117 @@ function sideWall(m, x, out, cab, colours) {
     else quad(m, a, b, c, d, col);
   };
   // along the car: doors, and the window bays between them
-  const cuts = [z0];
-  for (const d of DOORS) cuts.push(d - DOOR_HALF, d + DOOR_HALF);
-  cuts.push(z1);
+  const cuts = cutsOf(cab);
   for (let k = 0; k + 1 < cuts.length; k++) {
     const za = cuts[k];
     const zb = cuts[k + 1];
-    const door = k % 2 === 1;
-    if (door) {
-      // the doors: steel, a window in each leaf, the floor's edge under
-      panel(za, zb, 0.85, CAR.floor, colours.under);
-      panel(za, zb, CAR.floor, 1.95, colours.door);
-      panel(za, za + 0.12, 1.95, 2.6, colours.door);
-      panel(zb - 0.12, zb, 1.95, 2.6, colours.door);
-      panel((za + zb) / 2 - 0.02, (za + zb) / 2 + 0.02, CAR.floor, 2.6, colours.doorEdge);
-      panel((za + zb) / 2 - 0.07, (za + zb) / 2 - 0.02, 1.95, 2.6, colours.door);
-      panel((za + zb) / 2 + 0.02, (za + zb) / 2 + 0.07, 1.95, 2.6, colours.door);
-      panel(za + 0.12, (za + zb) / 2 - 0.05, 1.95, 2.6, colours.band);
-      panel((za + zb) / 2 + 0.05, zb - 0.12, 1.95, 2.6, colours.band);
-      panel(za, zb, 2.6, CAR.eaves, colours.door);
+    if (k % 2 === 1) {
+      // the doors: steel, a window in each leaf (open, as the others are),
+      // the floor's edge under
+      const zm = (za + zb) / 2;
+      const { y0, y1 } = DOOR_GLASS;
+      panel(za, zb, 0.85, CAR.floor, COL.under);
+      panel(za, zb, CAR.floor, y0, COL.door);
+      panel(za, za + 0.12, y0, y1, COL.door);
+      panel(zb - 0.12, zb, y0, y1, COL.door);
+      panel(zm - 0.02, zm + 0.02, CAR.floor, DOOR_TOP, COL.doorEdge);
+      panel(zm - 0.07, zm - 0.02, y0, y1, COL.door);
+      panel(zm + 0.02, zm + 0.07, y0, y1, COL.door);
+      panel(za, zm - 0.02, y1, DOOR_TOP, COL.door);
+      panel(zm + 0.02, zb, y1, DOOR_TOP, COL.door);
+      panel(za, zb, DOOR_TOP, CAR.eaves, COL.steel);
       continue;
     }
-    panel(za, zb, 0.85, WINDOW.y0, colours.steel);
-    panel(za, zb, WINDOW.y1, CAR.eaves, colours.band);
+    panel(za, zb, 0.85, WINDOW.y0, COL.steel);
+    panel(za, zb, WINDOW.y1, CAR.eaves, COL.band);
     // the windows, open, between narrow piers of the band
     const n = Math.max(1, Math.round((zb - za) / 1.7));
     const w = (zb - za) / n;
     for (let j = 0; j <= n; j++) {
       const zc = za + j * w;
-      panel(Math.max(za, zc - 0.13), Math.min(zb, zc + 0.13), WINDOW.y0, WINDOW.y1, colours.band);
+      panel(Math.max(za, zc - 0.13), Math.min(zb, zc + 0.13), WINDOW.y0, WINDOW.y1, COL.band);
     }
+  }
+}
+
+// A face inside a car, its corners [x, y, z] in order round it as seen from
+// inside, looking n; each corner coloured `col` as the strips (z0 to z1)
+// light it there.
+function litQuad(m, a, b, c, d, col, n, z0, z1) {
+  quad(m, a, b, c, d, [a, b, c, d].map((p) => carLight(p, n, z0, z1).multiply(col)));
+}
+
+// A box inside a car, square to it, round (cx, cy, cz), hx, hy, hz either
+// way: each face coloured `col` at each corner as the strips light it there.
+const FACES = [[0, 1], [0, -1], [1, 1], [1, -1], [2, 1], [2, -1]]; // [axis, way]
+function litBox(m, cx, cy, cz, hx, hy, hz, col, z0, z1) {
+  const c = [cx, cy, cz];
+  const h = [hx, hy, hz];
+  for (const [k, w] of FACES) {
+    // the face's corners, round it the way it looks
+    const i = (k + 1) % 3;
+    const j = (k + 2) % 3;
+    const at = (u, v) => {
+      const p = [0, 0, 0];
+      p[k] = c[k] + w * h[k];
+      p[i] = c[i] + u * h[i];
+      p[j] = c[j] + v * h[j];
+      return p;
+    };
+    const n = [0, 0, 0];
+    n[k] = w;
+    if (w > 0) litQuad(m, at(-1, -1), at(1, -1), at(1, 1), at(-1, 1), col, n, z0, z1);
+    else litQuad(m, at(-1, -1), at(-1, 1), at(1, 1), at(1, -1), col, n, z0, z1);
+  }
+}
+
+// One side's wall of a car, inside, x = ±IN.wall: panels round its windows
+// and doors, up to where it curves in to the ceiling; then that curve.
+function innerWall(m, x, cab, z0, z1, za0, zb1) {
+  const s = Math.sign(x);
+  const n = [-s, 0, 0];
+  const panel = (za, zb, ya, yb, col) => {
+    za = Math.max(za, za0);
+    zb = Math.min(zb, zb1);
+    if (zb - za < 0.01 || yb - ya < 0.01) return;
+    const a = [x, ya, za];
+    const b = [x, ya, zb];
+    const c = [x, yb, zb];
+    const d = [x, yb, za];
+    // (seen from inside, looking -s across)
+    if (s < 0) litQuad(m, a, d, c, b, col, n, z0, z1);
+    else litQuad(m, a, b, c, d, col, n, z0, z1);
+  };
+  const cuts = cutsOf(cab);
+  for (let k = 0; k + 1 < cuts.length; k++) {
+    const za = cuts[k];
+    const zb = cuts[k + 1];
+    if (k % 2 === 1) {
+      // the doors, from inside: a window in each leaf, the wall over them
+      const zm = (za + zb) / 2;
+      const { y0, y1 } = DOOR_GLASS;
+      panel(za, zb, CAR.floor, y0, COL.doorIn);
+      panel(za, za + 0.12, y0, y1, COL.doorIn);
+      panel(zb - 0.12, zb, y0, y1, COL.doorIn);
+      panel(zm - 0.07, zm + 0.07, y0, y1, COL.doorIn);
+      panel(za, zb, y1, DOOR_TOP, COL.doorIn);
+      panel(za, zb, DOOR_TOP, IN.cove, COL.wallIn);
+    } else {
+      panel(za, zb, CAR.floor, WINDOW.y0, COL.wallLow);
+      panel(za, zb, WINDOW.y1, IN.cove, COL.wallIn);
+      const w = (zb - za) / Math.max(1, Math.round((zb - za) / 1.7));
+      for (let zc = za; zc <= zb + 1e-6; zc += w) panel(Math.max(za, zc - 0.13), Math.min(zb, zc + 0.13), WINDOW.y0, WINDOW.y1, COL.wallIn);
+    }
+    // the curve in to the ceiling, over this stretch
+    const ea = Math.max(za, za0);
+    const eb = Math.min(zb, zb1);
+    if (eb - ea < 0.01) continue;
+    const e = s * IN.edge;
+    const dn = Math.hypot(IN.ceiling - IN.cove, IN.wall - IN.edge);
+    const nc = [(-s * (IN.ceiling - IN.cove)) / dn, -(IN.wall - IN.edge) / dn, 0];
+    const p = [[x, IN.cove, ea], [x, IN.cove, eb], [e, IN.ceiling, eb], [e, IN.ceiling, ea]];
+    if (s < 0) litQuad(m, p[0], p[3], p[2], p[1], COL.ceiling, nc, z0, z1);
+    else litQuad(m, p[0], p[1], p[2], p[3], COL.ceiling, nc, z0, z1);
   }
 }
 
@@ -154,6 +305,15 @@ function wheel(m, x, z, col) {
   }
 }
 
+// The inside of a car, along it: from the end wall at its back (-z) to the
+// one at its front (or the back of the cab).
+function insideOf(cab) {
+  return { z0: -CAR.len / 2 + 0.2, z1: cab ? CAR.len / 2 - CAB - 0.1 : CAR.len / 2 - 0.2 };
+}
+
+// The inside's outline across a car, round from the floor at one side.
+const PROFILE = [[-IN.wall, CAR.floor], [IN.wall, CAR.floor], [IN.wall, IN.cove], [IN.edge, IN.ceiling], [-IN.edge, IN.ceiling], [-IN.wall, IN.cove]];
+
 // A car's shell, round its middle: x across, y up from the rail, z along
 // (+z forward). A cab car has its cab at +z.
 function carGeometry(cab) {
@@ -166,10 +326,7 @@ function carGeometry(cab) {
   const z0 = -CAR.len / 2;
   const z1 = CAR.len / 2;
   const zf = z1 - (cab ? CAB : 0);
-  for (const x of [-H, H]) {
-    sideWall(outer, x, 1, cab, COL);
-    sideWall(inner, x * 0.97, -1, cab, { steel: COL.wallLow, band: COL.wallIn, door: COL.wallIn, under: COL.wallLow, doorEdge: COL.wallIn });
-  }
+  for (const x of [-H, H]) sideWall(outer, x, cab);
   // the roof: rounded at its edges, flat on top
   const roofProf = [[-H, CAR.eaves], [-H * 0.82, CAR.roof - 0.12], [-H * 0.55, CAR.roof], [H * 0.55, CAR.roof], [H * 0.82, CAR.roof - 0.12], [H, CAR.eaves]];
   for (let k = 0; k + 1 < roofProf.length; k++) {
@@ -177,10 +334,6 @@ function carGeometry(cab) {
     const [xb, yb] = roofProf[k + 1];
     quad(outer, [xa, ya, z0], [xb, yb, z0], [xb, yb, zf], [xa, ya, zf], k === 2 ? COL.roof : COL.steelDark);
   }
-  // the ceiling inside, and its light strips; the floor
-  quad(inner, [-H * 0.97, 2.62, z0 + 0.2], [-H * 0.97, 2.62, zf - 0.2], [H * 0.97, 2.62, zf - 0.2], [H * 0.97, 2.62, z0 + 0.2], COL.ceiling);
-  for (const x of [-0.55, 0.55]) box(glow, x, 2.6, (z0 + zf) / 2, 0.12, 0.02, (zf - z0) / 2 - 0.8, 0, COL.light);
-  quad(inner, [-H * 0.97, CAR.floor, z0 + 0.2], [H * 0.97, CAR.floor, z0 + 0.2], [H * 0.97, CAR.floor, zf - 0.2], [-H * 0.97, CAR.floor, zf - 0.2], COL.floor);
   // under the floor: the frame's skirt, the boxes of its equipment between
   // the trucks, and the trucks on their wheels
   box(outer, 0, 0.78, 0, H - 0.08, 0.1, CAR.len / 2 - 0.4, 0, COL.under);
@@ -195,8 +348,6 @@ function carGeometry(cab) {
       }
     }
   }
-  // the bars along the ceiling, to hold on to
-  for (const x of [-0.62, 0.62]) box(inner, x, 2.22, (z0 + zf) / 2, 0.018, 0.018, (zf - z0) / 2 - 1.0, 0, COL.pole);
   // the ends: a plain end with its gangway door; or the cab
   const end = (z, facing) => {
     const pts = [[-H, 0.85], [H, 0.85], [H, CAR.eaves], [H * 0.82, CAR.roof - 0.12], [H * 0.55, CAR.roof], [-H * 0.55, CAR.roof], [-H * 0.82, CAR.roof - 0.12], [-H, CAR.eaves]];
@@ -213,10 +364,11 @@ function carGeometry(cab) {
   };
   // the barriers either side of the gap to the next car, and the end door's
   // window, at each end that meets another car
+  const [gy0, gy1, gw] = END_DOOR.glass;
   for (const [z, s] of cab ? [[z0, -1]] : [[z0, -1], [z1, 1]]) {
     for (const x of [-H + 0.1, H - 0.1]) box(outer, x, 1.65, z + s * 0.16, 0.06, 0.72, 0.15, 0, COL.barrier);
-    quad(outer, [-0.36, 1.55, z + s * 0.01], [0.36, 1.55, z + s * 0.01], [0.36, 2.45, z + s * 0.01], [-0.36, 2.45, z + s * 0.01], COL.band);
-    quad(outer, [0.36, 1.55, z + s * 0.01], [-0.36, 1.55, z + s * 0.01], [-0.36, 2.45, z + s * 0.01], [0.36, 2.45, z + s * 0.01], COL.band);
+    quad(outer, [-gw, gy0, z + s * 0.01], [gw, gy0, z + s * 0.01], [gw, gy1, z + s * 0.01], [-gw, gy1, z + s * 0.01], COL.band);
+    quad(outer, [gw, gy0, z + s * 0.01], [-gw, gy0, z + s * 0.01], [-gw, gy1, z + s * 0.01], [gw, gy1, z + s * 0.01], COL.band);
   }
   end(z0, -1);
   if (!cab) end(z1, 1);
@@ -240,24 +392,77 @@ function carGeometry(cab) {
     face(1.05, 1.5, COL.steel);
     face(1.5, 3.12, COL.nose);
     face(3.12, CAR.roof * 0.96 + 0.03, COL.steel);
-    // and inside, the cab's back wall
-    quad(inner, [-H * 0.97, CAR.floor, n0 - 0.1], [H * 0.97, CAR.floor, n0 - 0.1], [H * 0.97, CAR.eaves, n0 - 0.1], [-H * 0.97, CAR.eaves, n0 - 0.1], COL.wallIn);
   }
-  quad(inner, [H * 0.97, CAR.floor, z0 + 0.2], [-H * 0.97, CAR.floor, z0 + 0.2], [-H * 0.97, CAR.eaves, z0 + 0.2], [H * 0.97, CAR.eaves, z0 + 0.2], COL.wallIn);
-  if (!cab) quad(inner, [-H * 0.97, CAR.floor, z1 - 0.2], [H * 0.97, CAR.floor, z1 - 0.2], [H * 0.97, CAR.eaves, z1 - 0.2], [-H * 0.97, CAR.eaves, z1 - 0.2], COL.wallIn);
-  // the seats, and the poles by the doors
+
+  // ── Inside ──
+  const { z0: i0, z1: i1 } = insideOf(cab);
+  // the strips of lamps along the ceiling, from end to end
+  const s0 = i0 + STRIP.end - 0.2;
+  const s1 = i1 - STRIP.end + 0.2;
+  for (const x of [-STRIP.x, STRIP.x]) box(glow, x, IN.ceiling - 0.012, (s0 + s1) / 2, STRIP.half, 0.012, (s1 - s0) / 2, 0, COL.light);
+  // the walls, and their curve in to the ceiling
+  for (const x of [-IN.wall, IN.wall]) innerWall(inner, x, cab, s0, s1, i0, i1);
+  // the ceiling and the floor, in stretches along (so that the light falls
+  // off towards the ends) and, the floor, across (so that it's darker under
+  // the seats than in the aisle)
+  const along = [i0, ...cutsOf(cab).slice(1, -1), i1];
+  for (let k = 0; k + 1 < along.length; k++) {
+    const [za, zb] = [along[k], along[k + 1]];
+    litQuad(inner, [-IN.edge, IN.ceiling, za], [IN.edge, IN.ceiling, za], [IN.edge, IN.ceiling, zb], [-IN.edge, IN.ceiling, zb], COL.ceiling, [0, -1, 0], s0, s1);
+    const xs = [-IN.wall, -AISLE.half, AISLE.half, IN.wall];
+    for (let j = 0; j + 1 < xs.length; j++) litQuad(inner, [xs[j], CAR.floor, za], [xs[j], CAR.floor, zb], [xs[j + 1], CAR.floor, zb], [xs[j + 1], CAR.floor, za], COL.floor, UP, s0, s1);
+  }
+  // the ends: a wall round the inside's outline, and the door into the next car
+  for (const [z, s] of [[i0, 1], [i1, -1]]) {
+    const n = [0, 0, s];
+    const mid = [0, (CAR.floor + IN.ceiling) / 2, z];
+    for (let k = 0; k < PROFILE.length; k++) {
+      const [xa, ya] = PROFILE[k];
+      const [xb, yb] = PROFILE[(k + 1) % PROFILE.length];
+      const a = [xa, ya, z];
+      const b = [xb, yb, z];
+      // (seen from inside: looking -s along)
+      if (s > 0) litQuad(inner, mid, a, b, b, COL.wallIn, n, s0, s1);
+      else litQuad(inner, mid, b, a, a, COL.wallIn, n, s0, s1);
+    }
+    if (cab && s < 0) continue; // (the back of the cab has no door in it)
+    const zd = z + s * 0.01;
+    const door = (xa, xb, ya, yb, col) => {
+      const p = [[xa, ya, zd], [xb, ya, zd], [xb, yb, zd], [xa, yb, zd]];
+      if (s > 0) litQuad(inner, p[0], p[1], p[2], p[3], col, n, s0, s1);
+      else litQuad(inner, p[0], p[3], p[2], p[1], col, n, s0, s1);
+    };
+    const { half: dh, top } = END_DOOR;
+    door(-dh, dh, CAR.floor, gy0, COL.doorIn);
+    door(-dh, -gw, gy0, gy1, COL.doorIn);
+    door(gw, dh, gy0, gy1, COL.doorIn);
+    door(-gw, gw, gy0, gy1, COL.glass);
+    door(-dh, dh, gy1, top, COL.doorIn);
+  }
+  // the bars along the ceiling, to hold on to, and the poles by the doors
+  const solid = (cx, cy, cz, hx, hy, hz, col) => litBox(inner, cx, cy, cz, hx, hy, hz, col, s0, s1);
+  for (const x of [-BAR.x, BAR.x]) solid(x, BAR.y, (i0 + i1) / 2, 0.018, 0.018, (i1 - i0) / 2 - 0.8, COL.pole);
+  for (const d of DOORS) {
+    for (const zz of [d - DOOR_HALF - 0.3, d + DOOR_HALF + 0.3]) {
+      if (zz < i1 - 0.3) solid(0, (CAR.floor + IN.ceiling) / 2, zz, 0.025, (IN.ceiling - CAR.floor) / 2, 0.025, COL.pole);
+    }
+  }
+  // the seats: the cushion, its back, the leg under it
   for (const s of SEATS) {
-    if (cab && s.z > zf - 0.6) continue;
+    if (cab && s.z > i1 - 0.6) continue;
     const back = s.yaw ? 1 : -1;
-    box(inner, s.x, CAR.floor + SEAT.y - 0.06, s.z, 0.22, 0.06, SEAT.depth / 2, 0, COL.seat);
-    box(inner, s.x, CAR.floor + SEAT.y + SEAT.back / 2, s.z + back * (SEAT.depth / 2 - 0.04), 0.22, SEAT.back / 2, 0.05, 0, COL.seat);
-    box(inner, s.x, CAR.floor + SEAT.y / 2 - 0.06, s.z, 0.04, SEAT.y / 2 - 0.06, 0.04, 0, COL.pole);
+    const top = CAR.floor + SEAT.y;
+    solid(s.x, top - 0.06, s.z, 0.22, 0.06, SEAT.depth / 2, COL.seat);
+    solid(s.x, top + SEAT.back / 2, s.z + back * (SEAT.depth / 2 - 0.04), 0.22, SEAT.back / 2, 0.05, COL.seatBack);
+    solid(s.x, CAR.floor + SEAT.y / 2 - 0.06, s.z, 0.04, SEAT.y / 2 - 0.06, 0.04, COL.pole);
   }
-  for (const d of DOORS) for (const zz of [d - DOOR_HALF - 0.3, d + DOOR_HALF + 0.3]) box(inner, 0, (CAR.floor + 2.62) / 2, zz, 0.025, (2.62 - CAR.floor) / 2, 0.025, 0, COL.pole);
   return { outer: outer.build(), inner: inner.build(), glow: glow.build() };
 }
 
 const _a = { x: 0, y: 0, z: 0, dx: 0, dz: 0 };
+const _q = new THREE.Quaternion();
+const _o = new THREE.Vector3();
+const _d = new THREE.Vector3();
 const _b = { x: 0, y: 0, z: 0, dx: 0, dz: 0 };
 
 // What all trains share: the cars' geometry and materials.
@@ -377,6 +582,40 @@ export class MetroTrain {
     out.z = v.z;
     out.yaw = g.rotation.y + s.yaw;
     return out;
+  }
+
+  // Where (x, y, z) in car `car`'s own frame (x across, y up from the rail,
+  // z along) is in the world: out.x, y, z.
+  point(car, x, y, z, out) {
+    const g = this.cars[car].group;
+    _o.set(x, y, z).applyQuaternion(g.quaternion).add(g.position);
+    out.x = _o.x;
+    out.y = _o.y;
+    out.z = _o.z;
+    return out;
+  }
+
+  // How far (m) along dir from `from` (both in the world, `from` inside car
+  // `car`) its walls, floor, ceiling or ends are, kept `clear` m back from
+  // them; Infinity if `from` isn't inside it.
+  inside(car, from, dir, clear = 0.15) {
+    const c = this.cars[car];
+    const g = c.group;
+    _q.copy(g.quaternion).invert();
+    _o.set(from.x, from.y, from.z).sub(g.position).applyQuaternion(_q);
+    _d.set(dir.x, dir.y, dir.z).applyQuaternion(_q);
+    const { z0, z1 } = insideOf(c.cab);
+    const lo = [-IN.wall + clear, CAR.floor + clear, z0 + clear];
+    const hi = [IN.wall - clear, IN.ceiling - clear, z1 - clear];
+    const o = [_o.x, _o.y, _o.z];
+    const d = [_d.x, _d.y, _d.z];
+    let t = Infinity;
+    for (let k = 0; k < 3; k++) {
+      if (o[k] < lo[k] || o[k] > hi[k]) return Infinity;
+      if (d[k] > 1e-9) t = Math.min(t, (hi[k] - o[k]) / d[k]);
+      else if (d[k] < -1e-9) t = Math.min(t, (lo[k] - o[k]) / d[k]);
+    }
+    return t;
   }
 
   // Where a car's doors are, in the world, on its right side (+1) and left (-1).

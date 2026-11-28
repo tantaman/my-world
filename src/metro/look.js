@@ -31,7 +31,7 @@ const LIT = {
   vault: { own: 1.1, take: 0 }, // (its colour carries the coves' light)
   solid: { own: 1.0, take: 0 }, // what stands under the vault (likewise)
   tube: { own: 0.07, take: 1 },
-  car: { own: 0.4, take: 0 }, // (its colour carries how lit each face is: trains.js)
+  car: { own: 0.3, take: 0 }, // (its colour carries the light its strips put on each face: trains.js)
 };
 
 // a sign's colour under the street (its texture taken by it)

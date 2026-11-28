@@ -44,7 +44,11 @@ the black mask of its front round the windscreen with its line's colour and
 where it's going lit behind the glass, and again along each car's side;
 barriers across the gaps between the cars), its brakes squealing as it
 draws up, and stands half a minute. **F** beside one of its cars gets you on, into a seat by the window;
-the HUD says where it stops next and when. The doors' chime sounds, and it
+the HUD says where it stops next and when. Inside, it's as tall as a real
+car, 2.1 m from the floor to the ceiling, lit a cool white by the two strips
+of lamps along its ceiling: brightest on the floor of the aisle and the walls
+under them, the ceiling lit only by what comes back off everything, the
+floor under the seats in their shadow. The camera stays in the car with you. The doors' chime sounds, and it
 pulls away down the tunnel. At a station, **F** gets you off onto the
 platform by its doors. Where the line goes on past life-size Washington (to
 Shady Grove, Vienna, Franconia, Ashburn…) the train leaves you at the last
