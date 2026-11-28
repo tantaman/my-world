@@ -2,19 +2,18 @@
 // and it's yours, with you at the wheel; W drives it off, S stops it; F gets
 // you out beside it, where it waits; F beside it, and you're back in.
 //
-// The dealership is a named one (pinned in test/golden/dealers-20261119.json):
-// none is near enough to the start to be the nearest from wherever the parts
-// before left you, since Mount Storm King's land took in the town that had
-// one. A lot faces across its town's road, into the town, so what's straight
-// ahead of a car leaving it is a few dozen metres off: it's driven off for
-// far enough to be under way, not to the far side of town.
+// The dealership is a named one (pinned in test/golden/dealers-20261119.json),
+// the nearest to the start, so the parts before can leave you anywhere. A lot
+// faces across its town's road, into the town, so what's straight ahead of a
+// car leaving it is a few dozen metres off: it's driven off for far enough to
+// be under way, not to the far side of town.
 //
 // Needs: nothing of what came before. Leaves: you standing beside your car.
 
 import assert from 'node:assert/strict';
 
-// Rattler Gulch's, with the clearest run off its lot of those round the start
-const DEALER = 'dealer:town:-4:-2';
+// Broken Gulch's, 1.8 km east of the start
+const DEALER = 'dealer:town:1:-1';
 // m W is held for: well under way, short of what stands across the road
 // (however quickly the frames come)
 const DRIVE_TO = 8;

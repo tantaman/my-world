@@ -116,12 +116,19 @@ export default async function ({ page, step, key, frames, shot }) {
   });
 
   await step('paddling out', async () => {
-    // the board points out to sea: W paddles it there
+    // the board points out to sea: W paddles it there, and where the white
+    // water is carrying you back in, shift ducks the nose under it (a big
+    // break's sets come in over where it's waist-deep)
     const got = await page.evaluate(async (s) => {
       const sf = world.surfing.surfer;
       const from = T.breakFrame(s, sf.x, sf.z).u;
-      T.keys(['KeyW']);
-      await T.until(() => T.breakFrame(s, sf.x, sf.z).u > from + 6, 60000);
+      let last = from;
+      await T.until(() => {
+        const u = T.breakFrame(s, sf.x, sf.z).u;
+        T.keys(u < last - 0.005 ? ['KeyW', 'ShiftLeft'] : ['KeyW']);
+        last = u;
+        return u > from + 6;
+      }, 90000);
       T.keys([]);
       return { from, to: T.breakFrame(s, sf.x, sf.z).u, cue: T.prompt() };
     }, spot);

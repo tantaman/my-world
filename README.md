@@ -224,6 +224,7 @@ place in that order, not at the end:
 | `game/commands.js` | keys of its own for somewhere that isn't the forest, where the forest's do nothing | `commands.add({ …, mode })`, `commands.mode = …` |
 | `game/game.ts` | something done every frame | `game.addSystem({ name, phase, update })` |
 | `game/game.ts` | something that must be here before the hiker is set down where they were left | `game.beforeArrival(look.ready())` |
+| `game/game.ts` | a save that leaves the hiker where the forest isn't drawn, so the opening doesn't wait for it | `game.arrivesCovered()` in `restore` |
 | `game/game.ts` | something the features after this one look about on as they install (the real Earth round the start and the hikes), fetched first | return its promise from the install function |
 | `game/settings.js` | a remembered preference | `game.settings.get / set` |
 | `hell/index.ts` | the voice the poem is read aloud in, for somewhere else out of the same book | `game.hell.reader` (`core/reader.ts`) |

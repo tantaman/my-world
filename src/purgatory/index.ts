@@ -178,8 +178,12 @@ export function installPurgatory(game: Game) {
       done = kept.done;
       dreams = kept.dreams;
       land.shut = !marked;
-      // left standing on the mountain: what it looks like must be here first
-      if (kept.on) game.beforeArrival(looked());
+      // left standing on the mountain: what it looks like must be here
+      // first, and the forest overhead needn't be
+      if (kept.on) {
+        game.beforeArrival(looked());
+        game.arrivesCovered();
+      }
     },
   });
 

@@ -27,7 +27,7 @@ export default async function ({ page, step, key, frames, shot }) {
       world.mounts.ride('eagle');
       await T.frames(3);
     });
-    assert.ok(await climb(page, 30), 'up high');
+    assert.ok(await climb(page, 60), 'up high'); // (well clear of the trees on a hillside, however the ground rises under the glide)
     assert.match(await page.evaluate(() => T.prompt()), /F let go and glide/, 'the prompt says what F does up here');
     await key('KeyF');
     const off = await page.evaluate(() => ({

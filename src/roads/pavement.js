@@ -266,6 +266,7 @@ export function buildPiece(road, p, ground, material) {
       bx: cur.x,
       bz: cur.z,
       r: WIDE + 0.1,
+      flat: true,
       topA: prev.h,
       topB: cur.h,
       bottom: bridge ? Math.min(prev.h, cur.h) - DECK - 0.3 : Math.min(prev.h - prev.up, cur.h - cur.up) - 1,
@@ -441,7 +442,7 @@ export function buildGate(gate, paved, ground, material, over = material) {
       quad(m, ps.lt, cs.lt, cs.top[0], ps.top[0], [foot, foot, lip, lip]);
       const last = offs.length - 1;
       quad(m, ps.top[last], cs.top[last], cs.rt, ps.rt, [lip, lip, foot, foot]);
-      solids.push({ ax: prev.x, az: prev.z, bx: cur.x, bz: cur.z, r: WIDE + 0.1, topA: prev.h, topB: cur.h, bottom: Math.min(prev.h - prev.up, cur.h - cur.up) - 1, step: Math.min(Math.max(Math.min(prev.up, cur.up), 0) + 0.12, 1.1), surface: UNDERFOOT[paved ? 'paved' : 'gravel'] });
+      solids.push({ ax: prev.x, az: prev.z, bx: cur.x, bz: cur.z, r: WIDE + 0.1, flat: true, topA: prev.h, topB: cur.h, bottom: Math.min(prev.h - prev.up, cur.h - cur.up) - 1, step: Math.min(Math.max(Math.min(prev.up, cur.up), 0) + 0.12, 1.1), surface: UNDERFOOT[paved ? 'paved' : 'gravel'] });
     }
     ps = cs;
     prev = cur;

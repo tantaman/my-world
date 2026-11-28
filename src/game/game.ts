@@ -102,6 +102,10 @@ export class Game extends Emitter {
   // What has to be here before the hiker is set down where they were left:
   // see beforeArrival().
   arrivals: Promise<unknown>[];
+  // Whether the hiker is set down where the forest isn't drawn (a place of
+  // its own, under the land: arrivesCovered()), so the opening needn't wait
+  // for the forest round them.
+  arrivingCovered = false;
   running: boolean;
   private _covers: Array<{ on: () => boolean; idle: () => boolean }>;
   private _before: Promise<unknown> | null = null;
@@ -172,6 +176,14 @@ export class Game extends Emitter {
   // main.js waits for these, a while, before they arrive.
   beforeArrival(wait: Promise<unknown>): void {
     this.arrivals.push(wait.catch(() => {}));
+  }
+
+  // The save leaves the hiker somewhere that covers the forest (coverWhen:
+  // Purgatory's mountain): main.js doesn't wait for the forest round where
+  // they're set down before they arrive, since it isn't drawn (it streams in
+  // after, as it does round anywhere). A place says so as it's restored.
+  arrivesCovered(): void {
+    this.arrivingCovered = true;
   }
 
   // While fn() is true something covers the whole view (the map, say) and the

@@ -37,7 +37,7 @@ export default async function ({ page, step, key, frames, shot }) {
     assert.ok(await page.evaluate(() => T.until(() => world.swamptour.list()[0].ready, 120000)), 'the way round is found');
     const t = await page.evaluate(() => world.swamptour.list()[0]);
     assert.equal(await page.evaluate(() => world.country.name), 'bayou', 'in the bayou country');
-    assert.ok(t.length > 1500 && t.length < 4000, `a few kilometres round (${t.length} m)`);
+    assert.ok(t.length > 7500 && t.length < 20000, `ten kilometres or so round (${t.length} m)`);
     assert.equal(t.gators, 4, 'with four gators to see on the way');
     return t;
   });

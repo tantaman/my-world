@@ -6,7 +6,11 @@
 //   { ax, az, bx, bz, r, bottom, topA, topB, step? }
 //
 // `step` is how far below its top you can be and still walk up onto it
-// (defaults to the player's usual step height).
+// (defaults to the player's usual step height). `flat`: its ends are square,
+// not round: a piece of a road, the next piece of which carries on from its
+// end. (Round, its end would hold its height out a road's width past it: on
+// a crest, half a metre over the road.) A point more than FLAT_SLACK past an
+// end isn't near it at all.
 // Owners (a building, a stump...) replace their whole list at once.
 //
 // There is one of these for the whole world. The player, the animals and the
@@ -23,6 +27,19 @@ function cellsOf(s, fn) {
   const z0 = Math.floor((Math.min(s.az, s.bz) - s.r) / CELL);
   const z1 = Math.floor((Math.max(s.az, s.bz) + s.r) / CELL);
   for (let cz = z0; cz <= z1; cz++) for (let cx = x0; cx <= x1; cx++) fn(ck(cx, cz));
+}
+
+// m past a square end (flat) that a point still counts as on it: enough to
+// cover the outside of a road's bend, where the point is past both pieces
+const FLAT_SLACK = 1;
+// Whether (x, z) is further than FLAT_SLACK past either end of solid s.
+function pastEnd(s, x, z) {
+  const ex = s.bx - s.ax;
+  const ez = s.bz - s.az;
+  const l = Math.hypot(ex, ez);
+  if (l < 1e-6) return false;
+  const along = ((x - s.ax) * ex + (z - s.az) * ez) / l;
+  return along < -FLAT_SLACK || along > l + FLAT_SLACK;
 }
 
 export class Solids {
@@ -73,7 +90,7 @@ export class Solids {
     const z1 = Math.floor((z + r) / CELL);
     if (x0 === x1 && z0 === z1) {
       const set = this.grid.get(ck(x0, z0));
-      if (set) for (const s of set) fn(s);
+      if (set) for (const s of set) if (!s.flat || !pastEnd(s, x, z)) fn(s);
       return;
     }
     const seen = this._seen || (this._seen = new Set());
@@ -85,7 +102,7 @@ export class Solids {
         for (const s of set) {
           if (seen.has(s)) continue;
           seen.add(s);
-          fn(s);
+          if (!s.flat || !pastEnd(s, x, z)) fn(s);
         }
       }
     }

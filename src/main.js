@@ -70,16 +70,19 @@ game.api.features = FEATURES.map((feature) => feature.name);
 window.world = game.api;
 
 // ── Opening ──────────────────────────────────────────────────────────────────
-// Stream the forest in with a progress bar so the page never freezes.
+// Stream the forest in with a progress bar so the page never freezes (unless
+// where you're set down covers it: game.arrivesCovered).
 const { chunks, grass, player, hud } = game;
 const at = player.arrival;
 await nextFrame();
-do {
-  chunks.update(at.x, at.z, 45);
-  const p = chunks.progress();
-  loader.say(p < 1 ? 'growing the forest…' : 'laying down the grass…', p * 0.9);
-  await nextFrame();
-} while (!chunks.isFullyLoaded());
+if (!game.arrivingCovered) {
+  do {
+    chunks.update(at.x, at.z, 45);
+    const p = chunks.progress();
+    loader.say(p < 1 ? 'growing the forest…' : 'laying down the grass…', p * 0.9);
+    await nextFrame();
+  } while (!chunks.isFullyLoaded());
+}
 for (let i = 0; i < 6; i++) {
   grass.update(at.x, at.z, 40);
   await nextFrame();

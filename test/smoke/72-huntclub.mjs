@@ -240,8 +240,11 @@ export default async function ({ page, step, key, frames, open, shot }) {
     await first.waitFor();
     const home = await page.evaluate(() => world.huntclub.home.id);
     assert.equal(await first.getAttribute('data-destination'), home, 'the first club is the nearest');
+    // (found a little at a time, out of what each frame spares: the squares
+    // nearest the start are the Olympics' sides, each looked over at length
+    // before it turns out to have none, and drawn in software that's slow)
     const row = page.locator('.route-options button[data-destination^="huntclub:far:"]').first();
-    await row.waitFor({ timeout: 60000 });
+    await row.waitFor({ timeout: 240000 });
     const id = await row.getAttribute('data-destination');
     const far = await page.evaluate((id) => {
       const s = world.huntclub.clubs.byId(id);
